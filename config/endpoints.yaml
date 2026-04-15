@@ -1,0 +1,22 @@
+endpoints:
+  - id: cpu-worker-1
+    url: "${WORKER_CPU_ENDPOINT}"
+    model: "${WORKER_CPU_MODEL}"
+    hardware: cpu
+    max_concurrent: 4
+  - id: gpu-worker-1
+    url: "${WORKER_GPU_ENDPOINT}"
+    model: "${WORKER_GPU_MODEL}"
+    hardware: gpu
+    max_concurrent: 8
+    optional: true          # gracefully excluded if unreachable on startup
+  - id: orchestrator
+    url: "${ORCHESTRATOR_ENDPOINT}"
+    model: "${ORCHESTRATOR_MODEL}"
+    hardware: cpu
+    max_concurrent: 2
+  - id: single-model
+    url: "${SINGLE_MODEL_ENDPOINT}"
+    model: "${SINGLE_MODEL}"
+    hardware: cpu
+    max_concurrent: 2

@@ -1,0 +1,44 @@
+roles:
+  research:
+    description: "Find and synthesize factual information"
+    system_prompt: |
+      You are a research specialist. Given a subtask, find and clearly summarize
+      the most relevant factual information. Be concise and cite your reasoning.
+      Respond in JSON: {"result": "...", "confidence": 0.0-1.0, "sources": [...]}
+    preferred_hardware: gpu
+    tools: [web_search, doc_retrieval]
+
+  analysis:
+    description: "Analyze data, find patterns, draw conclusions"
+    system_prompt: |
+      You are an analysis specialist. Given a subtask, perform structured analysis.
+      Break down the problem, identify patterns, and draw clear conclusions.
+      Respond in JSON: {"result": "...", "confidence": 0.0-1.0, "reasoning": "..."}
+    preferred_hardware: cpu
+    tools: []
+
+  code:
+    description: "Write, review, or explain code"
+    system_prompt: |
+      You are a code specialist. Given a subtask, produce correct, well-commented code
+      or a clear code explanation. Respond in JSON: {"result": "...", "language": "...",
+      "confidence": 0.0-1.0}
+    preferred_hardware: gpu
+    tools: [code_exec]
+
+  summarization:
+    description: "Condense and summarize content"
+    system_prompt: |
+      You are a summarization specialist. Condense the provided content into a clear,
+      concise summary that captures the key points.
+      Respond in JSON: {"result": "...", "key_points": [...], "confidence": 0.0-1.0}
+    preferred_hardware: cpu
+    tools: []
+
+  general:
+    description: "General purpose reasoning"
+    system_prompt: |
+      You are a general-purpose reasoning agent. Answer the given subtask clearly
+      and concisely. Respond in JSON: {"result": "...", "confidence": 0.0-1.0}
+    preferred_hardware: cpu
+    tools: []

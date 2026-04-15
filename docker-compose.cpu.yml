@@ -1,0 +1,8 @@
+# CPU-only override — excludes GPU vllm service
+# Usage: docker compose -f docker-compose.yml -f docker-compose.cpu.yml up
+version: "3.9"
+
+services:
+  vllm-worker-gpu:
+    deploy:
+      replicas: 0

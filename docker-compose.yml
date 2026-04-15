@@ -1,0 +1,117 @@
+version: "3.9"
+
+services:
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── OPEA vLLM — CPU orchestrator (Qwen2.5-7B) ────────────────────────────
+  vllm-orchestrator:
+    image: opea/vllm-cpu:latest
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
+      - VLLM_OPENVINO_KVCACHE_SPACE=8
+    command: >
+      --model ${ORCHESTRATOR_MODEL}
+      --port 8080
+      --max-model-len 4096
+    ports: ["8080:8080"]
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+
+  # ── OPEA vLLM — CPU worker (Phi-4-mini) ──────────────────────────────────
+  vllm-worker-cpu:
+    image: opea/vllm-cpu:latest
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
+      - VLLM_OPENVINO_KVCACHE_SPACE=6
+    command: >
+      --model ${WORKER_CPU_MODEL}
+      --port 8081
+      --max-model-len 2048
+    ports: ["8081:8081"]
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+
+  # ── OPEA vLLM — GPU worker (optional, Llama-3.1-8B) ─────────────────────
+  vllm-worker-gpu:
+    image: opea/vllm-gaudi:latest
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+    command: >
+      --model ${WORKER_GPU_MODEL}
+      --port 8082
+      --max-model-len 4096
+    ports: ["8082:8082"]
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    profiles: ["gpu"]       # only started with: docker compose --profile gpu up
+
+  # ── OPEA vLLM — single model A/B (Mistral-7B) ────────────────────────────
+  vllm-single:
+    image: opea/vllm-cpu:latest
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
+      - VLLM_OPENVINO_KVCACHE_SPACE=8
+    command: >
+      --model ${SINGLE_MODEL}
+      --port 8083
+      --max-model-len 4096
+    ports: ["8083:8083"]
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+
+  # ── MCP servers ───────────────────────────────────────────────────────────
+  mcp-web-search:
+    build: ./mcp_servers/web_search
+    ports: ["9001:9001"]
+    environment:
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+
+  mcp-doc-retrieval:
+    build: ./mcp_servers/doc_retrieval
+    ports: ["9002:9002"]
+
+  mcp-code-exec:
+    build: ./mcp_servers/code_exec
+    ports: ["9003:9003"]
+
+  # ── Backend ───────────────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config:ro
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ── Frontend ──────────────────────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    ports: ["3000:3000"]
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000
+
+  # ── Observability ─────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+
+volumes:
+  hf_cache:
