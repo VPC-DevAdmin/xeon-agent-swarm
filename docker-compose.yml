@@ -74,17 +74,17 @@ services:
   # ── MCP servers ───────────────────────────────────────────────────────────
   mcp-web-search:
     build: ./mcp_servers/web_search
-    ports: ["9001:9001"]
+    ports: ["9401:9001"]
     environment:
       - BRAVE_API_KEY=${BRAVE_API_KEY:-}
 
   mcp-doc-retrieval:
     build: ./mcp_servers/doc_retrieval
-    ports: ["9002:9002"]
+    ports: ["9402:9002"]
 
   mcp-code-exec:
     build: ./mcp_servers/code_exec
-    ports: ["9003:9003"]
+    ports: ["9403:9003"]
 
   # ── Backend ───────────────────────────────────────────────────────────────
   backend:
