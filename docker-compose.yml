@@ -89,6 +89,7 @@ services:
       --port 8084
       --max-model-len 4096
       --trust-remote-code
+      --disable-sliding-window
     ports: ["8084:8084"]
     volumes:
       - hf_cache:/root/.cache/huggingface
