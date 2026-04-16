@@ -121,7 +121,12 @@ services:
     environment:
       - ORCHESTRATOR_ENDPOINT=http://vllm-orchestrator:8080/v1
       - WORKER_CPU_ENDPOINT=http://vllm-worker-cpu:8081/v1
-      - WORKER_GPU_ENDPOINT=http://vllm-worker-gpu:8082/v1
+      # GPU worker is in the `gpu` profile and not started by default.
+      # Leaving WORKER_GPU_ENDPOINT empty forces worker.py to route
+      # GPU-preferred tasks to CPU instead of failing against an
+      # unreachable host. To actually use GPU, run with `--profile gpu`
+      # and override this to `http://vllm-worker-gpu:8082/v1`.
+      - WORKER_GPU_ENDPOINT=
       - SINGLE_MODEL_ENDPOINT=http://vllm-single:8083/v1
       - REDIS_URL=redis://redis:6379
       - MCP_WEB_SEARCH_URL=http://mcp-web-search:9001
