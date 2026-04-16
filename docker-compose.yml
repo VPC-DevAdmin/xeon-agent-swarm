@@ -2,10 +2,18 @@ version: "3.9"
 
 services:
 
-  # ── Redis ────────────────────────────────────────────────────────────────────
+  # ── Redis Stack (adds RediSearch + RedisJSON for the upcoming corpus) ───────
+  # Drop-in replacement for redis:7-alpine: standard Redis commands (pub/sub,
+  # GET/SETEX used by backend.queue.task_queue) work unchanged; the Search and
+  # JSON modules are there for the corpus vector store coming in a later PR.
+  # Port 8001 exposes RedisInsight (browser UI) for debugging corpus indexes.
   redis:
-    image: redis:7-alpine
-    ports: ["6479:6379"]
+    image: redis/redis-stack:latest
+    ports:
+      - "6479:6379"
+      - "8001:8001"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -192,3 +200,4 @@ services:
 
 volumes:
   hf_cache:
+  redis_data:
