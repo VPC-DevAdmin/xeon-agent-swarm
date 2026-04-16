@@ -14,7 +14,7 @@ os.environ.setdefault("WORKER_CPU_MODEL", "test-worker-model")
 os.environ.setdefault("WORKER_GPU_ENDPOINT", "")
 os.environ.setdefault("SINGLE_MODEL_ENDPOINT", "http://localhost:8083/v1")
 os.environ.setdefault("SINGLE_MODEL", "test-single-model")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6479")
 os.environ.setdefault("CONFIG_DIR", str(
     os.path.join(os.path.dirname(__file__), "..", "config")
 ))
