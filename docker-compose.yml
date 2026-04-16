@@ -71,6 +71,35 @@ services:
       - hf_cache:/root/.cache/huggingface
     profiles: ["gpu"]       # only started with: docker compose --profile gpu up
 
+  # ── OPEA vLLM — Vision validation spike (Phi-3.5-vision) ─────────────────
+  # Validates that vLLM's CPU backend can serve a VLM before we invest in a
+  # vision worker. Behind the `vision` profile so `docker compose up` is
+  # unchanged. To test:
+  #   docker compose --profile vision up -d vllm-vision
+  #   scripts/test_vlm.sh <path-to-any.jpg|png>
+  vllm-vision:
+    image: opea/vllm:latest
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - VLLM_USE_V1=1
+      - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
+      - VLLM_OPENVINO_KVCACHE_SPACE=6
+    command: >
+      --model ${VLM_MODEL:-microsoft/Phi-3.5-vision-instruct}
+      --port 8084
+      --max-model-len 4096
+      --trust-remote-code
+    ports: ["8084:8084"]
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    profiles: ["vision"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8084/health', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 60        # VLM weight download + load takes longer
+      start_period: 60s
+
   # ── OPEA vLLM — single model A/B (Mistral-7B) ────────────────────────────
   vllm-single:
     image: opea/vllm:latest
