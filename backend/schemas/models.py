@@ -65,6 +65,12 @@ class SingleModelResult(BaseModel):
     hardware: str
     latency_ms: float
     status: TaskStatus
+    # Context-rot metrics — populated when corpus RAG is enabled
+    context_chunks_retrieved: int = 0   # chunks fetched from corpus
+    context_chunks_included: int = 0    # chunks that fit in context window
+    context_chunks_cited: int = 0       # sources the model referenced in its answer
+    context_token_estimate: int = 0     # estimated tokens of context injected
+    context_rot_score: float = 0.0      # 1 - (cited / included); 1.0 = total waste
 
 
 class RunResult(BaseModel):
