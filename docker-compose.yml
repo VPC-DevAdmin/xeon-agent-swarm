@@ -25,7 +25,7 @@ services:
   # produces 384-dim vectors and runs comfortably on CPU.
   # Endpoint: POST /embed  body: {"inputs": ["text", ...]}  → [[float, ...], ...]
   tei-embedding:
-    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
     command: >
       --model-id ${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
       --port 8090
