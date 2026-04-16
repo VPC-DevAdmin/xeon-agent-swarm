@@ -9,6 +9,9 @@ const TYPE_COLORS: Record<string, string> = {
   analysis:      'bg-amber-900 text-amber-300 border-amber-700',
   code:          'bg-teal-900 text-teal-300 border-teal-700',
   summarization: 'bg-blue-900 text-blue-300 border-blue-700',
+  vision:        'bg-pink-900 text-pink-300 border-pink-700',
+  fact_check:    'bg-cyan-900 text-cyan-300 border-cyan-700',
+  writing:       'bg-green-900 text-green-300 border-green-700',
   general:       'bg-gray-800 text-gray-300 border-gray-600',
 }
 

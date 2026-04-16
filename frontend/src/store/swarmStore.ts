@@ -4,8 +4,10 @@ import type {
   TaskStatus,
   AgentResult,
   SwarmEvent,
-  SingleModelResult,
+  DocumentResult,
 } from '../types/swarm'
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 export interface TaskMeta {
   description: string
@@ -32,12 +34,22 @@ interface SwarmStore {
   swarmLatencyMs: number | null
   swarmTaskCount: number | null
 
+  // Intelligence report document
+  document: DocumentResult | null
+
   // Single-model A/B panel
   singleTokens: string
   singleModel: string
   singleHardware: string
   singleCompleted: boolean
   singleLatencyMs: number | null
+
+  // Context rot metrics
+  singleChunksRetrieved: number
+  singleChunksIncluded: number
+  singleChunksCited: number
+  singleTokenEstimate: number
+  singleRotScore: number | null
 
   // Actions
   startRun: (runId: string, query: string) => void
@@ -57,11 +69,17 @@ const initialState = {
   finalAnswer: null,
   swarmLatencyMs: null,
   swarmTaskCount: null,
+  document: null,
   singleTokens: '',
   singleModel: '',
   singleHardware: '',
   singleCompleted: false,
   singleLatencyMs: null,
+  singleChunksRetrieved: 0,
+  singleChunksIncluded: 0,
+  singleChunksCited: 0,
+  singleTokenEstimate: 0,
+  singleRotScore: null,
 }
 
 export const useSwarmStore = create<SwarmStore>((set, get) => ({
@@ -139,7 +157,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         set({ synthesizing: true })
         break
 
-      case 'run_completed':
+      case 'run_completed': {
         set({
           finalAnswer: payload.final_answer as string,
           swarmLatencyMs: payload.latency_ms as number,
@@ -147,10 +165,30 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           synthesizing: false,
           isRunning: false,
         })
+        // Fetch full RunResult from REST API to get structured document
+        const runId = get().runId
+        if (runId) {
+          fetch(`${API_BASE}/run/${runId}`)
+            .then((r) => r.json())
+            .then((data) => {
+              if (data?.document) {
+                set({ document: data.document as DocumentResult })
+              }
+            })
+            .catch((err) => console.error('[swarm] fetch document failed:', err))
+        }
         break
+      }
 
       case 'single_started':
-        set({ singleModel: payload.model as string, singleHardware: payload.hardware as string })
+        set({
+          singleModel: payload.model as string,
+          singleHardware: payload.hardware as string,
+          // Context rot: chunks available before LLM call
+          singleChunksRetrieved: (payload.context_chunks_retrieved as number) || 0,
+          singleChunksIncluded: (payload.context_chunks_included as number) || 0,
+          singleTokenEstimate: (payload.context_token_estimate as number) || 0,
+        })
         break
 
       case 'single_token':
@@ -162,6 +200,14 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           singleCompleted: true,
           singleLatencyMs: payload.latency_ms as number,
           singleTokens: payload.answer as string,
+          // Context rot metrics
+          singleChunksRetrieved: (payload.context_chunks_retrieved as number) || 0,
+          singleChunksIncluded: (payload.context_chunks_included as number) || 0,
+          singleChunksCited: (payload.context_chunks_cited as number) || 0,
+          singleTokenEstimate: (payload.context_token_estimate as number) || 0,
+          singleRotScore: payload.context_rot_score != null
+            ? (payload.context_rot_score as number)
+            : null,
         })
         break
 
