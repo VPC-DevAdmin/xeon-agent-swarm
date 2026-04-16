@@ -277,8 +277,11 @@ async def execute_task(
         {"role": "user", "content": user_content},
     ]
 
+    # Writing tasks get a larger token budget and store raw JSON for the reducer
+    max_tokens = 2048 if task.type == TaskType.writing else 768
+
     try:
-        raw, latency_ms = await client.complete(messages, max_tokens=768)
+        raw, latency_ms = await client.complete(messages, max_tokens=max_tokens)
         agent_result = _parse_worker_response(raw, task.id, client, latency_ms)
         agent_result.tool_calls = tool_calls_made
 
