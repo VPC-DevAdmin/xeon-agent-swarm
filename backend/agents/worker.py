@@ -162,7 +162,6 @@ async def _execute_vision_task(
         {"role": "user", "content": content},
     ]
 
-    t0 = time.perf_counter()
     resp = await vlm_client.chat.completions.create(
         model=vlm_model,
         messages=messages,
@@ -203,6 +202,16 @@ async def execute_task(
     role_cfg = roles.get(task.type.value, roles["general"])
     client = _select_client(role_cfg.get("preferred_hardware", "cpu"))
 
+    # For vision tasks, report the VLM model in task_started (not the CPU worker)
+    # so the UI shows the correct model before the VLM call begins.
+    if task.type == TaskType.vision:
+        vlm_ep = os.getenv("VLM_ENDPOINT", "")
+        started_model = os.getenv("VLM_MODEL", "microsoft/Phi-3.5-vision-instruct") if vlm_ep else client.model
+        started_hw = "cpu"  # vllm-vision runs on CPU (OpenVINO) in this setup
+    else:
+        started_model = client.model
+        started_hw = client.hardware
+
     await broadcast(
         run_id,
         SwarmEvent(
@@ -212,8 +221,8 @@ async def execute_task(
                 "task_id": task.id,
                 "description": task.description,
                 "type": task.type.value,
-                "model": client.model,
-                "hardware": client.hardware,
+                "model": started_model,
+                "hardware": started_hw,
             },
         ),
     )
