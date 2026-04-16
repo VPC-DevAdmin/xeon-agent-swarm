@@ -158,6 +158,13 @@ services:
   mcp-doc-retrieval:
     build: ./mcp_servers/doc_retrieval
     ports: ["9402:9002"]
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - TEI_ENDPOINT=http://tei-embedding:8090
+      - EMBEDDING_DIM=${EMBEDDING_DIM:-384}
+    depends_on:
+      redis:
+        condition: service_healthy
 
   mcp-code-exec:
     build: ./mcp_servers/code_exec
