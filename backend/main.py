@@ -45,6 +45,7 @@ from backend.agents.worker import execute_task
 from backend.agents.reducer import synthesize
 from backend.agents.single_model import run_single_model
 from backend.protocols.a2a_cards import all_agent_cards, ORCHESTRATOR_CARD
+from backend.corpus_api import router as corpus_router
 from backend.queue.task_queue import TaskQueue
 from backend.observability.metrics import (
     runs_total,
@@ -73,6 +74,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Xeon Agent Swarm Demo", lifespan=lifespan)
+app.include_router(corpus_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
