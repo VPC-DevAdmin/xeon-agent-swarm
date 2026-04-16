@@ -17,6 +17,7 @@ services:
     image: opea/vllm:latest
     environment:
       - HF_TOKEN=${HF_TOKEN}
+      - VLLM_USE_V1=1
       - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
       - VLLM_OPENVINO_KVCACHE_SPACE=8
     command: >
@@ -32,6 +33,7 @@ services:
     image: opea/vllm:latest
     environment:
       - HF_TOKEN=${HF_TOKEN}
+      - VLLM_USE_V1=1
       - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
       - VLLM_OPENVINO_KVCACHE_SPACE=6
     command: >
@@ -61,6 +63,7 @@ services:
     image: opea/vllm:latest
     environment:
       - HF_TOKEN=${HF_TOKEN}
+      - VLLM_USE_V1=1
       - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
       - VLLM_OPENVINO_KVCACHE_SPACE=8
     command: >
