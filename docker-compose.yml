@@ -14,7 +14,7 @@ services:
 
   # ── OPEA vLLM — CPU orchestrator (Qwen2.5-7B) ────────────────────────────
   vllm-orchestrator:
-    image: opea/vllm-cpu:latest
+    image: opea/vllm:cpu
     environment:
       - HF_TOKEN=${HF_TOKEN}
       - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
@@ -29,7 +29,7 @@ services:
 
   # ── OPEA vLLM — CPU worker (Phi-4-mini) ──────────────────────────────────
   vllm-worker-cpu:
-    image: opea/vllm-cpu:latest
+    image: opea/vllm:cpu
     environment:
       - HF_TOKEN=${HF_TOKEN}
       - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
@@ -58,7 +58,7 @@ services:
 
   # ── OPEA vLLM — single model A/B (Mistral-7B) ────────────────────────────
   vllm-single:
-    image: opea/vllm-cpu:latest
+    image: opea/vllm:cpu
     environment:
       - HF_TOKEN=${HF_TOKEN}
       - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
