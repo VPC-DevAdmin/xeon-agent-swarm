@@ -67,7 +67,7 @@ _task_queue: TaskQueue | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _task_queue
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6479")
     _task_queue = TaskQueue(redis_url)
     yield
 
