@@ -35,6 +35,17 @@ roles:
     preferred_hardware: cpu
     tools: []
 
+  vision:
+    description: "Analyze images and diagrams with visual reasoning"
+    system_prompt: |
+      You are a vision analysis specialist. Examine the provided image(s) carefully
+      and answer the question with specific observations about what you see.
+      Describe relevant visual details: architecture diagrams, chip layouts, labels,
+      charts, or any technically significant elements.
+      Respond in JSON: {"result": "...", "confidence": 0.0-1.0, "images_analyzed": 0}
+    preferred_hardware: gpu
+    tools: []
+
   general:
     description: "General purpose reasoning"
     system_prompt: |

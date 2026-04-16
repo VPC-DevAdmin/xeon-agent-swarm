@@ -3,11 +3,11 @@ Corpus ingestion pipeline: download → chunk → embed → upsert.
 
 Can be run as a CLI to seed one or all predefined corpora:
 
-  # Seed a single corpus
+  # Seed a single corpus (text only)
   docker compose exec backend python -m backend.corpus.ingester ai_hardware
 
-  # Seed all corpora
-  docker compose exec backend python -m backend.corpus.ingester --all
+  # Seed all corpora including images
+  docker compose exec backend python -m backend.corpus.ingester --all --images
 
   # Seed from a custom list of Wikipedia titles
   docker compose exec backend python -m backend.corpus.ingester my_corpus \\
@@ -24,6 +24,8 @@ import sys
 from backend.corpus.chunker import chunk_text
 from backend.corpus.downloader import fetch_articles
 from backend.corpus.embedder import Embedder
+from backend.corpus.image_downloader import fetch_corpus_images
+from backend.corpus.redis_imagestore import RedisImageStore
 from backend.corpus.redis_vectorstore import RedisVectorStore
 from backend.corpus.seed_data import CORPORA
 
@@ -109,6 +111,40 @@ async def ingest_corpus(
     }
 
 
+async def ingest_images(
+    corpus_name: str,
+    wikipedia_titles: list[str],
+    embedder: Embedder,
+    image_store: RedisImageStore,
+) -> dict:
+    """
+    Image ingestion pipeline for a single corpus.
+
+    1. Download primary Wikipedia thumbnails for each article
+    2. Embed captions via TEI
+    3. Upsert to Redis image store
+
+    Returns summary dict with image_count, skipped.
+    """
+    print(f"\n[{corpus_name}:images] Downloading images for {len(wikipedia_titles)} articles …")
+    images = await fetch_corpus_images(wikipedia_titles, corpus_name)
+    skipped = len(wikipedia_titles) - len(images)
+    print(f"[{corpus_name}:images] Downloaded {len(images)} images ({skipped} had none)")
+
+    if not images:
+        return {"corpus": corpus_name, "image_count": 0, "skipped": skipped}
+
+    created = await image_store.create_index()
+    if created:
+        print(f"[{corpus_name}:images] Created index idx:images:{corpus_name}")
+
+    captions = [img["caption"] for img in images]
+    embeddings = await embedder.embed_texts(captions)
+    n = await image_store.add_images(images, embeddings)
+    print(f"[{corpus_name}:images] Done. {n} images indexed.")
+    return {"corpus": corpus_name, "image_count": n, "skipped": skipped}
+
+
 async def main() -> int:
     logging.basicConfig(level=logging.WARNING)
 
@@ -126,6 +162,7 @@ async def main() -> int:
         help="Custom Wikipedia titles (requires positional corpus name)",
     )
     parser.add_argument("--drop", action="store_true", help="Drop existing index before seeding")
+    parser.add_argument("--images", action="store_true", help="Also download and index images")
     args = parser.parse_args()
 
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6479")
@@ -161,18 +198,30 @@ async def main() -> int:
         store = RedisVectorStore(redis_url=redis_url, corpus_name=corpus_name, embedding_dim=emb_dim)
         try:
             if args.drop:
-                print(f"[{corpus_name}] Dropping existing index …")
+                print(f"[{corpus_name}] Dropping existing text index …")
                 await store.drop_index(delete_documents=True)
             summary = await ingest_corpus(corpus_name, titles, embedder, store)
             summaries.append(summary)
         finally:
             await store.close()
 
+        if args.images:
+            image_store = RedisImageStore(redis_url=redis_url, corpus_name=corpus_name, embedding_dim=emb_dim)
+            try:
+                if args.drop:
+                    print(f"[{corpus_name}] Dropping existing image index …")
+                    await image_store.drop_index(delete_documents=True)
+                img_summary = await ingest_images(corpus_name, titles, embedder, image_store)
+                summaries[-1]["image_count"] = img_summary["image_count"]
+            finally:
+                await image_store.close()
+
     print("\n── Summary ─────────────────────────────────────────")
     for s in summaries:
+        img_info = f"  images={s.get('image_count', '-'):>3}" if args.images else ""
         print(
             f"  {s['corpus']:20s}  articles={s['article_count']:3d}"
-            f"  chunks={s['chunk_count']:5d}  skipped={s['skipped']}"
+            f"  chunks={s['chunk_count']:5d}  skipped={s['skipped']}{img_info}"
         )
     return 0
 
