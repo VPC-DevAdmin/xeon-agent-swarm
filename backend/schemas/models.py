@@ -11,6 +11,8 @@ class TaskType(str, Enum):
     code          = "code"
     summarization = "summarization"
     vision        = "vision"
+    fact_check    = "fact_check"
+    writing       = "writing"
     general       = "general"
 
 
@@ -46,6 +48,32 @@ class AgentResult(BaseModel):
     tool_calls: list[str] = []
 
 
+# ── Structured document output ────────────────────────────────────────────────
+
+class DocumentSection(BaseModel):
+    title: str
+    content: str
+    sources: list[str] = []
+
+
+class CodeSnippet(BaseModel):
+    language: str
+    description: str
+    code: str
+
+
+class DocumentResult(BaseModel):
+    """Structured intelligence report produced by the writing worker."""
+    title: str
+    executive_summary: str
+    sections: list[DocumentSection] = []
+    code_snippets: list[CodeSnippet] = []
+    key_findings: list[str] = []
+    sources: list[str] = []
+    diagram_mermaid: Optional[str] = None   # Mermaid.js diagram syntax
+    tts_audio_url: Optional[str] = None     # served at /audio/{run_id}.mp3
+
+
 class SwarmState(BaseModel):
     run_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     query: str
@@ -72,6 +100,7 @@ class RunResult(BaseModel):
     run_id: str
     swarm: SwarmState
     single_model: Optional[SingleModelResult] = None
+    document: Optional[DocumentResult] = None
 
 
 # ── WebSocket event envelope ──────────────────────────────────────────────────

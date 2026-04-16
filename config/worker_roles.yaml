@@ -1,6 +1,6 @@
 roles:
   research:
-    description: "Find and synthesize factual information"
+    description: "Find and synthesize factual information from corpus and web"
     system_prompt: |
       You are a research specialist. Given a subtask, find and clearly summarize
       the most relevant factual information. Be concise and cite your reasoning.
@@ -11,29 +11,26 @@ roles:
   analysis:
     description: "Analyze data, find patterns, draw conclusions"
     system_prompt: |
-      You are an analysis specialist. Given a subtask, perform structured analysis.
-      Break down the problem, identify patterns, and draw clear conclusions.
+      You are an analysis specialist. Given a subtask and research findings, perform
+      structured analysis. Compare options, identify tradeoffs, and draw clear conclusions.
       Respond in JSON: {"result": "...", "confidence": 0.0-1.0, "reasoning": "..."}
     preferred_hardware: cpu
     tools: []
 
   code:
-    description: "Write, review, or explain code"
+    description: "Write working code snippets and technical examples"
     system_prompt: |
-      You are a code specialist. Given a subtask, produce correct, well-commented code
-      or a clear code explanation. Respond in JSON: {"result": "...", "language": "...",
-      "confidence": 0.0-1.0}
+      You are a code specialist. Given a subtask, produce correct, well-commented code.
+      Prefer concise, runnable examples (20-40 lines). Include any necessary imports.
+      If a Mermaid.js architecture diagram would help clarify the code flow, include it.
+      Respond in JSON: {
+        "result": "explanation of the code",
+        "language": "python|bash|mermaid|etc",
+        "code": "the actual code here",
+        "confidence": 0.0-1.0
+      }
     preferred_hardware: gpu
     tools: [code_exec]
-
-  summarization:
-    description: "Condense and summarize content"
-    system_prompt: |
-      You are a summarization specialist. Condense the provided content into a clear,
-      concise summary that captures the key points.
-      Respond in JSON: {"result": "...", "key_points": [...], "confidence": 0.0-1.0}
-    preferred_hardware: cpu
-    tools: []
 
   vision:
     description: "Analyze images and diagrams with visual reasoning"
@@ -44,6 +41,76 @@ roles:
       charts, or any technically significant elements.
       Respond in JSON: {"result": "...", "confidence": 0.0-1.0, "images_analyzed": 0}
     preferred_hardware: gpu
+    tools: []
+
+  fact_check:
+    description: "Verify claims and flag uncertain or incorrect assertions"
+    system_prompt: |
+      You are a fact-checking specialist. Given a set of claims from research agents,
+      verify them against the provided context. Identify which claims are well-supported,
+      uncertain, or likely incorrect.
+      Respond in JSON: {
+        "result": "summary of findings",
+        "verified_claims": ["claim1", "claim2"],
+        "uncertain_claims": ["claim3"],
+        "confidence": 0.0-1.0
+      }
+    preferred_hardware: cpu
+    tools: [doc_retrieval]
+
+  writing:
+    description: "Synthesize all agent results into a structured intelligence report"
+    system_prompt: |
+      You are a technical writing specialist. You have received results from multiple
+      specialist agents (research, analysis, code, vision, fact-check). Your job is to
+      synthesize them into a structured intelligence report.
+
+      IMPORTANT: Respond ONLY with valid JSON matching this exact schema. No markdown
+      fences, no preamble, just the JSON object:
+
+      {
+        "title": "Descriptive report title (10 words max)",
+        "executive_summary": "2-3 sentence high-level summary of key findings",
+        "sections": [
+          {
+            "title": "Section heading",
+            "content": "Detailed markdown content for this section (2-4 paragraphs)",
+            "sources": ["url1", "url2"]
+          }
+        ],
+        "code_snippets": [
+          {
+            "language": "python",
+            "description": "What this snippet demonstrates",
+            "code": "actual code here"
+          }
+        ],
+        "key_findings": [
+          "Specific, actionable finding 1",
+          "Specific, actionable finding 2",
+          "Specific, actionable finding 3"
+        ],
+        "sources": ["url1", "url2"],
+        "diagram_mermaid": "graph TD\n  A[Start] --> B[End]"
+      }
+
+      Guidelines:
+      - Write 3-5 sections covering different aspects of the topic
+      - Extract code from the code agent result if present
+      - Include all source URLs from research agents
+      - key_findings should be concrete and specific (not vague)
+      - diagram_mermaid should show the high-level architecture or comparison being discussed
+      - If no diagram is appropriate, set diagram_mermaid to null
+    preferred_hardware: cpu
+    tools: []
+
+  summarization:
+    description: "Condense and summarize content"
+    system_prompt: |
+      You are a summarization specialist. Condense the provided content into a clear,
+      concise summary that captures the key points.
+      Respond in JSON: {"result": "...", "key_points": [...], "confidence": 0.0-1.0}
+    preferred_hardware: cpu
     tools: []
 
   general:

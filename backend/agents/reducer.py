@@ -1,19 +1,36 @@
 """
-Reducer agent: synthesizes all worker AgentResults into a final answer.
-Uses the orchestrator endpoint (stronger model).
+Reducer agent: synthesizes all worker AgentResults into a final answer
+and, when a writing task is present, into a structured DocumentResult.
+
+Flow:
+  1. Scan completed tasks for a `writing` task
+  2. If found: parse its raw JSON output as DocumentResult → run TTS on summary
+  3. If not found: fall back to LLM-based synthesis (old behaviour)
+  4. Emit synthesis_started / run_completed events either way
 """
+from __future__ import annotations
+
+import json
+import logging
 import os
 import time
 from datetime import datetime
 
+from pydantic import ValidationError
+
+from backend.agents.tts import synthesize_speech
 from backend.inference.client import InferenceClient
 from backend.schemas.models import (
     AgentResult,
+    DocumentResult,
     SwarmState,
     TaskStatus,
+    TaskType,
     EventType,
     SwarmEvent,
 )
+
+logger = logging.getLogger(__name__)
 
 REDUCER_SYSTEM = """
 You are a synthesis specialist. You have received the results of several parallel
@@ -53,14 +70,45 @@ def _build_synthesis_prompt(query: str, results: dict[str, AgentResult], task_gr
     return "\n".join(lines)
 
 
+def _extract_document_result(raw: str) -> DocumentResult | None:
+    """
+    Try to parse the writing worker's raw output as a DocumentResult.
+    Handles JSON wrapped in markdown fences (```json ... ```) gracefully.
+    """
+    text = raw.strip()
+    # Strip markdown fences if the model wrapped the JSON
+    if text.startswith("```"):
+        lines = text.splitlines()
+        text = "\n".join(
+            line for line in lines if not line.strip().startswith("```")
+        ).strip()
+
+    # Find the outermost JSON object
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start == -1 or end == 0:
+        return None
+
+    try:
+        data = json.loads(text[start:end])
+        return DocumentResult(**data)
+    except (json.JSONDecodeError, ValidationError, TypeError) as exc:
+        logger.warning("Failed to parse DocumentResult from writing worker: %s", exc)
+        return None
+
+
 async def synthesize(
     query: str,
     results: dict[str, AgentResult],
     task_graph,
     run_id: str,
     broadcast,
-) -> str:
-    """Synthesize all results into a final answer, emitting WebSocket events."""
+) -> tuple[str, DocumentResult | None]:
+    """
+    Synthesize all results into a final answer + optional DocumentResult.
+
+    Returns (final_answer_str, document_result_or_None).
+    """
     await broadcast(
         run_id,
         SwarmEvent(
@@ -70,27 +118,60 @@ async def synthesize(
         ),
     )
 
+    # ── Path A: writing task produced a DocumentResult ────────────────────────
+    document: DocumentResult | None = None
+    for task in task_graph.tasks:
+        if task.type == TaskType.writing:
+            r = results.get(task.id)
+            if r and r.status == TaskStatus.completed:
+                document = _extract_document_result(r.result)
+                if document:
+                    logger.info("DocumentResult extracted from writing worker")
+                    break
+
+    if document:
+        # Run TTS on the executive summary (non-blocking best-effort)
+        audio_url = await synthesize_speech(document.executive_summary, run_id)
+        if audio_url:
+            document.tts_audio_url = audio_url
+
+        # Build a plain-text final_answer from the document for backward compat
+        section_texts = "\n\n".join(
+            f"### {s.title}\n{s.content}" for s in document.sections
+        )
+        final_answer = (
+            f"# {document.title}\n\n"
+            f"**Executive Summary:** {document.executive_summary}\n\n"
+            f"{section_texts}"
+        )
+        if document.key_findings:
+            bullets = "\n".join(f"- {f}" for f in document.key_findings)
+            final_answer += f"\n\n**Key Findings:**\n{bullets}"
+
+        return final_answer, document
+
+    # ── Path B: no writing task — fall back to LLM synthesis ─────────────────
     client = _make_client()
     synthesis_prompt = _build_synthesis_prompt(query, results, task_graph)
     messages = [
         {"role": "system", "content": REDUCER_SYSTEM},
         {"role": "user", "content": synthesis_prompt},
     ]
+    final_answer, _ = await client.complete(messages, max_tokens=1024)
 
-    final_answer, latency_ms = await client.complete(messages, max_tokens=1024)
-
-    # Include attribution footer
+    # Attribution footer
     attributions = []
     for task in task_graph.tasks:
         r = results.get(task.id)
         if r and r.status == TaskStatus.completed:
             attributions.append(
-                f"- **{task.description}** → {r.model_used} ({r.hardware}, {r.latency_ms:.0f}ms, conf={r.confidence:.2f})"
+                f"- **{task.description}** → {r.model_used} ({r.hardware}, "
+                f"{r.latency_ms:.0f}ms, conf={r.confidence:.2f})"
             )
     if attributions:
         final_answer += "\n\n---\n**Agent attribution:**\n" + "\n".join(attributions)
 
-    return final_answer
+    return final_answer, None
 
 
 async def reduce(state: SwarmState) -> SwarmState:
@@ -98,7 +179,7 @@ async def reduce(state: SwarmState) -> SwarmState:
     async def _noop(run_id, event):
         pass
 
-    final_answer = await synthesize(
+    final_answer, _ = await synthesize(
         query=state.query,
         results=state.results,
         task_graph=state.task_graph,

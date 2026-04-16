@@ -27,8 +27,11 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 
+from pathlib import Path
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
@@ -183,7 +186,7 @@ async def run_swarm(run_id: str, query: str):
             completed_ids.update(finished_ids)
 
         # ── Step 3: Reduce ────────────────────────────────────────────────────
-        final_answer = await synthesize(
+        final_answer, document = await synthesize(
             query=query,
             results=state.results,
             task_graph=task_graph,
@@ -210,11 +213,15 @@ async def run_swarm(run_id: str, query: str):
             ),
         )
 
-        # Persist result
+        # Persist result (include structured document if produced)
         if run_id in _run_results:
             _run_results[run_id].swarm = state
+            if document:
+                _run_results[run_id].document = document
         else:
-            _run_results[run_id] = RunResult(run_id=run_id, swarm=state)
+            _run_results[run_id] = RunResult(
+                run_id=run_id, swarm=state, document=document
+            )
 
     except Exception as exc:
         await manager.broadcast(
@@ -308,6 +315,17 @@ async def well_known_agent():
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "xeon-agent-swarm"}
+
+
+@app.get("/audio/{filename}")
+async def serve_audio(filename: str):
+    """Serve TTS audio files generated for run executive summaries."""
+    audio_dir = Path(os.getenv("AUDIO_DIR", "/data/audio"))
+    path = audio_dir / filename
+    if not path.exists() or not filename.endswith(".mp3"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    return FileResponse(path, media_type="audio/mpeg")
 
 
 @app.get("/metrics")
