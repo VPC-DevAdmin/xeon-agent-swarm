@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 _WP_API = "https://en.wikipedia.org/w/api.php"
 _THUMB_SIZE = 800
 _TIMEOUT = 30.0
+_HEADERS = {"User-Agent": "XeonAgentSwarm/1.0 (https://github.com/VPC-DevAdmin/xeon-agent-swarm; educational demo)"}
 IMAGE_DIR = Path(os.getenv("IMAGE_DIR", "/data/images"))
 
 
@@ -110,7 +111,7 @@ async def fetch_corpus_images(titles: list[str], corpus_name: str) -> list[dict]
     Skips articles with no image; logs but does not raise on download errors.
     Returns list of image metadata dicts (one per successfully saved image).
     """
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(headers=_HEADERS) as client:
         tasks = [fetch_article_image(t, corpus_name, client) for t in titles]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 

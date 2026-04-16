@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 _WP_API = "https://en.wikipedia.org/w/api.php"
 _TIMEOUT = 20.0
+_HEADERS = {"User-Agent": "XeonAgentSwarm/1.0 (https://github.com/VPC-DevAdmin/xeon-agent-swarm; educational demo)"}
 
 
 async def fetch_article(title: str, client: httpx.AsyncClient) -> dict | None:
@@ -68,7 +69,7 @@ async def fetch_articles(titles: list[str]) -> list[dict]:
     Skips missing articles silently; logs a warning for each.
     Returns only successfully fetched articles in order.
     """
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(headers=_HEADERS) as client:
         tasks = [fetch_article(t, client) for t in titles]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
