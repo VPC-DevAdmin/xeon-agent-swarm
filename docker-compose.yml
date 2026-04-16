@@ -96,6 +96,18 @@ services:
       dockerfile: backend/Dockerfile
     ports: ["8000:8000"]
     env_file: .env
+    # Override endpoints so the backend talks to peer services by their
+    # Docker network names, regardless of what the user's .env says
+    # (env.example uses localhost for devs running backend outside compose).
+    environment:
+      - ORCHESTRATOR_ENDPOINT=http://vllm-orchestrator:8080/v1
+      - WORKER_CPU_ENDPOINT=http://vllm-worker-cpu:8081/v1
+      - WORKER_GPU_ENDPOINT=http://vllm-worker-gpu:8082/v1
+      - SINGLE_MODEL_ENDPOINT=http://vllm-single:8083/v1
+      - REDIS_URL=redis://redis:6379
+      - MCP_WEB_SEARCH_URL=http://mcp-web-search:9001
+      - MCP_DOC_RETRIEVAL_URL=http://mcp-doc-retrieval:9002
+      - MCP_CODE_EXEC_URL=http://mcp-code-exec:9003
     depends_on:
       redis:
         condition: service_healthy
