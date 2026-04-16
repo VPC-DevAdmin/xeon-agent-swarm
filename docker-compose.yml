@@ -95,12 +95,13 @@ services:
       - hf_cache:/root/.cache/huggingface
     profiles: ["gpu"]       # only started with: docker compose --profile gpu up
 
-  # ── OPEA vLLM — Vision validation spike (Phi-3.5-vision) ─────────────────
-  # Validates that vLLM's CPU backend can serve a VLM before we invest in a
-  # vision worker. Behind the `vision` profile so `docker compose up` is
-  # unchanged. To test:
-  #   docker compose --profile vision up -d vllm-vision
-  #   scripts/test_vlm.sh <path-to-any.jpg|png>
+  # ── OPEA vLLM — Vision worker (Phi-3.5-vision) ───────────────────────────
+  # Behind the `vision` profile — default `docker compose up` is unchanged.
+  # To enable the vision worker:
+  #   docker compose --profile vision up -d
+  # Then set VLM_ENDPOINT in .env:
+  #   VLM_ENDPOINT=http://vllm-vision:8084/v1
+  # and restart backend: docker compose up -d --build backend
   vllm-vision:
     image: opea/vllm:latest
     environment:
@@ -190,6 +191,11 @@ services:
       - TEI_ENDPOINT=http://tei-embedding:8090
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
       - EMBEDDING_DIM=${EMBEDDING_DIM:-384}
+      # Vision worker — only active when started with --profile vision
+      # Leave VLM_ENDPOINT empty to make vision tasks fall back to text-only
+      - VLM_ENDPOINT=${VLM_ENDPOINT:-}
+      - VLM_MODEL=${VLM_MODEL:-microsoft/Phi-3.5-vision-instruct}
+      - IMAGE_DIR=/data/images
     depends_on:
       redis:
         condition: service_healthy
@@ -201,6 +207,7 @@ services:
         condition: service_healthy
     volumes:
       - ./config:/app/config:ro
+      - image_data:/data/images
     command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
   # ── Frontend ──────────────────────────────────────────────────────────────
@@ -222,3 +229,4 @@ volumes:
   hf_cache:
   redis_data:
   tei_data:
+  image_data:

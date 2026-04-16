@@ -10,6 +10,7 @@ class TaskType(str, Enum):
     analysis      = "analysis"
     code          = "code"
     summarization = "summarization"
+    vision        = "vision"
     general       = "general"
 
 
