@@ -40,6 +40,7 @@ services:
       --model ${WORKER_CPU_MODEL}
       --port 8081
       --max-model-len 2048
+      --disable-sliding-window
     ports: ["8081:8081"]
     volumes:
       - hf_cache:/root/.cache/huggingface
