@@ -19,6 +19,9 @@ const TYPE_COLORS: Record<string, string> = {
   analysis:      '#d97706',
   code:          '#0d9488',
   summarization: '#2563eb',
+  vision:        '#db2777',
+  fact_check:    '#0891b2',
+  writing:       '#16a34a',
   general:       '#6b7280',
 }
 

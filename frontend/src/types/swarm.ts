@@ -1,6 +1,15 @@
 // TypeScript mirrors of backend Pydantic schemas
 
-export type TaskType = 'research' | 'analysis' | 'code' | 'summarization' | 'general'
+export type TaskType =
+  | 'research'
+  | 'analysis'
+  | 'code'
+  | 'summarization'
+  | 'vision'
+  | 'fact_check'
+  | 'writing'
+  | 'general'
+
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed'
 
 export interface TaskSpec {
@@ -39,6 +48,33 @@ export interface SwarmState {
   completed_at: string | null
 }
 
+// ── Intelligence report (DocumentResult) ─────────────────────────────────────
+
+export interface DocumentSection {
+  title: string
+  content: string
+  sources: string[]
+}
+
+export interface CodeSnippet {
+  language: string
+  description: string
+  code: string
+}
+
+export interface DocumentResult {
+  title: string
+  executive_summary: string
+  sections: DocumentSection[]
+  code_snippets: CodeSnippet[]
+  key_findings: string[]
+  sources: string[]
+  diagram_mermaid: string | null
+  tts_audio_url: string | null
+}
+
+// ── A/B comparison ────────────────────────────────────────────────────────────
+
 export interface SingleModelResult {
   run_id: string
   query: string
@@ -47,12 +83,19 @@ export interface SingleModelResult {
   hardware: string
   latency_ms: number
   status: TaskStatus
+  // Context rot demo fields
+  context_chunks_retrieved: number
+  context_chunks_included: number
+  context_chunks_cited: number
+  context_token_estimate: number
+  context_rot_score: number
 }
 
 export interface RunResult {
   run_id: string
   swarm: SwarmState
   single_model: SingleModelResult | null
+  document: DocumentResult | null
 }
 
 // ── WebSocket events ──────────────────────────────────────────────────────────
