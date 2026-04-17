@@ -12,8 +12,11 @@ Context rot demo:
 Rot score = 1 - (cited / included).
 A score of 0.80 means 80% of the injected context was silently ignored.
 
-Compare with each swarm worker, which receives only 4 highly focused chunks
-for its specific subtask — near-100% utilisation at a fraction of the cost.
+Context overflow recovery:
+  When the packed context exceeds the model's context window (HTTP 400),
+  we emit a `single_retrying` event explaining the failure, then retry
+  with a much smaller top_k. This is a deliberate demo moment: the failure
+  itself proves that a single model can't handle everything at once.
 """
 from __future__ import annotations
 
@@ -25,6 +28,7 @@ import httpx
 import numpy as np
 
 import redis.asyncio as aioredis
+from openai import BadRequestError
 from redis.commands.search.query import Query
 from redis.exceptions import ResponseError
 
@@ -40,15 +44,19 @@ from backend.schemas.models import (
 
 _CORPORA = ["ai_hardware", "ai_software", "llm_landscape"]
 
-# How many chunks to retrieve before trimming to fit the context window
+# Initial retrieval: cast a wide net for the context rot demo
 _RETRIEVE_TOP_K = 20
 
-# Approximate token budget for injected context.
-# The model max_model_len is 4096; reserve ~400 for system + query + answer.
+# Token budget for the first attempt — intentionally generous to show failure
+# on complex queries (the model's 4096 limit gets hit, which is the demo point).
 _CONTEXT_TOKEN_BUDGET = 2_800
 
-# Words-to-tokens ratio for English prose (conservative estimate)
-_WORDS_PER_TOKEN = 0.75   # i.e. ~1.33 tokens per word
+# Retry parameters: small enough to always fit within 4096 tokens
+_RETRY_TOP_K = 4
+_RETRY_CONTEXT_BUDGET = 900   # very conservative; leaves headroom for prompt + 1024 completion
+
+# Conservative words-to-tokens ratio for English technical prose
+_WORDS_PER_TOKEN = 0.75   # ~1.33 tokens per word
 
 SINGLE_MODEL_SYSTEM = """You are a helpful assistant with access to a knowledge base.
 Answer the user's question using the provided context passages where relevant.
@@ -56,7 +64,7 @@ Cite sources by mentioning the document title when you use information from them
 Use markdown formatting for readability."""
 
 
-# ── Corpus retrieval (inlined — single_model runs in the backend container) ──
+# ── Corpus retrieval ──────────────────────────────────────────────────────────
 
 async def _embed(query: str) -> list[float]:
     tei = os.getenv("TEI_ENDPOINT", "http://tei-embedding:8090").rstrip("/")
@@ -72,8 +80,8 @@ def _to_str(val) -> str:
     return str(val) if val is not None else ""
 
 
-async def _retrieve_chunks(query: str) -> list[dict]:
-    """Retrieve top-K chunks from all corpora, sorted by relevance."""
+async def _retrieve_chunks(query: str, top_k: int = _RETRIEVE_TOP_K) -> list[dict]:
+    """Retrieve top-k chunks from all corpora, sorted by relevance."""
     redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
     emb_dim = int(os.getenv("EMBEDDING_DIM", "384"))
 
@@ -95,10 +103,10 @@ async def _retrieve_chunks(query: str) -> list[dict]:
                 continue
 
             q = (
-                Query(f"*=>[KNN {_RETRIEVE_TOP_K} @embedding $query_vec AS score]")
+                Query(f"*=>[KNN {top_k} @embedding $query_vec AS score]")
                 .sort_by("score")
                 .return_fields("text", "doc_title", "source", "score")
-                .paging(0, _RETRIEVE_TOP_K)
+                .paging(0, top_k)
                 .dialect(2)
             )
             res = await r.ft(index).search(q, query_params={"query_vec": vec_bytes})
@@ -113,7 +121,6 @@ async def _retrieve_chunks(query: str) -> list[dict]:
     finally:
         await r.aclose()
 
-    # Merge-sort by cosine distance; deduplicate by (doc_title, first 80 chars)
     all_hits.sort(key=lambda h: h["score"])
     seen: set[str] = set()
     deduped: list[dict] = []
@@ -123,13 +130,12 @@ async def _retrieve_chunks(query: str) -> list[dict]:
             seen.add(key)
             deduped.append(h)
 
-    return deduped[:_RETRIEVE_TOP_K]
+    return deduped[:top_k]
 
 
-def _pack_context(chunks: list[dict]) -> tuple[str, int, list[dict]]:
+def _pack_context(chunks: list[dict], budget: int = _CONTEXT_TOKEN_BUDGET) -> tuple[str, int, list[dict]]:
     """
-    Pack as many chunks as fit within _CONTEXT_TOKEN_BUDGET.
-
+    Pack as many chunks as fit within the token budget.
     Returns (context_string, token_estimate, included_chunks).
     """
     lines: list[str] = ["## Knowledge Base Context\n"]
@@ -140,7 +146,7 @@ def _pack_context(chunks: list[dict]) -> tuple[str, int, list[dict]]:
         snippet = chunk["text"][:800]
         entry = f"### [{i}] {chunk['doc_title']} ({chunk['corpus']})\n{snippet}\n"
         entry_tokens = int(len(entry.split()) / _WORDS_PER_TOKEN)
-        if token_estimate + entry_tokens > _CONTEXT_TOKEN_BUDGET:
+        if token_estimate + entry_tokens > budget:
             break
         lines.append(entry)
         token_estimate += entry_tokens
@@ -150,19 +156,29 @@ def _pack_context(chunks: list[dict]) -> tuple[str, int, list[dict]]:
 
 
 def _count_citations(answer: str, included: list[dict]) -> int:
-    """
-    Count how many included source titles appear in the model's answer.
-    Uses case-insensitive substring matching on the article title.
-    """
+    """Count how many included source titles appear in the model's answer."""
     cited = 0
     answer_lower = answer.lower()
     for chunk in included:
         title = chunk["doc_title"].lower()
-        # Match on the most distinctive part (first two words of title)
         key = " ".join(title.split()[:2]) if title else ""
         if key and key in answer_lower:
             cited += 1
     return cited
+
+
+def _parse_context_overflow(exc: BadRequestError) -> tuple[int, int] | None:
+    """
+    Parse 'requested X tokens (Y in messages, Z in completion)' from a 400 error.
+    Returns (requested_total, limit) or None if not a context-length error.
+    """
+    msg = str(exc)
+    if "maximum context length" not in msg:
+        return None
+    m = re.search(r"maximum context length is (\d+).*?requested (\d+)", msg)
+    if m:
+        return int(m.group(2)), int(m.group(1))
+    return None
 
 
 # ── Main pipeline ─────────────────────────────────────────────────────────────
@@ -175,6 +191,23 @@ def _make_client() -> InferenceClient:
     )
 
 
+async def _stream_response(client: InferenceClient, messages: list[dict], run_id: str, broadcast) -> tuple[str, float]:
+    """Stream tokens, broadcasting each one. Returns (full_answer, latency_ms)."""
+    t0 = time.perf_counter()
+    full_answer = ""
+    async for token in client.stream(messages, max_tokens=1024):
+        full_answer += token
+        await broadcast(
+            run_id,
+            SwarmEvent(
+                event=EventType.single_token,
+                run_id=run_id,
+                payload={"token": token},
+            ),
+        )
+    return full_answer, (time.perf_counter() - t0) * 1000
+
+
 async def run_single_model(
     run_id: str,
     query: str,
@@ -182,18 +215,17 @@ async def run_single_model(
 ) -> SingleModelResult:
     """
     Stream the single-model response with corpus context injected.
-    Emits single_started / single_token / single_completed events.
+    On context-length overflow, emits single_retrying and retries with fewer chunks.
     """
     client = _make_client()
 
     # ── Step 1: retrieve corpus chunks ───────────────────────────────────────
-    chunks = await _retrieve_chunks(query)
+    chunks = await _retrieve_chunks(query, top_k=_RETRIEVE_TOP_K)
     retrieved_count = len(chunks)
 
-    context_str, token_estimate, included = _pack_context(chunks)
+    context_str, token_estimate, included = _pack_context(chunks, budget=_CONTEXT_TOKEN_BUDGET)
     included_count = len(included)
 
-    # ── Step 2: build prompt ─────────────────────────────────────────────────
     user_content = f"{context_str}\n\n## Question\n{query}"
     messages = [
         {"role": "system", "content": SINGLE_MODEL_SYSTEM},
@@ -215,24 +247,55 @@ async def run_single_model(
         ),
     )
 
-    # ── Step 3: stream response ──────────────────────────────────────────────
-    t0 = time.perf_counter()
+    # ── Step 2: stream (with context-overflow retry) ─────────────────────────
     full_answer = ""
+    latency_ms = 0.0
 
-    async for token in client.stream(messages, max_tokens=1024):
-        full_answer += token
+    try:
+        full_answer, latency_ms = await _stream_response(client, messages, run_id, broadcast)
+
+    except BadRequestError as exc:
+        overflow = _parse_context_overflow(exc)
+        if overflow is None:
+            raise   # unrelated 400 — let main.py handle it
+
+        requested_tokens, limit_tokens = overflow
+
+        # ── Emit retrying event — the demo "a-ha!" moment ───────────────────
         await broadcast(
             run_id,
             SwarmEvent(
-                event=EventType.single_token,
+                event=EventType.single_retrying,
                 run_id=run_id,
-                payload={"token": token},
+                payload={
+                    "reason": "context_overflow",
+                    "requested_tokens": requested_tokens,
+                    "limit_tokens": limit_tokens,
+                    "original_chunks": included_count,
+                    "retry_top_k": _RETRY_TOP_K,
+                    "model": client.model,
+                },
             ),
         )
 
-    latency_ms = (time.perf_counter() - t0) * 1000
+        # ── Rebuild with a much smaller context ──────────────────────────────
+        retry_chunks = await _retrieve_chunks(query, top_k=_RETRY_TOP_K)
+        retrieved_count = len(retry_chunks)   # update for rot metrics
 
-    # ── Step 4: measure context rot ──────────────────────────────────────────
+        retry_context, token_estimate, included = _pack_context(
+            retry_chunks, budget=_RETRY_CONTEXT_BUDGET
+        )
+        included_count = len(included)
+
+        retry_user = f"{retry_context}\n\n## Question\n{query}"
+        retry_messages = [
+            {"role": "system", "content": SINGLE_MODEL_SYSTEM},
+            {"role": "user", "content": retry_user},
+        ]
+
+        full_answer, latency_ms = await _stream_response(client, retry_messages, run_id, broadcast)
+
+    # ── Step 3: measure context rot ──────────────────────────────────────────
     cited_count = _count_citations(full_answer, included)
     rot_score = round(1.0 - (cited_count / included_count), 3) if included_count > 0 else 0.0
 

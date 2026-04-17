@@ -110,6 +110,7 @@ export type EventType =
   | 'run_completed'
   | 'single_started'
   | 'single_token'
+  | 'single_retrying'
   | 'single_completed'
   | 'error'
 
