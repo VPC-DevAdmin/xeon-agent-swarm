@@ -144,8 +144,35 @@ async def _execute_vision_task(
 
     content.append({"type": "text", "text": task.description})
 
-    if not vlm_endpoint or not images_used:
-        # Graceful fallback to text-only CPU worker
+    if not vlm_endpoint:
+        # VLM service not configured — tell the user what was found and why we fell back.
+        # Don't run a text-only model that would just say "no images found"; that's
+        # misleading when images were retrieved but we can't send them to the VLM.
+        img_count = len(images_used)
+        img_note = (
+            f"{img_count} relevant image(s) were retrieved from the corpus "
+            f"but could not be analyzed because the vision worker (VLM_ENDPOINT) "
+            f"is not running. Start vllm-vision with: "
+            f"docker compose --profile vision up -d vllm-vision"
+            if img_count > 0
+            else "No images matched the query and the vision worker (VLM_ENDPOINT) is not running."
+        )
+        fallback_client = _select_client("cpu")
+        latency_ms = (time.perf_counter() - t0) * 1000
+        result = AgentResult(
+            task_id=task.id,
+            status=TaskStatus.completed,
+            result=img_note,
+            confidence=0.0,
+            model_used=fallback_client.model,
+            hardware=fallback_client.hardware,
+            latency_ms=latency_ms,
+        )
+        result.tool_calls = ["fallback:no_vlm_endpoint"]
+        return result
+
+    if not images_used:
+        # VLM is running but no matching images were found in the corpus.
         fallback_client = _select_client("cpu")
         messages = [
             {"role": "system", "content": role_cfg["system_prompt"]},
@@ -153,7 +180,7 @@ async def _execute_vision_task(
         ]
         raw, latency_ms = await fallback_client.complete(messages, max_tokens=512)
         result = _parse_worker_response(raw, task.id, fallback_client, latency_ms)
-        result.tool_calls = [f"fallback:no_vlm_endpoint" if not vlm_endpoint else "fallback:no_images"]
+        result.tool_calls = ["fallback:no_images"]
         return result
 
     vlm_client = AsyncOpenAI(base_url=vlm_endpoint, api_key="none")
