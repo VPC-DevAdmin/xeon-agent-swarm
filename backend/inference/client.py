@@ -61,6 +61,10 @@ class InferenceClient:
             stream=True,
         )
         async for chunk in stream:
+            # vLLM (and some OpenAI-compat servers) emit a final chunk with
+            # choices: [] as a stream-done marker — guard against IndexError.
+            if not chunk.choices:
+                continue
             delta = chunk.choices[0].delta.content
             if delta:
                 yield delta
