@@ -3,16 +3,19 @@ Generic worker agent: executes a single TaskSpec and returns an AgentResult.
 Role (system prompt + tools) is loaded from config/worker_roles.yaml.
 
 Vision tasks (TaskType.vision) use a separate code path:
-  - Retrieve top-2 images from the Redis image store via caption embedding search
+  - Retrieve top-1 image from the Redis image store via caption embedding search
   - Base64-encode images and pass to Phi-3.5-vision via OpenAI vision API format
   - Falls back to text-only analysis if VLM_ENDPOINT is not set
 """
 import base64
+import logging
 import os
 import json
 import time
 import yaml
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from openai import AsyncOpenAI
 
@@ -123,8 +126,11 @@ async def _execute_vision_task(
     vlm_endpoint = os.getenv("VLM_ENDPOINT", "")
     vlm_model = os.getenv("VLM_MODEL", "microsoft/Phi-3.5-vision-instruct")
 
-    # Retrieve images even if we fall back — useful for debugging
-    hits = await _retrieve_images(task.description, top_k=2)
+    # Phi-3.5-vision image tokens: ~1024 tokens per 336×336 crop; arXiv diagrams
+    # are often 600×400+ (2–4 crops = 2048–4096 tokens). With max-model-len 4096,
+    # two images can exhaust the context before a single output token is generated.
+    # Use exactly 1 image (the most relevant hit) to keep within budget.
+    hits = await _retrieve_images(task.description, top_k=1)
 
     # Build vision message content
     content: list[dict] = []
@@ -205,10 +211,36 @@ async def _execute_vision_task(
     resp = await vlm_client.chat.completions.create(
         model=vlm_model,
         messages=messages,
-        max_tokens=512,
+        max_tokens=800,  # 512 was too small for detailed extraction responses
     )
     latency_ms = (time.perf_counter() - t0) * 1000
-    raw_text = resp.choices[0].message.content or ""
+    raw_text = (resp.choices[0].message.content or "").strip()
+
+    # Empty response = context overflow (model hit max-model-len before generating output).
+    # Surface this clearly rather than returning a silent blank result.
+    if not raw_text:
+        finish = resp.choices[0].finish_reason if resp.choices else "unknown"
+        logger.warning(
+            "VLM returned empty content (finish_reason=%s). "
+            "Image may be too large for max-model-len 4096. "
+            "images_used=%s",
+            finish,
+            images_used,
+        )
+        return AgentResult(
+            task_id=task.id,
+            status=TaskStatus.completed,
+            result=(
+                f"Vision model returned no output (finish_reason={finish!r}). "
+                f"The image context likely exceeded max-model-len 4096. "
+                f"Image retrieved: {images_used[0] if images_used else 'none'}"
+            ),
+            confidence=0.0,
+            model_used=vlm_model,
+            hardware="cpu",
+            latency_ms=latency_ms,
+            tool_calls=images_used,
+        )
 
     # Parse JSON response
     try:
