@@ -6,8 +6,15 @@ Can be run as a CLI to seed one or all predefined corpora:
   # Seed a single corpus (text only)
   docker compose exec backend python -m backend.corpus.ingester ai_hardware
 
-  # Seed all corpora including images
+  # Seed all corpora including Wikipedia images
   docker compose exec backend python -m backend.corpus.ingester --all --images
+
+  # Seed all corpora including PDF-extracted images (architecture diagrams,
+  # benchmark charts, comparison tables — used by the vision worker)
+  docker compose exec backend python -m backend.corpus.ingester --all --pdfs
+
+  # Full ingest: text + Wikipedia images + PDF images
+  docker compose exec backend python -m backend.corpus.ingester --all --images --pdfs
 
   # Seed from a custom list of Wikipedia titles
   docker compose exec backend python -m backend.corpus.ingester my_corpus \\
@@ -25,6 +32,7 @@ from backend.corpus.chunker import chunk_text
 from backend.corpus.downloader import fetch_articles
 from backend.corpus.embedder import Embedder
 from backend.corpus.image_downloader import fetch_corpus_images
+from backend.corpus.pdf_ingester import ingest_pdf_images
 from backend.corpus.redis_imagestore import RedisImageStore
 from backend.corpus.redis_vectorstore import RedisVectorStore
 from backend.corpus.seed_data import CORPORA
@@ -162,7 +170,13 @@ async def main() -> int:
         help="Custom Wikipedia titles (requires positional corpus name)",
     )
     parser.add_argument("--drop", action="store_true", help="Drop existing index before seeding")
-    parser.add_argument("--images", action="store_true", help="Also download and index images")
+    parser.add_argument("--images", action="store_true", help="Also download and index Wikipedia thumbnail images")
+    parser.add_argument(
+        "--pdfs",
+        action="store_true",
+        help="Extract and index images from curated PDFs (config/corpus_pdfs.yaml) — "
+             "architecture diagrams, benchmark charts, comparison tables for the vision worker",
+    )
     args = parser.parse_args()
 
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6479")
@@ -205,20 +219,46 @@ async def main() -> int:
         finally:
             await store.close()
 
-        if args.images:
+        if args.images or args.pdfs:
             image_store = RedisImageStore(redis_url=redis_url, corpus_name=corpus_name, embedding_dim=emb_dim)
             try:
                 if args.drop:
                     print(f"[{corpus_name}] Dropping existing image index …")
                     await image_store.drop_index(delete_documents=True)
-                img_summary = await ingest_images(corpus_name, titles, embedder, image_store)
-                summaries[-1]["image_count"] = img_summary["image_count"]
+
+                wiki_img_count = 0
+                if args.images:
+                    img_summary = await ingest_images(corpus_name, titles, embedder, image_store)
+                    wiki_img_count = img_summary["image_count"]
+
+                pdf_img_count = 0
+                if args.pdfs:
+                    pdf_summary = await ingest_pdf_images(corpus_name, embedder, image_store)
+                    pdf_img_count = pdf_summary["image_count"]
+                    if pdf_summary["skipped_pdfs"]:
+                        print(
+                            f"[{corpus_name}:pdfs] Warning: {pdf_summary['skipped_pdfs']} "
+                            f"PDF(s) failed to download"
+                        )
+
+                summaries[-1]["image_count"] = wiki_img_count + pdf_img_count
+                summaries[-1]["pdf_image_count"] = pdf_img_count
             finally:
                 await image_store.close()
 
     print("\n── Summary ─────────────────────────────────────────")
     for s in summaries:
-        img_info = f"  images={s.get('image_count', '-'):>3}" if args.images else ""
+        img_info = ""
+        if args.images or args.pdfs:
+            total_imgs = s.get("image_count", 0)
+            pdf_imgs   = s.get("pdf_image_count", 0)
+            wiki_imgs  = total_imgs - pdf_imgs
+            parts = []
+            if args.images:
+                parts.append(f"wiki={wiki_imgs}")
+            if args.pdfs:
+                parts.append(f"pdf={pdf_imgs}")
+            img_info = f"  images={total_imgs} ({', '.join(parts)})"
         print(
             f"  {s['corpus']:20s}  articles={s['article_count']:3d}"
             f"  chunks={s['chunk_count']:5d}  skipped={s['skipped']}{img_info}"

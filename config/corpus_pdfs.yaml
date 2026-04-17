@@ -1,0 +1,80 @@
+# Curated PDF sources for the corpus image store.
+#
+# These PDFs are downloaded, parsed for figures/diagrams, and the extracted
+# images are indexed in Redis alongside Wikipedia thumbnail images.
+#
+# The VLM vision worker retrieves images by caption embedding similarity and
+# sends them to Phi-3.5-vision. Good images for the demo are:
+#   - Architecture block diagrams (CPU die layouts, software stack diagrams)
+#   - Benchmark bar/line charts (tokens/sec, latency, throughput)
+#   - Comparison tables rendered as images
+#
+# Image filtering: width >= 200px, height >= 200px, aspect ratio 0.2–5.0
+# Caption extraction: figures are captioned from "Figure N:" text on the
+# same page; falls back to section heading + PDF description.
+#
+# Adding a PDF: append a url + description entry under the appropriate corpus.
+# Re-run:  docker compose exec backend python -m backend.corpus.ingester --all --pdfs
+#
+# arXiv PDF format: https://arxiv.org/pdf/{paper_id}
+# (no auth required, stable long-term, redirects to current version)
+
+corpora:
+
+  ai_hardware:
+    pdfs:
+
+      # vLLM / PagedAttention — GPU/CPU memory hierarchy diagrams,
+      # throughput comparison charts across hardware configurations
+      - url: "https://arxiv.org/pdf/2309.06180"
+        description: >-
+          PagedAttention vLLM — GPU and CPU memory management architecture,
+          KV-cache paging diagrams, and throughput benchmark charts
+
+      # FlashAttention — IO-aware attention, memory bandwidth analysis,
+      # roofline model diagrams comparing arithmetic vs memory-bound regimes
+      - url: "https://arxiv.org/pdf/2205.14135"
+        description: >-
+          FlashAttention — GPU memory bandwidth roofline diagrams,
+          IO complexity analysis, attention speed benchmark charts
+
+      # Efficient LLM inference survey — hardware performance tables,
+      # speedup charts across accelerator families (CPU, GPU, ASIC)
+      - url: "https://arxiv.org/pdf/2404.14294"
+        description: >-
+          LLM Inference Efficiency Survey — hardware accelerator comparison
+          tables, throughput and latency benchmark charts across platforms
+
+  ai_software:
+    pdfs:
+
+      # Llama 2 — RLHF pipeline block diagram, ghost attention architecture,
+      # benchmark result tables (HumanEval, MMLU, safety evaluations)
+      - url: "https://arxiv.org/pdf/2307.08691"
+        description: >-
+          Llama 2 — RLHF fine-tuning pipeline architecture, transformer
+          block diagrams, and benchmark comparison tables
+
+      # Speculative decoding — draft/verify pipeline diagram,
+      # latency speedup charts on CPU vs GPU
+      - url: "https://arxiv.org/pdf/2302.01318"
+        description: >-
+          Speculative Decoding — draft-and-verify pipeline architecture
+          diagram and inference latency speedup charts
+
+  llm_landscape:
+    pdfs:
+
+      # A Survey of Large Language Models — comprehensive model timeline,
+      # capability comparison radar charts, parameter scale vs performance
+      - url: "https://arxiv.org/pdf/2303.18223"
+        description: >-
+          LLM Survey — model family timeline, capability comparison charts,
+          parameter scale vs benchmark performance diagrams
+
+      # Scaling laws paper — loss curves, compute-optimal training charts,
+      # power-law relationship diagrams (highly visual)
+      - url: "https://arxiv.org/pdf/2001.08361"
+        description: >-
+          Neural Scaling Laws — loss vs compute curves, power-law scaling
+          diagrams, model size vs dataset size optimization charts
