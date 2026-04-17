@@ -121,6 +121,7 @@ class EventType(str, Enum):
     run_completed     = "run_completed"
     single_started    = "single_started"     # A/B single-model events
     single_token      = "single_token"       # streaming token
+    single_retrying   = "single_retrying"    # context overflow → retry with fewer chunks
     single_completed  = "single_completed"
     error             = "error"
 

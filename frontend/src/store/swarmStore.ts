@@ -45,6 +45,15 @@ interface SwarmStore {
   singleLatencyMs: number | null
   singleError: string | null
 
+  // Retry state (context overflow)
+  singleRetrying: boolean
+  singleRetryInfo: {
+    requestedTokens: number
+    limitTokens: number
+    originalChunks: number
+    retryTopK: number
+  } | null
+
   // Context rot metrics
   singleChunksRetrieved: number
   singleChunksIncluded: number
@@ -77,6 +86,8 @@ const initialState = {
   singleCompleted: false,
   singleLatencyMs: null,
   singleError: null,
+  singleRetrying: false,
+  singleRetryInfo: null,
   singleChunksRetrieved: 0,
   singleChunksIncluded: 0,
   singleChunksCited: 0,
@@ -193,6 +204,19 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         })
         break
 
+      case 'single_retrying':
+        set({
+          singleRetrying: true,
+          singleTokens: '',   // clear any partial stream so retry starts fresh
+          singleRetryInfo: {
+            requestedTokens: payload.requested_tokens as number,
+            limitTokens: payload.limit_tokens as number,
+            originalChunks: payload.original_chunks as number,
+            retryTopK: payload.retry_top_k as number,
+          },
+        })
+        break
+
       case 'single_token':
         set((s) => ({ singleTokens: s.singleTokens + (payload.token as string) }))
         break
@@ -200,6 +224,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
       case 'single_completed':
         set({
           singleCompleted: true,
+          singleRetrying: false,
           singleLatencyMs: payload.latency_ms as number,
           singleTokens: payload.answer as string,
           // Context rot metrics

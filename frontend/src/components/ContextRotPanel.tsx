@@ -127,6 +127,8 @@ export function ContextRotPanel() {
   const completed = useSwarmStore((s) => s.singleCompleted)
   const latencyMs = useSwarmStore((s) => s.singleLatencyMs)
   const singleError = useSwarmStore((s) => s.singleError)
+  const singleRetrying = useSwarmStore((s) => s.singleRetrying)
+  const retryInfo = useSwarmStore((s) => s.singleRetryInfo)
   const isRunning = useSwarmStore((s) => s.isRunning)
   const runId = useSwarmStore((s) => s.runId)
   const streaming = !!tokens && !completed
@@ -171,6 +173,35 @@ export function ContextRotPanel() {
 
       {/* Context rot meter */}
       <ContextRotMeter />
+
+      {/* Context overflow / retry banner */}
+      {retryInfo && (
+        <div className="rounded-lg border border-amber-600 bg-amber-950/30 p-4">
+          <div className="flex items-start gap-2 mb-2">
+            <span className="text-amber-400 text-lg leading-none flex-shrink-0">⚡</span>
+            <div>
+              <p className="text-sm font-semibold text-amber-300">Context limit hit — this proves the point!</p>
+              <p className="text-xs text-amber-200/70 mt-0.5">
+                The model's {retryInfo.limitTokens.toLocaleString()}-token limit was exceeded:{' '}
+                <span className="font-mono text-amber-300">{retryInfo.requestedTokens.toLocaleString()}</span> tokens
+                requested across {retryInfo.originalChunks} context chunks.
+                A single model simply cannot fit all retrieved knowledge at once.
+              </p>
+            </div>
+          </div>
+          {singleRetrying ? (
+            <div className="flex items-center gap-2 text-xs text-amber-400 animate-pulse">
+              <span>↩</span>
+              <span>Retrying with {retryInfo.retryTopK} chunks instead of {retryInfo.originalChunks}…</span>
+            </div>
+          ) : (
+            <div className="text-xs text-amber-400/70">
+              ↩ Retried with {retryInfo.retryTopK} chunks
+              {' '}— note the higher rot score with less context still going uncited
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Streaming / completed answer */}
       {tokens && !completed && (
