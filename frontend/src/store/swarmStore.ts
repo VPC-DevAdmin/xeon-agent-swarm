@@ -43,6 +43,7 @@ interface SwarmStore {
   singleHardware: string
   singleCompleted: boolean
   singleLatencyMs: number | null
+  singleError: string | null
 
   // Context rot metrics
   singleChunksRetrieved: number
@@ -75,6 +76,7 @@ const initialState = {
   singleHardware: '',
   singleCompleted: false,
   singleLatencyMs: null,
+  singleError: null,
   singleChunksRetrieved: 0,
   singleChunksIncluded: 0,
   singleChunksCited: 0,
@@ -211,10 +213,22 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         })
         break
 
-      case 'error':
-        console.error('[swarm error]', payload.error)
-        set({ isRunning: false, synthesizing: false })
+      case 'error': {
+        const msg = payload.error as string
+        console.error('[swarm error]', msg)
+        // Single-model errors are prefixed "single_model: …" by the backend.
+        // Mark the panel as terminated so the UI shows the error instead of
+        // spinning "waiting" forever.
+        if (msg?.startsWith('single_model:')) {
+          set({
+            singleCompleted: true,
+            singleError: msg.replace(/^single_model:\s*/, ''),
+          })
+        } else {
+          set({ isRunning: false, synthesizing: false })
+        }
         break
+      }
     }
   },
 }))

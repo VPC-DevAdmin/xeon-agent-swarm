@@ -126,6 +126,7 @@ export function ContextRotPanel() {
   const hardware = useSwarmStore((s) => s.singleHardware)
   const completed = useSwarmStore((s) => s.singleCompleted)
   const latencyMs = useSwarmStore((s) => s.singleLatencyMs)
+  const singleError = useSwarmStore((s) => s.singleError)
   const isRunning = useSwarmStore((s) => s.isRunning)
   const runId = useSwarmStore((s) => s.runId)
   const streaming = !!tokens && !completed
@@ -196,12 +197,26 @@ export function ContextRotPanel() {
       )}
 
       {/* Empty states */}
-      {!tokens && !isRunning && !runId && (
+      {/* Error state */}
+      {singleError && (
+        <div className="rounded-lg border border-red-800 bg-red-950/30 p-4">
+          <div className="flex items-start gap-2">
+            <span className="text-red-400 text-sm font-semibold flex-shrink-0">⚠ Error</span>
+            <p className="text-sm text-red-300 leading-relaxed">{singleError}</p>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Check backend logs: <code className="text-gray-400">docker compose logs backend | grep single</code>
+          </p>
+        </div>
+      )}
+
+      {/* Empty states */}
+      {!tokens && !singleError && !isRunning && !runId && (
         <div className="flex items-center justify-center h-48 text-gray-600 text-sm">
           Single model output will appear here
         </div>
       )}
-      {!tokens && (isRunning || !!runId) && !completed && (
+      {!tokens && !singleError && (isRunning || !!runId) && !completed && (
         <div className="flex items-center justify-center h-48 text-gray-600 text-sm">
           <span className="animate-pulse">Waiting for single model response…</span>
         </div>
