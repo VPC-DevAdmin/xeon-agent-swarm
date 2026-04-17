@@ -67,6 +67,10 @@ _MIN_HEIGHT = 200
 _MIN_ASPECT = 0.2   # width/height — skip very tall narrow strips
 _MAX_ASPECT = 5.0   # skip very wide horizontal banners/rules
 
+# Embedding limits — TEI has a 512-token sequence limit and a per-batch cap
+_EMBED_BATCH     = 32   # max captions per /embed call
+_MAX_CAPTION_LEN = 380  # characters (~300 tokens); keeps us safely under 512
+
 # ── Caption patterns ──────────────────────────────────────────────────────────
 
 # Matches "Figure 3:", "Fig. 3.", "FIGURE 3 —", etc., then captures caption text
@@ -339,9 +343,18 @@ async def ingest_pdf_images(
         if not images:
             continue
 
-        captions   = [img["caption"] for img in images]
-        embeddings = await embedder.embed_texts(captions)
-        n          = await image_store.add_images(images, embeddings)
+        # Truncate captions to stay within TEI's 512-token sequence limit,
+        # then batch embed to stay within TEI's per-request batch cap.
+        for img in images:
+            img["caption"] = img["caption"][:_MAX_CAPTION_LEN]
+
+        captions = [img["caption"] for img in images]
+        embeddings: list = []
+        for i in range(0, len(captions), _EMBED_BATCH):
+            batch_embs = await embedder.embed_texts(captions[i : i + _EMBED_BATCH])
+            embeddings.extend(batch_embs)
+
+        n = await image_store.add_images(images, embeddings)
         total_images += n
         print(f"[{corpus_name}:pdfs]   Indexed {n} images")
 
