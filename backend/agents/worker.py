@@ -142,7 +142,20 @@ async def _execute_vision_task(
             content.append({"type": "text", "text": f"[Image: {hit['caption']}]"})
             images_used.append(hit["local_path"])
 
-    content.append({"type": "text", "text": task.description})
+    # Give the VLM an explicit extraction directive, not just the task description.
+    # Without this, vision models default to high-level image descriptions rather
+    # than reading the actual numbers, labels, and components in the image.
+    extraction_prompt = (
+        f"Task: {task.description}\n\n"
+        "IMPORTANT — do not describe these images at a high level. Read and extract "
+        "the specific information they contain:\n"
+        "• Charts/graphs: report exact axis labels, series names, and key numeric values\n"
+        "• Architecture diagrams: list every labeled component and the connections between them\n"
+        "• Tables: extract rows, columns, and their values\n"
+        "• Pipeline diagrams: list each stage in order, noting parallel vs sequential steps\n\n"
+        "Synthesize what the images reveal that text descriptions alone cannot convey."
+    )
+    content.append({"type": "text", "text": extraction_prompt})
 
     if not vlm_endpoint:
         # VLM service not configured — tell the user what was found and why we fell back.
