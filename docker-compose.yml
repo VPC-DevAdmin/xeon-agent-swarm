@@ -202,6 +202,7 @@ services:
       - VLM_MODEL=${VLM_MODEL:-microsoft/Phi-3.5-vision-instruct}
       - IMAGE_DIR=/data/images
       - AUDIO_DIR=/data/audio
+      - PDF_CACHE_DIR=/data/pdf_cache
     depends_on:
       redis:
         condition: service_healthy
@@ -215,6 +216,7 @@ services:
       - ./config:/app/config:ro
       - image_data:/data/images
       - audio_data:/data/audio
+      - pdf_data:/data/pdf_cache
     command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
   # ── Frontend ──────────────────────────────────────────────────────────────
@@ -237,4 +239,5 @@ volumes:
   redis_data:
   tei_data:
   image_data:
+  pdf_data:
   audio_data:
