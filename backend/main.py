@@ -267,10 +267,12 @@ async def run_single_model_pipeline(run_id: str, query: str):
 
 @app.post("/run")
 async def start_run(request: RunRequest):
-    """Start a new swarm run + concurrent A/B single-model run."""
+    """Start a new swarm run. Set ENABLE_AB_COMPARISON=1 to also start
+    the single-model baseline pipeline for legacy A/B comparison mode."""
     run_id = str(uuid.uuid4())
     asyncio.create_task(run_swarm(run_id, request.query))
-    asyncio.create_task(run_single_model_pipeline(run_id, request.query))
+    if os.getenv("ENABLE_AB_COMPARISON", "").strip() == "1":
+        asyncio.create_task(run_single_model_pipeline(run_id, request.query))
     return {"run_id": run_id}
 
 
