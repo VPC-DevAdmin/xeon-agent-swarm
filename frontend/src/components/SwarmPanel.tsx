@@ -7,7 +7,7 @@ export function SwarmPanel() {
   const taskGraph = useSwarmStore((s) => s.taskGraph)
   const finalAnswer = useSwarmStore((s) => s.finalAnswer)
   const swarmLatencyMs = useSwarmStore((s) => s.swarmLatencyMs)
-  const swarmTaskCount = useSwarmStore((s) => s.swarmTaskCount)
+  const swarmTaskCount = useSwarmStore((s) => s.taskGraph?.tasks.length ?? 0)
   const synthesizing = useSwarmStore((s) => s.synthesizing)
   const isRunning = useSwarmStore((s) => s.isRunning)
 

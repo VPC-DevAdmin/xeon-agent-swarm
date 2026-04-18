@@ -118,7 +118,7 @@ export function OutputPanel() {
       </AnimatePresence>
 
       {/* Key findings */}
-      {document?.key_findings?.length > 0 && (
+      {(document?.key_findings?.length ?? 0) > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -126,7 +126,7 @@ export function OutputPanel() {
         >
           <h3 className="text-xs font-bold text-blue-300 uppercase tracking-wide mb-3">Key Findings</h3>
           <ul className="space-y-1.5">
-            {document.key_findings.map((f, i) => (
+            {document!.key_findings.map((f, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
                 <span className="text-blue-400 font-bold shrink-0">{i + 1}.</span>
                 {f}

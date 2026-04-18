@@ -63,12 +63,13 @@ const edgeVariants = {
   visible: { scaleX: 1, transition: { duration: 0.5, ease: 'easeOut' } },
 }
 
-const pulseBorder = {
-  animate: {
-    boxShadow: ['0 0 0 0 rgba(59,130,246,0)', '0 0 0 6px rgba(59,130,246,0.3)', '0 0 0 0 rgba(59,130,246,0)'],
-    transition: { duration: 2, repeat: Infinity },
-  },
-}
+// Pulse keyframes used directly in StageNode's animate object (not a spread,
+// to avoid TypeScript's "animate specified more than once" error with variants)
+const PULSE_BOX_SHADOW = [
+  '0 0 0 0 rgba(59,130,246,0)',
+  '0 0 0 6px rgba(59,130,246,0.3)',
+  '0 0 0 0 rgba(59,130,246,0)',
+] as const
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,9 +107,15 @@ function StageNode({
 }) {
   return (
     <motion.div
-      variants={nodeVariants}
-      initial="hidden"
-      animate="visible"
+      initial={{ opacity: 0, scale: 0.82 }}
+      animate={active && !done
+        ? { opacity: 1, scale: 1, boxShadow: PULSE_BOX_SHADOW }
+        : { opacity: 1, scale: 1 }
+      }
+      transition={active && !done
+        ? { duration: 0.4, ease: [0.22, 1, 0.36, 1], boxShadow: { duration: 2, repeat: Infinity } }
+        : { duration: 0.4, ease: [0.22, 1, 0.36, 1] }
+      }
       className={`
         relative flex flex-col items-center gap-1 px-5 py-3 rounded-xl border
         ${done
@@ -119,7 +126,6 @@ function StageNode({
         }
         transition-colors duration-500
       `}
-      {...(active && !done ? pulseBorder : {})}
     >
       <span className="text-xl">{icon}</span>
       <span className={`text-xs font-semibold ${done ? 'text-green-400' : active ? `text-${color}-300` : 'text-gray-500'}`}>
