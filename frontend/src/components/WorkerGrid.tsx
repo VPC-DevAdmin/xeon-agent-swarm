@@ -3,6 +3,7 @@
  * Workers spawn with staggered timing to communicate parallelism visually.
  * Completing workers show a mini artifact preview inside their card.
  */
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useSwarmStore, PACING } from '../store/swarmStore'
 import type { TaskSpec } from '../types/swarm'
@@ -69,6 +70,30 @@ function ArtifactPreview({ taskId }: { taskId: string }) {
         </div>
       )
     },
+    chart: () => {
+      const series = ((art.content as { series?: Array<{ name: string; data: Array<{ x: unknown; y: number }> }> }).series ?? [])
+      const caption = (art.content as { caption?: string }).caption
+      const pts = series[0]?.data ?? []
+      return (
+        <div className="text-[9px] text-gray-400 mt-1">
+          {caption && <div className="text-indigo-400 truncate mb-0.5">📈 {caption}</div>}
+          <div className="flex items-end gap-0.5 h-5">
+            {pts.slice(0, 8).map((pt, i) => {
+              const max = Math.max(...pts.map((p) => p.y), 1)
+              const pct = Math.round((pt.y / max) * 100)
+              return (
+                <div
+                  key={i}
+                  className="bg-indigo-500/60 rounded-sm flex-1"
+                  style={{ height: `${Math.max(pct, 8)}%` }}
+                  title={`${pt.x}: ${pt.y}`}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )
+    },
     claim_verdict: () => {
       const v = (art.content as { verdict?: string; claim?: string }).verdict ?? 'uncertain'
       const colors = { supported: 'text-green-400', unsupported: 'text-red-400', uncertain: 'text-amber-400' }
@@ -109,10 +134,18 @@ function WorkerCard({ task, index }: { task: TaskSpec; index: number }) {
   const isFailed    = status === 'failed'
   const isKilled    = status === 'killed'
 
+  // Live elapsed timer — ticks every 100ms while the task is running
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (!isRunning) return
+    const id = setInterval(() => setNow(Date.now()), 100)
+    return () => clearInterval(id)
+  }, [isRunning])
+
   const elapsed = meta?.startedAt
     ? meta.completedAt
       ? ((meta.completedAt - meta.startedAt) / 1000).toFixed(1)
-      : ((Date.now() - meta.startedAt) / 1000).toFixed(1)
+      : ((now - meta.startedAt) / 1000).toFixed(1)
     : null
 
   const borderClass = isCompleted

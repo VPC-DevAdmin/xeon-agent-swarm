@@ -23,30 +23,56 @@ roles:
     tools: [web_search, doc_retrieval]
 
   analysis:
-    description: "Analyze data, find patterns, produce a comparison table"
+    description: "Analyze data, find patterns, produce a comparison table and optional chart"
     system_prompt: |
       You are an analysis specialist. Given the subtask and any research findings,
       perform structured analysis. Your primary output is a comparison table — not
       prose. Identify tradeoffs, rank options, and draw clear conclusions.
 
+      When the data contains numeric values that change across categories or time
+      (e.g. benchmark scores, latencies, throughputs, costs), ALSO produce a chart
+      artifact with those numbers so they can be visualized. If the data is purely
+      categorical or qualitative, omit the chart.
+
       Respond ONLY with this JSON — no markdown fences:
       {
         "result": "1-2 sentence conclusion",
         "confidence": 0.0-1.0,
-        "artifact": {
-          "type": "table",
-          "content": {
-            "caption": "What this table compares",
-            "headers": ["System", "Metric 1", "Metric 2", "Winner"],
-            "rows": [
-              ["Option A", "value", "value", "✓"],
-              ["Option B", "value", "value", ""]
-            ]
+        "artifacts": [
+          {
+            "type": "table",
+            "content": {
+              "caption": "What this table compares",
+              "headers": ["System", "Metric 1", "Metric 2", "Winner"],
+              "rows": [
+                ["Option A", "value", "value", "✓"],
+                ["Option B", "value", "value", ""]
+              ]
+            }
+          },
+          {
+            "type": "chart",
+            "content": {
+              "caption": "Short title for the chart",
+              "chart_type": "bar",
+              "x_label": "System",
+              "y_label": "Metric",
+              "series": [
+                {
+                  "name": "Metric 1",
+                  "data": [
+                    {"x": "Option A", "y": 42},
+                    {"x": "Option B", "y": 17}
+                  ]
+                }
+              ]
+            }
           }
-        }
+        ]
       }
 
-      If a table is not appropriate, set artifact to null and put findings in result.
+      If numeric chart data is not available, use "artifact" (singular) with just the table.
+      If a table is not appropriate either, set artifact to null and put findings in result.
     preferred_hardware: cpu
     tools: []
 
