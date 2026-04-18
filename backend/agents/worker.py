@@ -24,6 +24,8 @@ from backend.corpus.redis_imagestore import RedisImageStore
 from backend.corpus.seed_data import CORPORA
 from backend.inference.client import InferenceClient
 from backend.schemas.models import (
+    Artifact,
+    ArtifactType,
     AgentResult,
     SwarmState,
     TaskSpec,
@@ -31,6 +33,7 @@ from backend.schemas.models import (
     TaskType,
     EventType,
     SwarmEvent,
+    validate_code_syntax,
 )
 from backend.protocols.mcp_servers import call_tool
 
@@ -51,10 +54,41 @@ def _load_roles() -> dict:
     return _ROLES
 
 
-def _select_client(preferred_hardware: str) -> InferenceClient:
-    """Choose CPU or GPU endpoint based on role preference and env config."""
+def _client_for_role(task_type: TaskType) -> InferenceClient:
+    """
+    Specialist routing table — each role hits the model best suited to it.
+
+    Role            Model                         Rationale
+    ─────────────   ──────────────────────────    ───────────────────────────────
+    code            Qwen2.5-Coder-7B-Instruct     Code-tuned; noticeably better
+    writing         Mistral-7B-Instruct-v0.3       Prose quality / fluency
+    analysis        Mistral-7B-Instruct-v0.3       Synthesis quality
+    research        Phi-4-mini-instruct            Retrieval summarisation at 3.8B
+    fact_check      Phi-4-mini-instruct            Smaller = less confabulation
+    summarization   Phi-4-mini-instruct            Same
+    general         Phi-4-mini-instruct            Catch-all; CPU-cheap
+    vision          (handled in _execute_vision_task via VLM_ENDPOINT)
+    """
+    if task_type == TaskType.code:
+        return InferenceClient(
+            base_url=os.getenv("CODER_ENDPOINT", "http://localhost:8083/v1"),
+            model=os.getenv("CODER_MODEL", "Qwen/Qwen2.5-Coder-7B-Instruct"),
+            hardware="cpu",
+        )
+    if task_type in (TaskType.writing, TaskType.analysis):
+        # Mistral-7B for prose quality — same endpoint as the orchestrator
+        return InferenceClient(
+            base_url=os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1"),
+            model=os.getenv("ORCHESTRATOR_MODEL", "mistralai/Mistral-7B-Instruct-v0.3"),
+            hardware="cpu",
+        )
+    # research, fact_check, summarization, general, vision fallback → Phi-4-mini
+    # A smaller model is deliberately better for fact-checking: it is less likely
+    # to confabulate supporting evidence for claims it cannot verify.
     gpu_url = os.getenv("WORKER_GPU_ENDPOINT", "")
-    if preferred_hardware == "gpu" and gpu_url:
+    roles = _load_roles()
+    preferred_hw = roles.get(task_type.value, {}).get("preferred_hardware", "cpu")
+    if preferred_hw == "gpu" and gpu_url:
         return InferenceClient(
             base_url=gpu_url,
             model=os.getenv("WORKER_GPU_MODEL", "meta-llama/Llama-3.1-8B-Instruct"),
@@ -67,20 +101,72 @@ def _select_client(preferred_hardware: str) -> InferenceClient:
     )
 
 
+def _extract_artifacts(data: dict, task_id: str) -> list[Artifact]:
+    """
+    Pull typed artifacts out of a worker's JSON response.
+
+    Workers may return:
+      - "artifact": {...}          — single artifact
+      - "artifacts": [{...}, ...]  — multiple artifacts (code worker returns 2)
+
+    Code artifacts get server-side Python syntax validation.
+    Vision artifacts get source_image populated from tool_calls if present.
+    """
+    raw_artifacts: list[dict] = []
+    if "artifact" in data and data["artifact"]:
+        raw_artifacts = [data["artifact"]]
+    elif "artifacts" in data and data["artifacts"]:
+        raw_artifacts = [a for a in data["artifacts"] if a]
+
+    artifacts: list[Artifact] = []
+    for raw in raw_artifacts:
+        try:
+            art_type = ArtifactType(raw.get("type", "prose"))
+            content: dict = raw.get("content", {})
+
+            # Validate Python syntax for code artifacts
+            if art_type == ArtifactType.code:
+                code_str = content.get("code", "")
+                lang = content.get("language", "")
+                content["syntax_valid"] = validate_code_syntax(code_str, lang)
+
+            artifacts.append(
+                Artifact(
+                    type=art_type,
+                    content=content,
+                    worker_id=task_id,
+                    confidence=float(data.get("confidence", 0.8)),
+                )
+            )
+        except Exception as exc:
+            logger.debug("Artifact parse error task=%s: %s | raw=%s", task_id, exc, raw)
+
+    return artifacts
+
+
 def _parse_worker_response(raw: str, task_id: str, client: InferenceClient, latency_ms: float) -> AgentResult:
-    """Parse the model's JSON response; fall back gracefully to plain text."""
+    """Parse the model's JSON response; extract typed artifacts; fall back to plain text."""
+    # Strip markdown fences if the model wrapped the JSON
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        text = "\n".join(l for l in lines if not l.strip().startswith("```")).strip()
+
     try:
-        data = json.loads(raw)
+        data = json.loads(text)
         result = data.get("result", raw)
         confidence = float(data.get("confidence", 0.8))
+        artifacts = _extract_artifacts(data, task_id)
     except (json.JSONDecodeError, ValueError):
         result = raw
         confidence = 0.5
+        artifacts = []
 
     return AgentResult(
         task_id=task_id,
         status=TaskStatus.completed,
         result=result,
+        artifacts=artifacts,
         confidence=confidence,
         model_used=client.model,
         hardware=client.hardware,
@@ -192,7 +278,7 @@ async def _execute_vision_task(
 
     if not images_used:
         # VLM is running but no matching images were found in the corpus.
-        fallback_client = _select_client("cpu")
+        fallback_client = _client_for_role(TaskType.general)
         messages = [
             {"role": "system", "content": role_cfg["system_prompt"]},
             {"role": "user", "content": task.description},
@@ -242,19 +328,26 @@ async def _execute_vision_task(
             tool_calls=images_used,
         )
 
-    # Parse JSON response
+    # Parse JSON response and extract typed artifact
     try:
         data = json.loads(raw_text)
         result_text = data.get("result", raw_text)
         confidence = float(data.get("confidence", 0.8))
+        artifacts = _extract_artifacts(data, task.id)
+        # Patch source_image into extracted_data artifacts
+        for art in artifacts:
+            if art.type == ArtifactType.extracted_data and images_used:
+                art.content.setdefault("source_image", images_used[0])
     except (json.JSONDecodeError, ValueError):
         result_text = raw_text
         confidence = 0.7
+        artifacts = []
 
     return AgentResult(
         task_id=task.id,
         status=TaskStatus.completed,
         result=result_text,
+        artifacts=artifacts,
         confidence=confidence,
         model_used=vlm_model,
         hardware="cpu",
@@ -272,7 +365,7 @@ async def execute_task(
     """Execute a single task, broadcast events, return AgentResult."""
     roles = _load_roles()
     role_cfg = roles.get(task.type.value, roles["general"])
-    client = _select_client(role_cfg.get("preferred_hardware", "cpu"))
+    client = _client_for_role(task.type)
 
     # For vision tasks, report the VLM model in task_started (not the CPU worker)
     # so the UI shows the correct model before the VLM call begins.
@@ -311,6 +404,7 @@ async def execute_task(
                     payload={
                         "task_id": task.id,
                         "result": agent_result.result,
+                        "artifacts": [a.model_dump() for a in agent_result.artifacts],
                         "confidence": agent_result.confidence,
                         "model_used": agent_result.model_used,
                         "hardware": agent_result.hardware,
@@ -374,6 +468,7 @@ async def execute_task(
                 payload={
                     "task_id": task.id,
                     "result": agent_result.result,
+                    "artifacts": [a.model_dump() for a in agent_result.artifacts],
                     "confidence": agent_result.confidence,
                     "model_used": agent_result.model_used,
                     "hardware": agent_result.hardware,
