@@ -75,6 +75,7 @@ export function OutputPanel() {
   const artifacts     = useSwarmStore((s) => s.artifacts)
   const runCompleted  = useSwarmStore((s) => s.runCompleted)
   const synthesizing  = useSwarmStore((s) => s.synthesizing)
+  const retryRun      = useSwarmStore((s) => s.retryRun)
   const panelRef      = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom as new artifacts appear
@@ -164,8 +165,22 @@ export function OutputPanel() {
         </motion.div>
       ))}
 
-      {/* No content yet */}
-      {!document && !artifacts.length && synthesizing && null}
+      {/* Run again footer */}
+      {runCompleted && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+          className="flex justify-center pt-2 pb-4"
+        >
+          <button
+            onClick={() => retryRun()}
+            className="flex items-center gap-1.5 text-xs px-4 py-2 rounded-full border border-gray-700 bg-gray-900/60 text-gray-400 hover:text-white hover:border-blue-700 transition-colors"
+          >
+            ↺ Run again with same query
+          </button>
+        </motion.div>
+      )}
     </div>
   )
 }

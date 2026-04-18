@@ -100,6 +100,7 @@ function WorkerCard({ task, index }: { task: TaskSpec; index: number }) {
   const meta       = useSwarmStore((s) => s.taskMeta[task.id])
   const status     = useSwarmStore((s) => s.taskStatuses[task.id] ?? 'pending')
   const killTask   = useSwarmStore((s) => s.killTask)
+  const retryTask  = useSwarmStore((s) => s.retryTask)
 
   const style = ROLE_STYLE[task.type] ?? DEFAULT_STYLE
 
@@ -178,6 +179,15 @@ function WorkerCard({ task, index }: { task: TaskSpec; index: number }) {
             className="ml-1 text-[9px] px-1.5 py-0.5 rounded border border-red-900 text-red-600 hover:bg-red-950 transition-colors"
           >
             Kill
+          </button>
+        )}
+        {/* Retry button — shown on killed or failed workers */}
+        {(isKilled || isFailed) && (
+          <button
+            onClick={() => retryTask(task.id)}
+            className="ml-1 text-[9px] px-1.5 py-0.5 rounded border border-blue-900 text-blue-500 hover:bg-blue-950 transition-colors"
+          >
+            ↺ Retry
           </button>
         )}
       </div>

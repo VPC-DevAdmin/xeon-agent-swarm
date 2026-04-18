@@ -262,7 +262,7 @@ async def _execute_vision_task(
             if img_count > 0
             else "No images matched the query and the vision worker (VLM_ENDPOINT) is not running."
         )
-        fallback_client = _select_client("cpu")
+        fallback_client = _client_for_role(TaskType.general)
         latency_ms = (time.perf_counter() - t0) * 1000
         result = AgentResult(
             task_id=task.id,

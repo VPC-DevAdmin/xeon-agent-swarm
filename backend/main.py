@@ -36,6 +36,8 @@ from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
 from backend.schemas.models import (
+    AgentResult,
+    KillTaskRequest,
     RunRequest,
     RunResult,
     SwarmEvent,
@@ -66,6 +68,10 @@ import time
 # ── In-memory store for run results (production: use Redis) ──────────────────
 _run_results: dict[str, RunResult] = {}
 _task_queue: TaskQueue | None = None
+
+# Registry of live asyncio Tasks indexed by (run_id, task_id).
+# Populated by run_swarm() so the /kill endpoint can cancel them.
+_running_tasks: dict[str, dict[str, asyncio.Task]] = {}
 
 
 @asynccontextmanager
@@ -143,6 +149,7 @@ async def run_swarm(run_id: str, query: str):
         # ── Step 2: Fan-out workers (respecting dependencies) ─────────────────
         completed_ids: set[str] = set()
         pending_tasks = list(task_graph.tasks)
+        _running_tasks[run_id] = {}
 
         while pending_tasks:
             # Find all tasks whose dependencies are satisfied
@@ -156,21 +163,47 @@ async def run_swarm(run_id: str, query: str):
             for t in ready:
                 pending_tasks.remove(t)
 
-            # Build dep context for tasks that have dependencies
             async def run_one(task):
                 context = {
                     dep: state.results[dep].result
                     for dep in task.dependencies
                     if dep in state.results
                 }
-                result = await execute_task(
-                    task=task,
-                    run_id=run_id,
-                    broadcast=manager.broadcast,
-                    context=context or None,
+                # Wrap in a named asyncio.Task so /kill can cancel it
+                inner = asyncio.create_task(
+                    execute_task(
+                        task=task,
+                        run_id=run_id,
+                        broadcast=manager.broadcast,
+                        context=context or None,
+                    ),
+                    name=f"{run_id}:{task.id}",
                 )
+                _running_tasks[run_id][task.id] = inner
+                try:
+                    result = await inner
+                except asyncio.CancelledError:
+                    # Kill was requested for this task — create a killed AgentResult
+                    # and broadcast the event (execute_task never got to do it).
+                    result = AgentResult(
+                        task_id=task.id,
+                        status=TaskStatus.killed,
+                        result="Task cancelled by user.",
+                        confidence=0.0,
+                        model_used="n/a",
+                        hardware="n/a",
+                        latency_ms=0.0,
+                    )
+                    await manager.broadcast(run_id, SwarmEvent(
+                        event=EventType.task_killed,
+                        run_id=run_id,
+                        payload={"task_id": task.id},
+                    ))
+                finally:
+                    _running_tasks[run_id].pop(task.id, None)
+
                 state.results[task.id] = result
-                # Record metrics
+                # Record metrics (killed tasks still count)
                 tasks_total.labels(
                     status=result.status.value,
                     type=task.type.value,
@@ -182,8 +215,13 @@ async def run_swarm(run_id: str, query: str):
                 ).observe(result.latency_ms / 1000)
                 return task.id
 
-            finished_ids = await asyncio.gather(*[run_one(t) for t in ready])
-            completed_ids.update(finished_ids)
+            finished_ids = await asyncio.gather(
+                *[run_one(t) for t in ready],
+                return_exceptions=True,  # one killed task doesn't abort the batch
+            )
+            completed_ids.update(
+                fid for fid in finished_ids if isinstance(fid, str)
+            )
 
         # ── Step 3: Reduce ────────────────────────────────────────────────────
         final_answer, document = await synthesize(
@@ -288,6 +326,79 @@ async def get_run(run_id: str):
         if cached:
             return cached
     return {"run_id": run_id, "status": "not_found"}
+
+
+@app.post("/run/{run_id}/kill")
+async def kill_task(run_id: str, request: KillTaskRequest):
+    """
+    Cancel a running worker task by task_id.
+    The asyncio.Task is cancelled; the CancelledError is caught in run_swarm()
+    which broadcasts task_killed and records a killed AgentResult.
+    """
+    task = _running_tasks.get(run_id, {}).get(request.task_id)
+    if task and not task.done():
+        task.cancel()
+        return {"status": "killed", "task_id": request.task_id}
+    return {"status": "not_found", "task_id": request.task_id}
+
+
+@app.post("/run/{run_id}/retry")
+async def retry_task(run_id: str, request: KillTaskRequest):
+    """
+    Re-dispatch a single failed or killed task within an existing run.
+    Looks up the task from the stored task_graph, rebuilds its dependency context,
+    and re-executes it — broadcasting task_started / task_completed as normal.
+    This lets the UI retry individual specialists without restarting the full run.
+    """
+    stored = _run_results.get(run_id)
+    if not stored or not stored.swarm.task_graph:
+        return {"status": "not_found", "detail": "run or task graph not found"}
+
+    task_spec = next(
+        (t for t in stored.swarm.task_graph.tasks if t.id == request.task_id), None
+    )
+    if not task_spec:
+        return {"status": "not_found", "detail": f"task {request.task_id} not in graph"}
+
+    async def _do_retry():
+        context = {
+            dep: stored.swarm.results[dep].result
+            for dep in task_spec.dependencies
+            if dep in stored.swarm.results
+        }
+        inner = asyncio.create_task(
+            execute_task(
+                task=task_spec,
+                run_id=run_id,
+                broadcast=manager.broadcast,
+                context=context or None,
+            ),
+            name=f"{run_id}:{task_spec.id}:retry",
+        )
+        _running_tasks.setdefault(run_id, {})[task_spec.id] = inner
+        try:
+            result = await inner
+        except asyncio.CancelledError:
+            result = AgentResult(
+                task_id=task_spec.id,
+                status=TaskStatus.killed,
+                result="Retry cancelled by user.",
+                confidence=0.0,
+                model_used="n/a",
+                hardware="n/a",
+                latency_ms=0.0,
+            )
+            await manager.broadcast(run_id, SwarmEvent(
+                event=EventType.task_killed,
+                run_id=run_id,
+                payload={"task_id": task_spec.id},
+            ))
+        finally:
+            _running_tasks.get(run_id, {}).pop(task_spec.id, None)
+        stored.swarm.results[task_spec.id] = result
+
+    asyncio.create_task(_do_retry())
+    return {"status": "retrying", "task_id": request.task_id}
 
 
 @app.websocket("/ws/{run_id}")

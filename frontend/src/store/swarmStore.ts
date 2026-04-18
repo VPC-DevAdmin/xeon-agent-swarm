@@ -58,6 +58,8 @@ interface SwarmStore {
   // Actions
   startRun: (runId: string, query: string) => void
   killTask: (taskId: string) => void
+  retryTask: (taskId: string) => void
+  retryRun: () => Promise<void>
   dispatch: (event: SwarmEvent) => void
   reset: () => void
 }
@@ -89,7 +91,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   killTask: (taskId: string) => {
     const { runId } = get()
     if (!runId) return
-    // Optimistic UI update
+    // Optimistic UI update — the backend confirms via task_killed WS event
     set((s) => ({
       taskStatuses: { ...s.taskStatuses, [taskId]: 'killed' },
       taskMeta: {
@@ -97,12 +99,54 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         [taskId]: { ...s.taskMeta[taskId], killed: true, completedAt: Date.now() },
       },
     }))
-    // Inform the backend (best-effort; backend may not support it yet)
     fetch(`${API_BASE}/run/${runId}/kill`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task_id: taskId }),
-    }).catch(() => {/* ignore — kill is UI-side for now */})
+    }).catch(() => {/* network failure — optimistic state stands */})
+  },
+
+  retryTask: (taskId: string) => {
+    const { runId } = get()
+    if (!runId) return
+    // Optimistic: reset the task to running so the card shows activity immediately
+    set((s) => ({
+      taskStatuses: { ...s.taskStatuses, [taskId]: 'running' },
+      taskMeta: {
+        ...s.taskMeta,
+        [taskId]: {
+          ...s.taskMeta[taskId],
+          killed: false,
+          startedAt: Date.now(),
+          completedAt: null,
+        },
+      },
+      // Remove stale result so the mini-preview clears
+      taskResults: Object.fromEntries(
+        Object.entries(s.taskResults).filter(([k]) => k !== taskId)
+      ),
+    }))
+    fetch(`${API_BASE}/run/${runId}/retry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId }),
+    }).catch(() => {/* fall through — WS events will update state if it worked */})
+  },
+
+  retryRun: async () => {
+    const { query, reset, startRun } = get()
+    if (!query.trim()) return
+    reset()
+    try {
+      const resp = await fetch(`${API_BASE}/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim() }),
+      })
+      if (!resp.ok) return
+      const data = await resp.json()
+      startRun(data.run_id as string, query)
+    } catch {/* ignore */}
   },
 
   dispatch: (event: SwarmEvent) => {
@@ -113,7 +157,8 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         set({ taskGraph: payload as unknown as TaskGraph, demoStage: 'working' })
         break
 
-      case 'task_started':
+      case 'task_started': {
+        const isFactCheck = (payload.type as string) === 'fact_check'
         set((s) => ({
           taskStatuses: { ...s.taskStatuses, [payload.task_id as string]: 'running' },
           taskMeta: {
@@ -128,8 +173,11 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               killed: false,
             },
           },
+          // Advance to fact_checking stage when the first fact_check task starts
+          demoStage: isFactCheck && s.demoStage === 'working' ? 'fact_checking' : s.demoStage,
         }))
         break
+      }
 
       case 'task_completed': {
         const taskArtifacts = (payload.artifacts as Artifact[] | undefined) ?? []
