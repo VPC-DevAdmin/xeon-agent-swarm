@@ -17,6 +17,7 @@ import { useSwarmStore } from '../store/swarmStore'
 import type { Artifact, ArtifactType } from '../types/swarm'
 import { TableArtifact }       from './artifacts/TableArtifact'
 import { DiagramArtifact }     from './artifacts/DiagramArtifact'
+import { ChartArtifact }       from './artifacts/ChartArtifact'
 import { CodeArtifact }        from './artifacts/CodeArtifact'
 import { ClaimVerdictList }    from './artifacts/ClaimVerdictList'
 import { CitationList }        from './artifacts/CitationList'
@@ -53,6 +54,9 @@ function ArtifactSection({ type, artifacts }: { type: ArtifactType; artifacts: A
       ))}
       {type === 'diagram' && artifacts.map((a, i) => (
         <DiagramArtifact key={i} artifact={a} />
+      ))}
+      {type === 'chart' && artifacts.map((a, i) => (
+        <ChartArtifact key={i} artifact={a} />
       ))}
       {type === 'code' && artifacts.map((a, i) => (
         <CodeArtifact key={i} artifact={a} />
