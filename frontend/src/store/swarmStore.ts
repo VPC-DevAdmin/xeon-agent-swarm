@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  Artifact,
   TaskGraph,
   TaskStatus,
   AgentResult,
@@ -16,36 +17,53 @@ export interface TaskMeta {
   hardware: string
   startedAt: number | null
   completedAt: number | null
+  killed: boolean
+}
+
+// Demo pacing: minimum time each stage stays visible before auto-advancing.
+// The flow canvas reads these to gate transitions even when compute finishes fast.
+export const PACING = {
+  ORCHESTRATOR_DWELL_MS: 8_000,   // hold orchestrator card visible for ≥ 8s
+  WORKER_SPAWN_STAGGER_MS: 120,   // 120ms between each worker card appearing
+  WORKER_MIN_DWELL_MS: 3_000,     // don't show a worker as done in <3s
+  FACT_CHECK_DWELL_MS: 4_000,
+  SYNTHESIS_DWELL_MS: 3_000,
 }
 
 interface SwarmStore {
-  // Run
+  // Run lifecycle
   runId: string | null
   query: string
   isRunning: boolean
+  synthesizing: boolean
+  runCompleted: boolean
+  swarmLatencyMs: number | null
 
-  // Swarm pipeline
+  // Graph + tasks
   taskGraph: TaskGraph | null
   taskStatuses: Record<string, TaskStatus>
   taskMeta: Record<string, TaskMeta>
   taskResults: Record<string, AgentResult>
-  synthesizing: boolean
-  finalAnswer: string | null
-  swarmLatencyMs: number | null
-  swarmTaskCount: number | null
 
-  // Intelligence report document
+  // Typed artifacts collected from all workers (live, as tasks complete)
+  artifacts: Artifact[]
+
+  // Final structured document (fetched after run_completed)
   document: DocumentResult | null
 
-  // Single-model A/B panel
+  // Active demo stage for narrative cards and flow canvas
+  // orchestrating → working → fact_checking → synthesizing → done
+  demoStage: 'idle' | 'orchestrating' | 'working' | 'fact_checking' | 'synthesizing' | 'done'
+
+  // ── Legacy A/B single-model state (used when ENABLE_AB_COMPARISON=1) ───────
+  // Kept so ABPanel / ContextRotPanel / TimingBar continue to compile.
+  finalAnswer: string | null
   singleTokens: string
   singleModel: string
   singleHardware: string
   singleCompleted: boolean
   singleLatencyMs: number | null
   singleError: string | null
-
-  // Retry state (context overflow)
   singleRetrying: boolean
   singleRetryInfo: {
     requestedTokens: number
@@ -53,8 +71,6 @@ interface SwarmStore {
     originalChunks: number
     retryTopK: number
   } | null
-
-  // Context rot metrics
   singleChunksRetrieved: number
   singleChunksIncluded: number
   singleChunksCited: number
@@ -63,6 +79,9 @@ interface SwarmStore {
 
   // Actions
   startRun: (runId: string, query: string) => void
+  killTask: (taskId: string) => void
+  retryTask: (taskId: string) => void
+  retryRun: () => Promise<void>
   dispatch: (event: SwarmEvent) => void
   reset: () => void
 }
@@ -71,15 +90,18 @@ const initialState = {
   runId: null,
   query: '',
   isRunning: false,
+  synthesizing: false,
+  runCompleted: false,
+  swarmLatencyMs: null,
   taskGraph: null,
   taskStatuses: {},
   taskMeta: {},
   taskResults: {},
-  synthesizing: false,
-  finalAnswer: null,
-  swarmLatencyMs: null,
-  swarmTaskCount: null,
+  artifacts: [],
   document: null,
+  demoStage: 'idle' as const,
+  // Legacy A/B fields (zeroed out; populated only when ENABLE_AB_COMPARISON=1)
+  finalAnswer: null,
   singleTokens: '',
   singleModel: '',
   singleHardware: '',
@@ -98,19 +120,82 @@ const initialState = {
 export const useSwarmStore = create<SwarmStore>((set, get) => ({
   ...initialState,
 
-  startRun: (runId, query) => set({ ...initialState, runId, query, isRunning: true }),
+  startRun: (runId, query) =>
+    set({ ...initialState, runId, query, isRunning: true, demoStage: 'orchestrating' }),
 
   reset: () => set(initialState),
+
+  killTask: (taskId: string) => {
+    const { runId } = get()
+    if (!runId) return
+    // Optimistic UI update — the backend confirms via task_killed WS event
+    set((s) => ({
+      taskStatuses: { ...s.taskStatuses, [taskId]: 'killed' },
+      taskMeta: {
+        ...s.taskMeta,
+        [taskId]: { ...s.taskMeta[taskId], killed: true, completedAt: Date.now() },
+      },
+    }))
+    fetch(`${API_BASE}/run/${runId}/kill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId }),
+    }).catch(() => {/* network failure — optimistic state stands */})
+  },
+
+  retryTask: (taskId: string) => {
+    const { runId } = get()
+    if (!runId) return
+    // Optimistic: reset the task to running so the card shows activity immediately
+    set((s) => ({
+      taskStatuses: { ...s.taskStatuses, [taskId]: 'running' },
+      taskMeta: {
+        ...s.taskMeta,
+        [taskId]: {
+          ...s.taskMeta[taskId],
+          killed: false,
+          startedAt: Date.now(),
+          completedAt: null,
+        },
+      },
+      // Remove stale result so the mini-preview clears
+      taskResults: Object.fromEntries(
+        Object.entries(s.taskResults).filter(([k]) => k !== taskId)
+      ),
+    }))
+    fetch(`${API_BASE}/run/${runId}/retry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId }),
+    }).catch(() => {/* fall through — WS events will update state if it worked */})
+  },
+
+  retryRun: async () => {
+    const { query, reset, startRun } = get()
+    if (!query.trim()) return
+    reset()
+    try {
+      const resp = await fetch(`${API_BASE}/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim() }),
+      })
+      if (!resp.ok) return
+      const data = await resp.json()
+      startRun(data.run_id as string, query)
+    } catch {/* ignore */}
+  },
 
   dispatch: (event: SwarmEvent) => {
     const { payload } = event
 
     switch (event.event) {
       case 'graph_ready':
-        set({ taskGraph: payload as unknown as TaskGraph })
+        set({ taskGraph: payload as unknown as TaskGraph, demoStage: 'working' })
         break
 
-      case 'task_started':
+      case 'task_started': {
+        const isFactCheck = (payload.type as string) === 'fact_check'
         set((s) => ({
           taskStatuses: { ...s.taskStatuses, [payload.task_id as string]: 'running' },
           taskMeta: {
@@ -122,12 +207,17 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               hardware: payload.hardware as string,
               startedAt: Date.now(),
               completedAt: null,
+              killed: false,
             },
           },
+          // Advance to fact_checking stage when the first fact_check task starts
+          demoStage: isFactCheck && s.demoStage === 'working' ? 'fact_checking' : s.demoStage,
         }))
         break
+      }
 
-      case 'task_completed':
+      case 'task_completed': {
+        const taskArtifacts = (payload.artifacts as Artifact[] | undefined) ?? []
         set((s) => ({
           taskStatuses: { ...s.taskStatuses, [payload.task_id as string]: 'completed' },
           taskMeta: {
@@ -143,6 +233,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               task_id: payload.task_id as string,
               status: 'completed',
               result: payload.result as string,
+              artifacts: taskArtifacts,
               confidence: payload.confidence as number,
               model_used: payload.model_used as string,
               hardware: payload.hardware as string,
@@ -150,8 +241,14 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               tool_calls: (payload.tool_calls as string[]) || [],
             },
           },
+          // Collect artifacts from all non-writing workers into the global list
+          artifacts: [
+            ...s.artifacts,
+            ...taskArtifacts.filter((a) => a.type !== 'prose'),
+          ],
         }))
         break
+      }
 
       case 'task_failed':
         set((s) => ({
@@ -166,48 +263,69 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }))
         break
 
+      case 'task_killed':
+        set((s) => ({
+          taskStatuses: { ...s.taskStatuses, [payload.task_id as string]: 'killed' },
+          taskMeta: {
+            ...s.taskMeta,
+            [payload.task_id as string]: {
+              ...s.taskMeta[payload.task_id as string],
+              killed: true,
+              completedAt: Date.now(),
+            },
+          },
+        }))
+        break
+
       case 'synthesis_started':
-        set({ synthesizing: true })
+        set({ synthesizing: true, demoStage: 'synthesizing' })
         break
 
       case 'run_completed': {
+        const fa = payload.final_answer as string | undefined
         set({
-          finalAnswer: payload.final_answer as string,
           swarmLatencyMs: payload.latency_ms as number,
-          swarmTaskCount: payload.task_count as number,
           synthesizing: false,
           isRunning: false,
+          runCompleted: true,
+          demoStage: 'done',
+          finalAnswer: fa ?? null,
         })
-        // Fetch full RunResult from REST API to get structured document
         const runId = get().runId
         if (runId) {
           fetch(`${API_BASE}/run/${runId}`)
             .then((r) => r.json())
             .then((data) => {
-              if (data?.document) {
-                set({ document: data.document as DocumentResult })
-              }
+              if (data?.document) set({ document: data.document as DocumentResult })
             })
             .catch((err) => console.error('[swarm] fetch document failed:', err))
         }
         break
       }
 
+      // ── Legacy A/B single-model events (ENABLE_AB_COMPARISON=1) ─────────────
+
       case 'single_started':
         set({
+          singleTokens: '',
           singleModel: payload.model as string,
           singleHardware: payload.hardware as string,
-          // Context rot: chunks available before LLM call
-          singleChunksRetrieved: (payload.context_chunks_retrieved as number) || 0,
-          singleChunksIncluded: (payload.context_chunks_included as number) || 0,
-          singleTokenEstimate: (payload.context_token_estimate as number) || 0,
+          singleCompleted: false,
+          singleLatencyMs: null,
+          singleError: null,
+          singleRetrying: false,
+          singleRetryInfo: null,
         })
+        break
+
+      case 'single_token':
+        set((s) => ({ singleTokens: s.singleTokens + (payload.token as string) }))
         break
 
       case 'single_retrying':
         set({
           singleRetrying: true,
-          singleTokens: '',   // clear any partial stream so retry starts fresh
+          singleTokens: '',
           singleRetryInfo: {
             requestedTokens: payload.requested_tokens as number,
             limitTokens: payload.limit_tokens as number,
@@ -217,41 +335,23 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         })
         break
 
-      case 'single_token':
-        set((s) => ({ singleTokens: s.singleTokens + (payload.token as string) }))
-        break
-
       case 'single_completed':
         set({
           singleCompleted: true,
-          singleRetrying: false,
           singleLatencyMs: payload.latency_ms as number,
-          singleTokens: payload.answer as string,
-          // Context rot metrics
-          singleChunksRetrieved: (payload.context_chunks_retrieved as number) || 0,
-          singleChunksIncluded: (payload.context_chunks_included as number) || 0,
-          singleChunksCited: (payload.context_chunks_cited as number) || 0,
-          singleTokenEstimate: (payload.context_token_estimate as number) || 0,
-          singleRotScore: payload.context_rot_score != null
-            ? (payload.context_rot_score as number)
-            : null,
+          singleRetrying: false,
+          singleChunksRetrieved: (payload.chunks_retrieved as number) ?? 0,
+          singleChunksIncluded: (payload.chunks_included as number) ?? 0,
+          singleChunksCited: (payload.chunks_cited as number) ?? 0,
+          singleTokenEstimate: (payload.token_estimate as number) ?? 0,
+          singleRotScore: (payload.rot_score as number) ?? null,
         })
         break
 
       case 'error': {
         const msg = payload.error as string
         console.error('[swarm error]', msg)
-        // Single-model errors are prefixed "single_model: …" by the backend.
-        // Mark the panel as terminated so the UI shows the error instead of
-        // spinning "waiting" forever.
-        if (msg?.startsWith('single_model:')) {
-          set({
-            singleCompleted: true,
-            singleError: msg.replace(/^single_model:\s*/, ''),
-          })
-        } else {
-          set({ isRunning: false, synthesizing: false })
-        }
+        set({ isRunning: false, synthesizing: false })
         break
       }
     }
