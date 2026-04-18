@@ -14,7 +14,7 @@ AVAILABLE TASK TYPES:
   research    — retrieve factual information from the knowledge corpus and web
   analysis    — compare, contrast, evaluate, or reason over research findings
   code        — write working code snippets or examples relevant to the query
-  vision      — analyze images or diagrams from the knowledge corpus
+  vision      — extract specific data from charts, architecture diagrams, or tables in the corpus
   fact_check  — verify key claims against the corpus; flag uncertain assertions
   writing     — synthesize ALL prior results into a structured intelligence report
   general     — catch-all for tasks that don't fit the above
@@ -26,6 +26,10 @@ MANDATORY RULES:
 4. Include ONE "analysis" task that depends on the research tasks.
 5. Include ONE "code" task if the query has any technical / implementation angle.
 6. Include ONE "vision" task if diagrams, architecture images, or visual comparisons are relevant.
+   Write the vision task description as a SPECIFIC extraction request, not a vague "analyze diagrams"
+   instruction. Focus on what data to extract: benchmark numbers, component names, pipeline stages, etc.
+   Good: "Extract throughput and latency numbers from LLM inference benchmark charts"
+   Bad:  "Analyze any architecture diagrams found in the knowledge base"
 7. Research tasks have NO dependencies (run immediately in parallel).
 8. The writing task must be last — it depends on fact_check, analysis, and any other non-research tasks.
 
@@ -35,7 +39,7 @@ DEPENDENCY EXAMPLE for "Compare Intel Xeon and NVIDIA H100 for LLM inference":
   t3: research — Latest benchmarks: CPU vs GPU for LLM inference  (deps: [])
   t4: analysis — Compare Xeon vs H100 tradeoffs: cost, power, throughput  (deps: [t1, t2, t3])
   t5: code     — Python example using vLLM on CPU with OpenVINO backend  (deps: [t1])
-  t6: vision   — Analyze architecture diagram of transformer attention on hardware  (deps: [])
+  t6: vision   — Extract throughput numbers and hardware comparisons from LLM benchmark charts  (deps: [])
   t7: fact_check — Verify performance claims from research  (deps: [t1, t2, t3])
   t8: writing  — Full intelligence report on CPU vs GPU LLM inference  (deps: [t4, t5, t6, t7])
 

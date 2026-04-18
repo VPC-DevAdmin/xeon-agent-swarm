@@ -130,6 +130,24 @@ async def synthesize(
                     break
 
     if document:
+        # ── Collect typed artifacts from all workers ───────────────────────────
+        # The output panel renders these directly; the writing worker's prose
+        # sections are stored separately in document.sections.
+        all_artifacts = []
+        for task in task_graph.tasks:
+            if task.type == TaskType.writing:
+                continue   # writing worker produces the document, not artifacts
+            r = results.get(task.id)
+            if r and r.artifacts:
+                all_artifacts.extend(r.artifacts)
+        document.artifacts = all_artifacts
+        logger.info("Collected %d typed artifacts from %d workers", len(all_artifacts), len(results))
+
+        # ── Validate and patch code_snippets syntax ────────────────────────────
+        from backend.schemas.models import validate_code_syntax
+        for snip in document.code_snippets:
+            snip.syntax_valid = validate_code_syntax(snip.code, snip.language)
+
         # Run TTS on the executive summary (non-blocking best-effort)
         audio_url = await synthesize_speech(document.executive_summary, run_id)
         if audio_url:

@@ -3,7 +3,7 @@ import { useSwarmStore } from '../store/swarmStore'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
-const SAMPLE_QUERIES = [
+const DEFAULT_PRESETS = [
   'Compare the energy efficiency of nuclear, wind, and solar power generation, including current costs per MWh and carbon footprint.',
   'Explain the differences between transformer and LSTM architectures for NLP, with code examples of each.',
   'Analyze the economic impacts of remote work on urban real estate markets since 2020.',
@@ -11,9 +11,11 @@ const SAMPLE_QUERIES = [
 
 interface Props {
   onRunStart: (runId: string, query: string) => void
+  presets?: string[]
 }
 
-export function QueryInput({ onRunStart }: Props) {
+export function QueryInput({ onRunStart, presets }: Props) {
+  const SAMPLE_QUERIES = presets ?? DEFAULT_PRESETS
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,7 +47,7 @@ export function QueryInput({ onRunStart }: Props) {
       <div className="mb-2 text-center">
         <h1 className="text-3xl font-bold text-blue-400 tracking-tight">Xeon Agent Swarm</h1>
         <p className="text-gray-400 text-sm mt-1">
-          Query decomposition → parallel execution → synthesis&nbsp;·&nbsp;A/B vs single large model
+          Parallel specialist agents · typed artifact outputs · real-time pipeline visualization
         </p>
       </div>
 

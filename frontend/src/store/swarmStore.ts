@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  Artifact,
   TaskGraph,
   TaskStatus,
   AgentResult,
@@ -16,44 +17,47 @@ export interface TaskMeta {
   hardware: string
   startedAt: number | null
   completedAt: number | null
+  killed: boolean
+}
+
+// Demo pacing: minimum time each stage stays visible before auto-advancing.
+// The flow canvas reads these to gate transitions even when compute finishes fast.
+export const PACING = {
+  ORCHESTRATOR_DWELL_MS: 8_000,   // hold orchestrator card visible for ≥ 8s
+  WORKER_SPAWN_STAGGER_MS: 120,   // 120ms between each worker card appearing
+  WORKER_MIN_DWELL_MS: 3_000,     // don't show a worker as done in <3s
+  FACT_CHECK_DWELL_MS: 4_000,
+  SYNTHESIS_DWELL_MS: 3_000,
 }
 
 interface SwarmStore {
-  // Run
+  // Run lifecycle
   runId: string | null
   query: string
   isRunning: boolean
+  synthesizing: boolean
+  runCompleted: boolean
+  swarmLatencyMs: number | null
 
-  // Swarm pipeline
+  // Graph + tasks
   taskGraph: TaskGraph | null
   taskStatuses: Record<string, TaskStatus>
   taskMeta: Record<string, TaskMeta>
   taskResults: Record<string, AgentResult>
-  synthesizing: boolean
-  finalAnswer: string | null
-  swarmLatencyMs: number | null
-  swarmTaskCount: number | null
 
-  // Intelligence report document
+  // Typed artifacts collected from all workers (live, as tasks complete)
+  artifacts: Artifact[]
+
+  // Final structured document (fetched after run_completed)
   document: DocumentResult | null
 
-  // Single-model A/B panel
-  singleTokens: string
-  singleModel: string
-  singleHardware: string
-  singleCompleted: boolean
-  singleLatencyMs: number | null
-  singleError: string | null
-
-  // Context rot metrics
-  singleChunksRetrieved: number
-  singleChunksIncluded: number
-  singleChunksCited: number
-  singleTokenEstimate: number
-  singleRotScore: number | null
+  // Active demo stage for narrative cards and flow canvas
+  // orchestrating → working → fact_checking → synthesizing → done
+  demoStage: 'idle' | 'orchestrating' | 'working' | 'fact_checking' | 'synthesizing' | 'done'
 
   // Actions
   startRun: (runId: string, query: string) => void
+  killTask: (taskId: string) => void
   dispatch: (event: SwarmEvent) => void
   reset: () => void
 }
@@ -62,41 +66,51 @@ const initialState = {
   runId: null,
   query: '',
   isRunning: false,
+  synthesizing: false,
+  runCompleted: false,
+  swarmLatencyMs: null,
   taskGraph: null,
   taskStatuses: {},
   taskMeta: {},
   taskResults: {},
-  synthesizing: false,
-  finalAnswer: null,
-  swarmLatencyMs: null,
-  swarmTaskCount: null,
+  artifacts: [],
   document: null,
-  singleTokens: '',
-  singleModel: '',
-  singleHardware: '',
-  singleCompleted: false,
-  singleLatencyMs: null,
-  singleError: null,
-  singleChunksRetrieved: 0,
-  singleChunksIncluded: 0,
-  singleChunksCited: 0,
-  singleTokenEstimate: 0,
-  singleRotScore: null,
+  demoStage: 'idle' as const,
 }
 
 export const useSwarmStore = create<SwarmStore>((set, get) => ({
   ...initialState,
 
-  startRun: (runId, query) => set({ ...initialState, runId, query, isRunning: true }),
+  startRun: (runId, query) =>
+    set({ ...initialState, runId, query, isRunning: true, demoStage: 'orchestrating' }),
 
   reset: () => set(initialState),
+
+  killTask: (taskId: string) => {
+    const { runId } = get()
+    if (!runId) return
+    // Optimistic UI update
+    set((s) => ({
+      taskStatuses: { ...s.taskStatuses, [taskId]: 'killed' },
+      taskMeta: {
+        ...s.taskMeta,
+        [taskId]: { ...s.taskMeta[taskId], killed: true, completedAt: Date.now() },
+      },
+    }))
+    // Inform the backend (best-effort; backend may not support it yet)
+    fetch(`${API_BASE}/run/${runId}/kill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId }),
+    }).catch(() => {/* ignore — kill is UI-side for now */})
+  },
 
   dispatch: (event: SwarmEvent) => {
     const { payload } = event
 
     switch (event.event) {
       case 'graph_ready':
-        set({ taskGraph: payload as unknown as TaskGraph })
+        set({ taskGraph: payload as unknown as TaskGraph, demoStage: 'working' })
         break
 
       case 'task_started':
@@ -111,12 +125,14 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               hardware: payload.hardware as string,
               startedAt: Date.now(),
               completedAt: null,
+              killed: false,
             },
           },
         }))
         break
 
-      case 'task_completed':
+      case 'task_completed': {
+        const taskArtifacts = (payload.artifacts as Artifact[] | undefined) ?? []
         set((s) => ({
           taskStatuses: { ...s.taskStatuses, [payload.task_id as string]: 'completed' },
           taskMeta: {
@@ -132,6 +148,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               task_id: payload.task_id as string,
               status: 'completed',
               result: payload.result as string,
+              artifacts: taskArtifacts,
               confidence: payload.confidence as number,
               model_used: payload.model_used as string,
               hardware: payload.hardware as string,
@@ -139,8 +156,14 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               tool_calls: (payload.tool_calls as string[]) || [],
             },
           },
+          // Collect artifacts from all non-writing workers into the global list
+          artifacts: [
+            ...s.artifacts,
+            ...taskArtifacts.filter((a) => a.type !== 'prose'),
+          ],
         }))
         break
+      }
 
       case 'task_failed':
         set((s) => ({
@@ -155,78 +178,48 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }))
         break
 
+      case 'task_killed':
+        set((s) => ({
+          taskStatuses: { ...s.taskStatuses, [payload.task_id as string]: 'killed' },
+          taskMeta: {
+            ...s.taskMeta,
+            [payload.task_id as string]: {
+              ...s.taskMeta[payload.task_id as string],
+              killed: true,
+              completedAt: Date.now(),
+            },
+          },
+        }))
+        break
+
       case 'synthesis_started':
-        set({ synthesizing: true })
+        set({ synthesizing: true, demoStage: 'synthesizing' })
         break
 
       case 'run_completed': {
         set({
-          finalAnswer: payload.final_answer as string,
           swarmLatencyMs: payload.latency_ms as number,
-          swarmTaskCount: payload.task_count as number,
           synthesizing: false,
           isRunning: false,
+          runCompleted: true,
+          demoStage: 'done',
         })
-        // Fetch full RunResult from REST API to get structured document
         const runId = get().runId
         if (runId) {
           fetch(`${API_BASE}/run/${runId}`)
             .then((r) => r.json())
             .then((data) => {
-              if (data?.document) {
-                set({ document: data.document as DocumentResult })
-              }
+              if (data?.document) set({ document: data.document as DocumentResult })
             })
             .catch((err) => console.error('[swarm] fetch document failed:', err))
         }
         break
       }
 
-      case 'single_started':
-        set({
-          singleModel: payload.model as string,
-          singleHardware: payload.hardware as string,
-          // Context rot: chunks available before LLM call
-          singleChunksRetrieved: (payload.context_chunks_retrieved as number) || 0,
-          singleChunksIncluded: (payload.context_chunks_included as number) || 0,
-          singleTokenEstimate: (payload.context_token_estimate as number) || 0,
-        })
-        break
-
-      case 'single_token':
-        set((s) => ({ singleTokens: s.singleTokens + (payload.token as string) }))
-        break
-
-      case 'single_completed':
-        set({
-          singleCompleted: true,
-          singleLatencyMs: payload.latency_ms as number,
-          singleTokens: payload.answer as string,
-          // Context rot metrics
-          singleChunksRetrieved: (payload.context_chunks_retrieved as number) || 0,
-          singleChunksIncluded: (payload.context_chunks_included as number) || 0,
-          singleChunksCited: (payload.context_chunks_cited as number) || 0,
-          singleTokenEstimate: (payload.context_token_estimate as number) || 0,
-          singleRotScore: payload.context_rot_score != null
-            ? (payload.context_rot_score as number)
-            : null,
-        })
-        break
-
       case 'error': {
         const msg = payload.error as string
         console.error('[swarm error]', msg)
-        // Single-model errors are prefixed "single_model: …" by the backend.
-        // Mark the panel as terminated so the UI shows the error instead of
-        // spinning "waiting" forever.
-        if (msg?.startsWith('single_model:')) {
-          set({
-            singleCompleted: true,
-            singleError: msg.replace(/^single_model:\s*/, ''),
-          })
-        } else {
-          set({ isRunning: false, synthesizing: false })
-        }
+        set({ isRunning: false, synthesizing: false })
         break
       }
     }
