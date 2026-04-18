@@ -55,6 +55,28 @@ interface SwarmStore {
   // orchestrating → working → fact_checking → synthesizing → done
   demoStage: 'idle' | 'orchestrating' | 'working' | 'fact_checking' | 'synthesizing' | 'done'
 
+  // ── Legacy A/B single-model state (used when ENABLE_AB_COMPARISON=1) ───────
+  // Kept so ABPanel / ContextRotPanel / TimingBar continue to compile.
+  finalAnswer: string | null
+  singleTokens: string
+  singleModel: string
+  singleHardware: string
+  singleCompleted: boolean
+  singleLatencyMs: number | null
+  singleError: string | null
+  singleRetrying: boolean
+  singleRetryInfo: {
+    requestedTokens: number
+    limitTokens: number
+    originalChunks: number
+    retryTopK: number
+  } | null
+  singleChunksRetrieved: number
+  singleChunksIncluded: number
+  singleChunksCited: number
+  singleTokenEstimate: number
+  singleRotScore: number | null
+
   // Actions
   startRun: (runId: string, query: string) => void
   killTask: (taskId: string) => void
@@ -78,6 +100,21 @@ const initialState = {
   artifacts: [],
   document: null,
   demoStage: 'idle' as const,
+  // Legacy A/B fields (zeroed out; populated only when ENABLE_AB_COMPARISON=1)
+  finalAnswer: null,
+  singleTokens: '',
+  singleModel: '',
+  singleHardware: '',
+  singleCompleted: false,
+  singleLatencyMs: null,
+  singleError: null,
+  singleRetrying: false,
+  singleRetryInfo: null,
+  singleChunksRetrieved: 0,
+  singleChunksIncluded: 0,
+  singleChunksCited: 0,
+  singleTokenEstimate: 0,
+  singleRotScore: null,
 }
 
 export const useSwarmStore = create<SwarmStore>((set, get) => ({
@@ -245,12 +282,14 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         break
 
       case 'run_completed': {
+        const fa = payload.final_answer as string | undefined
         set({
           swarmLatencyMs: payload.latency_ms as number,
           synthesizing: false,
           isRunning: false,
           runCompleted: true,
           demoStage: 'done',
+          finalAnswer: fa ?? null,
         })
         const runId = get().runId
         if (runId) {
@@ -263,6 +302,51 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         }
         break
       }
+
+      // ── Legacy A/B single-model events (ENABLE_AB_COMPARISON=1) ─────────────
+
+      case 'single_started':
+        set({
+          singleTokens: '',
+          singleModel: payload.model as string,
+          singleHardware: payload.hardware as string,
+          singleCompleted: false,
+          singleLatencyMs: null,
+          singleError: null,
+          singleRetrying: false,
+          singleRetryInfo: null,
+        })
+        break
+
+      case 'single_token':
+        set((s) => ({ singleTokens: s.singleTokens + (payload.token as string) }))
+        break
+
+      case 'single_retrying':
+        set({
+          singleRetrying: true,
+          singleTokens: '',
+          singleRetryInfo: {
+            requestedTokens: payload.requested_tokens as number,
+            limitTokens: payload.limit_tokens as number,
+            originalChunks: payload.original_chunks as number,
+            retryTopK: payload.retry_top_k as number,
+          },
+        })
+        break
+
+      case 'single_completed':
+        set({
+          singleCompleted: true,
+          singleLatencyMs: payload.latency_ms as number,
+          singleRetrying: false,
+          singleChunksRetrieved: (payload.chunks_retrieved as number) ?? 0,
+          singleChunksIncluded: (payload.chunks_included as number) ?? 0,
+          singleChunksCited: (payload.chunks_cited as number) ?? 0,
+          singleTokenEstimate: (payload.token_estimate as number) ?? 0,
+          singleRotScore: (payload.rot_score as number) ?? null,
+        })
+        break
 
       case 'error': {
         const msg = payload.error as string

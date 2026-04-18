@@ -112,9 +112,27 @@ export interface DocumentResult {
   artifacts: Artifact[]
 }
 
+// ── A/B single-model result (ENABLE_AB_COMPARISON=1) ─────────────────────────
+
+export interface SingleModelResult {
+  run_id: string
+  query: string
+  answer: string
+  model_used: string
+  hardware: string
+  latency_ms: number
+  status: TaskStatus
+  context_chunks_retrieved: number
+  context_chunks_included: number
+  context_chunks_cited: number
+  context_token_estimate: number
+  context_rot_score: number
+}
+
 export interface RunResult {
   run_id: string
   swarm: SwarmState
+  single_model: SingleModelResult | null
   document: DocumentResult | null
 }
 
@@ -129,6 +147,11 @@ export type EventType =
   | 'task_killed'
   | 'synthesis_started'
   | 'run_completed'
+  // A/B single-model events (used when ENABLE_AB_COMPARISON=1)
+  | 'single_started'
+  | 'single_token'
+  | 'single_retrying'
+  | 'single_completed'
   | 'error'
 
 export interface SwarmEvent {
