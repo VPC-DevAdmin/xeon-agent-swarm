@@ -51,10 +51,41 @@ def _load_roles() -> dict:
     return _ROLES
 
 
-def _select_client(preferred_hardware: str) -> InferenceClient:
-    """Choose CPU or GPU endpoint based on role preference and env config."""
+def _client_for_role(task_type: TaskType) -> InferenceClient:
+    """
+    Specialist routing table — each role hits the model best suited to it.
+
+    Role            Model                         Rationale
+    ─────────────   ──────────────────────────    ───────────────────────────────
+    code            Qwen2.5-Coder-7B-Instruct     Code-tuned; noticeably better
+    writing         Mistral-7B-Instruct-v0.3       Prose quality / fluency
+    analysis        Mistral-7B-Instruct-v0.3       Synthesis quality
+    research        Phi-4-mini-instruct            Retrieval summarisation at 3.8B
+    fact_check      Phi-4-mini-instruct            Smaller = less confabulation
+    summarization   Phi-4-mini-instruct            Same
+    general         Phi-4-mini-instruct            Catch-all; CPU-cheap
+    vision          (handled in _execute_vision_task via VLM_ENDPOINT)
+    """
+    if task_type == TaskType.code:
+        return InferenceClient(
+            base_url=os.getenv("CODER_ENDPOINT", "http://localhost:8083/v1"),
+            model=os.getenv("CODER_MODEL", "Qwen/Qwen2.5-Coder-7B-Instruct"),
+            hardware="cpu",
+        )
+    if task_type in (TaskType.writing, TaskType.analysis):
+        # Mistral-7B for prose quality — same endpoint as the orchestrator
+        return InferenceClient(
+            base_url=os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1"),
+            model=os.getenv("ORCHESTRATOR_MODEL", "mistralai/Mistral-7B-Instruct-v0.3"),
+            hardware="cpu",
+        )
+    # research, fact_check, summarization, general, vision fallback → Phi-4-mini
+    # A smaller model is deliberately better for fact-checking: it is less likely
+    # to confabulate supporting evidence for claims it cannot verify.
     gpu_url = os.getenv("WORKER_GPU_ENDPOINT", "")
-    if preferred_hardware == "gpu" and gpu_url:
+    roles = _load_roles()
+    preferred_hw = roles.get(task_type.value, {}).get("preferred_hardware", "cpu")
+    if preferred_hw == "gpu" and gpu_url:
         return InferenceClient(
             base_url=gpu_url,
             model=os.getenv("WORKER_GPU_MODEL", "meta-llama/Llama-3.1-8B-Instruct"),
@@ -272,7 +303,7 @@ async def execute_task(
     """Execute a single task, broadcast events, return AgentResult."""
     roles = _load_roles()
     role_cfg = roles.get(task.type.value, roles["general"])
-    client = _select_client(role_cfg.get("preferred_hardware", "cpu"))
+    client = _client_for_role(task.type)
 
     # For vision tasks, report the VLM model in task_started (not the CPU worker)
     # so the UI shows the correct model before the VLM call begins.

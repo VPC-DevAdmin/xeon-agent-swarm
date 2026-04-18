@@ -34,7 +34,9 @@ services:
     volumes:
       - tei_data:/data
 
-  # ── OPEA vLLM — CPU orchestrator (Qwen2.5-7B) ────────────────────────────
+  # ── OPEA vLLM — CPU orchestrator (Mistral-7B) ────────────────────────────
+  # Also serves writing and analysis workers; Mistral-7B gives better prose
+  # quality than Qwen2.5-7B for synthesis and structured report generation.
   vllm-orchestrator:
     image: opea/vllm:latest
     environment:
@@ -124,8 +126,11 @@ services:
       retries: 60        # VLM weight download + load takes longer
       start_period: 60s
 
-  # ── OPEA vLLM — single model A/B (Mistral-7B) ────────────────────────────
-  vllm-single:
+  # ── OPEA vLLM — code specialist (Qwen2.5-Coder-7B) ──────────────────────
+  # Code-tuned model routes all TaskType.code workers here. Noticeably better
+  # than a general-purpose 7B on function generation, snippets, and Mermaid.
+  # INT4 quantized via OpenVINO; fits on a single-socket Xeon with 128 GB RAM.
+  vllm-coder:
     image: opea/vllm:latest
     environment:
       - HF_TOKEN=${HF_TOKEN}
@@ -133,7 +138,7 @@ services:
       - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
       - VLLM_OPENVINO_KVCACHE_SPACE=8
     command: >
-      --model ${SINGLE_MODEL}
+      --model ${CODER_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}
       --port 8083
       --max-model-len 4096
     ports: ["8083:8083"]
@@ -187,7 +192,9 @@ services:
       # unreachable host. To actually use GPU, run with `--profile gpu`
       # and override this to `http://vllm-worker-gpu:8082/v1`.
       - WORKER_GPU_ENDPOINT=
-      - SINGLE_MODEL_ENDPOINT=http://vllm-single:8083/v1
+      # Code specialist — Qwen2.5-Coder-7B routes all TaskType.code workers
+      - CODER_ENDPOINT=http://vllm-coder:8083/v1
+      - CODER_MODEL=${CODER_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}
       - REDIS_URL=redis://redis:6379
       - MCP_WEB_SEARCH_URL=http://mcp-web-search:9001
       - MCP_DOC_RETRIEVAL_URL=http://mcp-doc-retrieval:9002
@@ -210,7 +217,7 @@ services:
         condition: service_healthy
       vllm-worker-cpu:
         condition: service_healthy
-      vllm-single:
+      vllm-coder:
         condition: service_healthy
     volumes:
       - ./config:/app/config:ro
