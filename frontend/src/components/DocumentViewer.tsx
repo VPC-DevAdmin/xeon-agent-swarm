@@ -165,7 +165,7 @@ export function DocumentViewer() {
   const finalAnswer = useSwarmStore((s) => s.finalAnswer)
   const isRunning = useSwarmStore((s) => s.isRunning)
   const swarmLatencyMs = useSwarmStore((s) => s.swarmLatencyMs)
-  const swarmTaskCount = useSwarmStore((s) => s.swarmTaskCount)
+  const swarmTaskCount = useSwarmStore((s) => s.taskGraph?.tasks.length ?? 0)
 
   const formatLatency = (ms: number) =>
     ms < 1000 ? `${ms.toFixed(0)}ms` : `${(ms / 1000).toFixed(1)}s`
