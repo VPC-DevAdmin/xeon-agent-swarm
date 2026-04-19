@@ -1,7 +1,12 @@
 import time
 from openai import AsyncOpenAI
 from typing import AsyncGenerator
+import httpx
 import instructor
+
+# Hard wall on any single inference call. Phi-4-mini on CPU rarely needs more
+# than 90s; if it does, something has gone wrong (context overflow, model loop).
+_INFERENCE_TIMEOUT = httpx.Timeout(timeout=90.0, connect=10.0)
 
 
 class InferenceClient:
@@ -11,7 +16,9 @@ class InferenceClient:
     """
 
     def __init__(self, base_url: str, model: str, hardware: str = "cpu"):
-        self._raw = AsyncOpenAI(base_url=base_url, api_key="none")
+        self._raw = AsyncOpenAI(
+            base_url=base_url, api_key="none", timeout=_INFERENCE_TIMEOUT
+        )
         self._instructor = instructor.from_openai(self._raw)
         self.model = model
         self.hardware = hardware
