@@ -473,8 +473,28 @@ async def execute_task(
     max_tokens = _BUDGETS.get(task.type, 768)
 
     try:
-        raw, latency_ms = await client.complete(messages, max_tokens=max_tokens)
-        agent_result = _parse_worker_response(raw, task.id, client, latency_ms)
+        # ── Writing tasks: stream tokens for live UI feedback ────────────────
+        # Streaming lets the frontend typewriter-display the report being written
+        # rather than blocking for the full 2000-token generation (~250s on CPU).
+        if task.type == TaskType.writing:
+            accumulated = ""
+            t0_stream = time.perf_counter()
+            async for token in client.stream(messages, max_tokens=max_tokens):
+                accumulated += token
+                await broadcast(
+                    run_id,
+                    SwarmEvent(
+                        event=EventType.task_token,
+                        run_id=run_id,
+                        payload={"task_id": task.id, "token": token},
+                    ),
+                )
+            latency_ms = (time.perf_counter() - t0_stream) * 1000
+            agent_result = _parse_worker_response(accumulated, task.id, client, latency_ms)
+        else:
+            raw, latency_ms = await client.complete(messages, max_tokens=max_tokens)
+            agent_result = _parse_worker_response(raw, task.id, client, latency_ms)
+
         agent_result.tool_calls = tool_calls_made
 
         await broadcast(
