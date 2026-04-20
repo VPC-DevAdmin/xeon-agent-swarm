@@ -173,6 +173,7 @@ class EventType(str, Enum):
     run_started       = "run_started"
     graph_ready       = "graph_ready"
     task_started      = "task_started"
+    task_token        = "task_token"       # streaming token from a worker (writing task)
     task_completed    = "task_completed"
     task_failed       = "task_failed"
     task_killed       = "task_killed"

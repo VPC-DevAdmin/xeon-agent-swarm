@@ -48,6 +48,9 @@ interface SwarmStore {
   // Typed artifacts collected from all workers (live, as tasks complete)
   artifacts: Artifact[]
 
+  // Live streaming text per task (populated by task_token events from the writing worker)
+  taskStreams: Record<string, string>
+
   // Final structured document (fetched after run_completed)
   document: DocumentResult | null
 
@@ -98,6 +101,7 @@ const initialState = {
   taskMeta: {},
   taskResults: {},
   artifacts: [],
+  taskStreams: {},
   document: null,
   demoStage: 'idle' as const,
   // Legacy A/B fields (zeroed out; populated only when ENABLE_AB_COMPARISON=1)
@@ -212,6 +216,18 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           },
           // Advance to fact_checking stage when the first fact_check task starts
           demoStage: isFactCheck && s.demoStage === 'working' ? 'fact_checking' : s.demoStage,
+        }))
+        break
+      }
+
+      case 'task_token': {
+        // Append streaming token to taskStreams for the writing worker's live preview
+        const { task_id: streamTaskId, token } = payload as { task_id: string; token: string }
+        set((s) => ({
+          taskStreams: {
+            ...s.taskStreams,
+            [streamTaskId]: (s.taskStreams[streamTaskId] ?? '') + token,
+          },
         }))
         break
       }

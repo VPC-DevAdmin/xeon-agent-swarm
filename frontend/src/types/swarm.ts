@@ -142,6 +142,7 @@ export type EventType =
   | 'run_started'
   | 'graph_ready'
   | 'task_started'
+  | 'task_token'        // streaming token from a worker (writing task)
   | 'task_completed'
   | 'task_failed'
   | 'task_killed'

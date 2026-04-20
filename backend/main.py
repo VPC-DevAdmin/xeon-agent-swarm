@@ -146,7 +146,11 @@ def _build_writing_context(task: TaskSpec, results: dict) -> dict[str, str]:
                     chart_lines.append(f"  {s.get('name', '')}: {pts_str}")
                 parts.append("\n".join(chart_lines))
 
-        context[dep] = "\n\n".join(p for p in parts if p.strip())
+        # Cap total context per dependency to avoid prompt overflow.
+        # Mistral-7B has a 32K token context; each enriched block should stay
+        # well under 1500 chars so the full writing prompt fits comfortably.
+        combined = "\n\n".join(p for p in parts if p.strip())
+        context[dep] = combined[:1500] if len(combined) > 1500 else combined
     return context
 
 
