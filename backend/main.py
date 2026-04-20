@@ -29,9 +29,10 @@ from datetime import datetime
 
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
@@ -162,8 +163,23 @@ async def lifespan(app: FastAPI):
     yield
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Xeon Agent Swarm Demo", lifespan=lifespan)
 app.include_router(corpus_router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Log the full Pydantic validation detail so 422s are diagnosable in docker compose logs."""
+    logger.warning(
+        "422 validation error — %s %s body_errors=%s",
+        request.method, request.url.path, exc.errors(),
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
