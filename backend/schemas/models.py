@@ -209,7 +209,11 @@ class SingleModelResult(BaseModel):
 # ── HTTP request/response models ──────────────────────────────────────────────
 
 class RunRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=2000)
+    # 10 000 chars (~2 500 tokens) fits multi-paragraph research briefs comfortably.
+    # The orchestrator model (Mistral-7B, 32K context) has room for the full query
+    # plus its task-decomposition output. Raise QUERY_MAX_LENGTH in the environment
+    # if you need longer inputs without a code change.
+    query: str = Field(..., min_length=1, max_length=10_000)
 
 
 class KillTaskRequest(BaseModel):
