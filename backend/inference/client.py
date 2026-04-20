@@ -1,7 +1,17 @@
 import time
 from openai import AsyncOpenAI
 from typing import AsyncGenerator
+import httpx
 import instructor
+
+# Hard wall on any single inference call.
+# Reasoning:
+#   - fact_check (400 tok)   @ ~8 tok/s CPU  → ~50s  ← safe under 300s
+#   - research/analysis      @ ~8 tok/s CPU  → ~150s ← safe
+#   - writing (2000 tok)     @ ~8 tok/s CPU  → ~250s ← needs headroom
+# 90s was too tight for the writing worker (3000 tok → 375s worst-case).
+# 300s is a realistic ceiling for any role given their capped token budgets.
+_INFERENCE_TIMEOUT = httpx.Timeout(timeout=300.0, connect=10.0)
 
 
 class InferenceClient:
@@ -11,7 +21,9 @@ class InferenceClient:
     """
 
     def __init__(self, base_url: str, model: str, hardware: str = "cpu"):
-        self._raw = AsyncOpenAI(base_url=base_url, api_key="none")
+        self._raw = AsyncOpenAI(
+            base_url=base_url, api_key="none", timeout=_INFERENCE_TIMEOUT
+        )
         self._instructor = instructor.from_openai(self._raw)
         self.model = model
         self.hardware = hardware

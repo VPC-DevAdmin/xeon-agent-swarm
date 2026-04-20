@@ -29,20 +29,24 @@ from datetime import datetime
 
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
 from backend.schemas.models import (
     AgentResult,
+    ArtifactType,
     KillTaskRequest,
     RunRequest,
     RunResult,
     SwarmEvent,
     SwarmState,
+    TaskSpec,
     TaskStatus,
+    TaskType,
     EventType,
 )
 from backend.agents.orchestrator import orchestrate_with_events
@@ -74,6 +78,83 @@ _task_queue: TaskQueue | None = None
 _running_tasks: dict[str, dict[str, asyncio.Task]] = {}
 
 
+def _build_writing_context(task: TaskSpec, results: dict) -> dict[str, str]:
+    """
+    Build an enriched context dict for the writing worker.
+
+    Plain workers only get `result` (a brief string). The writing task needs the
+    full substance from each specialist: table rows, citation snippets, extracted
+    data points — otherwise it can only produce thin generalisations.
+
+    Each dependency's context value is a concatenation of:
+      1. The `result` summary string
+      2. Table rows (if a table artifact was produced)
+      3. Citation snippets (if a citation_set was produced)
+      4. Extracted data points (if an extracted_data artifact was produced)
+      5. Chart series values (if a chart artifact was produced)
+    """
+    context: dict[str, str] = {}
+    for dep in task.dependencies:
+        if dep not in results:
+            continue
+        agent_result = results[dep]
+        parts: list[str] = [agent_result.result or ""]
+
+        for art in agent_result.artifacts:
+            c = art.content or {}
+
+            if art.type == ArtifactType.table:
+                headers = c.get("headers", [])
+                rows = c.get("rows", [])
+                caption = c.get("caption", "")
+                table_lines = [f"\n[Table: {caption}]"]
+                if headers:
+                    table_lines.append(" | ".join(str(h) for h in headers))
+                    table_lines.append("-" * max(20, len(" | ".join(headers))))
+                for row in rows[:15]:  # cap to avoid token overflow
+                    table_lines.append(" | ".join(str(cell) for cell in row))
+                parts.append("\n".join(table_lines))
+
+            elif art.type == ArtifactType.citation_set:
+                citations = c.get("citations", [])
+                cite_lines = ["\n[Sources]"]
+                for cit in citations[:6]:
+                    snippet = cit.get("snippet", "")
+                    title = cit.get("title", "")
+                    url = cit.get("url", "")
+                    cite_lines.append(f"- {title}: {snippet} <{url}>")
+                parts.append("\n".join(cite_lines))
+
+            elif art.type == ArtifactType.extracted_data:
+                pts = c.get("data_points", [])
+                desc = c.get("description", "")
+                data_lines = [f"\n[Extracted Data: {desc}]"]
+                for pt in pts:
+                    label = pt.get("label", "")
+                    value = pt.get("value", "")
+                    unit = pt.get("unit", "")
+                    data_lines.append(f"- {label}: {value}{' ' + unit if unit else ''}")
+                parts.append("\n".join(data_lines))
+
+            elif art.type == ArtifactType.chart:
+                series = c.get("series", [])
+                caption = c.get("caption", "")
+                chart_lines = [f"\n[Chart data: {caption}]"]
+                for s in series[:3]:
+                    pts_str = ", ".join(
+                        f"{p['x']}={p['y']}" for p in s.get("data", [])[:8]
+                    )
+                    chart_lines.append(f"  {s.get('name', '')}: {pts_str}")
+                parts.append("\n".join(chart_lines))
+
+        # Cap total context per dependency to avoid prompt overflow.
+        # Mistral-7B has a 32K token context; each enriched block should stay
+        # well under 1500 chars so the full writing prompt fits comfortably.
+        combined = "\n\n".join(p for p in parts if p.strip())
+        context[dep] = combined[:1500] if len(combined) > 1500 else combined
+    return context
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _task_queue
@@ -82,8 +163,23 @@ async def lifespan(app: FastAPI):
     yield
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Xeon Agent Swarm Demo", lifespan=lifespan)
 app.include_router(corpus_router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Log the full Pydantic validation detail so 422s are diagnosable in docker compose logs."""
+    logger.warning(
+        "422 validation error — %s %s body_errors=%s",
+        request.method, request.url.path, exc.errors(),
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -164,11 +260,17 @@ async def run_swarm(run_id: str, query: str):
                 pending_tasks.remove(t)
 
             async def run_one(task):
-                context = {
-                    dep: state.results[dep].result
-                    for dep in task.dependencies
-                    if dep in state.results
-                }
+                # Writing worker gets enriched context (table rows, citation
+                # snippets, extracted data) so it can produce substantive prose.
+                # All other workers only need the brief result string.
+                if task.type == TaskType.writing:
+                    context = _build_writing_context(task, state.results)
+                else:
+                    context = {
+                        dep: state.results[dep].result
+                        for dep in task.dependencies
+                        if dep in state.results
+                    }
                 # Wrap in a named asyncio.Task so /kill can cancel it
                 inner = asyncio.create_task(
                     execute_task(
@@ -361,11 +463,14 @@ async def retry_task(run_id: str, request: KillTaskRequest):
         return {"status": "not_found", "detail": f"task {request.task_id} not in graph"}
 
     async def _do_retry():
-        context = {
-            dep: stored.swarm.results[dep].result
-            for dep in task_spec.dependencies
-            if dep in stored.swarm.results
-        }
+        if task_spec.type == TaskType.writing:
+            context = _build_writing_context(task_spec, stored.swarm.results)
+        else:
+            context = {
+                dep: stored.swarm.results[dep].result
+                for dep in task_spec.dependencies
+                if dep in stored.swarm.results
+            }
         inner = asyncio.create_task(
             execute_task(
                 task=task_spec,

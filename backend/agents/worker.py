@@ -452,12 +452,49 @@ async def execute_task(
         {"role": "user", "content": user_content},
     ]
 
-    # Writing tasks get a larger token budget and store raw JSON for the reducer
-    max_tokens = 2048 if task.type == TaskType.writing else 768
+    # Per-role token budgets:
+    #   writing    — 3000: needs room for title + summary + 3-5 full sections + findings
+    #   research   — 1200: richer result paragraph feeds the writing worker
+    #   analysis   — 1000: table rows + optional chart JSON
+    #   fact_check —  400: 2-3 short claim_verdict objects; more causes generation loops
+    #   others     —  768: general budget
+    # Per-role token budgets:
+    #   writing    — 2000: title + summary + 3-5 sections; 2000 tok @ 8 tok/s ≈ 250s (fits in 300s timeout)
+    #   research   — 1200: richer result paragraph feeds the writing worker
+    #   analysis   — 1000: table rows + optional chart JSON
+    #   fact_check —  400: 2-3 short claim_verdict objects; more causes generation loops
+    #   others     —  768: general budget
+    _BUDGETS = {
+        TaskType.writing:    2000,
+        TaskType.research:   1200,
+        TaskType.analysis:   1000,
+        TaskType.fact_check:  400,
+    }
+    max_tokens = _BUDGETS.get(task.type, 768)
 
     try:
-        raw, latency_ms = await client.complete(messages, max_tokens=max_tokens)
-        agent_result = _parse_worker_response(raw, task.id, client, latency_ms)
+        # ── Writing tasks: stream tokens for live UI feedback ────────────────
+        # Streaming lets the frontend typewriter-display the report being written
+        # rather than blocking for the full 2000-token generation (~250s on CPU).
+        if task.type == TaskType.writing:
+            accumulated = ""
+            t0_stream = time.perf_counter()
+            async for token in client.stream(messages, max_tokens=max_tokens):
+                accumulated += token
+                await broadcast(
+                    run_id,
+                    SwarmEvent(
+                        event=EventType.task_token,
+                        run_id=run_id,
+                        payload={"task_id": task.id, "token": token},
+                    ),
+                )
+            latency_ms = (time.perf_counter() - t0_stream) * 1000
+            agent_result = _parse_worker_response(accumulated, task.id, client, latency_ms)
+        else:
+            raw, latency_ms = await client.complete(messages, max_tokens=max_tokens)
+            agent_result = _parse_worker_response(raw, task.id, client, latency_ms)
+
         agent_result.tool_calls = tool_calls_made
 
         await broadcast(
