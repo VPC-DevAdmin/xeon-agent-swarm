@@ -4,9 +4,14 @@ from typing import AsyncGenerator
 import httpx
 import instructor
 
-# Hard wall on any single inference call. Phi-4-mini on CPU rarely needs more
-# than 90s; if it does, something has gone wrong (context overflow, model loop).
-_INFERENCE_TIMEOUT = httpx.Timeout(timeout=90.0, connect=10.0)
+# Hard wall on any single inference call.
+# Reasoning:
+#   - fact_check (400 tok)   @ ~8 tok/s CPU  → ~50s  ← safe under 300s
+#   - research/analysis      @ ~8 tok/s CPU  → ~150s ← safe
+#   - writing (2000 tok)     @ ~8 tok/s CPU  → ~250s ← needs headroom
+# 90s was too tight for the writing worker (3000 tok → 375s worst-case).
+# 300s is a realistic ceiling for any role given their capped token budgets.
+_INFERENCE_TIMEOUT = httpx.Timeout(timeout=300.0, connect=10.0)
 
 
 class InferenceClient:

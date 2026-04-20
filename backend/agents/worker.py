@@ -458,8 +458,14 @@ async def execute_task(
     #   analysis   — 1000: table rows + optional chart JSON
     #   fact_check —  400: 2-3 short claim_verdict objects; more causes generation loops
     #   others     —  768: general budget
+    # Per-role token budgets:
+    #   writing    — 2000: title + summary + 3-5 sections; 2000 tok @ 8 tok/s ≈ 250s (fits in 300s timeout)
+    #   research   — 1200: richer result paragraph feeds the writing worker
+    #   analysis   — 1000: table rows + optional chart JSON
+    #   fact_check —  400: 2-3 short claim_verdict objects; more causes generation loops
+    #   others     —  768: general budget
     _BUDGETS = {
-        TaskType.writing:    3000,
+        TaskType.writing:    2000,
         TaskType.research:   1200,
         TaskType.analysis:   1000,
         TaskType.fact_check:  400,

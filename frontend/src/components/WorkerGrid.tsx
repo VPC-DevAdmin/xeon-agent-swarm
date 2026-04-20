@@ -264,11 +264,14 @@ export function WorkerGrid() {
 }
 
 function WritingTaskRow({ task, index }: { task: TaskSpec; index: number }) {
-  const status = useSwarmStore((s) => s.taskStatuses[task.id] ?? 'pending')
-  const meta   = useSwarmStore((s) => s.taskMeta[task.id])
+  const status    = useSwarmStore((s) => s.taskStatuses[task.id] ?? 'pending')
+  const retryTask = useSwarmStore((s) => s.retryTask)
 
   const isRunning   = status === 'running'
   const isCompleted = status === 'completed'
+  const isFailed    = status === 'failed'
+  const isKilled    = status === 'killed'
+  const isError     = isFailed || isKilled
 
   return (
     <motion.div
@@ -276,20 +279,45 @@ function WritingTaskRow({ task, index }: { task: TaskSpec; index: number }) {
       animate={{ opacity: 1 }}
       transition={{ delay: index * (PACING.WORKER_SPAWN_STAGGER_MS / 1000) }}
       className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-xs
-        ${isCompleted ? 'border-green-700 bg-green-950/20' : isRunning ? 'border-green-800 bg-green-950/10' : 'border-gray-800 bg-gray-900/30'}
+        ${isCompleted ? 'border-green-700 bg-green-950/20'
+          : isRunning  ? 'border-green-800 bg-green-950/10'
+          : isError    ? 'border-red-800 bg-red-950/20'
+          : 'border-gray-800 bg-gray-900/30'}
       `}
     >
       <span className="text-base">✍️</span>
-      <span className="text-gray-400 flex-1">Synthesizer — {task.description}</span>
-      <span className={`text-[10px] font-semibold ${isCompleted ? 'text-green-400' : isRunning ? 'text-green-600' : 'text-gray-600'}`}>
-        {isCompleted ? 'report ready ↓' : isRunning ? 'drafting…' : 'waiting'}
+      <span className={`flex-1 ${isError ? 'text-red-400' : 'text-gray-400'}`}>
+        Synthesizer — {task.description}
       </span>
+
+      <span className={`text-[10px] font-semibold ${
+        isCompleted ? 'text-green-400'
+        : isRunning  ? 'text-green-600'
+        : isError    ? 'text-red-400'
+        : 'text-gray-600'
+      }`}>
+        {isCompleted ? 'report ready ↓'
+          : isRunning ? 'drafting…'
+          : isFailed  ? 'timed out'
+          : isKilled  ? 'killed'
+          : 'waiting'}
+      </span>
+
       {isRunning && (
         <motion.div
           animate={{ opacity: [1, 0.2, 1] }}
           transition={{ duration: 1.2, repeat: Infinity }}
           className="w-1.5 h-1.5 rounded-full bg-green-400"
         />
+      )}
+
+      {isError && (
+        <button
+          onClick={() => retryTask(task.id)}
+          className="ml-1 text-[9px] px-1.5 py-0.5 rounded border border-blue-900 text-blue-500 hover:bg-blue-950 transition-colors"
+        >
+          ↺ Retry
+        </button>
       )}
     </motion.div>
   )
