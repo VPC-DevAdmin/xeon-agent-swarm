@@ -57,12 +57,18 @@ export function QueryInput({ onRunStart, presets }: Props) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Enter a complex query to decompose and execute in parallel…"
           rows={3}
+          maxLength={10000}
           disabled={loading || isRunning}
           className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit(e)
           }}
         />
+        {query.length > 8000 && (
+          <p className="mt-1 text-right text-[10px] text-amber-500">
+            {query.length.toLocaleString()} / 10,000 chars
+          </p>
+        )}
         <div className="flex items-center justify-between mt-3">
           <div className="flex gap-2 flex-wrap">
             {SAMPLE_QUERIES.map((q, i) => (
