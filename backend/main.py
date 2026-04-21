@@ -33,7 +33,6 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from starlette.datastructures import MutableHeaders
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
@@ -181,50 +180,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
-class PrivateNetworkAccessMiddleware:
-    """
-    Raw ASGI middleware that injects Access-Control-Allow-Private-Network: true
-    into every HTTP response at the send() level.
-
-    Chrome's Private Network Access (PNA) policy blocks public HTTPS sites
-    (e.g. Lovable) from fetching Tailscale / RFC-1918 addresses unless the
-    server opts in with this header — including on CORS preflight OPTIONS.
-
-    BaseHTTPMiddleware cannot intercept CORSMiddleware's early-return preflight
-    responses because CORSMiddleware short-circuits before calling call_next().
-    A raw ASGI middleware wrapping send() works at a lower level and sees every
-    outgoing message regardless of which middleware produced it.
-
-    https://developer.chrome.com/blog/private-network-access-preflight
-    """
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        async def patched_send(message):
-            if message["type"] == "http.response.start":
-                headers = MutableHeaders(scope=message)
-                headers.append("Access-Control-Allow-Private-Network", "true")
-            await send(message)
-
-        await self.app(scope, receive, patched_send)
-
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_private_network=True,  # Starlette 0.27+ native PNA support — required for
+                                 # Lovable (public HTTPS) → Tailscale (private IP) requests.
+                                 # Without this, CORSMiddleware returns HTTP 400
+                                 # "Disallowed CORS private-network" for any preflight
+                                 # that includes Access-Control-Request-Private-Network.
 )
-# Must be added after CORSMiddleware — FastAPI reverses middleware order so
-# this becomes the outermost layer and its patched_send wraps everything.
-app.add_middleware(PrivateNetworkAccessMiddleware)
 
 
 # ── WebSocket connection manager ─────────────────────────────────────────────
