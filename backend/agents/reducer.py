@@ -70,10 +70,60 @@ def _build_synthesis_prompt(query: str, results: dict[str, AgentResult], task_gr
     return "\n".join(lines)
 
 
+def _repair_truncated_json(text: str) -> str:
+    """
+    Close any unmatched brackets/braces to rescue a truncated JSON string.
+
+    When the writing worker hits max_tokens mid-JSON, the output is syntactically
+    invalid. This heuristic strips the trailing incomplete token, closes open
+    arrays/objects in reverse order, and returns the repaired string.
+    """
+    # Discard everything after the last complete value (remove trailing comma,
+    # incomplete string, or partial key).
+    text = text.rstrip()
+    # Remove a trailing comma (common truncation artifact before a new key)
+    if text.endswith(","):
+        text = text[:-1]
+    # Remove a dangling open string (odd number of unescaped quotes at end)
+    # Simple heuristic: count unescaped quotes in the last 200 chars.
+    tail = text[-200:]
+    if tail.count('"') % 2 == 1:
+        # Find the last unescaped quote and cut before it
+        for i in range(len(text) - 1, -1, -1):
+            if text[i] == '"' and (i == 0 or text[i - 1] != "\\"):
+                text = text[:i].rstrip().rstrip(",")
+                break
+
+    # Walk the string to build the bracket/brace close stack
+    stack: list[str] = []
+    in_string = False
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "\\" and in_string:
+            i += 2
+            continue
+        if ch == '"':
+            in_string = not in_string
+        elif not in_string:
+            if ch in "{[":
+                stack.append("}" if ch == "{" else "]")
+            elif ch in "}]" and stack and stack[-1] == ch:
+                stack.pop()
+        i += 1
+
+    # Close any open containers
+    return text + "".join(reversed(stack))
+
+
 def _extract_document_result(raw: str) -> DocumentResult | None:
     """
     Try to parse the writing worker's raw output as a DocumentResult.
-    Handles JSON wrapped in markdown fences (```json ... ```) gracefully.
+
+    Handles:
+    - JSON wrapped in markdown fences (```json ... ```)
+    - Truncated JSON (model hit max_tokens mid-stream) — repaired via
+      _repair_truncated_json() before giving up
     """
     text = raw.strip()
     # Strip markdown fences if the model wrapped the JSON
@@ -85,15 +135,45 @@ def _extract_document_result(raw: str) -> DocumentResult | None:
 
     # Find the outermost JSON object
     start = text.find("{")
-    end = text.rfind("}") + 1
-    if start == -1 or end == 0:
+    if start == -1:
+        logger.warning("DocumentResult parse: no JSON object found in writing worker output")
         return None
 
+    # Slice from the first '{'; rfind('}') gives the outermost closing brace
+    # (or -1 if the JSON was truncated before it was closed).
+    end = text.rfind("}") + 1
+    candidate = text[start:end] if end > start else text[start:]
+
+    # First attempt — valid JSON
     try:
-        data = json.loads(text[start:end])
-        return DocumentResult(**data)
+        data = json.loads(candidate)
+        doc = DocumentResult(**data)
+        logger.info("DocumentResult parsed successfully (title=%r)", doc.title)
+        return doc
+    except json.JSONDecodeError:
+        logger.warning(
+            "DocumentResult parse: JSON truncated at ~%d chars — attempting repair",
+            len(candidate),
+        )
+    except (ValidationError, TypeError) as exc:
+        logger.warning("DocumentResult parse: Pydantic validation failed: %s", exc)
+        return None
+
+    # Second attempt — repair truncated JSON then re-parse
+    repaired = _repair_truncated_json(candidate)
+    try:
+        data = json.loads(repaired)
+        # Fill in required fields that may have been cut off
+        data.setdefault("title", "Report")
+        data.setdefault("executive_summary", "")
+        doc = DocumentResult(**data)
+        logger.info(
+            "DocumentResult recovered from truncated JSON (title=%r, sections=%d)",
+            doc.title, len(doc.sections),
+        )
+        return doc
     except (json.JSONDecodeError, ValidationError, TypeError) as exc:
-        logger.warning("Failed to parse DocumentResult from writing worker: %s", exc)
+        logger.warning("DocumentResult parse: repair also failed: %s", exc)
         return None
 
 
@@ -149,9 +229,21 @@ async def synthesize(
             snip.syntax_valid = validate_code_syntax(snip.code, snip.language)
 
         # Run TTS on the executive summary (non-blocking best-effort)
-        audio_url = await synthesize_speech(document.executive_summary, run_id)
-        if audio_url:
-            document.tts_audio_url = audio_url
+        summary_len = len(document.executive_summary)
+        logger.info("Attempting TTS for run %s (summary %d chars)", run_id, summary_len)
+        if not document.executive_summary.strip():
+            logger.warning("TTS skipped: executive_summary is empty")
+        else:
+            audio_url = await synthesize_speech(document.executive_summary, run_id)
+            if audio_url:
+                document.tts_audio_url = audio_url
+                logger.info("TTS succeeded: %s", audio_url)
+            else:
+                logger.warning(
+                    "TTS returned None for run %s — check edge-tts logs above "
+                    "(network connectivity to speech.platform.bing.com required)",
+                    run_id,
+                )
 
         # Build a plain-text final_answer from the document for backward compat
         section_texts = "\n\n".join(

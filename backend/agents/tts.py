@@ -44,7 +44,10 @@ async def synthesize_speech(text: str, run_id: str) -> str | None:
     try:
         import edge_tts  # optional dependency
     except ImportError:
-        logger.debug("edge-tts not installed — skipping TTS")
+        logger.warning(
+            "edge-tts not installed — TTS disabled. "
+            "Add 'edge-tts>=6.1.9' to requirements.txt and rebuild the backend image."
+        )
         return None
 
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
@@ -52,11 +55,17 @@ async def synthesize_speech(text: str, run_id: str) -> str | None:
     output_path = AUDIO_DIR / filename
 
     snippet = _truncate(text)
+    logger.info("TTS synthesizing %d chars to %s via %s", len(snippet), output_path, _VOICE)
     try:
         communicate = edge_tts.Communicate(snippet, _VOICE)
         await communicate.save(str(output_path))
         logger.info("TTS saved: %s (%d chars)", output_path, len(snippet))
         return f"/audio/{filename}"
     except Exception as exc:
-        logger.warning("TTS synthesis failed: %s", exc)
+        logger.warning(
+            "TTS synthesis failed (%s: %s). "
+            "edge-tts requires outbound HTTPS to speech.platform.bing.com — "
+            "check firewall / Docker network settings.",
+            type(exc).__name__, exc,
+        )
         return None
