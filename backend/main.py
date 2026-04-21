@@ -33,6 +33,7 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
@@ -180,6 +181,24 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
+class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
+    """
+    Chrome's Private Network Access (PNA) policy blocks public websites from
+    calling addresses in private/local IP space (including Tailscale IPs) unless
+    the server explicitly opts in with this header on every response, including
+    CORS preflight OPTIONS requests.
+    https://developer.chrome.com/blog/private-network-access-preflight
+    """
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
+
+
+# PrivateNetworkAccessMiddleware must be added AFTER CORSMiddleware so that it
+# wraps the outside — FastAPI applies middleware in reverse-addition order, meaning
+# the last-added runs first. This ensures the PNA header is appended to the
+# preflight response that CORSMiddleware generates.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -187,6 +206,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(PrivateNetworkAccessMiddleware)
 
 
 # ── WebSocket connection manager ─────────────────────────────────────────────
