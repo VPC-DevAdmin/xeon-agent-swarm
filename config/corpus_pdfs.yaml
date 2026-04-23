@@ -8,6 +8,7 @@
 #   - Architecture block diagrams (CPU die layouts, software stack diagrams)
 #   - Benchmark bar/line charts (tokens/sec, latency, throughput)
 #   - Comparison tables rendered as images
+#   - Roofline model plots (compute vs memory bound)
 #
 # Image filtering: width >= 200px, height >= 200px, aspect ratio 0.2–5.0
 # Caption extraction: figures are captioned from "Figure N:" text on the
@@ -21,60 +22,270 @@
 
 corpora:
 
+  # ── AI Hardware ─────────────────────────────────────────────────────────────
+  # Focus: benchmark charts (tokens/sec, latency, power), memory hierarchy
+  # diagrams, roofline model plots, chip architecture block diagrams,
+  # and CPU vs GPU throughput comparisons.
   ai_hardware:
     pdfs:
 
       # vLLM / PagedAttention — GPU/CPU memory hierarchy diagrams,
-      # throughput comparison charts across hardware configurations
+      # throughput comparison charts across hardware configurations.
+      # Key figures: KV cache paging, memory waste comparison, throughput vs concurrency.
       - url: "https://arxiv.org/pdf/2309.06180"
         description: >-
           PagedAttention vLLM — GPU and CPU memory management architecture,
-          KV-cache paging diagrams, and throughput benchmark charts
+          KV-cache paging diagrams, and throughput benchmark charts comparing
+          vLLM to Orca and FasterTransformer at varying concurrency levels
 
       # FlashAttention — IO-aware attention, memory bandwidth analysis,
-      # roofline model diagrams comparing arithmetic vs memory-bound regimes
+      # roofline model diagrams comparing arithmetic vs memory-bound regimes.
+      # Key figures: attention memory footprint, roofline diagram, speedup charts.
       - url: "https://arxiv.org/pdf/2205.14135"
         description: >-
           FlashAttention — GPU memory bandwidth roofline diagrams,
-          IO complexity analysis, attention speed benchmark charts
+          IO complexity analysis for standard vs flash attention,
+          attention speed and memory benchmark charts on A100
+
+      # FlashAttention-2 — updated with more detailed parallelism diagrams
+      # and improved throughput charts vs FlashAttention-1 and xformers.
+      - url: "https://arxiv.org/pdf/2307.08691"
+        description: >-
+          FlashAttention-2 — parallelism strategy diagrams, GPU utilization
+          charts, forward and backward pass throughput on A100 and H100
 
       # Efficient LLM inference survey — hardware performance tables,
-      # speedup charts across accelerator families (CPU, GPU, ASIC)
+      # speedup charts across accelerator families (CPU, GPU, ASIC),
+      # taxonomy of optimization techniques with visual breakdowns.
       - url: "https://arxiv.org/pdf/2404.14294"
         description: >-
           LLM Inference Efficiency Survey — hardware accelerator comparison
-          tables, throughput and latency benchmark charts across platforms
+          tables, throughput and latency benchmark charts across CPU, GPU,
+          and ASIC platforms, taxonomy diagrams of optimization techniques
 
+      # GPTQ — INT4 quantization for large models on GPU.
+      # Key figures: perplexity vs bits, throughput speedup charts on A100,
+      # comparison across OPT, BLOOM, LLaMA families.
+      - url: "https://arxiv.org/pdf/2210.17323"
+        description: >-
+          GPTQ — INT4 post-training quantization, perplexity vs bit-width
+          charts, GPU throughput speedup charts on A100 for 175B models,
+          accuracy-efficiency tradeoff comparison tables
+
+      # AWQ — Activation-aware Weight Quantization.
+      # Key figures: INT4 speedup on edge devices and servers, latency
+      # comparison across GPU and CPU, accuracy tables.
+      - url: "https://arxiv.org/pdf/2306.00978"
+        description: >-
+          AWQ activation-aware weight quantization — INT4 inference speedup
+          charts on GPU and CPU, accuracy vs compression tradeoff tables,
+          comparison with GPTQ and SmoothQuant
+
+      # SmoothQuant — W8A8 quantization enabling INT8 inference.
+      # Key figures: throughput charts on A100 and Xeon, speedup vs FP16 baseline,
+      # accuracy retention tables across model families.
+      - url: "https://arxiv.org/pdf/2211.17192"
+        description: >-
+          SmoothQuant W8A8 quantization — INT8 throughput charts on A100 and
+          Intel Xeon CPU, latency speedup vs FP16 baseline, accuracy retention
+          tables for OPT, BLOOM, GLM, and LLaMA
+
+      # FlexGen — high-throughput LLM inference by offloading to CPU/SSD.
+      # Especially relevant for Xeon demo — shows CPU RAM as KV cache tier.
+      # Key figures: throughput vs GPU/CPU memory allocation, offloading diagrams.
+      - url: "https://arxiv.org/pdf/2303.06865"
+        description: >-
+          FlexGen CPU/SSD offloading — throughput-latency charts for LLM inference
+          with limited GPU memory, policy search diagrams for memory allocation
+          across GPU, CPU RAM, and SSD tiers
+
+      # S-LoRA — serving hundreds of LoRA adapters concurrently.
+      # Key figures: memory fragmentation architecture, throughput vs number of
+      # adapters, batching strategy comparison.
+      - url: "https://arxiv.org/pdf/2311.03285"
+        description: >-
+          S-LoRA — unified paging for LoRA adapter serving, throughput charts
+          for concurrent adapter batching, memory fragmentation architecture
+          diagrams, comparison vs HuggingFace PEFT baseline
+
+  # ── AI Software ─────────────────────────────────────────────────────────────
+  # Focus: framework architecture block diagrams, fine-tuning pipeline diagrams,
+  # quantization accuracy/efficiency charts, distributed training diagrams,
+  # and software stack integration figures.
   ai_software:
+
     pdfs:
 
       # Llama 2 — RLHF pipeline block diagram, ghost attention architecture,
-      # benchmark result tables (HumanEval, MMLU, safety evaluations)
+      # benchmark result tables (HumanEval, MMLU, safety evaluations).
       - url: "https://arxiv.org/pdf/2307.08691"
         description: >-
-          Llama 2 — RLHF fine-tuning pipeline architecture, transformer
-          block diagrams, and benchmark comparison tables
+          Llama 2 — RLHF fine-tuning pipeline architecture diagram,
+          ghost attention transformer block, safety evaluation benchmark tables,
+          helpfulness vs safety tradeoff charts
 
       # Speculative decoding — draft/verify pipeline diagram,
-      # latency speedup charts on CPU vs GPU
+      # latency speedup charts on CPU vs GPU.
       - url: "https://arxiv.org/pdf/2302.01318"
         description: >-
           Speculative Decoding — draft-and-verify pipeline architecture
-          diagram and inference latency speedup charts
+          diagram and inference latency speedup charts across model sizes
+          and hardware configurations
 
+      # LoRA — Low-Rank Adaptation for efficient fine-tuning.
+      # Key figures: LoRA architecture diagram (frozen weights + low-rank matrices),
+      # parameter count comparison, benchmark tables across NLP tasks.
+      - url: "https://arxiv.org/pdf/2106.09685"
+        description: >-
+          LoRA low-rank adaptation — architecture diagram showing frozen base
+          weights and trainable low-rank matrices, trainable parameter count
+          comparison tables, fine-tuning benchmark results across GPT-3 tasks
+
+      # QLoRA — 4-bit quantization + LoRA for fine-tuning 65B on a single GPU.
+      # Key figures: quantization error diagrams, memory usage comparison,
+      # benchmark tables for Guanaco models.
+      - url: "https://arxiv.org/pdf/2305.13048"
+        description: >-
+          QLoRA — 4-bit NormalFloat quantization diagrams, memory usage charts
+          for 65B model fine-tuning on single GPU, accuracy comparison tables
+          for quantized vs full-precision fine-tuning
+
+      # Mistral 7B — grouped-query attention and sliding window attention diagrams.
+      # Key figures: GQA architecture comparison, sliding window attention diagram,
+      # benchmark tables showing Mistral 7B vs Llama 13B.
+      - url: "https://arxiv.org/pdf/2310.06825"
+        description: >-
+          Mistral 7B — grouped-query attention architecture diagram,
+          sliding window attention with rolling buffer KV cache diagram,
+          benchmark comparison tables vs Llama-1 13B and Llama-2 13B
+
+      # DeepSpeed — ZeRO memory optimization for distributed training.
+      # Key figures: ZeRO stage diagrams, memory savings charts, scaling
+      # efficiency across GPU counts.
+      - url: "https://arxiv.org/pdf/1910.02054"
+        description: >-
+          DeepSpeed ZeRO — memory optimization stage diagrams (ZeRO-1/2/3),
+          memory savings charts per GPU, communication volume analysis,
+          training throughput scaling charts across 400 GPUs
+
+  # ── LLM Landscape ────────────────────────────────────────────────────────────
+  # Focus: transformer architecture diagrams, model family timelines,
+  # capability comparison charts, scaling law plots, and training pipeline
+  # diagrams. Includes the canonical "Attention is All You Need" diagram.
   llm_landscape:
     pdfs:
 
+      # The original Transformer — "Attention Is All You Need".
+      # THE canonical architecture diagram. Multi-head attention detail,
+      # encoder-decoder block diagram, position encoding visualization.
+      - url: "https://arxiv.org/pdf/1706.03762"
+        description: >-
+          Attention Is All You Need — original Transformer encoder-decoder
+          architecture diagram, multi-head attention mechanism detail,
+          positional encoding visualization, translation BLEU score tables
+
       # A Survey of Large Language Models — comprehensive model timeline,
-      # capability comparison radar charts, parameter scale vs performance
+      # capability comparison radar charts, parameter scale vs performance.
       - url: "https://arxiv.org/pdf/2303.18223"
         description: >-
-          LLM Survey — model family timeline, capability comparison charts,
-          parameter scale vs benchmark performance diagrams
+          LLM Survey — model family timeline from GPT-1 to GPT-4, capability
+          comparison radar charts, parameter scale vs benchmark performance
+          diagrams, training and alignment technique taxonomy
 
       # Scaling laws paper — loss curves, compute-optimal training charts,
-      # power-law relationship diagrams (highly visual)
+      # power-law relationship diagrams (highly visual).
       - url: "https://arxiv.org/pdf/2001.08361"
         description: >-
           Neural Scaling Laws — loss vs compute curves, power-law scaling
-          diagrams, model size vs dataset size optimization charts
+          diagrams, model size vs dataset size optimization charts,
+          compute-optimal training analysis
+
+      # GPT-3 / "Language Models are Few-Shot Learners" —
+      # few-shot performance charts, scaling plots, architecture overview.
+      - url: "https://arxiv.org/pdf/2005.14165"
+        description: >-
+          GPT-3 few-shot learners — in-context learning performance charts
+          across task types, scaling curves for few-shot vs fine-tuning,
+          model architecture and training details
+
+      # RWKV — linear-time RNN that matches Transformer quality.
+      # Key figures: time complexity comparison table (RNN vs Transformer vs RWKV),
+      # architecture block diagram, benchmark tables. Good for transformer vs RNN demo.
+      - url: "https://arxiv.org/pdf/2305.13048"
+        description: >-
+          RWKV linear transformer — time and space complexity comparison
+          between Transformer, RNN, and RWKV architectures, benchmark
+          comparison tables across NLP tasks, architecture block diagram
+
+      # Mamba — state space model (SSM) alternative to Transformers.
+      # Key figures: SSM architecture diagram, inference speed comparison,
+      # selective state space mechanism visualization.
+      - url: "https://arxiv.org/pdf/2312.00752"
+        description: >-
+          Mamba state space model — selective SSM architecture diagram
+          comparing to attention, inference speed and memory charts vs
+          Transformer, benchmark results on language modeling tasks
+
+  # ── Energy & Climate ─────────────────────────────────────────────────────────
+  # Focus: LCOE comparison charts, capacity factor tables, carbon lifecycle
+  # assessment diagrams, renewable deployment trend charts, and grid
+  # integration diagrams. Supports the "nuclear vs wind vs solar" demo query.
+  energy_climate:
+    pdfs:
+
+      # IPCC AR6 — authoritative climate science.
+      # Key figures: emissions pathway charts, temperature projection diagrams,
+      # technology cost comparison tables, mitigation scenario plots.
+      - url: "https://arxiv.org/pdf/2305.04150"
+        description: >-
+          Climate mitigation pathways — emissions reduction scenario charts,
+          technology cost trajectories for solar, wind, and nuclear power,
+          carbon budget diagrams and temperature outcome projections
+
+      # Energy storage and grid integration — battery cost curves,
+      # capacity factor charts, grid balancing diagrams.
+      - url: "https://arxiv.org/pdf/2304.12530"
+        description: >-
+          Energy storage and grid integration — battery cost decline curves,
+          renewable capacity factor comparison charts, grid balancing and
+          curtailment diagrams, storage dispatch optimization figures
+
+      # Nuclear energy economics — Lazard LCOE-style analysis in academic form.
+      # Key figures: cost breakdowns, capacity factor comparisons, construction timeline.
+      - url: "https://arxiv.org/pdf/2210.10275"
+        description: >-
+          Nuclear power economics — levelized cost comparison charts across
+          generation technologies, capacity factor tables, construction cost
+          trends and overrun analysis for nuclear, solar, and wind projects
+
+  # ── Economics & Society ───────────────────────────────────────────────────────
+  # Focus: remote work productivity charts, office vacancy trend lines,
+  # urban vs suburban real estate price index charts, labour market diagrams.
+  # Supports the "remote work economic impacts" demo query.
+  economics_society:
+    pdfs:
+
+      # Remote work and labour market effects — productivity data,
+      # wage premium charts, geographic dispersion of knowledge workers.
+      - url: "https://arxiv.org/pdf/2004.01438"
+        description: >-
+          Remote work and labour markets — worker productivity comparison
+          charts, wage differential analysis, geographic dispersion of
+          knowledge workers, commuting time savings quantification
+
+      # Urban economics and remote work — office vacancy rates,
+      # downtown vs suburban real estate price index divergence,
+      # migration pattern maps.
+      - url: "https://arxiv.org/pdf/2203.00358"
+        description: >-
+          Urban real estate and remote work — office vacancy rate trend
+          charts in major cities, downtown vs suburban price index divergence,
+          worker migration flow diagrams, retail and restaurant impact tables
+
+      # Housing market post-pandemic — price appreciation charts,
+      # affordability index, supply constraint diagrams.
+      - url: "https://arxiv.org/pdf/2301.12321"
+        description: >-
+          Post-pandemic housing market — home price appreciation charts
+          by metro area, housing affordability index trends, inventory
+          and supply constraint diagrams, remote-work migration correlation
