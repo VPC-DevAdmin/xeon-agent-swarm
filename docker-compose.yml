@@ -40,24 +40,27 @@ services:
   # Specialization comes from contract fields (objective/scope/success_criteria)
   # injected into each role's prompt — not from separate models.
   #
-  # Hardware tuning (Xeon 6 GNR, 64 cores, 1 TB RAM, DDR5-5600):
-  #   TP=4 → 4 worker processes, 16 cores each
-  #   VLLM_CPU_OMP_THREADS_BIND partitions cores so no overlap
-  #   VLLM_CPU_KVCACHE_SPACE=16 → 16 GB per worker × 4 = 64 GB total KV cache
-  #   --compilation-config inductor → AOT compile via torch.compile (AMX dispatch)
-  #   --dtype bfloat16 → AMX BF16 TMUL path (requires Sapphire Rapids or later)
+  # Built from docker/vllm-cpu/Dockerfile using the native vLLM CPU wheel
+  # (github.com/vllm-project/vllm releases).  The native backend supports:
+  #   --tensor-parallel-size 4     → 4 workers, each owning 16 cores
+  #   --dtype bfloat16             → AMX BF16 TMUL (Sapphire Rapids+)
+  #   --distributed-executor-backend mp
+  #   --enable-chunked-prefill
+  #   VLLM_CPU_OMP_THREADS_BIND    → pin workers to distinct core ranges
+  #   VLLM_CPU_KVCACHE_SPACE       → KV cache per worker in GB
   #
-  # Concurrency:
-  #   WORKER_CONCURRENCY (default 8) limits simultaneous requests via asyncio.Semaphore
-  #   in backend/inference/client.py. Tune to (4 × 16 threads / avg tokens per req).
+  # Build: docker compose build vllm-text
+  # To pin a vLLM version: set VLLM_VERSION=x.y.z in .env before building.
   vllm-text:
-    image: opea/vllm-cpu:latest
+    build:
+      context: ./docker/vllm-cpu
+      args:
+        VLLM_VERSION: ${VLLM_VERSION:-}
     environment:
       - HF_TOKEN=${HF_TOKEN}
       - VLLM_CPU_OMP_THREADS_BIND=${VLLM_CPU_OMP_THREADS_BIND:-0-15|16-31|32-47|48-63}
       - VLLM_CPU_KVCACHE_SPACE=${VLLM_CPU_KVCACHE_SPACE:-16}
       - OMP_NUM_THREADS=${OMP_NUM_THREADS:-16}
-      - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
     command: >
       --model ${TEXT_ENGINE_MODEL:-mistralai/Mistral-7B-Instruct-v0.3}
       --port 8080
@@ -76,7 +79,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 60
-      start_period: 600s   # cold start: weight download (~4 min) + AOT compile (~1 min)
+      start_period: 300s   # cold start: HF model download + JIT compile
 
   # ── Vision engine (Phi-3.5-vision-instruct) ────────────────────────────────
   # Separate engine — modality requires a different model architecture.
@@ -84,9 +87,10 @@ services:
   # To enable: docker compose --profile vision up -d vllm-vision
   # Then set VLM_ENDPOINT=http://vllm-vision:8084/v1 in .env and restart backend.
   vllm-vision:
-    image: opea/vllm-cpu:latest
+    image: opea/vllm:latest   # OpenVINO backend — vision models don't need native TP
     environment:
       - HF_TOKEN=${HF_TOKEN}
+      - VLLM_USE_V1=1
       - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
       - VLLM_OPENVINO_KVCACHE_SPACE=6
     command: >
