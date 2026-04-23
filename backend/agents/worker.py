@@ -2,15 +2,20 @@
 Generic worker agent: executes a single TaskSpec and returns an AgentResult.
 Role (system prompt + tools) is loaded from config/worker_roles.yaml.
 
-Vision tasks (TaskType.vision) use a separate code path:
-  - Retrieve top-1 image from the Redis image store via caption embedding search
-  - Base64-encode images and pass to Phi-3.5-vision via OpenAI vision API format
-  - Falls back to text-only analysis if VLM_ENDPOINT is not set
+Single-engine topology: all text workers share one Mistral-7B engine (TEXT_ENGINE_ENDPOINT).
+Vision uses a separate VLM endpoint. Specialization comes from contracts + prompts, not models.
+
+Optional validator retry loop:
+  If state.validator_enabled is True, each worker result is checked against the TaskSpec
+  contract. Failed checks trigger a retry with a correction_hint injected into the prompt.
+  Retries are capped per role (max_retries in worker_roles.yaml, default 3).
 """
+from __future__ import annotations
+
 import base64
+import json
 import logging
 import os
-import json
 import time
 import yaml
 from pathlib import Path
@@ -33,6 +38,7 @@ from backend.schemas.models import (
     TaskType,
     EventType,
     SwarmEvent,
+    ValidationVerdict,
     validate_code_syntax,
 )
 from backend.protocols.mcp_servers import call_tool
@@ -47,7 +53,6 @@ def _load_roles() -> dict:
     if _ROLES is None:
         cfg_path = Path(os.getenv("CONFIG_DIR", "/app/config")) / "worker_roles.yaml"
         if not cfg_path.exists():
-            # fallback for local dev
             cfg_path = Path(__file__).parent.parent.parent / "config" / "worker_roles.yaml"
         with open(cfg_path) as f:
             _ROLES = yaml.safe_load(f)["roles"]
@@ -56,48 +61,34 @@ def _load_roles() -> dict:
 
 def _client_for_role(task_type: TaskType) -> InferenceClient:
     """
-    Specialist routing table — each role hits the model best suited to it.
+    Single-engine topology: all text workers share one Mistral-7B engine.
+    Vision uses its own endpoint. Specialization comes from contracts, not models.
 
-    Role            Model                         Rationale
+    Role            Engine                        Rationale
     ─────────────   ──────────────────────────    ───────────────────────────────
-    code            Qwen2.5-Coder-7B-Instruct     Code-tuned; noticeably better
-    writing         Mistral-7B-Instruct-v0.3       Prose quality / fluency
-    analysis        Mistral-7B-Instruct-v0.3       Synthesis quality
-    research        Phi-4-mini-instruct            Retrieval summarisation at 3.8B
-    fact_check      Phi-4-mini-instruct            Smaller = less confabulation
-    summarization   Phi-4-mini-instruct            Same
-    general         Phi-4-mini-instruct            Catch-all; CPU-cheap
-    vision          (handled in _execute_vision_task via VLM_ENDPOINT)
+    vision          VLM_ENDPOINT                  Separate — modality requires different model
+    all others      TEXT_ENGINE_ENDPOINT           Shared Mistral-7B with concurrency semaphore
     """
-    if task_type == TaskType.code:
+    if task_type == TaskType.vision:
         return InferenceClient(
-            base_url=os.getenv("CODER_ENDPOINT", "http://localhost:8083/v1"),
-            model=os.getenv("CODER_MODEL", "Qwen/Qwen2.5-Coder-7B-Instruct"),
+            base_url=os.getenv("VLM_ENDPOINT", "http://localhost:8084/v1"),
+            model=os.getenv("VLM_MODEL", "microsoft/Phi-3.5-vision-instruct"),
             hardware="cpu",
+            use_semaphore=False,  # vision has its own engine, no text engine contention
         )
-    if task_type in (TaskType.writing, TaskType.analysis):
-        # Mistral-7B for prose quality — same endpoint as the orchestrator
-        return InferenceClient(
-            base_url=os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1"),
-            model=os.getenv("ORCHESTRATOR_MODEL", "mistralai/Mistral-7B-Instruct-v0.3"),
-            hardware="cpu",
-        )
-    # research, fact_check, summarization, general, vision fallback → Phi-4-mini
-    # A smaller model is deliberately better for fact-checking: it is less likely
-    # to confabulate supporting evidence for claims it cannot verify.
-    gpu_url = os.getenv("WORKER_GPU_ENDPOINT", "")
-    roles = _load_roles()
-    preferred_hw = roles.get(task_type.value, {}).get("preferred_hardware", "cpu")
-    if preferred_hw == "gpu" and gpu_url:
-        return InferenceClient(
-            base_url=gpu_url,
-            model=os.getenv("WORKER_GPU_MODEL", "meta-llama/Llama-3.1-8B-Instruct"),
-            hardware="gpu",
-        )
+
+    # All text tasks: shared Mistral-7B with semaphore
     return InferenceClient(
-        base_url=os.getenv("WORKER_CPU_ENDPOINT", "http://localhost:8081/v1"),
-        model=os.getenv("WORKER_CPU_MODEL", "microsoft/Phi-4-mini-instruct"),
+        base_url=os.getenv(
+            "TEXT_ENGINE_ENDPOINT",
+            os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1"),
+        ),
+        model=os.getenv(
+            "TEXT_ENGINE_MODEL",
+            os.getenv("ORCHESTRATOR_MODEL", "mistralai/Mistral-7B-Instruct-v0.3"),
+        ),
         hardware="cpu",
+        use_semaphore=True,
     )
 
 
@@ -146,7 +137,6 @@ def _extract_artifacts(data: dict, task_id: str) -> list[Artifact]:
 
 def _parse_worker_response(raw: str, task_id: str, client: InferenceClient, latency_ms: float) -> AgentResult:
     """Parse the model's JSON response; extract typed artifacts; fall back to plain text."""
-    # Strip markdown fences if the model wrapped the JSON
     text = raw.strip()
     if text.startswith("```"):
         lines = text.splitlines()
@@ -193,9 +183,49 @@ async def _retrieve_images(query: str, top_k: int = 2) -> list[dict]:
         finally:
             await store.close()
 
-    # Sort by ascending cosine distance (lower = more similar), take top_k
     all_hits.sort(key=lambda h: h["score"])
     return all_hits[:top_k]
+
+
+async def _execute_text_retrieval_fallback(
+    task: TaskSpec,
+    role_cfg: dict,
+    correction_hint: str | None = None,
+) -> AgentResult:
+    """
+    Text-only fallback when no images are found for a vision task.
+    Uses the shared text engine with the research role prompt.
+    """
+    client = InferenceClient(
+        base_url=os.getenv(
+            "TEXT_ENGINE_ENDPOINT",
+            os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1"),
+        ),
+        model=os.getenv(
+            "TEXT_ENGINE_MODEL",
+            os.getenv("ORCHESTRATOR_MODEL", "mistralai/Mistral-7B-Instruct-v0.3"),
+        ),
+        hardware="cpu",
+        use_semaphore=True,
+    )
+    task_desc = task.objective or task.description
+    user_content = (
+        f"Vision task fallback (no images found in corpus).\n"
+        f"Use text-based retrieval instead.\n\n"
+        f"Original objective: {task_desc}\n"
+        f"Scope: {'; '.join(task.scope) if task.scope else 'not specified'}"
+    )
+    if correction_hint:
+        user_content += f"\n\nCorrection hint from previous attempt: {correction_hint}"
+
+    messages = [
+        {"role": "system", "content": role_cfg["system_prompt"]},
+        {"role": "user", "content": user_content},
+    ]
+    raw, latency_ms = await client.complete(messages, max_tokens=512)
+    result = _parse_worker_response(raw, task.id, client, latency_ms)
+    result.tool_calls = ["fallback:no_images_text_retrieval"]
+    return result
 
 
 async def _execute_vision_task(
@@ -203,22 +233,72 @@ async def _execute_vision_task(
     run_id: str,
     broadcast,
     role_cfg: dict,
+    correction_hint: str | None = None,
 ) -> AgentResult:
     """
     Vision worker: retrieve relevant images → VLM call with base64 images.
-    Falls back to text-only analysis if VLM_ENDPOINT is unset or no images found.
+
+    Honors task.fallback_behavior when no images are found:
+      "skip"           → return VisionResult with image_found=False, confidence=0
+      "retrieval_only" → fall back to text-based retrieval (default)
+      "describe"       → call VLM anyway (no image, just text prompt)
     """
     t0 = time.perf_counter()
     vlm_endpoint = os.getenv("VLM_ENDPOINT", "")
     vlm_model = os.getenv("VLM_MODEL", "microsoft/Phi-3.5-vision-instruct")
 
-    # Phi-3.5-vision image tokens: ~1024 tokens per 336×336 crop; arXiv diagrams
-    # are often 600×400+ (2–4 crops = 2048–4096 tokens). With max-model-len 4096,
-    # two images can exhaust the context before a single output token is generated.
-    # Use exactly 1 image (the most relevant hit) to keep within budget.
-    hits = await _retrieve_images(task.description, top_k=1)
+    task_desc = task.objective or task.description
+    hits = await _retrieve_images(task_desc, top_k=1)
 
-    # Build vision message content
+    # ── No images found — honor fallback_behavior ────────────────────────────
+    if not hits:
+        fallback = task.fallback_behavior
+        logger.info("Vision task %s: no images found; fallback=%s", task.id, fallback)
+
+        if fallback == "skip":
+            latency_ms = (time.perf_counter() - t0) * 1000
+            return AgentResult(
+                task_id=task.id,
+                status=TaskStatus.completed,
+                result="No relevant image in corpus; task skipped per fallback_behavior=skip",
+                artifacts=[
+                    Artifact(
+                        type=ArtifactType.extracted_data,
+                        content={
+                            "description": "No image found",
+                            "image_found": False,
+                            "data_points": [],
+                        },
+                        worker_id=task.id,
+                        confidence=0.0,
+                    )
+                ],
+                confidence=0.0,
+                model_used="vision_skipped",
+                hardware="n/a",
+                latency_ms=latency_ms,
+            )
+
+        if fallback == "retrieval_only":
+            return await _execute_text_retrieval_fallback(task, role_cfg, correction_hint)
+
+        # fallback == "describe": fall through to VLM call (text only, no image)
+
+    # ── VLM not configured ───────────────────────────────────────────────────
+    if not vlm_endpoint:
+        img_count = len(hits)
+        img_note = (
+            f"{img_count} relevant image(s) were retrieved from the corpus "
+            f"but could not be analyzed because the vision worker (VLM_ENDPOINT) "
+            f"is not running. Start vllm-vision with: "
+            f"docker compose --profile vision up -d vllm-vision"
+            if img_count > 0
+            else "No images matched the query and the vision worker (VLM_ENDPOINT) is not running."
+        )
+        # Fall back to text retrieval
+        return await _execute_text_retrieval_fallback(task, role_cfg, correction_hint)
+
+    # ── Build VLM message content ────────────────────────────────────────────
     content: list[dict] = []
     images_used: list[str] = []
 
@@ -234,59 +314,34 @@ async def _execute_vision_task(
             content.append({"type": "text", "text": f"[Image: {hit['caption']}]"})
             images_used.append(hit["local_path"])
 
-    # Give the VLM an explicit extraction directive, not just the task description.
-    # Without this, vision models default to high-level image descriptions rather
-    # than reading the actual numbers, labels, and components in the image.
+    # Build type-specific extraction directive from expected_image_types
+    extraction_directives = ""
+    if task.expected_image_types:
+        if "benchmark_chart" in task.expected_image_types:
+            extraction_directives += (
+                "\nFor benchmark charts: populate extracted_data with "
+                "{data_points: [{label, value, unit}], axis_x, axis_y, title}"
+            )
+        if "architecture_diagram" in task.expected_image_types:
+            extraction_directives += (
+                "\nFor architecture diagrams: populate extracted_data with "
+                "{components: [name], connections: [[from, to]], labeled_values: {}}"
+            )
+
     extraction_prompt = (
-        f"Task: {task.description}\n\n"
+        f"Task: {task_desc}\n\n"
         "IMPORTANT — do not describe these images at a high level. Read and extract "
         "the specific information they contain:\n"
         "• Charts/graphs: report exact axis labels, series names, and key numeric values\n"
         "• Architecture diagrams: list every labeled component and the connections between them\n"
         "• Tables: extract rows, columns, and their values\n"
-        "• Pipeline diagrams: list each stage in order, noting parallel vs sequential steps\n\n"
-        "Synthesize what the images reveal that text descriptions alone cannot convey."
+        "• Pipeline diagrams: list each stage in order, noting parallel vs sequential steps"
+        + extraction_directives
     )
+    if correction_hint:
+        extraction_prompt += f"\n\nCorrection hint from previous attempt: {correction_hint}"
+
     content.append({"type": "text", "text": extraction_prompt})
-
-    if not vlm_endpoint:
-        # VLM service not configured — tell the user what was found and why we fell back.
-        # Don't run a text-only model that would just say "no images found"; that's
-        # misleading when images were retrieved but we can't send them to the VLM.
-        img_count = len(images_used)
-        img_note = (
-            f"{img_count} relevant image(s) were retrieved from the corpus "
-            f"but could not be analyzed because the vision worker (VLM_ENDPOINT) "
-            f"is not running. Start vllm-vision with: "
-            f"docker compose --profile vision up -d vllm-vision"
-            if img_count > 0
-            else "No images matched the query and the vision worker (VLM_ENDPOINT) is not running."
-        )
-        fallback_client = _client_for_role(TaskType.general)
-        latency_ms = (time.perf_counter() - t0) * 1000
-        result = AgentResult(
-            task_id=task.id,
-            status=TaskStatus.completed,
-            result=img_note,
-            confidence=0.0,
-            model_used=fallback_client.model,
-            hardware=fallback_client.hardware,
-            latency_ms=latency_ms,
-        )
-        result.tool_calls = ["fallback:no_vlm_endpoint"]
-        return result
-
-    if not images_used:
-        # VLM is running but no matching images were found in the corpus.
-        fallback_client = _client_for_role(TaskType.general)
-        messages = [
-            {"role": "system", "content": role_cfg["system_prompt"]},
-            {"role": "user", "content": task.description},
-        ]
-        raw, latency_ms = await fallback_client.complete(messages, max_tokens=512)
-        result = _parse_worker_response(raw, task.id, fallback_client, latency_ms)
-        result.tool_calls = ["fallback:no_images"]
-        return result
 
     vlm_client = AsyncOpenAI(base_url=vlm_endpoint, api_key="none")
     messages = [
@@ -297,28 +352,23 @@ async def _execute_vision_task(
     resp = await vlm_client.chat.completions.create(
         model=vlm_model,
         messages=messages,
-        max_tokens=800,  # 512 was too small for detailed extraction responses
+        max_tokens=800,
     )
     latency_ms = (time.perf_counter() - t0) * 1000
     raw_text = (resp.choices[0].message.content or "").strip()
 
-    # Empty response = context overflow (model hit max-model-len before generating output).
-    # Surface this clearly rather than returning a silent blank result.
     if not raw_text:
         finish = resp.choices[0].finish_reason if resp.choices else "unknown"
         logger.warning(
-            "VLM returned empty content (finish_reason=%s). "
-            "Image may be too large for max-model-len 4096. "
-            "images_used=%s",
-            finish,
-            images_used,
+            "VLM returned empty content (finish_reason=%s). images_used=%s",
+            finish, images_used,
         )
         return AgentResult(
             task_id=task.id,
             status=TaskStatus.completed,
             result=(
                 f"Vision model returned no output (finish_reason={finish!r}). "
-                f"The image context likely exceeded max-model-len 4096. "
+                f"Image context likely exceeded max-model-len 4096. "
                 f"Image retrieved: {images_used[0] if images_used else 'none'}"
             ),
             confidence=0.0,
@@ -328,13 +378,11 @@ async def _execute_vision_task(
             tool_calls=images_used,
         )
 
-    # Parse JSON response and extract typed artifact
     try:
         data = json.loads(raw_text)
         result_text = data.get("result", raw_text)
         confidence = float(data.get("confidence", 0.8))
         artifacts = _extract_artifacts(data, task.id)
-        # Patch source_image into extracted_data artifacts
         for art in artifacts:
             if art.type == ArtifactType.extracted_data and images_used:
                 art.content.setdefault("source_image", images_used[0])
@@ -356,26 +404,36 @@ async def _execute_vision_task(
     )
 
 
+# Per-role token budgets
+_BUDGETS = {
+    TaskType.writing:    2000,
+    TaskType.research:   1200,
+    TaskType.analysis:   1000,
+    TaskType.fact_check:  400,
+}
+
+
 async def execute_task(
     task: TaskSpec,
     run_id: str,
     broadcast,
     context: dict[str, str] | None = None,
+    correction_hint: str | None = None,
 ) -> AgentResult:
     """Execute a single task, broadcast events, return AgentResult."""
     roles = _load_roles()
     role_cfg = roles.get(task.type.value, roles["general"])
     client = _client_for_role(task.type)
 
-    # For vision tasks, report the VLM model in task_started (not the CPU worker)
-    # so the UI shows the correct model before the VLM call begins.
     if task.type == TaskType.vision:
         vlm_ep = os.getenv("VLM_ENDPOINT", "")
         started_model = os.getenv("VLM_MODEL", "microsoft/Phi-3.5-vision-instruct") if vlm_ep else client.model
-        started_hw = "cpu"  # vllm-vision runs on CPU (OpenVINO) in this setup
+        started_hw = "cpu"
     else:
         started_model = client.model
         started_hw = client.hardware
+
+    task_desc = task.objective or task.description
 
     await broadcast(
         run_id,
@@ -384,7 +442,7 @@ async def execute_task(
             run_id=run_id,
             payload={
                 "task_id": task.id,
-                "description": task.description,
+                "description": task_desc,
                 "type": task.type.value,
                 "model": started_model,
                 "hardware": started_hw,
@@ -395,7 +453,7 @@ async def execute_task(
     # ── Vision tasks: separate code path ────────────────────────────────────
     if task.type == TaskType.vision:
         try:
-            agent_result = await _execute_vision_task(task, run_id, broadcast, role_cfg)
+            agent_result = await _execute_vision_task(task, run_id, broadcast, role_cfg, correction_hint)
             await broadcast(
                 run_id,
                 SwarmEvent(
@@ -431,52 +489,43 @@ async def execute_task(
             ))
             return err
 
-    # ── MCP tool calls (inject context before LLM call) ──────────────────────
+    # ── MCP tool calls ───────────────────────────────────────────────────────
     tool_context = ""
     tool_calls_made: list[str] = []
     for tool_name in role_cfg.get("tools", []):
-        tool_result = await call_tool(tool_name, {"query": task.description})
+        tool_result = await call_tool(tool_name, {"query": task_desc})
         if tool_result:
             tool_context += f"\n\n[{tool_name} results]\n{tool_result}"
             tool_calls_made.append(tool_name)
 
-    user_content = task.description
+    # Build user content — include scope and success_criteria for richer context
+    user_content = task_desc
+    if task.scope:
+        user_content += "\n\nSpecific questions to answer:\n" + "\n".join(
+            f"- {q}" for q in task.scope
+        )
+    if task.success_criteria:
+        user_content += "\n\nSuccess criteria:\n" + "\n".join(
+            f"- {c}" for c in task.success_criteria
+        )
     if tool_context:
         user_content += f"\n\nAdditional context from tools:{tool_context}"
     if context:
         deps_text = "\n".join(f"- {k}: {v}" for k, v in context.items())
         user_content += f"\n\nResults from prerequisite tasks:\n{deps_text}"
+    if correction_hint:
+        user_content += f"\n\n[RETRY HINT] Previous attempt failed validation. Fix: {correction_hint}"
 
     messages = [
         {"role": "system", "content": role_cfg["system_prompt"]},
         {"role": "user", "content": user_content},
     ]
 
-    # Per-role token budgets:
-    #   writing    — 3000: needs room for title + summary + 3-5 full sections + findings
-    #   research   — 1200: richer result paragraph feeds the writing worker
-    #   analysis   — 1000: table rows + optional chart JSON
-    #   fact_check —  400: 2-3 short claim_verdict objects; more causes generation loops
-    #   others     —  768: general budget
-    # Per-role token budgets:
-    #   writing    — 2000: title + summary + 3-5 sections; 2000 tok @ 8 tok/s ≈ 250s (fits in 300s timeout)
-    #   research   — 1200: richer result paragraph feeds the writing worker
-    #   analysis   — 1000: table rows + optional chart JSON
-    #   fact_check —  400: 2-3 short claim_verdict objects; more causes generation loops
-    #   others     —  768: general budget
-    _BUDGETS = {
-        TaskType.writing:    2000,
-        TaskType.research:   1200,
-        TaskType.analysis:   1000,
-        TaskType.fact_check:  400,
-    }
     max_tokens = _BUDGETS.get(task.type, 768)
 
     try:
-        # ── Writing tasks: stream tokens for live UI feedback ────────────────
-        # Streaming lets the frontend typewriter-display the report being written
-        # rather than blocking for the full 2000-token generation (~250s on CPU).
         if task.type == TaskType.writing:
+            # Stream tokens for live UI feedback
             accumulated = ""
             t0_stream = time.perf_counter()
             async for token in client.stream(messages, max_tokens=max_tokens):
@@ -537,14 +586,155 @@ async def execute_task(
         return err_result
 
 
+async def execute_task_with_validation(
+    task: TaskSpec,
+    run_id: str,
+    broadcast,
+    context: dict[str, str] | None = None,
+    validator_enabled: bool = True,
+) -> AgentResult:
+    """
+    Execute a task with optional validator retry loop.
+
+    If validator_enabled:
+      - Run the task
+      - Check output against contract via validator
+      - On failure: retry with correction_hint injected into the prompt
+      - Retry budget: role's max_retries from worker_roles.yaml (default 3)
+      - On exhausted retries: commit the last result with a warning
+
+    Returns the final AgentResult regardless of validation status.
+    """
+    from backend.agents.validator import validate_worker_output
+
+    roles = _load_roles()
+    role_cfg = roles.get(task.type.value, roles["general"])
+    max_retries = role_cfg.get("max_retries", 3)
+
+    correction_hint: str | None = None
+    last_result: AgentResult | None = None
+
+    for attempt in range(1, max_retries + 2):  # +1 for initial attempt
+        # Execute the task (with correction hint on retries)
+        result = await execute_task(
+            task=task,
+            run_id=run_id,
+            broadcast=broadcast,
+            context=context,
+            correction_hint=correction_hint,
+        )
+        last_result = result
+
+        # Skip validation if disabled
+        if not validator_enabled:
+            return result
+
+        # Skip validation for failed tasks
+        if result.status != TaskStatus.completed:
+            return result
+
+        # Broadcast validator starting
+        await broadcast(
+            run_id,
+            SwarmEvent(
+                event=EventType.validator_started,
+                run_id=run_id,
+                payload={"task_id": task.id, "attempt": attempt},
+            ),
+        )
+
+        verdict: ValidationVerdict = await validate_worker_output(task, result)
+
+        if verdict.compliant:
+            await broadcast(
+                run_id,
+                SwarmEvent(
+                    event=EventType.validator_approved,
+                    run_id=run_id,
+                    payload={"task_id": task.id, "attempt": attempt},
+                ),
+            )
+            return result
+
+        # Validation failed
+        await broadcast(
+            run_id,
+            SwarmEvent(
+                event=EventType.validator_rejected,
+                run_id=run_id,
+                payload={
+                    "task_id": task.id,
+                    "attempt": attempt,
+                    "failed_criteria": verdict.failed_criteria,
+                    "correction_hint": verdict.correction_hint,
+                    "severity": verdict.severity,
+                },
+            ),
+        )
+
+        if verdict.severity == "unfixable":
+            logger.warning("Task %s: validator says unfixable — committing as-is", task.id)
+            await broadcast(
+                run_id,
+                SwarmEvent(
+                    event=EventType.worker_rejected_final,
+                    run_id=run_id,
+                    payload={"task_id": task.id, "reason": "unfixable"},
+                ),
+            )
+            return result
+
+        if attempt > max_retries:
+            logger.warning(
+                "Task %s: validator retry budget exhausted (%d retries) — committing as-is",
+                task.id, max_retries,
+            )
+            await broadcast(
+                run_id,
+                SwarmEvent(
+                    event=EventType.worker_rejected_final,
+                    run_id=run_id,
+                    payload={"task_id": task.id, "reason": "retries_exhausted"},
+                ),
+            )
+            return result
+
+        # Set up retry
+        correction_hint = verdict.correction_hint
+        logger.info(
+            "Task %s: retrying (attempt %d/%d) hint=%r",
+            task.id, attempt + 1, max_retries + 1, correction_hint[:80] if correction_hint else "",
+        )
+        await broadcast(
+            run_id,
+            SwarmEvent(
+                event=EventType.worker_retrying,
+                run_id=run_id,
+                payload={
+                    "task_id": task.id,
+                    "next_attempt": attempt + 1,
+                    "correction_hint": correction_hint,
+                },
+            ),
+        )
+
+    return last_result  # should not be reached
+
+
 async def run_worker(inputs: dict) -> dict:
     """LangGraph node wrapper."""
     task: TaskSpec = inputs["task"]
     state: SwarmState = inputs["state"]
-    # In LangGraph context there's no live broadcast; use a no-op
+
     async def _noop(run_id, event):
         pass
 
-    result = await execute_task(task, state.run_id, _noop)
+    validator_enabled = getattr(state, "validator_enabled", True)
+    result = await execute_task_with_validation(
+        task=task,
+        run_id=state.run_id,
+        broadcast=_noop,
+        validator_enabled=validator_enabled,
+    )
     state.results[task.id] = result
     return {"results": state.results}

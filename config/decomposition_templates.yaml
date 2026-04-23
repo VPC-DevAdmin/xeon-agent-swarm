@@ -1,0 +1,158 @@
+# Decomposition templates for canonical demo queries.
+#
+# When a query matches a template trigger pattern, the orchestrator uses the
+# pre-defined task structure instead of free-form LLM decomposition. This gives
+# repeatable, consistent task graphs for demo runs.
+#
+# Template matching is done in backend/agents/orchestrator.py:
+#   1. Try each template's trigger regexes (case-insensitive)
+#   2. First match wins
+#   3. Fall back to LLM decomposition if no template matches
+#
+# Templates are illustrative — the orchestrator LLM still fills in specific
+# details (objectives, scope, success_criteria) based on the actual query text.
+# The template controls the *shape* of the decomposition (types and deps).
+
+templates:
+
+  - id: technical_comparison
+    description: "Compare N products/technologies across technical dimensions"
+    triggers:
+      - "compare .* for .*"
+      - ".*\\bvs\\.?\\b.* for .*"
+      - "competitive analysis of .*"
+      - ".* benchmark.*comparison"
+      - "which is better.*for .*inference"
+      - "xeon.*h100|h100.*xeon"
+      - "cpu.*gpu.*inference|gpu.*cpu.*inference"
+    task_shape:
+      # 2 parallel research tasks (one per entity being compared)
+      - type: research
+        id_prefix: "t1"
+        dependencies: []
+        deliverable_format: finding_list_with_numeric_values
+      - type: research
+        id_prefix: "t2"
+        dependencies: []
+        deliverable_format: finding_list_with_numeric_values
+      # Vision for benchmark charts
+      - type: vision
+        id_prefix: "t3"
+        dependencies: []
+        deliverable_format: extracted_chart_data
+        expected_image_types: [benchmark_chart]
+        fallback_behavior: retrieval_only
+      # Analysis synthesizes research results
+      - type: analysis
+        id_prefix: "t4"
+        dependencies: [t1, t2, t3]
+        deliverable_format: comparison_table
+      # Code for decision tree or example
+      - type: code
+        id_prefix: "t5"
+        dependencies: [t4]
+        deliverable_format: mermaid_diagram
+      # Fact-check verifies research claims
+      - type: fact_check
+        id_prefix: "t6"
+        dependencies: [t1, t2]
+        deliverable_format: claim_verdicts
+      # Writing synthesizes everything
+      - type: writing
+        id_prefix: "t7"
+        dependencies: [t1, t2, t3, t4, t5, t6]
+        deliverable_format: document_result
+
+  - id: deployment_guide
+    description: "Reference architecture and deployment playbook for a technology"
+    triggers:
+      - "deployment.*playbook"
+      - "reference architecture for .*"
+      - "how to deploy .*"
+      - "production deployment.*guide"
+      - "deploy.*on.*xeon|deploy.*on.*cpu"
+      - "kubernetes.*deployment|docker.*deployment"
+    task_shape:
+      # Research: architecture overview + deployment requirements
+      - type: research
+        id_prefix: "t1"
+        dependencies: []
+        deliverable_format: finding_list_with_citations
+      - type: research
+        id_prefix: "t2"
+        dependencies: []
+        deliverable_format: finding_list_with_citations
+      # Vision for architecture diagrams
+      - type: vision
+        id_prefix: "t3"
+        dependencies: []
+        deliverable_format: component_diagram_description
+        expected_image_types: [architecture_diagram]
+        fallback_behavior: retrieval_only
+      # Code: working deployment example
+      - type: code
+        id_prefix: "t4"
+        dependencies: [t1, t2]
+        deliverable_format: code_block_python
+      # Analysis: deployment tradeoffs
+      - type: analysis
+        id_prefix: "t5"
+        dependencies: [t1, t2, t3]
+        deliverable_format: comparison_table
+      # Fact-check
+      - type: fact_check
+        id_prefix: "t6"
+        dependencies: [t1, t2]
+        deliverable_format: claim_verdicts
+      # Writing
+      - type: writing
+        id_prefix: "t7"
+        dependencies: [t1, t2, t3, t4, t5, t6]
+        deliverable_format: document_result
+
+  - id: intelligence_report
+    description: "Multi-section intelligence report on a technology or market topic"
+    triggers:
+      - "intelligence report"
+      - "briefing on .*"
+      - "analysis.*report.*on .*"
+      - "explain.*landscape.*of .*"
+      - "overview of .*(landscape|ecosystem|market|technology)"
+      - "explain the differences between.*architectures"
+      - "energy efficiency.*nuclear|wind|solar"
+      - "economic impacts.*remote work"
+    task_shape:
+      - type: research
+        id_prefix: "t1"
+        dependencies: []
+        deliverable_format: finding_list_with_citations
+      - type: research
+        id_prefix: "t2"
+        dependencies: []
+        deliverable_format: finding_list_with_numeric_values
+      - type: research
+        id_prefix: "t3"
+        dependencies: []
+        deliverable_format: finding_list_with_citations
+      - type: vision
+        id_prefix: "t4"
+        dependencies: []
+        deliverable_format: extracted_chart_data
+        expected_image_types: [benchmark_chart, architecture_diagram]
+        fallback_behavior: retrieval_only
+      - type: code
+        id_prefix: "t5"
+        dependencies: [t1, t2]
+        deliverable_format: code_block_python
+      - type: analysis
+        id_prefix: "t6"
+        dependencies: [t1, t2, t3, t4]
+        deliverable_format: comparison_table
+      - type: fact_check
+        id_prefix: "t7"
+        dependencies: [t1, t2, t3]
+        deliverable_format: claim_verdicts
+      - type: writing
+        id_prefix: "t8"
+        dependencies: [t1, t2, t3, t4, t5, t6, t7]
+        deliverable_format: document_result

@@ -47,10 +47,19 @@ Be concise but thorough. Use markdown formatting for readability.
 
 
 def _make_client() -> InferenceClient:
+    # Reducer uses the same shared text engine as workers.
+    # Semaphore is off — reducer runs after all workers complete, no contention.
     return InferenceClient(
-        base_url=os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1"),
-        model=os.getenv("ORCHESTRATOR_MODEL", "Qwen/Qwen2.5-7B-Instruct"),
+        base_url=os.getenv(
+            "TEXT_ENGINE_ENDPOINT",
+            os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1"),
+        ),
+        model=os.getenv(
+            "TEXT_ENGINE_MODEL",
+            os.getenv("ORCHESTRATOR_MODEL", "mistralai/Mistral-7B-Instruct-v0.3"),
+        ),
         hardware="cpu",
+        use_semaphore=False,
     )
 
 
@@ -58,15 +67,16 @@ def _build_synthesis_prompt(query: str, results: dict[str, AgentResult], task_gr
     lines = [f"Original query: {query}\n"]
     for task in task_graph.tasks:
         result = results.get(task.id)
+        task_desc = task.objective or task.description
         if result and result.status == TaskStatus.completed:
             lines.append(
-                f"## Subtask: {task.description}\n"
+                f"## Subtask: {task_desc}\n"
                 f"Type: {task.type.value} | Model: {result.model_used} | "
                 f"Hardware: {result.hardware} | Confidence: {result.confidence:.2f}\n"
                 f"{result.result}\n"
             )
         else:
-            lines.append(f"## Subtask: {task.description}\n[FAILED or PENDING]\n")
+            lines.append(f"## Subtask: {task_desc}\n[FAILED or PENDING]\n")
     return "\n".join(lines)
 
 
@@ -228,22 +238,52 @@ async def synthesize(
         for snip in document.code_snippets:
             snip.syntax_valid = validate_code_syntax(snip.code, snip.language)
 
-        # Run TTS on the executive summary (non-blocking best-effort)
+        # ── TTS rendering pass ─────────────────────────────────────────────────
+        # TTS fires here (in the reducer), not in workers. Attach audio to:
+        #   1. Executive summary → document.tts_audio_url (backward compat)
+        #   2. Any DocumentSection with render_targets including "audio"
+        await broadcast(run_id, SwarmEvent(
+            event=EventType.tts_started,
+            run_id=run_id,
+            payload={"run_id": run_id},
+        ))
+
         summary_len = len(document.executive_summary)
-        logger.info("Attempting TTS for run %s (summary %d chars)", run_id, summary_len)
+        logger.info("TTS rendering pass for run %s (summary %d chars)", run_id, summary_len)
         if not document.executive_summary.strip():
             logger.warning("TTS skipped: executive_summary is empty")
         else:
             audio_url = await synthesize_speech(document.executive_summary, run_id)
             if audio_url:
                 document.tts_audio_url = audio_url
-                logger.info("TTS succeeded: %s", audio_url)
+                document.executive_summary_audio_url = audio_url
+                logger.info("TTS exec summary: %s", audio_url)
             else:
                 logger.warning(
                     "TTS returned None for run %s — check edge-tts logs above "
                     "(network connectivity to speech.platform.bing.com required)",
                     run_id,
                 )
+
+        # Per-section TTS for sections with render_targets=["html", "audio"]
+        for i, section in enumerate(document.sections):
+            if "audio" in getattr(section, "render_targets", []) and section.content.strip():
+                section_key = f"{run_id}_section_{i}"
+                sec_audio = await synthesize_speech(section.content[:1500], section_key)
+                if sec_audio:
+                    section.audio_url = sec_audio
+                    logger.info("TTS section %d (%r): %s", i, section.title[:30], sec_audio)
+
+        await broadcast(run_id, SwarmEvent(
+            event=EventType.tts_completed,
+            run_id=run_id,
+            payload={
+                "exec_summary_audio": document.tts_audio_url,
+                "section_audio_count": sum(
+                    1 for s in document.sections if getattr(s, "audio_url", None)
+                ),
+            },
+        ))
 
         # Build a plain-text final_answer from the document for backward compat
         section_texts = "\n\n".join(

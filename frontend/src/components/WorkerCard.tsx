@@ -20,6 +20,7 @@ const STATUS_COLORS: Record<string, string> = {
   running:   'border-blue-500 bg-gray-900 animate-pulse-border',
   completed: 'border-green-600 bg-gray-900',
   failed:    'border-red-600 bg-gray-900',
+  killed:    'border-gray-600 bg-gray-900 opacity-60',
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -27,6 +28,7 @@ const STATUS_DOT: Record<string, string> = {
   running:   'bg-blue-400 animate-pulse',
   completed: 'bg-green-400',
   failed:    'bg-red-400',
+  killed:    'bg-gray-500',
 }
 
 function elapsed(meta: TaskMeta): string {
@@ -45,20 +47,38 @@ export function WorkerCard({ task }: Props) {
   const status = useSwarmStore((s) => s.taskStatuses[task.id] ?? 'pending')
   const meta = useSwarmStore((s) => s.taskMeta[task.id])
   const result = useSwarmStore((s) => s.taskResults[task.id])
+  const isValidating = useSwarmStore((s) => s.workerValidating[task.id] ?? false)
+  const attemptNum = useSwarmStore((s) => s.workerAttempts[task.id] ?? 1)
+  const correctionHint = useSwarmStore((s) => s.workerCorrections[task.id])
+  const rejectedFinal = useSwarmStore((s) => s.workerRejectedFinal[task.id])
 
   const typeColor = TYPE_COLORS[task.type] ?? TYPE_COLORS.general
+
+  // Determine effective border color (validator states override status colors)
+  const borderClass = isValidating
+    ? 'border-yellow-500 bg-gray-900'
+    : rejectedFinal
+    ? 'border-red-500 bg-gray-900'
+    : attemptNum > 1 && status === 'running'
+    ? 'border-orange-500 bg-gray-900 animate-pulse-border'
+    : STATUS_COLORS[status]
+
+  const taskDesc = task.objective || task.description
 
   return (
     <div
       className={clsx(
         'rounded-lg border p-3 transition-all duration-300',
-        STATUS_COLORS[status],
+        borderClass,
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', STATUS_DOT[status])} />
-          <p className="text-sm text-gray-200 truncate">{task.description}</p>
+          <span className={clsx(
+            'w-2 h-2 rounded-full flex-shrink-0',
+            isValidating ? 'bg-yellow-400 animate-pulse' : STATUS_DOT[status],
+          )} />
+          <p className="text-sm text-gray-200 truncate">{taskDesc}</p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <span className={clsx('text-xs px-1.5 py-0.5 rounded border font-mono', typeColor)}>
@@ -91,6 +111,29 @@ export function WorkerCard({ task }: Props) {
               tools: {result.tool_calls.join(', ')}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Validator status line */}
+      {isValidating && (
+        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-yellow-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+          Validator checking contract…
+        </div>
+      )}
+      {attemptNum > 1 && !isValidating && (
+        <div className="mt-1.5 text-xs text-orange-400">
+          Attempt {attemptNum}
+          {correctionHint && (
+            <span className="text-orange-500 ml-1">
+              · Hint: {correctionHint.slice(0, 60)}{correctionHint.length > 60 ? '…' : ''}
+            </span>
+          )}
+        </div>
+      )}
+      {rejectedFinal && (
+        <div className="mt-1.5 text-xs text-red-400">
+          ⚠ Committed with warnings ({rejectedFinal})
         </div>
       )}
 
