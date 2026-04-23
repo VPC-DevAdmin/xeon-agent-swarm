@@ -40,14 +40,13 @@ services:
   # Specialization comes from contract fields (objective/scope/success_criteria)
   # injected into each role's prompt — not from separate models.
   #
-  # Built from docker/vllm-cpu/Dockerfile using the native vLLM CPU wheel
-  # (github.com/vllm-project/vllm releases).  The native backend supports:
-  #   --tensor-parallel-size 4     → 4 workers, each owning 16 cores
-  #   --dtype bfloat16             → AMX BF16 TMUL (Sapphire Rapids+)
-  #   --distributed-executor-backend mp
-  #   --enable-chunked-prefill
-  #   VLLM_CPU_OMP_THREADS_BIND    → pin workers to distinct core ranges
-  #   VLLM_CPU_KVCACHE_SPACE       → KV cache per worker in GB
+  # Built from docker/vllm-cpu/Dockerfile using the native vLLM CPU wheel.
+  #
+  # CPU parallelism model: the vLLM CPU backend is single-process and uses
+  # OpenMP intra-op thread parallelism — NOT GPU-style multiprocess TP.
+  # Do NOT pass --tensor-parallel-size >1 or --distributed-executor-backend mp.
+  # Instead, set OMP_NUM_THREADS=64 (all cores) and optionally bind with
+  # VLLM_CPU_OMP_THREADS_BIND to control NUMA locality.
   #
   # Build: docker compose build vllm-text
   # To pin a vLLM version: set VLLM_VERSION=x.y.z in .env before building.
@@ -58,18 +57,20 @@ services:
         VLLM_VERSION: ${VLLM_VERSION:-}
     environment:
       - HF_TOKEN=${HF_TOKEN}
-      - VLLM_CPU_OMP_THREADS_BIND=${VLLM_CPU_OMP_THREADS_BIND:-0-15|16-31|32-47|48-63}
-      - VLLM_CPU_KVCACHE_SPACE=${VLLM_CPU_KVCACHE_SPACE:-16}
-      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-16}
+      # OpenMP thread count — set to total physical cores on the socket.
+      # On Xeon 6 GNR with 64 cores: OMP_NUM_THREADS=64
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-64}
+      # Optional NUMA binding. "auto" lets vLLM pick; explicit ranges can help
+      # on multi-socket systems. Leave as "auto" for single-socket Xeon.
+      - VLLM_CPU_OMP_THREADS_BIND=${VLLM_CPU_OMP_THREADS_BIND:-auto}
+      # KV cache in GB (single-process pool, not per-worker)
+      - VLLM_CPU_KVCACHE_SPACE=${VLLM_CPU_KVCACHE_SPACE:-64}
     command: >
       --model ${TEXT_ENGINE_MODEL:-mistralai/Mistral-7B-Instruct-v0.3}
       --port 8080
-      --tensor-parallel-size ${TP_SIZE:-4}
-      --distributed-executor-backend mp
       --max-model-len ${TEXT_MAX_MODEL_LEN:-8192}
       --max-num-seqs ${TEXT_MAX_NUM_SEQS:-16}
       --dtype bfloat16
-      --enable-chunked-prefill
       --served-model-name mistral7b
     ports: ["8080:8080"]
     volumes:
