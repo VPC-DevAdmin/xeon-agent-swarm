@@ -22,64 +22,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   VLLM_CPU_OMP_THREADS_BIND    (pin each TP worker to distinct core ranges)
 #   VLLM_CPU_KVCACHE_SPACE       (KV cache allocation per worker in GB)
 #
-# To pin a version: VLLM_VERSION=x.y.z in .env  →  docker compose build vllm-text
+# To pin a version: set VLLM_VERSION=x.y.z in .env  →  docker compose build vllm-text
 # Leave blank (default) to auto-install the latest GitHub release at build time.
 ARG VLLM_VERSION=""
 
-# Resolve version, then install.
-# NOTE: no heredocs inside $() — Docker's parser rejects that syntax.
-# Instead we write the resolver to a temp script file first.
+# Copy helper scripts into the image — avoids all shell/Python escaping issues.
+COPY get_vllm_version.py /tmp/get_vllm_version.py
+
 RUN pip install --upgrade pip && \
-    printf 'import json,urllib.request\nwith urllib.request.urlopen("https://api.github.com/repos/vllm-project/vllm/releases/latest",timeout=30) as r:\n    print(json.load(r)["tag_name"].lstrip("v"))\n' \
-        > /tmp/get_vllm_ver.py && \
-    VER="${VLLM_VERSION}" && \
-    [ -z "${VER}" ] && VER=$(python3 /tmp/get_vllm_ver.py); \
-    rm -f /tmp/get_vllm_ver.py && \
+    if [ -z "${VLLM_VERSION}" ]; then \
+        VER=$(python3 /tmp/get_vllm_version.py); \
+    else \
+        VER="${VLLM_VERSION}"; \
+    fi && \
     echo "Installing vLLM CPU wheel ${VER}" && \
     pip install --extra-index-url https://download.pytorch.org/whl/cpu \
         "https://github.com/vllm-project/vllm/releases/download/v${VER}/vllm-${VER}+cpu-cp38-abi3-manylinux_2_35_x86_64.whl" && \
     echo "${VER}" > /vllm-version.txt && \
-    echo "Installed vLLM $(cat /vllm-version.txt)"
+    echo "Installed vLLM $(cat /vllm-version.txt)" && \
+    rm -f /tmp/get_vllm_version.py
 
 # ── LD_PRELOAD: tcmalloc + Intel OpenMP ───────────────────────────────────────
-# intel-openmp (libiomp5) is pulled in as a wheel dependency.
-# Write a helper script, run it, then remove it — avoids heredoc-in-RUN issues.
-RUN printf '\
-import subprocess, re, glob\n\
-\n\
-def find_lib(*names):\n\
-    try:\n\
-        out = subprocess.check_output(["ldconfig", "-p"], text=True)\n\
-        for name in names:\n\
-            m = re.search(rf"^\\s+{name}\\s.*=>\\s+(\\S+)", out, re.M)\n\
-            if m:\n\
-                return m.group(1)\n\
-    except Exception:\n\
-        pass\n\
-    for name in names:\n\
-        for p in (glob.glob(f"/usr/lib/**/{name}", recursive=True) +\n\
-                  glob.glob(f"/usr/local/lib/**/{name}", recursive=True) +\n\
-                  glob.glob(f"/usr/lib/x86_64-linux-gnu/{name}")):\n\
-            return p\n\
-    return ""\n\
-\n\
-tcmalloc = find_lib("libtcmalloc_minimal.so.4", "libtcmalloc_minimal.so")\n\
-iomp     = find_lib("libiomp5.so")\n\
-\n\
-with open("/etc/vllm-preload.env", "w") as f:\n\
-    f.write(f"TCMALLOC_PATH={tcmalloc}\\n")\n\
-    f.write(f"IOMP_PATH={iomp}\\n")\n\
-\n\
-print(f"tcmalloc: {tcmalloc or \"(not found)\"}")\n\
-print(f"iomp:     {iomp or \"(not found)\"}")\n\
-' > /tmp/find_preload.py && \
-    python3 /tmp/find_preload.py && \
-    rm -f /tmp/find_preload.py
+# intel-openmp (libiomp5) is pulled in as a wheel dependency of torch[cpu].
+# find_preload.py locates both libraries and writes /etc/vllm-preload.env so
+# the entrypoint can set LD_PRELOAD without running ldconfig at every start.
+COPY find_preload.py /tmp/find_preload.py
+RUN python3 /tmp/find_preload.py && rm -f /tmp/find_preload.py
 
 # ── Entrypoint ─────────────────────────────────────────────────────────────────
-# Sources LD_PRELOAD paths, then execs the vLLM OpenAI-compatible API server.
-# All flags (--model, --port, --tensor-parallel-size, etc.) come from CMD /
-# docker-compose `command:` and are forwarded via "$@".
+# Sources LD_PRELOAD paths from /etc/vllm-preload.env, then execs the vLLM
+# OpenAI-compatible API server.  All flags (--model, --port, --tensor-parallel-size,
+# --dtype, etc.) come from docker-compose `command:` and are forwarded via "$@".
 RUN printf '#!/bin/sh\n\
 . /etc/vllm-preload.env\n\
 PRELOAD=""\n\
