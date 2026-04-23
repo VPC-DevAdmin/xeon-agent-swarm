@@ -20,6 +20,8 @@ export function QueryInput({ onRunStart, presets }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isRunning = useSwarmStore((s) => s.isRunning)
+  const validatorEnabled = useSwarmStore((s) => s.validatorEnabled)
+  const setValidatorEnabled = useSwarmStore((s) => s.setValidatorEnabled)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -30,7 +32,10 @@ export function QueryInput({ onRunStart, presets }: Props) {
       const resp = await fetch(`${API_BASE}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim() }),
+        body: JSON.stringify({
+          query: query.trim(),
+          validator_enabled: validatorEnabled,
+        }),
       })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
@@ -47,7 +52,7 @@ export function QueryInput({ onRunStart, presets }: Props) {
       <div className="mb-2 text-center">
         <h1 className="text-3xl font-bold text-blue-400 tracking-tight">Xeon Agent Swarm</h1>
         <p className="text-gray-400 text-sm mt-1">
-          Parallel specialist agents · typed artifact outputs · real-time pipeline visualization
+          Parallel specialist agents · contract-enforced outputs · real-time pipeline visualization
         </p>
       </div>
 
@@ -69,8 +74,8 @@ export function QueryInput({ onRunStart, presets }: Props) {
             {query.length.toLocaleString()} / 10,000 chars
           </p>
         )}
-        <div className="flex items-center justify-between mt-3">
-          <div className="flex gap-2 flex-wrap">
+        <div className="flex items-center justify-between mt-3 gap-3">
+          <div className="flex gap-2 flex-wrap items-center">
             {SAMPLE_QUERIES.map((q, i) => (
               <button
                 key={i}
@@ -83,13 +88,38 @@ export function QueryInput({ onRunStart, presets }: Props) {
               </button>
             ))}
           </div>
-          <button
-            type="submit"
-            disabled={!query.trim() || loading || isRunning}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors"
-          >
-            {loading ? 'Starting…' : isRunning ? 'Running…' : 'Run Swarm ⚡'}
-          </button>
+
+          <div className="flex items-center gap-4 flex-shrink-0">
+            {/* Validator toggle */}
+            <label className="flex items-center gap-2 cursor-pointer select-none group">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={validatorEnabled}
+                  onChange={(e) => setValidatorEnabled(e.target.checked)}
+                  disabled={loading || isRunning}
+                />
+                <div className={`w-9 h-5 rounded-full transition-colors ${
+                  validatorEnabled ? 'bg-blue-600' : 'bg-gray-700'
+                } ${loading || isRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`} />
+                <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  validatorEnabled ? 'translate-x-4' : 'translate-x-0'
+                }`} />
+              </div>
+              <span className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">
+                Contract enforcement
+              </span>
+            </label>
+
+            <button
+              type="submit"
+              disabled={!query.trim() || loading || isRunning}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors"
+            >
+              {loading ? 'Starting…' : isRunning ? 'Running…' : 'Run Swarm ⚡'}
+            </button>
+          </div>
         </div>
         {error && (
           <p className="mt-2 text-red-400 text-sm">{error}</p>

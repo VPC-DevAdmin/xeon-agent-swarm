@@ -6,6 +6,7 @@ import type {
   AgentResult,
   SwarmEvent,
   DocumentResult,
+  RunMetrics,
 } from '../types/swarm'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -58,6 +59,16 @@ interface SwarmStore {
   // orchestrating → working → fact_checking → synthesizing → done
   demoStage: 'idle' | 'orchestrating' | 'working' | 'fact_checking' | 'synthesizing' | 'done'
 
+  // ── Validator feature ──────────────────────────────────────────────────────
+  validatorEnabled: boolean
+  // Per-task validator state
+  workerAttempts: Record<string, number>          // task_id → current attempt number
+  workerCorrections: Record<string, string>       // task_id → latest correction hint
+  workerValidating: Record<string, boolean>       // task_id → validator is checking
+  workerRejectedFinal: Record<string, string>     // task_id → rejection reason
+  // Run-level metrics (received at end of run)
+  runMetrics: RunMetrics | null
+
   // ── Legacy A/B single-model state (used when ENABLE_AB_COMPARISON=1) ───────
   // Kept so ABPanel / ContextRotPanel / TimingBar continue to compile.
   finalAnswer: string | null
@@ -82,6 +93,7 @@ interface SwarmStore {
 
   // Actions
   startRun: (runId: string, query: string) => void
+  setValidatorEnabled: (enabled: boolean) => void
   killTask: (taskId: string) => void
   retryTask: (taskId: string) => void
   retryRun: () => Promise<void>
@@ -104,6 +116,13 @@ const initialState = {
   taskStreams: {},
   document: null,
   demoStage: 'idle' as const,
+  // Validator
+  validatorEnabled: true,
+  workerAttempts: {},
+  workerCorrections: {},
+  workerValidating: {},
+  workerRejectedFinal: {},
+  runMetrics: null,
   // Legacy A/B fields (zeroed out; populated only when ENABLE_AB_COMPARISON=1)
   finalAnswer: null,
   singleTokens: '',
@@ -125,7 +144,17 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
   ...initialState,
 
   startRun: (runId, query) =>
-    set({ ...initialState, runId, query, isRunning: true, demoStage: 'orchestrating' }),
+    set((s) => ({
+      ...initialState,
+      // Preserve validator toggle across runs
+      validatorEnabled: s.validatorEnabled,
+      runId,
+      query,
+      isRunning: true,
+      demoStage: 'orchestrating' as const,
+    })),
+
+  setValidatorEnabled: (enabled) => set({ validatorEnabled: enabled }),
 
   reset: () => set(initialState),
 
@@ -291,6 +320,66 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
             },
           },
         }))
+        break
+
+      // ── Validator events ─────────────────────────────────────────────────────
+
+      case 'validator_started': {
+        const vsTaskId = payload.task_id as string
+        set((s) => ({
+          workerValidating: { ...s.workerValidating, [vsTaskId]: true },
+        }))
+        break
+      }
+
+      case 'validator_approved': {
+        const vaTaskId = payload.task_id as string
+        set((s) => ({
+          workerValidating: { ...s.workerValidating, [vaTaskId]: false },
+        }))
+        break
+      }
+
+      case 'validator_rejected': {
+        const vrTaskId = payload.task_id as string
+        const hint = payload.correction_hint as string
+        set((s) => ({
+          workerValidating: { ...s.workerValidating, [vrTaskId]: false },
+          workerCorrections: { ...s.workerCorrections, [vrTaskId]: hint },
+        }))
+        break
+      }
+
+      case 'worker_retrying': {
+        const wrTaskId = payload.task_id as string
+        const nextAttempt = payload.next_attempt as number
+        const retryHint = payload.correction_hint as string
+        set((s) => ({
+          taskStatuses: { ...s.taskStatuses, [wrTaskId]: 'running' },
+          workerAttempts: { ...s.workerAttempts, [wrTaskId]: nextAttempt },
+          workerCorrections: { ...s.workerCorrections, [wrTaskId]: retryHint },
+        }))
+        break
+      }
+
+      case 'worker_rejected_final': {
+        const wfTaskId = payload.task_id as string
+        const reason = payload.reason as string
+        set((s) => ({
+          workerRejectedFinal: { ...s.workerRejectedFinal, [wfTaskId]: reason },
+          workerValidating: { ...s.workerValidating, [wfTaskId]: false },
+        }))
+        break
+      }
+
+      case 'run_metrics': {
+        set({ runMetrics: payload as unknown as RunMetrics })
+        break
+      }
+
+      case 'tts_started':
+      case 'tts_completed':
+        // No state change needed — handled by document fetch on run_completed
         break
 
       case 'synthesis_started':

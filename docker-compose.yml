@@ -1,9 +1,9 @@
 services:
 
-  # ── Redis Stack (adds RediSearch + RedisJSON for the upcoming corpus) ───────
+  # ── Redis Stack (adds RediSearch + RedisJSON for the corpus) ─────────────────
   # Drop-in replacement for redis:7-alpine: standard Redis commands (pub/sub,
   # GET/SETEX used by backend.queue.task_queue) work unchanged; the Search and
-  # JSON modules are there for the corpus vector store coming in a later PR.
+  # JSON modules are there for the corpus vector store.
   # Port 8001 exposes RedisInsight (browser UI) for debugging corpus indexes.
   redis:
     image: redis/redis-stack:latest
@@ -34,20 +34,40 @@ services:
     volumes:
       - tei_data:/data
 
-  # ── OPEA vLLM — CPU orchestrator (Mistral-7B) ────────────────────────────
-  # Also serves writing and analysis workers; Mistral-7B gives better prose
-  # quality than Qwen2.5-7B for synthesis and structured report generation.
-  vllm-orchestrator:
-    image: opea/vllm:latest
+  # ── Single shared text engine (Mistral-7B-Instruct-v0.3) ─────────────────
+  #
+  # Serves ALL text inference roles: orchestrator, workers, validator, reducer.
+  # Specialization comes from contract fields (objective/scope/success_criteria)
+  # injected into each role's prompt — not from separate models.
+  #
+  # Hardware tuning (Xeon 6 GNR, 64 cores, 1 TB RAM, DDR5-5600):
+  #   TP=4 → 4 worker processes, 16 cores each
+  #   VLLM_CPU_OMP_THREADS_BIND partitions cores so no overlap
+  #   VLLM_CPU_KVCACHE_SPACE=16 → 16 GB per worker × 4 = 64 GB total KV cache
+  #   --compilation-config inductor → AOT compile via torch.compile (AMX dispatch)
+  #   --dtype bfloat16 → AMX BF16 TMUL path (requires Sapphire Rapids or later)
+  #
+  # Concurrency:
+  #   WORKER_CONCURRENCY (default 8) limits simultaneous requests via asyncio.Semaphore
+  #   in backend/inference/client.py. Tune to (4 × 16 threads / avg tokens per req).
+  vllm-text:
+    image: opea/vllm-cpu:latest
     environment:
       - HF_TOKEN=${HF_TOKEN}
-      - VLLM_USE_V1=1
+      - VLLM_CPU_OMP_THREADS_BIND=${VLLM_CPU_OMP_THREADS_BIND:-0-15|16-31|32-47|48-63}
+      - VLLM_CPU_KVCACHE_SPACE=${VLLM_CPU_KVCACHE_SPACE:-16}
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-16}
       - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
-      - VLLM_OPENVINO_KVCACHE_SPACE=8
     command: >
-      --model ${ORCHESTRATOR_MODEL}
+      --model ${TEXT_ENGINE_MODEL:-mistralai/Mistral-7B-Instruct-v0.3}
       --port 8080
-      --max-model-len 4096
+      --tensor-parallel-size ${TP_SIZE:-4}
+      --distributed-executor-backend mp
+      --max-model-len ${TEXT_MAX_MODEL_LEN:-8192}
+      --max-num-seqs ${TEXT_MAX_NUM_SEQS:-16}
+      --dtype bfloat16
+      --enable-chunked-prefill
+      --served-model-name mistral7b
     ports: ["8080:8080"]
     volumes:
       - hf_cache:/root/.cache/huggingface
@@ -55,58 +75,18 @@ services:
       test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health', timeout=3).status == 200 else 1)"]
       interval: 15s
       timeout: 5s
-      retries: 40
-      start_period: 30s
+      retries: 60
+      start_period: 600s   # cold start: weight download (~4 min) + AOT compile (~1 min)
 
-  # ── OPEA vLLM — CPU worker (Phi-4-mini) ──────────────────────────────────
-  vllm-worker-cpu:
-    image: opea/vllm:latest
-    environment:
-      - HF_TOKEN=${HF_TOKEN}
-      - VLLM_USE_V1=1
-      - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
-      - VLLM_OPENVINO_KVCACHE_SPACE=6
-    command: >
-      --model ${WORKER_CPU_MODEL}
-      --port 8081
-      --max-model-len 2048
-      --disable-sliding-window
-    ports: ["8081:8081"]
-    volumes:
-      - hf_cache:/root/.cache/huggingface
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8081/health', timeout=3).status == 200 else 1)"]
-      interval: 15s
-      timeout: 5s
-      retries: 40
-      start_period: 30s
-
-  # ── OPEA vLLM — GPU worker (optional, Llama-3.1-8B) ─────────────────────
-  vllm-worker-gpu:
-    image: opea/vllm-gaudi:latest
-    environment:
-      - HF_TOKEN=${HF_TOKEN}
-    command: >
-      --model ${WORKER_GPU_MODEL}
-      --port 8082
-      --max-model-len 4096
-    ports: ["8082:8082"]
-    volumes:
-      - hf_cache:/root/.cache/huggingface
-    profiles: ["gpu"]       # only started with: docker compose --profile gpu up
-
-  # ── OPEA vLLM — Vision worker (Phi-3.5-vision) ───────────────────────────
-  # Behind the `vision` profile — default `docker compose up` is unchanged.
-  # To enable the vision worker:
-  #   docker compose --profile vision up -d
-  # Then set VLM_ENDPOINT in .env:
-  #   VLM_ENDPOINT=http://vllm-vision:8084/v1
-  # and restart backend: docker compose up -d --build backend
+  # ── Vision engine (Phi-3.5-vision-instruct) ────────────────────────────────
+  # Separate engine — modality requires a different model architecture.
+  # Kept behind the `vision` profile to avoid loading by default.
+  # To enable: docker compose --profile vision up -d vllm-vision
+  # Then set VLM_ENDPOINT=http://vllm-vision:8084/v1 in .env and restart backend.
   vllm-vision:
-    image: opea/vllm:latest
+    image: opea/vllm-cpu:latest
     environment:
       - HF_TOKEN=${HF_TOKEN}
-      - VLLM_USE_V1=1
       - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
       - VLLM_OPENVINO_KVCACHE_SPACE=6
     command: >
@@ -123,33 +103,8 @@ services:
       test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8084/health', timeout=3).status == 200 else 1)"]
       interval: 15s
       timeout: 5s
-      retries: 60        # VLM weight download + load takes longer
+      retries: 60
       start_period: 60s
-
-  # ── OPEA vLLM — code specialist (Qwen2.5-Coder-7B) ──────────────────────
-  # Code-tuned model routes all TaskType.code workers here. Noticeably better
-  # than a general-purpose 7B on function generation, snippets, and Mermaid.
-  # INT4 quantized via OpenVINO; fits on a single-socket Xeon with 128 GB RAM.
-  vllm-coder:
-    image: opea/vllm:latest
-    environment:
-      - HF_TOKEN=${HF_TOKEN}
-      - VLLM_USE_V1=1
-      - VLLM_OPENVINO_ENABLE_QUANTIZED_WEIGHTS=ON
-      - VLLM_OPENVINO_KVCACHE_SPACE=8
-    command: >
-      --model ${CODER_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}
-      --port 8083
-      --max-model-len 4096
-    ports: ["8083:8083"]
-    volumes:
-      - hf_cache:/root/.cache/huggingface
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8083/health', timeout=3).status == 200 else 1)"]
-      interval: 15s
-      timeout: 5s
-      retries: 40
-      start_period: 30s
 
   # ── MCP servers ───────────────────────────────────────────────────────────
   mcp-web-search:
@@ -181,43 +136,36 @@ services:
     ports: ["8000:8000"]
     env_file: .env
     # Override endpoints so the backend talks to peer services by their
-    # Docker network names, regardless of what the user's .env says
-    # (env.example uses localhost for devs running backend outside compose).
+    # Docker network names, regardless of what the user's .env says.
     environment:
-      - ORCHESTRATOR_ENDPOINT=http://vllm-orchestrator:8080/v1
-      - WORKER_CPU_ENDPOINT=http://vllm-worker-cpu:8081/v1
-      # GPU worker is in the `gpu` profile and not started by default.
-      # Leaving WORKER_GPU_ENDPOINT empty forces worker.py to route
-      # GPU-preferred tasks to CPU instead of failing against an
-      # unreachable host. To actually use GPU, run with `--profile gpu`
-      # and override this to `http://vllm-worker-gpu:8082/v1`.
-      - WORKER_GPU_ENDPOINT=
-      # Code specialist — Qwen2.5-Coder-7B routes all TaskType.code workers
-      - CODER_ENDPOINT=http://vllm-coder:8083/v1
-      - CODER_MODEL=${CODER_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}
+      # Single text engine for orchestrator, workers, validator, reducer
+      - TEXT_ENGINE_ENDPOINT=http://vllm-text:8080/v1
+      - TEXT_ENGINE_MODEL=${TEXT_ENGINE_MODEL:-mistralai/Mistral-7B-Instruct-v0.3}
+      # Legacy env vars — kept so old code that reads them still works
+      - ORCHESTRATOR_ENDPOINT=http://vllm-text:8080/v1
+      - ORCHESTRATOR_MODEL=${TEXT_ENGINE_MODEL:-mistralai/Mistral-7B-Instruct-v0.3}
+      # Worker concurrency semaphore
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-8}
+      # Vision worker — only active when started with --profile vision
+      - VLM_ENDPOINT=${VLM_ENDPOINT:-}
+      - VLM_MODEL=${VLM_MODEL:-microsoft/Phi-3.5-vision-instruct}
+      # Redis / corpus / embeddings
       - REDIS_URL=redis://redis:6379
-      - MCP_WEB_SEARCH_URL=http://mcp-web-search:9001
-      - MCP_DOC_RETRIEVAL_URL=http://mcp-doc-retrieval:9002
-      - MCP_CODE_EXEC_URL=http://mcp-code-exec:9003
-      # Corpus embeddings (TEI service, BAAI/bge-small-en-v1.5, 384 dims)
       - TEI_ENDPOINT=http://tei-embedding:8090
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
       - EMBEDDING_DIM=${EMBEDDING_DIM:-384}
-      # Vision worker — only active when started with --profile vision
-      # Leave VLM_ENDPOINT empty to make vision tasks fall back to text-only
-      - VLM_ENDPOINT=${VLM_ENDPOINT:-}
-      - VLM_MODEL=${VLM_MODEL:-microsoft/Phi-3.5-vision-instruct}
+      # MCP servers
+      - MCP_WEB_SEARCH_URL=http://mcp-web-search:9001
+      - MCP_DOC_RETRIEVAL_URL=http://mcp-doc-retrieval:9002
+      - MCP_CODE_EXEC_URL=http://mcp-code-exec:9003
+      # File paths
       - IMAGE_DIR=/data/images
       - AUDIO_DIR=/data/audio
       - PDF_CACHE_DIR=/data/pdf_cache
     depends_on:
       redis:
         condition: service_healthy
-      vllm-orchestrator:
-        condition: service_healthy
-      vllm-worker-cpu:
-        condition: service_healthy
-      vllm-coder:
+      vllm-text:
         condition: service_healthy
     volumes:
       - ./config:/app/config:ro

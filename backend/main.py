@@ -50,8 +50,9 @@ from backend.schemas.models import (
     EventType,
 )
 from backend.agents.orchestrator import orchestrate_with_events
-from backend.agents.worker import execute_task
+from backend.agents.worker import execute_task_with_validation
 from backend.agents.reducer import synthesize
+from backend.graph.swarm_graph import validate_task_graph
 from backend.agents.single_model import run_single_model
 from backend.protocols.a2a_cards import all_agent_cards, ORCHESTRATOR_CARD
 from backend.corpus_api import router as corpus_router
@@ -224,13 +225,13 @@ manager = ConnectionManager()
 
 # ── Swarm pipeline ───────────────────────────────────────────────────────────
 
-async def run_swarm(run_id: str, query: str):
-    """Full swarm pipeline: orchestrate → parallel workers → reduce."""
+async def run_swarm(run_id: str, query: str, validator_enabled: bool = True):
+    """Full swarm pipeline: orchestrate → validate graph → parallel workers → reduce."""
     t0 = time.perf_counter()
     active_runs.inc()
     runs_total.inc()
 
-    state = SwarmState(run_id=run_id, query=query)
+    state = SwarmState(run_id=run_id, query=query, validator_enabled=validator_enabled)
 
     await manager.broadcast(
         run_id,
@@ -242,8 +243,37 @@ async def run_swarm(run_id: str, query: str):
     )
 
     try:
-        # ── Step 1: Orchestrate ───────────────────────────────────────────────
-        task_graph = await orchestrate_with_events(query, run_id, manager.broadcast)
+        # ── Step 1: Orchestrate (with graph validation + retry) ───────────────
+        orchestrator_retries = 0
+        task_graph = None
+        critique = None
+
+        while task_graph is None and orchestrator_retries < 2:
+            task_graph = await orchestrate_with_events(
+                query, run_id, manager.broadcast, critique=critique
+            )
+            validation = validate_task_graph(task_graph)
+            if not validation.valid:
+                logger.warning(
+                    "Graph validation failed (attempt %d): %s",
+                    orchestrator_retries + 1,
+                    validation.critique(),
+                )
+                critique = validation.critique()
+                task_graph = None
+                orchestrator_retries += 1
+            else:
+                logger.info(
+                    "Graph validation passed (%d tasks, attempt %d)",
+                    len(task_graph.tasks),
+                    orchestrator_retries + 1,
+                )
+
+        if task_graph is None:
+            # Give up after 2 retries — use whatever the last attempt produced
+            logger.error("Graph validation failed after 2 retries — proceeding anyway")
+            task_graph = await orchestrate_with_events(query, run_id, manager.broadcast)
+
         state.task_graph = task_graph
         state.status = TaskStatus.running
 
@@ -278,11 +308,12 @@ async def run_swarm(run_id: str, query: str):
                     }
                 # Wrap in a named asyncio.Task so /kill can cancel it
                 inner = asyncio.create_task(
-                    execute_task(
+                    execute_task_with_validation(
                         task=task,
                         run_id=run_id,
                         broadcast=manager.broadcast,
                         context=context or None,
+                        validator_enabled=validator_enabled,
                     ),
                     name=f"{run_id}:{task.id}",
                 )
@@ -415,7 +446,11 @@ async def start_run(request: RunRequest):
     """Start a new swarm run. Set ENABLE_AB_COMPARISON=1 to also start
     the single-model baseline pipeline for legacy A/B comparison mode."""
     run_id = str(uuid.uuid4())
-    asyncio.create_task(run_swarm(run_id, request.query))
+    asyncio.create_task(run_swarm(
+        run_id,
+        request.query,
+        validator_enabled=request.validator_enabled,
+    ))
     if os.getenv("ENABLE_AB_COMPARISON", "").strip() == "1":
         asyncio.create_task(run_single_model_pipeline(run_id, request.query))
     return {"run_id": run_id}
