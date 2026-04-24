@@ -165,10 +165,15 @@ def _build_writing_context(task: TaskSpec, results: dict) -> dict[str, str]:
                 parts.append("\n".join(chart_lines))
 
         # Cap total context per dependency to avoid prompt overflow.
-        # Mistral-7B has a 32K token context; each enriched block should stay
-        # well under 1500 chars so the full writing prompt fits comfortably.
+        # Budget: with TEXT_MAX_MODEL_LEN=16384, reserve ~4k for system prompt
+        # + task contract + writing output buffer, leaving ~12k tokens (~48k
+        # chars) for dependency context.  At 1200 chars × 10 deps = 12k chars
+        # we're well under budget even with long task graphs.
+        _PER_DEP_CAP = 1200
         combined = "\n\n".join(p for p in parts if p.strip())
-        context[dep] = combined[:1500] if len(combined) > 1500 else combined
+        if len(combined) > _PER_DEP_CAP:
+            combined = combined[:_PER_DEP_CAP] + "\n…[truncated]"
+        context[dep] = combined
     return context
 
 
