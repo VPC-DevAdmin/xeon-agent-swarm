@@ -21,6 +21,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.types import Send
 
 from backend.schemas.models import (
+    AgentResult,
     SwarmState,
     TaskGraph,
     TaskSpec,
@@ -174,30 +175,72 @@ def should_retry_orchestration(state: SwarmState) -> str:
 def route_tasks(state: SwarmState):
     """
     After orchestration (or after each worker), emit a Send for every task
-    whose dependencies are already satisfied. Returns "reduce" when all tasks
-    are complete.
+    whose dependencies are *successfully* completed.  Tasks whose upstream
+    dependencies failed or were killed are cascade-failed immediately (their
+    result is recorded with status=failed, no worker invocation) — this
+    prevents the reducer from synthesising a report over fabricated context.
+    Returns "reduce" when no more tasks can advance.
     """
     if state.task_graph is None:
         return "reduce"
 
-    completed_ids = {
-        tid
-        for tid, r in state.results.items()
+    # Terminal = reached some final state (won't change anymore)
+    terminal_ids = {
+        tid for tid, r in state.results.items()
         if r.status in (TaskStatus.completed, TaskStatus.failed, TaskStatus.killed)
     }
+    # Successful = the only kind of dependency a child should actually run on
+    successful_ids = {
+        tid for tid, r in state.results.items()
+        if r.status == TaskStatus.completed
+    }
 
-    # Tasks not yet started and whose dependencies are all satisfied
-    pending = [
+    # Tasks not yet started whose deps have all reached a terminal state
+    ready = [
         t
         for t in state.task_graph.tasks
         if t.id not in state.results
-        and all(dep in completed_ids for dep in t.dependencies)
+        and all(dep in terminal_ids for dep in t.dependencies)
     ]
 
-    if not pending:
-        return "reduce"
+    to_run: list[TaskSpec] = []
+    for t in ready:
+        failed_deps = [d for d in t.dependencies if d not in successful_ids]
+        if failed_deps:
+            # Cascade-fail: mark the task failed without invoking a worker.
+            # Mutating state.results directly from a routing function is safe
+            # here because Send() is returned afterwards and LangGraph merges
+            # the mutation before the next superstep.
+            logger.warning(
+                "Cascade-failing %s — upstream failed: %s",
+                t.id, failed_deps,
+            )
+            state.results[t.id] = AgentResult(
+                task_id=t.id,
+                status=TaskStatus.failed,
+                result=(
+                    f"Upstream dependency failed: {', '.join(failed_deps)}. "
+                    "Task skipped — downstream synthesis would be ungrounded."
+                ),
+                confidence=0.0,
+                model_used="n/a",
+                hardware="n/a",
+                latency_ms=0.0,
+            )
+        else:
+            to_run.append(t)
 
-    return [Send("worker", {"task": t, "state": state}) for t in pending]
+    if to_run:
+        return [Send("worker", {"task": t, "state": state}) for t in to_run]
+
+    # Nothing new to schedule. If everything is terminal, go to reduce; else
+    # we're waiting on in-flight workers and this routing pass is a no-op.
+    all_terminal = all(
+        t.id in state.results for t in state.task_graph.tasks
+    )
+    if all_terminal:
+        return "reduce"
+    return []
 
 
 def _route_tasks_entry(state: SwarmState):
