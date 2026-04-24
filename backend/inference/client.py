@@ -94,7 +94,27 @@ class InferenceClient:
         self._raw = AsyncOpenAI(
             base_url=base_url, api_key="none", timeout=_INFERENCE_TIMEOUT
         )
-        self._instructor = instructor.from_openai(self._raw)
+        # Use MD_JSON (markdown-wrapped JSON) instead of the default TOOLS mode.
+        #
+        # Why: instructor's TOOLS mode makes a tool-call request, and on a
+        # parse/validation failure it appends the bad response back into the
+        # conversation as an assistant tool_call message and asks the model to
+        # correct it.  When those messages are re-rendered by vLLM's Mistral
+        # tokenizer, the chat template validates ToolCall.function.arguments
+        # as a strict string — but the re-injected call has arguments as a raw
+        # list/dict, triggering:
+        #   ValueError: 1 validation error for ToolCall
+        #     function.arguments: Input should be a valid string
+        #
+        # MD_JSON avoids the tool-calling path entirely.  The model is asked
+        # to output JSON inside a ```json ... ``` block; instructor parses it
+        # and retries on parse failure by appending a plain user message ("the
+        # JSON you returned was invalid, try again") — no tool_calls, no
+        # Mistral tokenizer issue.  Slightly less constrained than TOOLS but
+        # reliable enough with a decent system prompt.
+        self._instructor = instructor.from_openai(
+            self._raw, mode=instructor.Mode.MD_JSON
+        )
         self.model = model
         self.hardware = hardware
         self.use_semaphore = use_semaphore
