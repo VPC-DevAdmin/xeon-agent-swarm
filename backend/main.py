@@ -22,12 +22,28 @@ WebSocket event flow:
   single_completed                  ← A/B panel shows final answer + timing
 """
 import asyncio
+import logging
 import os
+import sys
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 from pathlib import Path
+
+# Configure root logging early so every module's logger propagates to stdout
+# (otherwise uvicorn/docker only shows access logs — application errors and
+# tracebacks get swallowed).  Level controlled via LOG_LEVEL env var (INFO default).
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)-7s [%(name)s] %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
+    force=True,
+)
+# Quiet down the noisy ones so real signal stays visible
+for noisy in ("httpx", "httpcore", "openai._base_client"):
+    logging.getLogger(noisy).setLevel(logging.WARNING)
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
