@@ -3,10 +3,14 @@ FROM python:3.11-slim
 LABEL description="vLLM native CPU backend — tensor parallelism, BF16/AMX, chunked prefill"
 
 # ── System dependencies ────────────────────────────────────────────────────────
-# numactl/libnuma:         NUMA-aware memory allocation (critical on multi-socket Xeon)
-# libtcmalloc-minimal4:   fast malloc — reduces fragmentation under concurrent load
+# g++ / build-essential:  required by torch.inductor — vLLM v1 JIT-compiles
+#                         optimized C++ kernels during model warmup on CPU.
+#                         Without g++, startup fails with InvalidCxxCompiler.
+# numactl/libnuma:        NUMA-aware memory allocation (critical on multi-socket Xeon)
+# libtcmalloc-minimal4:  fast malloc — reduces fragmentation under concurrent load
 # ca-certificates:        HTTPS for HuggingFace Hub model downloads
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
         numactl \
         libnuma-dev \
         libtcmalloc-minimal4 \
