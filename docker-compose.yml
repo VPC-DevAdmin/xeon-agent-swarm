@@ -71,7 +71,6 @@ services:
       --max-model-len ${TEXT_MAX_MODEL_LEN:-8192}
       --max-num-seqs ${TEXT_MAX_NUM_SEQS:-16}
       --dtype bfloat16
-      --served-model-name mistral7b
     ports: ["8080:8080"]
     volumes:
       - hf_cache:/root/.cache/huggingface
