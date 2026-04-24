@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import subprocess
 import sys
 import urllib.request
 
@@ -34,6 +36,24 @@ STATUS_COLOUR = {
     "killed":    RED,
     "rejected_final": YELLOW,
 }
+
+
+_UUID_RE = re.compile(
+    r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
+)
+
+
+def _find_latest_run_id() -> str | None:
+    """Scan recent backend container logs for the most recent run_id UUID."""
+    try:
+        out = subprocess.check_output(
+            ["docker", "compose", "logs", "--tail=500", "backend"],
+            stderr=subprocess.STDOUT, text=True, timeout=10,
+        )
+    except Exception:
+        return None
+    ids = _UUID_RE.findall(out)
+    return ids[-1] if ids else None
 
 
 def _fetch(url: str, run_id: str) -> dict:
@@ -56,7 +76,10 @@ def _fetch(url: str, run_id: str) -> dict:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("run_id", help="Full run_id UUID (dashboard shows first 8 chars)")
+    p.add_argument("run_id", nargs="?",
+                   help="Full run_id UUID (omit with --latest)")
+    p.add_argument("--latest", action="store_true",
+                   help="Auto-find the most recent run_id from backend logs")
     p.add_argument("--url", default="http://localhost:8000")
     p.add_argument("--full", action="store_true",
                    help="Print task outputs without truncation")
@@ -65,7 +88,19 @@ def main() -> None:
                    help="Chars per task output (default 2500; ignored with --full)")
     args = p.parse_args()
 
-    data = _fetch(args.url, args.run_id)
+    run_id = args.run_id
+    if args.latest or not run_id:
+        found = _find_latest_run_id()
+        if not found:
+            print(f"{RED}Could not find a run_id in recent backend logs.{RESET}",
+                  file=sys.stderr)
+            print("Pass a run_id explicitly, or ensure the backend is running.",
+                  file=sys.stderr)
+            sys.exit(1)
+        run_id = found
+        print(f"{DIM}Using most-recent run_id from logs: {run_id}{RESET}")
+
+    data = _fetch(args.url, run_id)
     swarm   = data.get("swarm", {}) or {}
     tg      = swarm.get("task_graph", {}) or {}
     tasks   = {t["id"]: t for t in tg.get("tasks", [])}
