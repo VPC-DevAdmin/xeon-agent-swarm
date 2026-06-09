@@ -1,25 +1,22 @@
 import { useSwarmStore } from '../store/swarmStore'
 import { TaskGraph } from './TaskGraph'
 import { WorkerCard } from './WorkerCard'
-import { ResultCard } from './ResultCard'
 
 export function SwarmPanel() {
   const taskGraph = useSwarmStore((s) => s.taskGraph)
-  const finalAnswer = useSwarmStore((s) => s.finalAnswer)
-  const swarmLatencyMs = useSwarmStore((s) => s.swarmLatencyMs)
-  const swarmTaskCount = useSwarmStore((s) => s.taskGraph?.tasks.length ?? 0)
   const synthesizing = useSwarmStore((s) => s.synthesizing)
   const isRunning = useSwarmStore((s) => s.isRunning)
+  const runCompleted = useSwarmStore((s) => s.runCompleted)
 
   return (
     <div className="flex flex-col gap-4 min-h-0">
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-semibold text-blue-400">Swarm Pipeline</h2>
-        <span className="text-xs text-gray-500">parallel small models</span>
-        {isRunning && !finalAnswer && (
+        <span className="text-xs text-gray-500">parallel specialized agents</span>
+        {isRunning && !runCompleted && (
           <span className="ml-auto text-xs text-blue-400 animate-pulse">● running</span>
         )}
-        {finalAnswer && (
+        {runCompleted && (
           <span className="ml-auto text-xs text-green-400">● done</span>
         )}
       </div>
@@ -49,16 +46,6 @@ export function SwarmPanel() {
           <span className="animate-spin">⚙</span>
           Synthesizing results…
         </div>
-      )}
-
-      {/* Final answer */}
-      {finalAnswer && (
-        <ResultCard
-          title="Synthesized Answer"
-          answer={finalAnswer}
-          latencyMs={swarmLatencyMs}
-          taskCount={swarmTaskCount}
-        />
       )}
 
       {/* Empty state */}

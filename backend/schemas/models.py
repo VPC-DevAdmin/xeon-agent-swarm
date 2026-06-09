@@ -302,7 +302,6 @@ class RunResult(BaseModel):
     run_id: str
     swarm: SwarmState
     document: Optional[DocumentResult] = None
-    single_model: Optional["SingleModelResult"] = None
 
 
 # ── WebSocket event envelope ──────────────────────────────────────────────────
@@ -333,23 +332,6 @@ class SwarmEvent(BaseModel):
     run_id: str
     payload: dict
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-
-# ── A/B single-model result (used when ENABLE_AB_COMPARISON=1) ───────────────
-
-class SingleModelResult(BaseModel):
-    run_id: str
-    query: str
-    answer: str
-    model_used: str
-    hardware: str
-    latency_ms: float
-    status: TaskStatus
-    context_chunks_retrieved: int = 0
-    context_chunks_included: int = 0
-    context_chunks_cited: int = 0
-    context_token_estimate: int = 0
-    context_rot_score: float = 0.0
 
 
 # ── HTTP request/response models ──────────────────────────────────────────────

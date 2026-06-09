@@ -35,12 +35,6 @@ active_runs = Gauge(
     "Number of runs currently in progress",
 )
 
-single_model_latency_seconds = Histogram(
-    "swarm_single_model_latency_seconds",
-    "Single-model A/B baseline latency in seconds",
-    buckets=[1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0],
-)
-
 mcp_calls_total = Counter(
     "swarm_mcp_calls_total",
     "Total MCP tool calls",

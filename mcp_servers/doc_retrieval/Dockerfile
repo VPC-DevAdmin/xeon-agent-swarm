@@ -5,9 +5,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir \
     fastapi \
     uvicorn \
-    httpx \
-    "redis[hiredis]>=5.0.0" \
-    numpy
+    httpx
 
 COPY server.py .
 

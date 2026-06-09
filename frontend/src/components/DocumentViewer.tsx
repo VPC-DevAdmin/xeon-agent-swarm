@@ -162,7 +162,7 @@ function LiveSwarmView() {
 
 export function DocumentViewer() {
   const document = useSwarmStore((s) => s.document)
-  const finalAnswer = useSwarmStore((s) => s.finalAnswer)
+  const runCompleted = useSwarmStore((s) => s.runCompleted)
   const isRunning = useSwarmStore((s) => s.isRunning)
   const swarmLatencyMs = useSwarmStore((s) => s.swarmLatencyMs)
   const swarmTaskCount = useSwarmStore((s) => s.taskGraph?.tasks.length ?? 0)
@@ -179,7 +179,7 @@ export function DocumentViewer() {
         {isRunning && (
           <span className="ml-auto text-xs text-blue-400 animate-pulse">● running</span>
         )}
-        {finalAnswer && !isRunning && (
+        {runCompleted && !isRunning && (
           <span className="ml-auto text-xs text-green-400">
             ● done {swarmTaskCount && `· ${swarmTaskCount} tasks`}
             {swarmLatencyMs && ` · ${formatLatency(swarmLatencyMs)}`}
@@ -188,7 +188,7 @@ export function DocumentViewer() {
       </div>
 
       {/* Live view while running */}
-      {(isRunning || (!document && !finalAnswer)) && <LiveSwarmView />}
+      {(isRunning || (!document && !runCompleted)) && <LiveSwarmView />}
 
       {/* Intelligence report once complete */}
       {document && (
@@ -283,13 +283,6 @@ export function DocumentViewer() {
         </div>
       )}
 
-      {/* Fallback: plain final answer if no document */}
-      {!document && finalAnswer && !isRunning && (
-        <div className="rounded-lg border border-green-700 bg-gray-900 p-4">
-          <h3 className="text-sm font-semibold text-green-400 mb-2">Synthesized Answer</h3>
-          <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{finalAnswer}</p>
-        </div>
-      )}
     </div>
   )
 }

@@ -69,15 +69,12 @@ from backend.agents.orchestrator import orchestrate_with_events
 from backend.agents.worker import execute_task_with_validation
 from backend.agents.reducer import synthesize
 from backend.graph.swarm_graph import validate_task_graph
-from backend.agents.single_model import run_single_model
 from backend.protocols.a2a_cards import all_agent_cards, ORCHESTRATOR_CARD
-from backend.corpus_api import router as corpus_router
 from backend.queue.task_queue import TaskQueue
 from backend.observability.metrics import (
     runs_total,
     run_latency_seconds,
     active_runs,
-    single_model_latency_seconds,
     tasks_total,
     task_latency_seconds,
     websocket_connections,
@@ -189,7 +186,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Xeon Agent Swarm Demo", lifespan=lifespan)
-app.include_router(corpus_router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -433,47 +429,17 @@ async def run_swarm(run_id: str, query: str, validator_enabled: bool = True):
         active_runs.dec()
 
 
-async def run_single_model_pipeline(run_id: str, query: str):
-    """A/B single-model pipeline — runs concurrently with run_swarm."""
-    t0 = time.perf_counter()
-    try:
-        result = await run_single_model(run_id=run_id, query=query, broadcast=manager.broadcast)
-        single_model_latency_seconds.observe((time.perf_counter() - t0))
-
-        # Persist result
-        if run_id in _run_results:
-            _run_results[run_id].single_model = result
-        else:
-            _run_results[run_id] = RunResult(
-                run_id=run_id,
-                swarm=SwarmState(run_id=run_id, query=query),
-                single_model=result,
-            )
-    except Exception as exc:
-        await manager.broadcast(
-            run_id,
-            SwarmEvent(
-                event=EventType.error,
-                run_id=run_id,
-                payload={"error": f"single_model: {exc}"},
-            ),
-        )
-
-
 # ── REST endpoints ────────────────────────────────────────────────────────────
 
 @app.post("/run")
 async def start_run(request: RunRequest):
-    """Start a new swarm run. Set ENABLE_AB_COMPARISON=1 to also start
-    the single-model baseline pipeline for legacy A/B comparison mode."""
+    """Start a new swarm run."""
     run_id = str(uuid.uuid4())
     asyncio.create_task(run_swarm(
         run_id,
         request.query,
         validator_enabled=request.validator_enabled,
     ))
-    if os.getenv("ENABLE_AB_COMPARISON", "").strip() == "1":
-        asyncio.create_task(run_single_model_pipeline(run_id, request.query))
     return {"run_id": run_id}
 
 

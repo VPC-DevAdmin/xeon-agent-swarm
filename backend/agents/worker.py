@@ -2,8 +2,10 @@
 Generic worker agent: executes a single TaskSpec and returns an AgentResult.
 Role (system prompt + tools) is loaded from config/worker_roles.yaml.
 
-Single-engine topology: all text workers share one Mistral-7B engine (TEXT_ENGINE_ENDPOINT).
-Vision uses a separate VLM endpoint. Specialization comes from contracts + prompts, not models.
+LLM inference is delegated to the external LLM router (LLM_TIER_ENDPOINT).
+Knowledge retrieval is delegated to the external semantic-search endpoint via the
+doc_retrieval MCP server (SEMANTIC_SEARCH_ENDPOINT). This project serves no LLMs
+and stores no corpus content of its own.
 
 Optional validator retry loop:
   If state.validator_enabled is True, each worker result is checked against the TaskSpec
@@ -20,13 +22,12 @@ import time
 import yaml
 from pathlib import Path
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 from openai import AsyncOpenAI
 
-from backend.corpus.embedder import Embedder
-from backend.corpus.redis_imagestore import RedisImageStore
-from backend.corpus.seed_data import CORPORA
 from backend.inference.client import InferenceClient
 from backend.schemas.models import (
     Artifact,
@@ -42,8 +43,6 @@ from backend.schemas.models import (
     validate_code_syntax,
 )
 from backend.protocols.mcp_servers import call_tool
-
-_IMAGE_DIR = Path(os.getenv("IMAGE_DIR", "/data/images"))
 
 _ROLES: dict | None = None
 
@@ -61,32 +60,34 @@ def _load_roles() -> dict:
 
 def _client_for_role(task_type: TaskType) -> InferenceClient:
     """
-    Single-engine topology: all text workers share one Mistral-7B engine.
-    Vision uses its own endpoint. Specialization comes from contracts, not models.
+    Pick the inference client for a worker role.
 
-    Role            Engine                        Rationale
-    ─────────────   ──────────────────────────    ───────────────────────────────
-    vision          VLM_ENDPOINT                  Separate — modality requires different model
-    all others      TEXT_ENGINE_ENDPOINT           Shared Mistral-7B with concurrency semaphore
+    All text roles call the LLM router via the worker specialty. Vision can
+    optionally call a separate VLM endpoint (VLM_ENDPOINT) — if unset, vision
+    tasks fall back to text retrieval.
+
+    Role         Endpoint                              Specialty
+    ──────────   ───────────────────────────────────   ───────────────────────────
+    vision       VLM_ENDPOINT (or router fallback)     VLM_MODEL / worker-vision
+    all others   LLM_TIER_ENDPOINT (router)            worker-default-v1.0
     """
     if task_type == TaskType.vision:
+        from backend.inference.client import llm_endpoint
+        # If VLM_ENDPOINT is set, use it directly. Otherwise the router serves
+        # vision via the vision specialty (see docs/router-contract.md).
+        vlm_endpoint = os.getenv("VLM_ENDPOINT", "") or llm_endpoint()
         return InferenceClient(
-            base_url=os.getenv("VLM_ENDPOINT", "http://localhost:8084/v1"),
-            model=os.getenv("VLM_MODEL", "microsoft/Phi-3.5-vision-instruct"),
+            base_url=vlm_endpoint,
+            model=os.getenv("VLM_MODEL", "worker-vision-v1.0"),
             hardware="cpu",
-            use_semaphore=False,  # vision has its own engine, no text engine contention
+            use_semaphore=False,  # vision is a different specialty pool
         )
 
-    # All text tasks: shared Mistral-7B with semaphore
+    # All text tasks: shared router with semaphore
+    from backend.inference.client import llm_endpoint, llm_model_for
     return InferenceClient(
-        base_url=os.getenv(
-            "TEXT_ENGINE_ENDPOINT",
-            os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1"),
-        ),
-        model=os.getenv(
-            "TEXT_ENGINE_MODEL",
-            os.getenv("ORCHESTRATOR_MODEL", "mistralai/Mistral-7B-Instruct-v0.3"),
-        ),
+        base_url=llm_endpoint(),
+        model=llm_model_for("worker"),
         hardware="cpu",
         use_semaphore=True,
     )
@@ -165,26 +166,42 @@ def _parse_worker_response(raw: str, task_id: str, client: InferenceClient, late
 
 
 async def _retrieve_images(query: str, top_k: int = 2) -> list[dict]:
-    """Search all corpus image stores and return the top-k most relevant images."""
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6479")
-    tei_endpoint = os.getenv("TEI_ENDPOINT", "http://tei-embedding:8090")
-    emb_dim = int(os.getenv("EMBEDDING_DIM", "384"))
+    """Search for relevant images via the doc_retrieval MCP server.
 
-    embedder = Embedder(endpoint=tei_endpoint, dim=emb_dim)
-    query_vec = await embedder.embed_one(query)
+    Returns a list of dicts shaped {"url": str, "caption": str, "corpus": str}.
+    URLs may be https:// or data: schemes — both are handled by _fetch_image_bytes.
+    """
+    raw = await call_tool("search_images", {"query": query, "max_results": top_k})
+    if not raw:
+        return []
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("search_images returned non-JSON payload: %s", raw[:200])
+        return []
+    return payload.get("hits", [])[:top_k]
 
-    all_hits: list[dict] = []
-    for corpus_name in CORPORA:
-        store = RedisImageStore(redis_url=redis_url, corpus_name=corpus_name, embedding_dim=emb_dim)
+
+async def _fetch_image_bytes(url: str) -> bytes | None:
+    """Fetch an image URL and return its raw bytes, or None on failure.
+
+    Supports https:// (and http://) URLs via httpx, plus data:image/...;base64 URLs.
+    """
+    if url.startswith("data:"):
         try:
-            if await store.index_exists():
-                hits = await store.search(query_vec, top_k=top_k)
-                all_hits.extend(hits)
-        finally:
-            await store.close()
-
-    all_hits.sort(key=lambda h: h["score"])
-    return all_hits[:top_k]
+            _, b64part = url.split(",", 1)
+            return base64.b64decode(b64part)
+        except (ValueError, base64.binascii.Error):
+            logger.warning("Malformed data: URL")
+            return None
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            return resp.content
+    except httpx.HTTPError as exc:
+        logger.warning("Failed to fetch image %s: %s", url, exc)
+        return None
 
 
 async def _execute_text_retrieval_fallback(
@@ -194,17 +211,12 @@ async def _execute_text_retrieval_fallback(
 ) -> AgentResult:
     """
     Text-only fallback when no images are found for a vision task.
-    Uses the shared text engine with the research role prompt.
+    Uses the same router specialty as a regular worker.
     """
+    from backend.inference.client import llm_endpoint, llm_model_for
     client = InferenceClient(
-        base_url=os.getenv(
-            "TEXT_ENGINE_ENDPOINT",
-            os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1"),
-        ),
-        model=os.getenv(
-            "TEXT_ENGINE_MODEL",
-            os.getenv("ORCHESTRATOR_MODEL", "mistralai/Mistral-7B-Instruct-v0.3"),
-        ),
+        base_url=llm_endpoint(),
+        model=llm_model_for("worker"),
         hardware="cpu",
         use_semaphore=True,
     )
@@ -286,16 +298,10 @@ async def _execute_vision_task(
 
     # ── VLM not configured ───────────────────────────────────────────────────
     if not vlm_endpoint:
-        img_count = len(hits)
-        img_note = (
-            f"{img_count} relevant image(s) were retrieved from the corpus "
-            f"but could not be analyzed because the vision worker (VLM_ENDPOINT) "
-            f"is not running. Start vllm-vision with: "
-            f"docker compose --profile vision up -d vllm-vision"
-            if img_count > 0
-            else "No images matched the query and the vision worker (VLM_ENDPOINT) is not running."
+        logger.info(
+            "VLM_ENDPOINT not set; falling back to text retrieval for vision task %s "
+            "(%d image(s) were found)", task.id, len(hits),
         )
-        # Fall back to text retrieval
         return await _execute_text_retrieval_fallback(task, role_cfg, correction_hint)
 
     # ── Build VLM message content ────────────────────────────────────────────
@@ -303,16 +309,20 @@ async def _execute_vision_task(
     images_used: list[str] = []
 
     for hit in hits:
-        img_path = _IMAGE_DIR / hit["local_path"]
-        if img_path.exists():
-            raw = img_path.read_bytes()
-            b64 = base64.b64encode(raw).decode()
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
-            })
-            content.append({"type": "text", "text": f"[Image: {hit['caption']}]"})
-            images_used.append(hit["local_path"])
+        url = hit.get("url", "")
+        caption = hit.get("caption", "")
+        if not url:
+            continue
+        raw = await _fetch_image_bytes(url)
+        if raw is None:
+            continue
+        b64 = base64.b64encode(raw).decode()
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+        })
+        content.append({"type": "text", "text": f"[Image: {caption}]"})
+        images_used.append(url)
 
     # Build type-specific extraction directive from expected_image_types
     extraction_directives = ""
