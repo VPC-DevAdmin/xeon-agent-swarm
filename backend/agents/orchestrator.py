@@ -237,6 +237,8 @@ async def orchestrate_with_events(
     Accepts an optional critique string for retry-with-hint scenarios.
     Returns the TaskGraph.
     """
+    from backend.observability.trace import trace_headers
+
     client = _make_client()
     user_content = query
     if critique:
@@ -249,7 +251,8 @@ async def orchestrate_with_events(
     task_graph: TaskGraph = await client.complete_structured(
         messages=messages,
         response_model=TaskGraph,
-        max_tokens=2048,
+        max_tokens=4096,
+        extra_headers=trace_headers(run_id, "orchestrate"),
     )
     await broadcast(
         run_id,

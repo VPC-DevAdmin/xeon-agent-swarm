@@ -230,6 +230,9 @@ async def validate_worker_output(
     ]
 
     try:
+        # NOTE: validate_worker_output has no run_id in scope, so no traceparent
+        # is set here. When the persistence layer threads run context through
+        # the validator (Phase 2), add trace_headers(run_id, f"validate:{task.id}").
         verdict = await client.complete_structured(
             messages=messages,
             response_model=ValidationVerdict,

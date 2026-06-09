@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import random
 import time
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Type, TypeVar
 
 import httpx
-import instructor
 from openai import AsyncOpenAI, APIConnectionError, APITimeoutError
+from pydantic import BaseModel, ValidationError
+
+T = TypeVar("T", bound=BaseModel)
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +134,13 @@ def _get_semaphore() -> asyncio.Semaphore:
 
 class InferenceClient:
     """
-    Wraps an OpenAI-compatible endpoint.
-    Use `instructor.patch()` when structured output is needed (orchestrator).
+    Wraps an OpenAI-compatible endpoint (the LLM router — see docs/router-contract.md).
+
+    Structured output uses the router's native OpenAI Structured Outputs support
+    (`response_format: {type: "json_schema", strict: true}`), which the router
+    guarantees via server-side grammar-constrained decoding. No instructor
+    library, no MD_JSON workaround, no retry-on-malformed-JSON — the router
+    enforces the schema at the token level.
 
     use_semaphore=True: acquire the global WORKER_CONCURRENCY semaphore before
     every call. All text workers, the validator, and the reducer should set this.
@@ -146,29 +154,9 @@ class InferenceClient:
         hardware: str = "cpu",
         use_semaphore: bool = False,
     ):
+        api_key = os.getenv("LLM_TIER_TOKEN") or "none"
         self._raw = AsyncOpenAI(
-            base_url=base_url, api_key="none", timeout=_INFERENCE_TIMEOUT
-        )
-        # Use MD_JSON (markdown-wrapped JSON) instead of the default TOOLS mode.
-        #
-        # Why: instructor's TOOLS mode makes a tool-call request, and on a
-        # parse/validation failure it appends the bad response back into the
-        # conversation as an assistant tool_call message and asks the model to
-        # correct it.  When those messages are re-rendered by vLLM's Mistral
-        # tokenizer, the chat template validates ToolCall.function.arguments
-        # as a strict string — but the re-injected call has arguments as a raw
-        # list/dict, triggering:
-        #   ValueError: 1 validation error for ToolCall
-        #     function.arguments: Input should be a valid string
-        #
-        # MD_JSON avoids the tool-calling path entirely.  The model is asked
-        # to output JSON inside a ```json ... ``` block; instructor parses it
-        # and retries on parse failure by appending a plain user message ("the
-        # JSON you returned was invalid, try again") — no tool_calls, no
-        # Mistral tokenizer issue.  Slightly less constrained than TOOLS but
-        # reliable enough with a decent system prompt.
-        self._instructor = instructor.from_openai(
-            self._raw, mode=instructor.Mode.MD_JSON
+            base_url=base_url, api_key=api_key, timeout=_INFERENCE_TIMEOUT
         )
         self.model = model
         self.hardware = hardware
@@ -178,17 +166,22 @@ class InferenceClient:
         self,
         messages: list[dict],
         max_tokens: int = 512,
+        extra_headers: dict[str, str] | None = None,
     ) -> tuple[str, float]:
-        """Plain completion. Returns (content, latency_ms)."""
+        """Plain completion. Returns (content, latency_ms).
+
+        extra_headers: forwarded to the router (e.g. W3C `traceparent`).
+        """
         if self.use_semaphore:
             async with _get_semaphore():
-                return await self._complete_inner(messages, max_tokens)
-        return await self._complete_inner(messages, max_tokens)
+                return await self._complete_inner(messages, max_tokens, extra_headers)
+        return await self._complete_inner(messages, max_tokens, extra_headers)
 
     async def _complete_inner(
         self,
         messages: list[dict],
         max_tokens: int,
+        extra_headers: dict[str, str] | None = None,
     ) -> tuple[str, float]:
         t0 = time.perf_counter()
         resp = await _retry(
@@ -196,6 +189,7 @@ class InferenceClient:
                 model=self.model,
                 messages=messages,
                 max_tokens=max_tokens,
+                extra_headers=extra_headers or None,
             ),
             label=f"complete/{self.model}",
         )
@@ -205,33 +199,66 @@ class InferenceClient:
     async def complete_structured(
         self,
         messages: list[dict],
-        response_model,
+        response_model: Type[T],
         max_tokens: int = 1024,
-    ):
+        extra_headers: dict[str, str] | None = None,
+    ) -> T:
         """
-        Structured completion via instructor. Returns a validated Pydantic model.
-        Used by the orchestrator and validator.
+        Structured completion using the router's native OpenAI Structured Outputs.
+
+        Returns a validated instance of `response_model` (a Pydantic model).
+        The router guarantees the response body validates against the schema via
+        server-side grammar-constrained decoding (docs/router-contract.md §6.5),
+        so this never needs to retry on malformed JSON.
+
+        extra_headers: forwarded to the router (e.g. W3C `traceparent`).
         """
         if self.use_semaphore:
             async with _get_semaphore():
-                return await self._complete_structured_inner(messages, response_model, max_tokens)
-        return await self._complete_structured_inner(messages, response_model, max_tokens)
+                return await self._complete_structured_inner(
+                    messages, response_model, max_tokens, extra_headers)
+        return await self._complete_structured_inner(
+            messages, response_model, max_tokens, extra_headers)
 
     async def _complete_structured_inner(
         self,
         messages: list[dict],
-        response_model,
+        response_model: Type[T],
         max_tokens: int,
-    ):
-        return await _retry(
-            lambda: self._instructor.chat.completions.create(
+        extra_headers: dict[str, str] | None,
+    ) -> T:
+        schema = response_model.model_json_schema()
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": response_model.__name__,
+                "schema": schema,
+                "strict": True,
+            },
+        }
+
+        resp = await _retry(
+            lambda: self._raw.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                response_model=response_model,
                 max_tokens=max_tokens,
+                response_format=response_format,
+                extra_headers=extra_headers or None,
             ),
             label=f"structured/{self.model}",
         )
+        content = resp.choices[0].message.content or ""
+        try:
+            return response_model.model_validate_json(content)
+        except ValidationError as exc:
+            # The router commits to strict schema adherence; if we still get a
+            # validation error, log the payload so the contract breach is visible.
+            logger.error(
+                "[structured/%s] response failed schema validation despite "
+                "strict mode: %s\npayload=%s",
+                self.model, exc, content[:500],
+            )
+            raise
 
     async def stream(
         self,
