@@ -82,8 +82,10 @@ async def finalize_run(run_id, *, document_result=None, metrics=None, status="co
     )
 
 
-async def mark_job_fired(job_id, run_id):
+async def set_job_last_run(job_id, run_id):
+    """Record a job's most recent run_id (schedule advancement is the
+    scheduler's responsibility via claim_due_job)."""
     return await _run(
-        lambda s: jobs_repo.mark_fired(s, job_id, run_id),
-        "mark_job_fired",
+        lambda s: jobs_repo.set_last_run(s, job_id, run_id),
+        "set_job_last_run",
     )

@@ -17,3 +17,4 @@ asyncpg>=0.29.0
 alembic>=1.13.0
 cryptography>=42.0.0      # Fernet encryption for connector secrets
 croniter>=2.0.0           # cron expression parsing for schedules
+apscheduler>=3.10.0       # background job scheduler

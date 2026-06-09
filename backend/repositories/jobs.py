@@ -157,14 +157,52 @@ async def set_job_status(session: AsyncSession, job_id: str, status: str) -> Job
     return job
 
 
-async def mark_fired(session: AsyncSession, job_id: str, run_id: str) -> None:
-    """After a schedule fires: bump next_fire_at and record last_run_id."""
+async def set_last_run(session: AsyncSession, job_id: str, run_id: str) -> None:
+    """Record the most recent run for a job (does NOT touch the schedule)."""
     job = await session.get(Job, job_id)
     if job is None:
         return
     job.last_run_id = run_id
-    job.next_fire_at = compute_next_fire(job.schedule_cron, job.schedule_tz)
     await session.flush()
+
+
+async def claim_due_job(session: AsyncSession, job_id: str) -> bool:
+    """
+    Atomically advance a due job's next_fire_at to the next scheduled time.
+
+    Returns True if THIS caller advanced it (i.e. the job was still due), False
+    if another worker already claimed it. The scheduler calls this before firing
+    so a job can't be double-fired across the scan tick or across replicas —
+    advancing next_fire_at is the claim. Uses a row lock so concurrent schedulers
+    serialize on the job row.
+    """
+    from sqlalchemy import select as _select
+
+    now = _utcnow()
+    res = await session.execute(
+        _select(Job).where(Job.id == job_id).with_for_update()
+    )
+    job = res.scalar_one_or_none()
+    if job is None or job.status != "active":
+        return False
+    if job.next_fire_at is None or job.next_fire_at > now:
+        return False  # someone else already claimed/advanced it
+    job.next_fire_at = compute_next_fire(job.schedule_cron, job.schedule_tz, base=now)
+    await session.flush()
+    return True
+
+
+async def has_active_run(session: AsyncSession, job_id: str) -> bool:
+    """True if the job has a run in a non-terminal state (for overlap_policy)."""
+    from backend.db.models import Run
+
+    res = await session.execute(
+        select(Run.id).where(
+            Run.job_id == job_id,
+            Run.status.in_(("pending", "orchestrating", "running", "reducing")),
+        ).limit(1)
+    )
+    return res.scalar_one_or_none() is not None
 
 
 async def due_jobs(session: AsyncSession, *, now: datetime | None = None) -> list[Job]:

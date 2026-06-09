@@ -191,7 +191,22 @@ async def lifespan(app: FastAPI):
         logging.getLogger(__name__).warning(
             "DB migration on startup failed (continuing): %s", exc
         )
+    # Start the job scheduler (scans due jobs and fires runs). Opt-out via
+    # SCHEDULER_ENABLED=0 for environments that don't want background firing.
+    scheduler_started = False
+    if os.getenv("SCHEDULER_ENABLED", "1").lower() in ("1", "true", "yes"):
+        try:
+            from backend.scheduling.scheduler import start_scheduler
+            start_scheduler()
+            scheduler_started = True
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "Scheduler failed to start (continuing): %s", exc
+            )
     yield
+    if scheduler_started:
+        from backend.scheduling.scheduler import shutdown_scheduler
+        shutdown_scheduler()
     await dispose_engine()
 
 
@@ -291,7 +306,7 @@ async def run_swarm(
         config={"validator_enabled": validator_enabled},
     )
     if job_id:
-        await db.mark_job_fired(job_id, run_id)
+        await db.set_job_last_run(job_id, run_id)
     await db.set_run_status(run_id, "orchestrating")
 
     await manager.broadcast(

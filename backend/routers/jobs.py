@@ -44,8 +44,19 @@ async def list_jobs(
         session, status=status, owner=owner, search=search,
         limit=limit, offset=offset,
     )
-    # connectors aren't eager-loaded in list; expose ids best-effort
     return [JobOut.from_orm_job(j) for j in jobs]
+
+
+@router.get("/scheduled", response_model=list[JobOut])
+async def list_scheduled(session: AsyncSession = Depends(get_session)):
+    """Active jobs that have a cron schedule, ordered by next fire time.
+
+    Drives the UI's schedule view: what's going to run and when.
+    """
+    jobs = await jobs_repo.list_jobs(session, status="active", limit=500)
+    scheduled = [j for j in jobs if j.schedule_cron]
+    scheduled.sort(key=lambda j: (j.next_fire_at is None, j.next_fire_at))
+    return [JobOut.from_orm_job(j) for j in scheduled]
 
 
 @router.get("/{job_id}", response_model=JobOut)
