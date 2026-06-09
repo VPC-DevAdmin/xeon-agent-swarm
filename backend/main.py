@@ -71,6 +71,9 @@ from backend.agents.reducer import synthesize
 from backend.graph.swarm_graph import validate_task_graph
 from backend.protocols.a2a_cards import all_agent_cards, ORCHESTRATOR_CARD
 from backend.queue.task_queue import TaskQueue
+from backend.repositories import persistence as db
+from backend.db.base import dispose_engine, get_session
+from backend.db.migrate import upgrade_to_head
 from backend.observability.metrics import (
     runs_total,
     run_latency_seconds,
@@ -179,7 +182,17 @@ async def lifespan(app: FastAPI):
     global _task_queue
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6479")
     _task_queue = TaskQueue(redis_url)
+    # Apply DB migrations on startup (RUN_MIGRATIONS=1). Best-effort: a DB that
+    # isn't reachable yet shouldn't crash the API — the persistence facade
+    # degrades gracefully and the in-memory cache still works.
+    try:
+        upgrade_to_head()
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "DB migration on startup failed (continuing): %s", exc
+        )
     yield
+    await dispose_engine()
 
 
 import logging
@@ -246,13 +259,30 @@ manager = ConnectionManager()
 
 # ── Swarm pipeline ───────────────────────────────────────────────────────────
 
-async def run_swarm(run_id: str, query: str, validator_enabled: bool = True):
+async def run_swarm(
+    run_id: str,
+    query: str,
+    validator_enabled: bool = True,
+    *,
+    job_id: str | None = None,
+    trigger: str = "manual",
+):
     """Full swarm pipeline: orchestrate → validate graph → parallel workers → reduce."""
     t0 = time.perf_counter()
     active_runs.inc()
     runs_total.inc()
 
     state = SwarmState(run_id=run_id, query=query, validator_enabled=validator_enabled)
+
+    # Durable record — created before any work so the run is visible in the API
+    # immediately (status transitions through orchestrating → running → done).
+    await db.create_run(
+        run_id, query, job_id=job_id, trigger=trigger,
+        config={"validator_enabled": validator_enabled},
+    )
+    if job_id:
+        await db.mark_job_fired(job_id, run_id)
+    await db.set_run_status(run_id, "orchestrating")
 
     await manager.broadcast(
         run_id,
@@ -297,6 +327,10 @@ async def run_swarm(run_id: str, query: str, validator_enabled: bool = True):
 
         state.task_graph = task_graph
         state.status = TaskStatus.running
+
+        # Persist the decomposition and materialize Step rows, then mark running.
+        await db.save_task_graph(run_id, task_graph.model_dump())
+        await db.set_run_status(run_id, "running")
 
         # ── Step 2: Fan-out workers (respecting dependencies) ─────────────────
         completed_ids: set[str] = set()
@@ -362,6 +396,24 @@ async def run_swarm(run_id: str, query: str, validator_enabled: bool = True):
                     _running_tasks[run_id].pop(task.id, None)
 
                 state.results[task.id] = result
+                # Persist the step's terminal state + a summary attempt row.
+                await db.set_step_status(
+                    run_id, task.id, result.status.value,
+                    result={"text": result.result,
+                            "artifacts": [a.model_dump() for a in result.artifacts]},
+                    confidence=result.confidence,
+                    latency_ms=result.latency_ms,
+                    total_attempts=getattr(result, "total_attempts", 1) or 1,
+                )
+                await db.record_attempt(
+                    run_id, task.id,
+                    attempt_no=getattr(result, "total_attempts", 1) or 1,
+                    status="completed" if result.status == TaskStatus.completed else "failed",
+                    result={"text": result.result},
+                    model_id=result.model_used,
+                    tokens_out=result.total_tokens or None,
+                    latency_ms=result.latency_ms,
+                )
                 # Record metrics (killed tasks still count)
                 tasks_total.labels(
                     status=result.status.value,
@@ -420,7 +472,19 @@ async def run_swarm(run_id: str, query: str, validator_enabled: bool = True):
                 run_id=run_id, swarm=state, document=document
             )
 
+        # Durable finalize: store the document + metrics and mark completed.
+        await db.finalize_run(
+            run_id,
+            document_result=document.model_dump() if document else None,
+            metrics={
+                "latency_ms": latency_ms,
+                "task_count": len(state.results),
+            },
+            status="completed",
+        )
+
     except Exception as exc:
+        await db.set_run_status(run_id, "failed", error=str(exc))
         await manager.broadcast(
             run_id,
             SwarmEvent(
@@ -431,6 +495,52 @@ async def run_swarm(run_id: str, query: str, validator_enabled: bool = True):
         )
     finally:
         active_runs.dec()
+
+
+# ── DB serializers ────────────────────────────────────────────────────────────
+
+def _run_to_dict(run) -> dict:
+    """Serialize a Run ORM object (with eager-loaded steps + attempts) for the API."""
+    return {
+        "run_id": run.id,
+        "job_id": run.job_id,
+        "trigger": run.trigger,
+        "query": run.query,
+        "config": run.config,
+        "status": run.status,
+        "task_graph": run.task_graph,
+        "document": run.document_result,
+        "metrics": run.metrics,
+        "langfuse_trace_id": run.langfuse_trace_id,
+        "error": run.error,
+        "started_at": run.started_at.isoformat() if run.started_at else None,
+        "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+        "steps": [
+            {
+                "step_key": s.step_key,
+                "type": s.type,
+                "objective": s.objective,
+                "deliverable_format": s.deliverable_format,
+                "dependencies": s.dependencies,
+                "status": s.status,
+                "result": s.result,
+                "confidence": s.confidence,
+                "total_attempts": s.total_attempts,
+                "latency_ms": s.latency_ms,
+                "attempts": [
+                    {
+                        "attempt_no": a.attempt_no,
+                        "status": a.status,
+                        "model_id": a.model_id,
+                        "correction_hint": a.correction_hint,
+                        "latency_ms": a.latency_ms,
+                    }
+                    for a in sorted(s.attempts, key=lambda x: x.attempt_no)
+                ],
+            }
+            for s in sorted(run.steps, key=lambda x: x.step_key)
+        ],
+    }
 
 
 # ── REST endpoints ────────────────────────────────────────────────────────────
@@ -453,11 +563,17 @@ async def get_run(run_id: str):
     result = _run_results.get(run_id)
     if result:
         return result
-    # Try Redis
-    if _task_queue:
-        cached = await _task_queue.get_run_result(run_id)
-        if cached:
-            return cached
+    # Fall back to the durable DB record (survives restarts).
+    from backend.repositories import runs as runs_repo
+    from backend.db.base import get_sessionmaker
+    try:
+        sm = get_sessionmaker()
+        async with sm() as session:
+            run = await runs_repo.get_run(session, run_id)
+            if run:
+                return _run_to_dict(run)
+    except Exception as exc:
+        logger.warning("DB lookup for run %s failed: %s", run_id, exc)
     return {"run_id": run_id, "status": "not_found"}
 
 
