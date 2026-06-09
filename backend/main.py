@@ -508,6 +508,12 @@ async def run_swarm(
             status="completed",
         )
 
+        # Fire-and-forget async quality eval — scores each step against its
+        # deliverable_format rubric, persists into run.metrics, broadcasts.
+        # Never blocks run completion.
+        from backend.evals.runner import evaluate_run
+        asyncio.create_task(evaluate_run(run_id, broadcast=manager.broadcast))
+
     except Exception as exc:
         await db.set_run_status(run_id, "failed", error=str(exc))
         await manager.broadcast(
