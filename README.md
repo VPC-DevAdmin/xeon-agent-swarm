@@ -1,211 +1,167 @@
-# Xeon Agent Swarm
+# Agent Orchestrator
 
-An open-source demo showing how a complex query is automatically decomposed into parallel
-subtasks, executed against multiple OPEA-served model endpoints (CPU and GPU), and
-reassembled into a final answer — with a side-by-side A/B comparison against a single
-large-model pipeline.
+A focused, standards-aligned **agent orchestration platform**. It decomposes a
+prompt into a validated graph of specialist sub-tasks, runs them in parallel
+through an external LLM router, validates each output against its contract,
+synthesizes a result, and scores quality — all durably persisted, observable,
+and schedulable.
 
-## What You'll See
+This project owns **orchestration**. It deliberately delegates two concerns to
+sibling services it calls over the network:
 
-| Left panel (Swarm) | Right panel (A/B Baseline) |
+- **LLM inference + model routing** → an external OpenAI-compatible **router**
+  (semantic routing, on/off-system tiers, specialty models). See
+  [`docs/router-contract.md`](docs/router-contract.md).
+- **Knowledge retrieval** (vector search + re-rank) → an external **semantic
+  search** service, reached through the `doc_retrieval` MCP proxy.
+
+## What it does
+
+| Capability | How |
 |---|---|
-| Query decomposed into 3-6 parallel subtasks | Same query sent to one large model |
-| Animated task DAG with live status | Tokens stream in character by character |
-| Per-task model/hardware badges (CPU / GPU) | Final answer with total latency |
-| Synthesized final answer with attribution | |
-| Latency comparison bar chart | |
+| **Prompt decomposition** | Orchestrator agent emits a contract-based `TaskGraph` (A2A-aligned), structurally validated before any work starts |
+| **Agent creation & monitoring** | Workers fan out via LangGraph `Send`; live state over WebSocket (CloudEvents 1.0 envelopes) |
+| **Output evaluation** | Per-step validator (mechanical + LLM-judge) with retry loop; async quality evals per deliverable-format after each run |
+| **Tool calls** | MCP servers (web search, code exec, doc retrieval proxy) |
+| **Scheduled runs** | Cron-scheduled Jobs (APScheduler), overlap policies, durable history |
+| **Orchestration** | Durable Jobs → Runs → Steps → Attempts in Postgres; full REST + UI |
+
+## Standards
+
+OpenAI Chat Completions + Structured Outputs · MCP · A2A vocabulary ·
+CloudEvents 1.0 · W3C TraceContext · OpenAPI 3.1 · UUIDv7 · RFC 3339 · POSIX
+cron. See [`docs/standards.md`](docs/standards.md).
 
 ## Architecture
 
 ```
-User query
-    │
-    ▼
-Orchestrator (Qwen2.5-7B)
-    │  decomposes into TaskGraph (3-6 tasks)
-    ▼
-Fan-out via LangGraph Send API
-    ├── Worker[research]  (GPU preferred, Llama-3.1-8B)
-    ├── Worker[analysis]  (CPU, Phi-4-mini)
-    ├── Worker[code]      (GPU preferred)
-    └── Worker[general]   (CPU, Phi-4-mini)
-    │
-    ▼
-Reducer (Qwen2.5-7B)  ←  synthesizes all results
-    │
-    ▼
-WebSocket → Frontend (React + React Flow + Recharts)
+                       ┌─ external: semantic router / LLM tiers ─┐
+  client / cron ──▶ THIS PROJECT ──┤  OpenAI-compatible /v1/chat/completions  │
+                       └──────────────────────────────────────────┘
+       │                    │                    │
+   REST + WS         MCP tool calls       trace export (optional)
+       │                    │                    │
+       ▼                    ▼                    ▼
+  Postgres            web/code/doc-proxy     Langfuse (optional overlay)
+  (jobs, runs,             │
+   steps, attempts,        └─▶ external: vector search + re-rank
+   connectors+secrets)
 ```
 
-All model serving is via [OPEA](https://opea-project.github.io/) vLLM images with
-OpenVINO/AMX acceleration on Intel Xeon.
+Pipeline per run:
 
-## Stack
+```
+prompt
+  │
+  ▼ orchestrate ──▶ validate graph (structural rules) ──▶ [retry w/ critique]
+  │
+  ▼ fan-out workers (respect deps; cascade-fail on failed deps)
+  │     each: execute ──▶ validate (contract) ──▶ retry-with-hint ──▶ commit
+  │
+  ▼ reduce ──▶ DocumentResult
+  │
+  ▼ finalize (persist) ──▶ async quality eval ──▶ broadcast
+```
 
-| Layer | Technology |
-|---|---|
-| Orchestration | LangGraph (StateGraph + Send fan-out) |
-| Model serving | OPEA vLLM (OpenVINO + AMX on Xeon) |
-| Structured output | `instructor` (guarantees valid TaskGraph JSON) |
-| Backend API | FastAPI + WebSockets |
-| Task queue | Redis pub/sub |
-| Agent protocols | A2A Agent Cards, MCP (JSON-RPC 2.0 over HTTP) |
-| Frontend | React 18 + Vite + Tailwind |
-| Graph visualization | React Flow |
-| Timing charts | Recharts |
-| State management | Zustand |
-| Observability | Prometheus counters + histograms |
+## Data model
 
-## Quick Start
+```
+Job ──< Run ──< Step ──< StepAttempt
+ └──< JobConnector >── Connector ──< ConnectorSecret (Fernet ciphertext)
+                                  AuditLog (every secret decryption)
+```
 
-### Prerequisites
-
-- Docker and Docker Compose v2
-- 16 GB+ RAM for CPU-only stack
-- HuggingFace account (free tier) for model downloads
-
-### Steps
+## Quick start
 
 ```bash
-# 1. Clone and configure
-git clone https://github.com/your-org/xeon-agent-swarm
-cd xeon-agent-swarm
-cp .env.example .env
-# Edit .env — add your HF_TOKEN at minimum
+cp env.example .env
 
-# 2. Start CPU-only stack
-# First run downloads models (~10-20 min depending on connection)
-docker compose up
+# Generate the secret-encryption key and paste into .env as MASTER_ENCRYPTION_KEY
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
-# 3. Start with GPU workers (Intel Gaudi or NVIDIA)
-docker compose --profile gpu up
+# Point at your router + search service in .env:
+#   LLM_TIER_ENDPOINT=https://router.internal/v1
+#   LLM_TIER_TOKEN=...
+#   SEMANTIC_SEARCH_ENDPOINT=https://search.internal
 
-# 4. Open the demo UI
-open http://localhost:3000
+docker compose up -d --build        # postgres + redis + MCP + backend + frontend
+# migrations run automatically on backend startup (RUN_MIGRATIONS=1)
 ```
 
-### Sample queries to try
+- Frontend: <http://localhost:3000> (Live Run · Jobs · Runs · Connectors)
+- API docs: <http://localhost:8000/docs> (OpenAPI 3.1)
+- Metrics: <http://localhost:8000/metrics> (Prometheus)
 
-```
-Compare the energy efficiency of nuclear, wind, and solar power generation,
-including current costs per MWh and carbon footprint per MWh.
-
-Explain the differences between transformer and LSTM architectures for NLP,
-with code examples showing how each processes a sequence.
-
-Analyze the economic impacts of remote work on urban real estate markets
-since 2020, including effects on commercial and residential sectors.
-```
-
-## Repository Layout
-
-```
-xeon-agent-swarm/
-├── backend/
-│   ├── agents/          # orchestrator, worker, reducer, single_model
-│   ├── graph/           # LangGraph swarm_graph (fan-out / fan-in)
-│   ├── inference/       # Async OpenAI-compatible client wrapper
-│   ├── protocols/       # A2A Agent Cards, A2A tasks, MCP server registry
-│   ├── queue/           # Redis pub/sub task queue
-│   ├── observability/   # Prometheus metrics
-│   ├── schemas/         # Pydantic models (TaskSpec, SwarmState, events…)
-│   └── main.py          # FastAPI app + WebSocket hub
-├── frontend/
-│   └── src/
-│       ├── components/  # QueryInput, ABPanel, TaskGraph, WorkerCard, …
-│       ├── hooks/       # useSwarmSocket (WebSocket + event dispatch)
-│       ├── store/       # Zustand swarmStore
-│       └── types/       # TypeScript mirrors of backend schemas
-├── mcp_servers/
-│   ├── web_search/      # Brave/DuckDuckGo MCP server
-│   ├── doc_retrieval/   # ChromaDB RAG MCP server
-│   └── code_exec/       # Sandboxed Python exec MCP server
-├── config/
-│   ├── endpoints.yaml   # Model endpoint registry
-│   └── worker_roles.yaml # System prompts per worker specialization
-└── tests/               # pytest: orchestrator, graph routing, A2A
-```
-
-## Configuration
-
-### Model endpoints (`config/endpoints.yaml`)
-
-Edit to point at your OPEA vLLM instances or any OpenAI-compatible API:
-
-```yaml
-endpoints:
-  - id: orchestrator
-    url: "${ORCHESTRATOR_ENDPOINT}"   # set in .env
-    model: "${ORCHESTRATOR_MODEL}"
-    hardware: cpu
-```
-
-### Worker roles (`config/worker_roles.yaml`)
-
-Each role defines a system prompt, preferred hardware, and tools:
-
-```yaml
-roles:
-  research:
-    preferred_hardware: gpu
-    tools: [web_search, doc_retrieval]
-    system_prompt: |
-      You are a research specialist…
-```
-
-## Environment Variables
-
-See [.env.example](.env.example) for the full list. Key variables:
-
-| Variable | Description |
-|---|---|
-| `HF_TOKEN` | HuggingFace token for gated model downloads |
-| `ORCHESTRATOR_ENDPOINT` | vLLM URL for the orchestrator model |
-| `WORKER_CPU_ENDPOINT` | vLLM URL for CPU worker model |
-| `WORKER_GPU_ENDPOINT` | vLLM URL for GPU worker model (optional) |
-| `SINGLE_MODEL_ENDPOINT` | vLLM URL for A/B baseline model |
-| `REDIS_URL` | Redis connection string |
-| `BRAVE_API_KEY` | Optional — MCP web_search uses DuckDuckGo if not set |
-
-## Observability
-
-- **Prometheus** metrics at `http://localhost:9090` (scrapes `/metrics` on the backend)
-- Metrics include per-task latency histograms, run counters, and WebSocket connection gauges
-- A2A task state is persisted in Redis (visible with `redis-cli monitor`)
-
-## Running Tests
+### Optional: Langfuse tracing
 
 ```bash
-# Install test dependencies
-pip install -r backend/requirements.txt pytest pytest-asyncio
-
-# Run all tests
-pytest tests/ -v
+docker compose exec postgres createdb -U swarm langfuse
+docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d
+# create a project in http://localhost:3001, paste keys into .env, restart backend
 ```
 
-## API Reference
+## REST API (selected)
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/run` | Start a swarm run; returns `{run_id}` |
-| `GET` | `/run/{run_id}` | Fetch final `RunResult` |
-| `WS` | `/ws/{run_id}` | Stream `SwarmEvent` objects in real time |
-| `GET` | `/agents` | List all A2A Agent Cards |
-| `GET` | `/.well-known/agent.json` | A2A discovery for this host |
-| `GET` | `/health` | Liveness check |
-| `GET` | `/metrics` | Prometheus metrics |
+```
+POST   /run                      ad-hoc run
+POST   /jobs                     create job (query + optional cron schedule)
+GET    /jobs                     list
+GET    /jobs/scheduled           active cron jobs by next fire time
+PATCH  /jobs/{id}                update (schedule, query, config)
+POST   /jobs/{id}/pause|resume|archive|run-now
+GET    /runs                     run history
+GET    /runs/{id}                full detail (steps + attempts + eval scores)
+POST   /runs/{id}/kill           cancel in-flight steps
+POST   /connectors               create (secrets encrypted on save)
+PUT    /connectors/{id}/secrets/{field}   set/replace a secret
+GET    /connectors               list (secret field NAMES only — never values)
+```
 
-## Security Notes
+## Testing & iterating
 
-This is a demo. Before any production use:
+```bash
+# End-to-end smoke test: connector + secret hygiene, scheduled job lifecycle,
+# run-to-completion, step/attempt detail, quality eval, history, cleanup.
+python3 scripts/smoke_test.py
 
-- Add authentication to FastAPI endpoints (OAuth2 / API keys)
-- Scope MCP server tool permissions (code_exec runs in a restricted sandbox but has no network isolation)
-- Validate and sanitize all LLM outputs before rendering
-- Review A2A Agent Card exposure (currently no auth)
-- Replace `allow_origins=["*"]` CORS with explicit origins
-- Use secrets management (Vault, AWS Secrets Manager) instead of `.env` files
+# Watch one run live in the terminal (rich dashboard).
+python3 scripts/dashboard.py --validator "your query here"
 
-## License
+# Inspect a finished run's per-step outputs.
+python3 scripts/inspect_run.py --latest
+```
 
-Apache 2.0
+## Key environment variables
+
+| Var | Purpose |
+|---|---|
+| `LLM_TIER_ENDPOINT` / `LLM_TIER_TOKEN` | external router (OpenAI-compatible) |
+| `ORCHESTRATOR_MODEL` / `VALIDATOR_MODEL` / `WORKER_DEFAULT_MODEL` | router specialty names |
+| `SEMANTIC_SEARCH_ENDPOINT` | external vector-search service (via MCP proxy) |
+| `DATABASE_URL` | Postgres (asyncpg) |
+| `MASTER_ENCRYPTION_KEY` | Fernet key for connector secrets |
+| `SCHEDULER_ENABLED` | `0` disables background job firing |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | enable tracing (else no-op) |
+
+See [`env.example`](env.example) for the full list.
+
+## Project layout
+
+```
+backend/
+  agents/        orchestrator, worker, validator, reducer, tts
+  graph/         LangGraph swarm (fan-out/fan-in, graph validation)
+  inference/     router client (native structured outputs, retries, traceparent)
+  db/            SQLAlchemy models, async engine, Alembic migrations
+  repositories/  jobs / runs / connectors data access + persistence facade
+  routers/       /jobs /runs /connectors REST
+  scheduling/    APScheduler job scanner
+  evals/         per-deliverable-format quality rubrics
+  security/      Fernet secret encryption
+  observability/ Prometheus metrics, W3C trace helpers, optional Langfuse
+  protocols/     MCP clients, A2A agent cards
+frontend/        React + Vite console (Live Run, Jobs, Runs, Connectors)
+mcp_servers/     web_search, code_exec, doc_retrieval (search proxy)
+docs/            router-contract.md, standards.md
+scripts/         smoke_test, dashboard, inspect_run
+```
