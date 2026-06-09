@@ -33,6 +33,61 @@ _RETRYABLE = (APIConnectionError, APITimeoutError,
               httpx.RemoteProtocolError, httpx.PoolTimeout)
 
 
+# ── Router endpoint + model resolution ───────────────────────────────────────
+# Single source of truth for "where do we send LLM calls" and "which model
+# specialty does this role request." Callers (orchestrator, validator, worker,
+# reducer) use llm_endpoint() and llm_model_for(role) instead of re-doing the
+# env-var fallback chain inline.
+
+_ROLE_ENV = {
+    "orchestrator": "ORCHESTRATOR_MODEL",
+    "validator":    "VALIDATOR_MODEL",
+    "worker":       "WORKER_DEFAULT_MODEL",
+    "reducer":      "REDUCER_MODEL",
+}
+
+# Router specialty defaults — see docs/router-contract.md §2.1
+_ROLE_DEFAULT_SPECIALTY = {
+    "orchestrator": "orchestrator-v2.1",
+    "validator":    "validator-v1.0",
+    "worker":       "worker-default-v1.0",
+    "reducer":      "worker-default-v1.0",  # writing role uses the default worker
+}
+
+
+def llm_endpoint() -> str:
+    """Resolve the LLM router endpoint.
+
+    Order of precedence:
+      1. LLM_TIER_ENDPOINT  (canonical; the external router)
+      2. TEXT_ENGINE_ENDPOINT  (legacy single-engine name)
+      3. ORCHESTRATOR_ENDPOINT  (oldest legacy)
+      4. http://localhost:8080/v1  (last-resort default)
+    """
+    return (
+        os.getenv("LLM_TIER_ENDPOINT")
+        or os.getenv("TEXT_ENGINE_ENDPOINT")
+        or os.getenv("ORCHESTRATOR_ENDPOINT")
+        or "http://localhost:8080/v1"
+    )
+
+
+def llm_model_for(role: str) -> str:
+    """Resolve the model / specialty name for a role.
+
+    Role-specific env var (ORCHESTRATOR_MODEL, VALIDATOR_MODEL, etc.) wins;
+    falls back to legacy TEXT_ENGINE_MODEL, then to the router contract's
+    default specialty for the role.
+    """
+    role_env = _ROLE_ENV.get(role)
+    return (
+        (role_env and os.getenv(role_env))
+        or os.getenv("TEXT_ENGINE_MODEL")
+        or os.getenv("ORCHESTRATOR_MODEL")
+        or _ROLE_DEFAULT_SPECIALTY.get(role, "worker-default-v1.0")
+    )
+
+
 async def _retry(coro_factory, *, label: str):
     """Call coro_factory() with retry on transient transport errors.
 

@@ -1,61 +1,111 @@
 """
-Document retrieval MCP server — Redis Stack + TEI semantic search.
+Document retrieval MCP server — thin proxy to the external semantic search endpoint.
 
-Replaces the previous ChromaDB stub. Queries are embedded via the TEI
-service and searched against the Redis HNSW corpus indices populated by
-`backend.corpus.ingester`.
+This server holds no corpus, no embeddings, no vector index. It exposes an MCP
+interface that workers call uniformly, and forwards each call to the sibling
+"intelligent data search" project at SEMANTIC_SEARCH_ENDPOINT.
+
+If the endpoint is unreachable, tool calls return a clear error message so the
+worker can degrade gracefully (e.g., a vision task uses its fallback_behavior).
 
 Environment variables:
-  REDIS_URL       redis://redis:6379
-  TEI_ENDPOINT    http://tei-embedding:8090
-  EMBEDDING_DIM   384
+  SEMANTIC_SEARCH_ENDPOINT  Base URL for the external semantic search service
+                            (e.g. https://search.internal). Required.
+  SEMANTIC_SEARCH_TOKEN     Optional bearer token for the search endpoint.
+  SEMANTIC_SEARCH_TIMEOUT   Request timeout in seconds (default 20).
 
 Tools exposed:
-  search_documents — semantic search across one or all corpora
-  list_corpora     — list available corpus names with chunk counts
+  search_documents — text semantic search
+  search_images    — image semantic search (returns image refs the worker
+                     can pass to the vision model)
+  list_corpora     — list available corpus / collection names
 """
 from __future__ import annotations
 
+import json
+import logging
 import os
-import struct
+from typing import Any
 
 import httpx
-import numpy as np
-import redis.asyncio as aioredis
 from fastapi import FastAPI
-from redis.commands.search.query import Query
-from redis.exceptions import ResponseError
 
-app = FastAPI(title="MCP Doc Retrieval Server")
+logger = logging.getLogger(__name__)
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
-TEI_ENDPOINT = os.getenv("TEI_ENDPOINT", "http://tei-embedding:8090").rstrip("/")
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "384"))
+app = FastAPI(title="MCP Doc Retrieval Server (proxy)")
 
-# Known corpus names — must match what the ingester created
-_CORPORA = ["ai_hardware", "ai_software", "llm_landscape"]
+# ── Configuration ─────────────────────────────────────────────────────────────
+
+SEMANTIC_SEARCH_ENDPOINT = os.getenv("SEMANTIC_SEARCH_ENDPOINT", "").rstrip("/")
+SEMANTIC_SEARCH_TOKEN = os.getenv("SEMANTIC_SEARCH_TOKEN", "")
+SEMANTIC_SEARCH_TIMEOUT = float(os.getenv("SEMANTIC_SEARCH_TIMEOUT", "20"))
+
+
+def _auth_headers() -> dict[str, str]:
+    headers = {"Accept": "application/json"}
+    if SEMANTIC_SEARCH_TOKEN:
+        headers["Authorization"] = f"Bearer {SEMANTIC_SEARCH_TOKEN}"
+    return headers
+
+
+# ── MCP tool definitions ──────────────────────────────────────────────────────
 
 TOOLS = [
     {
         "name": "search_documents",
         "description": (
-            "Semantic search over the AI/hardware/LLM corpus. "
-            "Returns the most relevant text passages for a query. "
-            "Set corpus='all' to search across all domains."
+            "Semantic search of grounded sources via the external search "
+            "service. Returns the most relevant text passages with citations."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Search query"},
+                "query": {
+                    "type": "string",
+                    "description": "Search query.",
+                },
                 "max_results": {
                     "type": "integer",
                     "default": 4,
-                    "description": "Number of passages to return (1-10)",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Maximum number of passages to return.",
                 },
                 "corpus": {
                     "type": "string",
                     "default": "all",
-                    "description": "Corpus to search: 'ai_hardware', 'ai_software', 'llm_landscape', or 'all'",
+                    "description": (
+                        "Optional corpus/collection filter understood by the "
+                        "search service. 'all' searches everything."
+                    ),
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "search_images",
+        "description": (
+            "Semantic search of indexed images (charts, diagrams, photos). "
+            "Returns image references the caller can include in a vision-model "
+            "prompt. The search service decides what 'image' means."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query describing the desired image content.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "default": 2,
+                    "minimum": 1,
+                    "maximum": 10,
+                },
+                "corpus": {
+                    "type": "string",
+                    "default": "all",
                 },
             },
             "required": ["query"],
@@ -63,65 +113,85 @@ TOOLS = [
     },
     {
         "name": "list_corpora",
-        "description": "List available corpus names and their chunk counts.",
+        "description": "List corpus / collection names exposed by the search service.",
         "inputSchema": {"type": "object", "properties": {}},
     },
 ]
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Search-service calls ──────────────────────────────────────────────────────
 
-async def _embed(query: str) -> list[float]:
-    """Embed a single query string via TEI."""
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        resp = await client.post(
-            f"{TEI_ENDPOINT}/embed",
-            json={"inputs": [query], "truncate": True},
+class _SearchEndpointUnconfigured(RuntimeError):
+    pass
+
+
+def _require_endpoint() -> str:
+    if not SEMANTIC_SEARCH_ENDPOINT:
+        raise _SearchEndpointUnconfigured(
+            "SEMANTIC_SEARCH_ENDPOINT is not set — this MCP server has no "
+            "data of its own. Configure it to point at the sibling search "
+            "project."
         )
+    return SEMANTIC_SEARCH_ENDPOINT
+
+
+async def _post(path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Send a POST to the search service. Raises on transport/HTTP errors."""
+    base = _require_endpoint()
+    url = f"{base}{path}"
+    async with httpx.AsyncClient(timeout=SEMANTIC_SEARCH_TIMEOUT) as client:
+        resp = await client.post(url, json=payload, headers=_auth_headers())
         resp.raise_for_status()
-        return resp.json()[0]
+        return resp.json()
 
 
-def _to_str(val) -> str:
-    if isinstance(val, bytes):
-        return val.decode("utf-8", errors="replace")
-    return str(val) if val is not None else ""
+async def _get(path: str) -> dict[str, Any]:
+    base = _require_endpoint()
+    url = f"{base}{path}"
+    async with httpx.AsyncClient(timeout=SEMANTIC_SEARCH_TIMEOUT) as client:
+        resp = await client.get(url, headers=_auth_headers())
+        resp.raise_for_status()
+        return resp.json()
 
 
-async def _search_one_corpus(
-    r: aioredis.Redis,
-    corpus_name: str,
-    query_vec: list[float],
-    top_k: int,
-) -> list[dict]:
-    """Run KNN search against one corpus index. Returns hit dicts."""
-    index_name = f"idx:{corpus_name}"
-    try:
-        await r.ft(index_name).info()
-    except ResponseError:
-        return []   # corpus not seeded yet
+# ── Result formatting ─────────────────────────────────────────────────────────
 
-    vec_bytes = np.asarray(query_vec, dtype=np.float32).tobytes()
-    q = (
-        Query(f"*=>[KNN {top_k} @embedding $query_vec AS score]")
-        .sort_by("score")
-        .return_fields("text", "doc_title", "source", "score")
-        .paging(0, top_k)
-        .dialect(2)
-    )
-    res = await r.ft(index_name).search(q, query_params={"query_vec": vec_bytes})
-    hits = []
-    for doc in res.docs:
-        hits.append(
-            {
-                "corpus": corpus_name,
-                "doc_title": _to_str(getattr(doc, "doc_title", "")),
-                "text": _to_str(getattr(doc, "text", "")),
-                "source": _to_str(getattr(doc, "source", "")),
-                "score": float(getattr(doc, "score", 1.0)),
-            }
-        )
-    return hits
+def _format_text_hits(hits: list[dict[str, Any]]) -> str:
+    """Format a list of text-search hits as a markdown payload for the worker."""
+    if not hits:
+        return "No matching documents found."
+    lines: list[str] = []
+    for i, hit in enumerate(hits, 1):
+        title = hit.get("title") or hit.get("doc_title") or "(untitled)"
+        corpus = hit.get("corpus") or hit.get("collection") or ""
+        source = hit.get("source") or hit.get("url") or ""
+        snippet = (hit.get("text") or hit.get("snippet") or "")[:600].rstrip()
+        if hit.get("text") and len(hit["text"]) > 600:
+            snippet += "…"
+        header = f"**[{i}] {title}**"
+        if corpus:
+            header += f" ({corpus})"
+        line = header
+        if source:
+            line += f"\nSource: {source}"
+        line += f"\n{snippet}"
+        lines.append(line)
+    return "\n\n---\n\n".join(lines)
+
+
+def _format_image_hits(hits: list[dict[str, Any]]) -> str:
+    """Image hits are returned as a JSON string so the caller can parse the URLs.
+
+    Schema: {"hits": [{"url": str, "caption": str, "corpus": str?}, ...]}
+    """
+    normalized = []
+    for hit in hits:
+        normalized.append({
+            "url":     hit.get("url") or hit.get("source") or "",
+            "caption": hit.get("caption") or hit.get("description") or "",
+            "corpus":  hit.get("corpus") or hit.get("collection") or "",
+        })
+    return json.dumps({"hits": normalized})
 
 
 # ── Tool implementations ──────────────────────────────────────────────────────
@@ -129,68 +199,68 @@ async def _search_one_corpus(
 async def search_documents(query: str, max_results: int, corpus: str) -> str:
     if not query.strip():
         return "Empty query."
+    payload = {"query": query, "max_results": max_results, "corpus": corpus}
     try:
-        query_vec = await _embed(query)
-    except Exception as exc:
-        return f"Embedding error: {exc}"
+        body = await _post("/v1/search/text", payload)
+    except _SearchEndpointUnconfigured as exc:
+        return f"Search unavailable: {exc}"
+    except httpx.HTTPStatusError as exc:
+        logger.error("Text-search HTTP error: %s — body=%s",
+                     exc.response.status_code, exc.response.text[:300])
+        return f"Search error: HTTP {exc.response.status_code}."
+    except httpx.HTTPError as exc:
+        logger.error("Text-search transport error: %s", exc)
+        return f"Search transport error: {exc!s}"
+    return _format_text_hits(body.get("hits") or body.get("results") or [])
 
-    corpora_to_search = _CORPORA if corpus == "all" else [corpus]
 
-    r = aioredis.from_url(REDIS_URL, decode_responses=False)
+async def search_images(query: str, max_results: int, corpus: str) -> str:
+    if not query.strip():
+        return "Empty query."
+    payload = {"query": query, "max_results": max_results, "corpus": corpus}
     try:
-        all_hits: list[dict] = []
-        for c in corpora_to_search:
-            hits = await _search_one_corpus(r, c, query_vec, top_k=max_results)
-            all_hits.extend(hits)
-    finally:
-        await r.aclose()
-
-    if not all_hits:
-        return "No matching documents found in the corpus."
-
-    # Merge-sort by score (ascending cosine distance) and take top max_results
-    all_hits.sort(key=lambda h: h["score"])
-    top = all_hits[:max_results]
-
-    lines = []
-    for i, hit in enumerate(top, 1):
-        snippet = hit["text"][:600].rstrip()
-        if len(hit["text"]) > 600:
-            snippet += "…"
-        lines.append(
-            f"**[{i}] {hit['doc_title']} ({hit['corpus']})**\n"
-            f"Source: {hit['source']}\n"
-            f"{snippet}"
-        )
-    return "\n\n---\n\n".join(lines)
+        body = await _post("/v1/search/image", payload)
+    except _SearchEndpointUnconfigured as exc:
+        return f"Image search unavailable: {exc}"
+    except httpx.HTTPStatusError as exc:
+        # 404 from upstream → endpoint supports text but not images.
+        # Surface gracefully so vision workers can fall back.
+        if exc.response.status_code == 404:
+            return "Image search is not supported by the search service."
+        logger.error("Image-search HTTP error: %s — body=%s",
+                     exc.response.status_code, exc.response.text[:300])
+        return f"Image search error: HTTP {exc.response.status_code}."
+    except httpx.HTTPError as exc:
+        logger.error("Image-search transport error: %s", exc)
+        return f"Image search transport error: {exc!s}"
+    return _format_image_hits(body.get("hits") or body.get("results") or [])
 
 
 async def list_corpora() -> str:
-    r = aioredis.from_url(REDIS_URL, decode_responses=False)
     try:
-        lines = []
-        for c in _CORPORA:
-            try:
-                info = await r.ft(f"idx:{c}").info()
-                if isinstance(info, dict):
-                    n = int(_to_str(info.get("num_docs", 0)) or 0)
-                else:
-                    info_dict = {}
-                    for i in range(0, len(info), 2):
-                        info_dict[_to_str(info[i])] = info[i + 1] if i + 1 < len(info) else None
-                    n = int(_to_str(info_dict.get("num_docs", 0)) or 0)
-                lines.append(f"- **{c}**: {n} chunks")
-            except ResponseError:
-                lines.append(f"- **{c}**: not seeded")
-    finally:
-        await r.aclose()
+        body = await _get("/v1/corpora")
+    except _SearchEndpointUnconfigured as exc:
+        return f"Search unavailable: {exc}"
+    except httpx.HTTPStatusError as exc:
+        return f"List error: HTTP {exc.response.status_code}."
+    except httpx.HTTPError as exc:
+        return f"List transport error: {exc!s}"
+    corpora = body.get("corpora") or body.get("collections") or []
+    if not corpora:
+        return "No corpora reported by the search service."
+    lines = []
+    for c in corpora:
+        name = c.get("name") if isinstance(c, dict) else str(c)
+        size = c.get("size") or c.get("count") if isinstance(c, dict) else None
+        suffix = f" ({size} items)" if size is not None else ""
+        lines.append(f"- **{name}**{suffix}")
     return "Available corpora:\n" + "\n".join(lines)
 
 
-# ── MCP endpoint ──────────────────────────────────────────────────────────────
+# ── MCP JSON-RPC endpoint ─────────────────────────────────────────────────────
 
 @app.post("/mcp")
-async def mcp_endpoint(request: dict):
+async def mcp_endpoint(request: dict) -> dict:
     method = request.get("method")
     req_id = request.get("id", 1)
 
@@ -205,7 +275,13 @@ async def mcp_endpoint(request: dict):
         if tool_name == "search_documents":
             result = await search_documents(
                 query=arguments.get("query", ""),
-                max_results=min(int(arguments.get("max_results", 4)), 10),
+                max_results=min(int(arguments.get("max_results", 4)), 20),
+                corpus=arguments.get("corpus", "all"),
+            )
+        elif tool_name == "search_images":
+            result = await search_images(
+                query=arguments.get("query", ""),
+                max_results=min(int(arguments.get("max_results", 2)), 10),
                 corpus=arguments.get("corpus", "all"),
             )
         elif tool_name == "list_corpora":
@@ -231,8 +307,12 @@ async def mcp_endpoint(request: dict):
 
 
 @app.get("/health")
-def health():
-    return {"status": "ok", "server": "mcp-doc-retrieval"}
+def health() -> dict:
+    return {
+        "status": "ok",
+        "server": "mcp-doc-retrieval",
+        "endpoint_configured": bool(SEMANTIC_SEARCH_ENDPOINT),
+    }
 
 
 if __name__ == "__main__":

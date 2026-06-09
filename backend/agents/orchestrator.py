@@ -201,9 +201,10 @@ Respond with ONLY a JSON object matching this shape. No prose before or after.
 
 
 def _make_client() -> InferenceClient:
+    from backend.inference.client import llm_endpoint, llm_model_for
     return InferenceClient(
-        base_url=os.getenv("TEXT_ENGINE_ENDPOINT", os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1")),
-        model=os.getenv("TEXT_ENGINE_MODEL", os.getenv("ORCHESTRATOR_MODEL", "mistralai/Mistral-7B-Instruct-v0.3")),
+        base_url=llm_endpoint(),
+        model=llm_model_for("orchestrator"),
         hardware="cpu",
         use_semaphore=False,  # Orchestrator runs solo before workers; no contention
     )

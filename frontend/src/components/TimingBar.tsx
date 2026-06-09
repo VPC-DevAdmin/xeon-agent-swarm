@@ -16,20 +16,14 @@ function formatMs(ms: number): string {
 
 export function TimingBar() {
   const swarmLatencyMs = useSwarmStore((s) => s.swarmLatencyMs)
-  const singleLatencyMs = useSwarmStore((s) => s.singleLatencyMs)
   const taskResults = useSwarmStore((s) => s.taskResults)
   const taskGraph = useSwarmStore((s) => s.taskGraph)
 
-  if (!swarmLatencyMs && !singleLatencyMs) return null
+  if (!swarmLatencyMs) return null
 
-  const data = [
-    ...(swarmLatencyMs != null
-      ? [{ name: 'Swarm (parallel)', ms: swarmLatencyMs, color: '#3b82f6' }]
-      : []),
-    ...(singleLatencyMs != null
-      ? [{ name: 'Single model', ms: singleLatencyMs, color: '#f59e0b' }]
-      : []),
-  ]
+  const data = swarmLatencyMs != null
+    ? [{ name: 'Swarm (parallel)', ms: swarmLatencyMs, color: '#3b82f6' }]
+    : []
 
   const taskBreakdown = taskGraph?.tasks
     .map((t) => {
