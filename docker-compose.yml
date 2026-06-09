@@ -18,6 +18,24 @@ services:
       timeout: 3s
       retries: 5
 
+  # ── PostgreSQL (durable orchestration state) ────────────────────────────────
+  # Stores jobs, runs, steps, attempts, connectors, and encrypted secrets.
+  # See backend/db/models.py and docs/standards.md §2.6.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-swarm}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-swarm}
+      - POSTGRES_DB=${POSTGRES_DB:-swarm}
+    ports: ["5432:5432"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-swarm}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   # ── MCP servers ───────────────────────────────────────────────────────────
 
   # Web search via Brave (falls back to DuckDuckGo if BRAVE_API_KEY unset).
@@ -76,6 +94,14 @@ services:
       # backend just reaches it via MCP_DOC_RETRIEVAL_URL.
       - REDIS_URL=redis://redis:6379
 
+      # ── Persistence (Postgres) ──────────────────────────────────────────
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-swarm}:${POSTGRES_PASSWORD:-swarm}@postgres:5432/${POSTGRES_DB:-swarm}
+      # Fernet key for connector-secret encryption. MUST be set in production.
+      # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:-}
+      # Run Alembic migrations automatically on backend startup.
+      - RUN_MIGRATIONS=${RUN_MIGRATIONS:-1}
+
       # ── MCP servers ──────────────────────────────────────────────────────
       - MCP_WEB_SEARCH_URL=http://mcp-web-search:9001
       - MCP_DOC_RETRIEVAL_URL=http://mcp-doc-retrieval:9002
@@ -85,6 +111,8 @@ services:
       - AUDIO_DIR=/data/audio
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     volumes:
       - ./config:/app/config:ro
@@ -108,4 +136,5 @@ services:
 
 volumes:
   redis_data:
+  postgres_data:
   audio_data:
