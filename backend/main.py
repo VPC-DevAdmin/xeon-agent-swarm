@@ -307,7 +307,11 @@ async def run_swarm(
     )
     if job_id:
         await db.set_job_last_run(job_id, run_id)
-    await db.set_run_status(run_id, "orchestrating")
+
+    # Optional Langfuse trace (no-op when unconfigured).
+    from backend.observability import langfuse_client as lf
+    trace_id = lf.start_run_trace(run_id, query, {"validator_enabled": validator_enabled})
+    await db.set_run_status(run_id, "orchestrating", langfuse_trace_id=trace_id)
 
     await manager.broadcast(
         run_id,
@@ -505,6 +509,13 @@ async def run_swarm(
                 "latency_ms": latency_ms,
                 "task_count": len(state.results),
             },
+            status="completed",
+        )
+
+        # Complete the Langfuse trace (no-op when unconfigured).
+        lf.complete_run_trace(
+            run_id, output=final_answer,
+            metrics={"latency_ms": latency_ms, "task_count": len(state.results)},
             status="completed",
         )
 
