@@ -225,6 +225,16 @@ app.add_middleware(
 )
 
 
+# ── Routers (jobs / runs / connectors — durable orchestration API) ───────────
+from backend.routers.jobs import router as jobs_router
+from backend.routers.runs import router as runs_router
+from backend.routers.connectors import router as connectors_router
+
+app.include_router(jobs_router)
+app.include_router(runs_router)
+app.include_router(connectors_router)
+
+
 # ── WebSocket connection manager ─────────────────────────────────────────────
 
 class ConnectionManager:
@@ -497,6 +507,28 @@ async def run_swarm(
         active_runs.dec()
 
 
+def launch_run(
+    query: str,
+    *,
+    validator_enabled: bool = True,
+    job_id: str | None = None,
+    trigger: str = "manual",
+) -> str:
+    """Create a run_id and kick off run_swarm in the background. Returns run_id.
+
+    Shared entry point for ad-hoc /run, scheduled fires, and /jobs/{id}/run-now,
+    so they all go through identical pipeline + persistence paths.
+    """
+    run_id = str(uuid.uuid4())
+    asyncio.create_task(run_swarm(
+        run_id, query,
+        validator_enabled=validator_enabled,
+        job_id=job_id,
+        trigger=trigger,
+    ))
+    return run_id
+
+
 # ── DB serializers ────────────────────────────────────────────────────────────
 
 def _run_to_dict(run) -> dict:
@@ -547,13 +579,12 @@ def _run_to_dict(run) -> dict:
 
 @app.post("/run")
 async def start_run(request: RunRequest):
-    """Start a new swarm run."""
-    run_id = str(uuid.uuid4())
-    asyncio.create_task(run_swarm(
-        run_id,
+    """Start a new ad-hoc swarm run."""
+    run_id = launch_run(
         request.query,
         validator_enabled=request.validator_enabled,
-    ))
+        trigger="manual",
+    )
     return {"run_id": run_id}
 
 

@@ -87,7 +87,13 @@ async def list_jobs(
     limit: int = 100,
     offset: int = 0,
 ) -> list[Job]:
-    q = select(Job).order_by(Job.created_at.desc()).limit(limit).offset(offset)
+    q = (
+        select(Job)
+        .order_by(Job.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .options(selectinload(Job.connectors))  # eager — async can't lazy-load
+    )
     if status is not None:
         q = q.where(Job.status == status)
     else:
