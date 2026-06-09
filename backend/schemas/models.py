@@ -327,11 +327,64 @@ class EventType(str, Enum):
     error                 = "error"
 
 
+# CloudEvents 1.0 type registry — maps our internal EventType to reverse-DNS
+# CloudEvents `type` strings. See docs/standards.md §2.2. Reverse-DNS prefix
+# (io.xeon.swarm.*) lets these events ride a shared CloudEvents bus later.
+CE_TYPE: dict[EventType, str] = {
+    EventType.run_started:           "io.xeon.swarm.run.started",
+    EventType.graph_ready:           "io.xeon.swarm.plan.ready",
+    EventType.task_started:          "io.xeon.swarm.step.started",
+    EventType.task_token:            "io.xeon.swarm.step.token",
+    EventType.task_completed:        "io.xeon.swarm.step.completed",
+    EventType.task_failed:           "io.xeon.swarm.step.failed",
+    EventType.task_killed:           "io.xeon.swarm.step.killed",
+    EventType.validator_started:     "io.xeon.swarm.validator.started",
+    EventType.validator_approved:    "io.xeon.swarm.validator.approved",
+    EventType.validator_rejected:    "io.xeon.swarm.validator.rejected",
+    EventType.worker_retrying:       "io.xeon.swarm.step.retrying",
+    EventType.worker_rejected_final: "io.xeon.swarm.step.rejected_final",
+    EventType.synthesis_started:     "io.xeon.swarm.reduce.started",
+    EventType.tts_started:           "io.xeon.swarm.tts.started",
+    EventType.tts_completed:         "io.xeon.swarm.tts.completed",
+    EventType.run_completed:         "io.xeon.swarm.run.completed",
+    EventType.run_metrics:           "io.xeon.swarm.run.metrics",
+    EventType.error:                 "io.xeon.swarm.error",
+}
+
+
 class SwarmEvent(BaseModel):
     event: EventType
     run_id: str
     payload: dict
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    def to_cloudevent(self) -> dict:
+        """Render as a CloudEvents 1.0 structured-mode JSON envelope.
+
+        The original short event name is preserved in `data._event` so consumers
+        that don't want to reverse-map `type` can switch on it directly.
+        See docs/standards.md §2.2.
+        """
+        # subject: point at the step when the payload identifies one
+        subject = None
+        task_id = self.payload.get("task_id") if isinstance(self.payload, dict) else None
+        if task_id:
+            subject = f"step:{task_id}"
+
+        return {
+            "specversion": "1.0",
+            "type": CE_TYPE.get(self.event, f"io.xeon.swarm.{self.event.value}"),
+            "source": f"/runs/{self.run_id}",
+            "id": str(uuid.uuid4()),
+            "time": self.timestamp.isoformat() + ("Z" if self.timestamp.tzinfo is None else ""),
+            "subject": subject,
+            "datacontenttype": "application/json",
+            "data": {
+                "_event": self.event.value,   # short name for easy dispatch
+                "run_id": self.run_id,
+                **(self.payload if isinstance(self.payload, dict) else {"value": self.payload}),
+            },
+        }
 
 
 # ── HTTP request/response models ──────────────────────────────────────────────
@@ -350,3 +403,24 @@ class KillTaskRequest(BaseModel):
 # Resolve forward references
 WorkerAttempt.model_rebuild()
 RunResult.model_rebuild()
+
+
+# ── A2A (Agent-to-Agent) naming aliases ──────────────────────────────────────
+#
+# We align our vocabulary to Google's A2A protocol (see docs/standards.md §2.1).
+# These aliases expose the A2A-canonical names so new code and external
+# consumers can use them. They point at the existing models — the FULL A2A
+# Task lifecycle (state machine + history + artifacts as first-class fields)
+# lands with the persistence layer in Phase 2, where Job/Run/Step/Attempt
+# become real DB entities.
+#
+#   A2A name     →  current model
+#   ──────────       ─────────────
+#   Task         →  TaskSpec      (a unit of work with its contract)
+#   TaskResult   →  AgentResult   (the output + artifacts of running a Task)
+#   Plan         →  TaskGraph     (the orchestrator's decomposition)
+#
+# Prefer the A2A names in new code.
+Task = TaskSpec
+TaskResult = AgentResult
+Plan = TaskGraph

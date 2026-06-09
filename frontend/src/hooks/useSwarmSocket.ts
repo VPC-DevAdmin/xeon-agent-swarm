@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useSwarmStore } from '../store/swarmStore'
 import type { SwarmEvent } from '../types/swarm'
+import { fromCloudEvent, isCloudEvent } from '../protocol/cloudevents'
 
 const WS_BASE = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000'
 
@@ -16,7 +17,12 @@ export function useSwarmSocket(runId: string | null) {
 
     ws.onmessage = (e) => {
       try {
-        const event: SwarmEvent = JSON.parse(e.data)
+        const parsed = JSON.parse(e.data)
+        // Backend emits CloudEvents 1.0 envelopes; unwrap to the internal shape.
+        // Fall back to treating the message as a raw SwarmEvent for resilience.
+        const event: SwarmEvent = isCloudEvent(parsed)
+          ? fromCloudEvent(parsed)
+          : (parsed as SwarmEvent)
         dispatch(event)
       } catch {
         console.error('Failed to parse WS event:', e.data)

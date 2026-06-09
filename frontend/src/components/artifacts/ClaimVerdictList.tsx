@@ -2,9 +2,11 @@ import { motion } from 'framer-motion'
 import type { Artifact, ClaimVerdictContent } from '../../types/swarm'
 
 const VERDICT_STYLE = {
-  supported:   { icon: '✓', color: 'text-green-400', bg: 'bg-green-950/30 border-green-900' },
-  unsupported: { icon: '✗', color: 'text-red-400',   bg: 'bg-red-950/30 border-red-900' },
-  uncertain:   { icon: '?', color: 'text-amber-400',  bg: 'bg-amber-950/30 border-amber-900' },
+  supported:           { icon: '✓', color: 'text-green-400', bg: 'bg-green-950/30 border-green-900' },
+  unsupported:         { icon: '✗', color: 'text-red-400',   bg: 'bg-red-950/30 border-red-900' },
+  uncertain:           { icon: '?', color: 'text-amber-400',  bg: 'bg-amber-950/30 border-amber-900' },
+  partially_supported: { icon: '◑', color: 'text-amber-400',  bg: 'bg-amber-950/30 border-amber-900' },
+  contradicted:        { icon: '✗', color: 'text-red-400',   bg: 'bg-red-950/30 border-red-900' },
 }
 
 export function ClaimVerdictList({ artifacts }: { artifacts: Artifact[] }) {

@@ -230,9 +230,13 @@ class ConnectionManager:
         websocket_connections.dec()
 
     async def broadcast(self, run_id: str, event: SwarmEvent):
+        # Wire format is a CloudEvents 1.0 structured-mode envelope.
+        # See docs/standards.md §2.2 and frontend fromCloudEvent().
+        import json as _json
+        envelope = _json.dumps(event.to_cloudevent())
         for ws in list(self.connections.get(run_id, [])):
             try:
-                await ws.send_text(event.model_dump_json())
+                await ws.send_text(envelope)
             except Exception:
                 pass
 
