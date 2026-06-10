@@ -222,3 +222,5 @@ hf_cache/
 *.pyc
 dist/
 .venv/
+repomix-output.xml
+.DS_Store

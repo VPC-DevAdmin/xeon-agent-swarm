@@ -43,6 +43,11 @@ class GraphValidationResult:
     valid: bool
     errors: list[str] = field(default_factory=list)
 
+    @property
+    def ok(self) -> bool:
+        """Spec v6 §7 names this `.ok`; alias for `valid`."""
+        return self.valid
+
     def critique(self) -> str:
         return "\n".join(f"- {e}" for e in self.errors)
 
@@ -70,67 +75,110 @@ def _has_cycle(tasks: list[TaskSpec]) -> bool:
     return any(dfs(tid) for tid in list(graph) if color.get(tid) == WHITE)
 
 
-def validate_task_graph(tg: TaskGraph) -> GraphValidationResult:
+def _synthesis_node(tasks: list[TaskSpec]) -> str | None:
+    """Identify the DAG sink that combines the others into the final answer.
+
+    Preference order (spec v6 §3, option a — synthesis is a marked task in the
+    list, not a separate field):
+      1. the task explicitly marked is_synthesis (the planner sets exactly one)
+      2. the unique writing task (backward compat with the single-shot orchestrator)
+      3. the unique sink — a task no other task depends_on
+    Returns None when none of these yields a single node (orphan check is skipped).
     """
-    Structural validation rules for a TaskGraph.
-    All rules are deterministic — no LLM call needed.
+    marked = [t.id for t in tasks if getattr(t, "is_synthesis", False)]
+    if len(marked) == 1:
+        return marked[0]
+
+    writing = [t.id for t in tasks if t.type == TaskType.writing]
+    if len(writing) == 1:
+        return writing[0]
+
+    depended_on = {dep for t in tasks for dep in t.dependencies}
+    sinks = [t.id for t in tasks if t.id not in depended_on]
+    if len(sinks) == 1:
+        return sinks[0]
+    return None
+
+
+def _ancestors(start: str, tasks: list[TaskSpec]) -> set[str]:
+    """All ids reachable from `start` by following depends_on edges (its transitive
+    dependencies). Used to find subtasks the synthesis node never consumes."""
+    deps = {t.id: list(t.dependencies) for t in tasks}
+    seen: set[str] = set()
+    stack = list(deps.get(start, []))
+    while stack:
+        cur = stack.pop()
+        if cur in seen:
+            continue
+        seen.add(cur)
+        stack.extend(deps.get(cur, []))
+    return seen
+
+
+def validate_task_graph(tg: TaskGraph, *, strict: bool = False) -> GraphValidationResult:
+    """
+    Purely structural validation of a TaskGraph — no LLM, no demo-corpus rules
+    (spec v6 §5). It carries no "must have a research task" / "exactly one writing
+    task" assumptions: those reject valid plans for any task outside the original
+    demo. The generative verifier owns the judgment dimensions.
+
+    strict=True (planner gate) additionally requires every non-synthesis subtask to
+    carry success_criteria — the planner's contract. Off by default so the single-
+    shot orchestrator's graphs (which may omit it) still pass the LangGraph node.
     """
     errors: list[str] = []
     tasks = tg.tasks
     all_ids = {t.id for t in tasks}
 
-    # Rule 1: exactly one writing task
-    writing = [t for t in tasks if t.type == TaskType.writing]
-    if len(writing) != 1:
-        errors.append(f"Expected exactly 1 writing task, found {len(writing)}")
-    elif writing:
-        # Rule 2: writing task depends on all others
-        other_ids = {t.id for t in tasks if t.id != writing[0].id}
-        missing = other_ids - set(writing[0].dependencies)
-        if missing:
-            errors.append(
-                f"Writing task '{writing[0].id}' must depend on all others; "
-                f"missing deps: {sorted(missing)}"
-            )
+    if not tasks:
+        return GraphValidationResult(valid=False, errors=["Task graph has no tasks"])
 
-    # Rule 3: at least one research task
-    research = [t for t in tasks if t.type == TaskType.research]
-    if not research:
-        errors.append("At least one research task is required")
-
-    # Rule 4: every analysis task depends on at least one research task
-    research_ids = {t.id for t in research}
+    # Duplicate ids
+    seen: set[str] = set()
+    dups: set[str] = set()
     for t in tasks:
-        if t.type == TaskType.analysis:
-            if not any(dep in research_ids for dep in t.dependencies):
-                errors.append(
-                    f"Analysis task '{t.id}' must depend on at least one research task"
-                )
+        if t.id in seen:
+            dups.add(t.id)
+        seen.add(t.id)
+    if dups:
+        errors.append(f"Duplicate subtask ids: {sorted(dups)}")
 
-    # Rule 5: every fact_check task depends on at least one research task
-    for t in tasks:
-        if t.type == TaskType.fact_check:
-            if not any(dep in research_ids for dep in t.dependencies):
-                errors.append(
-                    f"Fact_check task '{t.id}' must depend on at least one research task"
-                )
-
-    # Rule 6: no cycles
-    if _has_cycle(tasks):
+    # Cycle
+    cyclic = _has_cycle(tasks)
+    if cyclic:
         errors.append("Dependency graph contains a cycle")
 
-    # Rule 7: all dependency IDs exist
+    # Dangling dependency ids
     for t in tasks:
         for dep in t.dependencies:
             if dep not in all_ids:
                 errors.append(f"Task '{t.id}' depends on unknown task '{dep}'")
 
-    # Rule 8: deliverable_format is a known value (if set)
+    # Known deliverable_format (structural — the renderer/validator key off it)
     for t in tasks:
         if t.deliverable_format and t.deliverable_format not in DELIVERABLE_FORMATS:
             errors.append(
                 f"Task '{t.id}' has unknown deliverable_format: '{t.deliverable_format}'"
             )
+
+    # Orphan check: every subtask's output must reach the synthesis sink. Skipped
+    # when the graph is cyclic (ancestor traversal is meaningless) or when no single
+    # synthesis node can be identified.
+    synth_id = None if cyclic else _synthesis_node(tasks)
+    if synth_id is not None:
+        consumed = _ancestors(synth_id, tasks)
+        for t in tasks:
+            if t.id != synth_id and t.id not in consumed:
+                errors.append(
+                    f"Orphan subtask '{t.id}': its output is never consumed by the "
+                    f"synthesis node '{synth_id}'"
+                )
+
+    # success_criteria presence (planner contract — strict mode only)
+    if strict:
+        for t in tasks:
+            if t.id != synth_id and not t.success_criteria:
+                errors.append(f"Subtask '{t.id}' has no success_criteria")
 
     return GraphValidationResult(valid=len(errors) == 0, errors=errors)
 

@@ -772,13 +772,26 @@ async def execute_task_with_escalation(
 
         verdict = await evaluate_step(task, result, run_id)
         await broadcast(run_id, SwarmEvent(
-            event=(EventType.validator_approved if verdict.passed
+            event=(EventType.validator_approved if verdict.compliant
                    else EventType.validator_rejected),
             run_id=run_id,
             payload={"task_id": task.id, "attempt": attempt + 1, "evaluator": True,
-                     "score": verdict.score, "passed": verdict.passed,
-                     "reason": verdict.reason, "served_tier": result.served_tier}))
-        if verdict.passed:
+                     "compliant": verdict.compliant,
+                     "failed_criteria": verdict.failed_criteria,
+                     "correction_hint": verdict.correction_hint,
+                     "severity": verdict.severity,
+                     "served_tier": result.served_tier}))
+        if verdict.compliant:
+            return result
+
+        # severity=unfixable short-circuit (spec v6 §6): escalating the tier won't
+        # fix a mis-scoped subtask or absent source — stop retrying and let the
+        # caller replan instead of burning a stronger-tier call.
+        if verdict.severity == "unfixable":
+            await broadcast(run_id, SwarmEvent(
+                event=EventType.worker_rejected_final, run_id=run_id,
+                payload={"task_id": task.id, "reason": "unfixable",
+                         "correction_hint": verdict.correction_hint}))
             return result
 
         # Escalate unless out of budget or already at the top tier.
@@ -794,7 +807,7 @@ async def execute_task_with_escalation(
         await broadcast(run_id, SwarmEvent(
             event=EventType.worker_retrying, run_id=run_id,
             payload={"task_id": task.id, "next_attempt": attempt + 2,
-                     "reason": "eval_failed", "fix_hint": verdict.fix_hint,
+                     "reason": "eval_failed", "correction_hint": verdict.correction_hint,
                      "escalate_from": result.served_tier, "escalate_to": new_floor}))
         min_tier = new_floor
     return result
@@ -808,10 +821,10 @@ async def run_worker(inputs: dict) -> dict:
     async def _noop(run_id, event):
         pass
 
-    # Tasks carrying an output_contract come from the decompose-verify planner —
+    # Tasks carrying success_criteria come from the decompose-verify planner —
     # run the per-step evaluator + tier-escalation loop. Older graphs (no
-    # contract) keep the validator correction-hint loop.
-    if task.output_contract:
+    # success_criteria) keep the validator correction-hint loop.
+    if task.success_criteria:
         result = await execute_task_with_escalation(task, state.run_id, _noop)
     else:
         validator_enabled = getattr(state, "validator_enabled", True)

@@ -81,9 +81,11 @@ class TaskSpec(BaseModel):
     # Rides along as metadata.tier_hint on the worker call; the router LOGS it but
     # owns the real decision. Never used as a control here.
     tier_hint: Tier = "L2"
-    # A single-sentence success definition for this subtask, written at plan time.
-    # The per-step evaluator scores the worker output against it (spec v3 §3, §6).
-    output_contract: str = ""
+    # Synthesis-node marker (spec v6 §3, option a): exactly one task per plan is the
+    # terminal node that combines the others into the final answer. It lives in the
+    # tasks list and is executed like any task; the marker only gives the mechanical
+    # gate a concrete sink to anchor its reachability/orphan check against.
+    is_synthesis: bool = False
 
     # Contract fields — produced by orchestrator, checked by validator
     objective: str = Field(
@@ -142,9 +144,13 @@ class VerifierScores(BaseModel):
 
 
 VERIFIER_WEIGHTS: dict[str, float] = {
-    "coverage": 0.30,
+    # Weights coupled to the v4 mechanical-gate split (spec v6 §5): acyclicity,
+    # reachability, and id integrity are checked deterministically before the
+    # verifier runs, so dependency_correctness covers only "are the stated edges
+    # real / any needed edge missing" and is weighted down; coverage carries more.
+    "coverage": 0.35,
     "decomposition_soundness": 0.25,
-    "dependency_correctness": 0.25,
+    "dependency_correctness": 0.20,
     "tier_appropriateness": 0.10,
     "verifiability": 0.10,
 }
@@ -164,19 +170,12 @@ class VerifierVerdict(BaseModel):
     repair_hint: str = ""
 
 
-# ── Per-step evaluator (spec v3 §6) ──────────────────────────────────────────
-# Scores one subtask output against its output_contract. `pass` is a Python
-# keyword, so the field is `passed` with serialization alias "pass" to match the
-# spec body and the router's json_schema property name.
-
-class StepEvalVerdict(BaseModel):
-    model_config = {"populate_by_name": True}
-
-    subtask_id: str = ""
-    passed: bool = Field(default=False, alias="pass")
-    score: float = Field(default=0.0, ge=0.0, le=1.0)
-    reason: str = ""
-    fix_hint: str = ""
+# ── Per-step evaluator (spec v6 §6) ──────────────────────────────────────────
+# The per-step evaluator reuses ValidationVerdict (defined below) — one verdict
+# type for the per-step role. StepEvalVerdict was retired in v6: ValidationVerdict's
+# failed_criteria (which specific success_criteria failed) is the natural verdict
+# against a checklist and beats a freeform score/reason. The only field added for
+# the evaluator role is subtask_id (correlation). See ValidationVerdict.
 
 
 # ── Typed artifact system ─────────────────────────────────────────────────────
@@ -279,6 +278,10 @@ class VisionResult(BaseModel):
 # ── Validator models ──────────────────────────────────────────────────────────
 
 class ValidationVerdict(BaseModel):
+    # Shared by the worker-output validator and the per-step evaluator (spec v6 §6).
+    # subtask_id is additive — set by the evaluator to correlate a verdict to its
+    # subtask; the validator path leaves it empty.
+    subtask_id: str = ""
     compliant: bool
     failed_criteria: list[str] = []
     correction_hint: str = ""
