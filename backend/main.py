@@ -66,6 +66,7 @@ from backend.schemas.models import (
     EventType,
 )
 from backend.agents.orchestrator import orchestrate_with_events
+from backend.agents.planner import plan_phase, PlanningFailed
 from backend.agents.worker import execute_task_with_validation
 from backend.agents.reducer import synthesize
 from backend.graph.swarm_graph import validate_task_graph
@@ -284,6 +285,22 @@ manager = ConnectionManager()
 
 # ── Swarm pipeline ───────────────────────────────────────────────────────────
 
+# Decompose-and-verify (spec v3): best-of-N planning with verifier selection.
+# Default ON; set BEST_OF_N_PLANNING=0 to fall back to single-shot decomposition.
+_BEST_OF_N = os.getenv("BEST_OF_N_PLANNING", "1").lower() not in ("0", "false", "no")
+
+
+async def _decompose(query: str, run_id: str, broadcast, critique: str | None):
+    """Produce a TaskGraph: best-of-N decompose-and-verify when enabled, else the
+    single-shot orchestrator. Falls back to single-shot if planning fails."""
+    if _BEST_OF_N:
+        try:
+            return await plan_phase(query, run_id, broadcast, feedback=critique)
+        except PlanningFailed:
+            logger.warning("best-of-N planning failed — falling back to single-shot")
+    return await orchestrate_with_events(query, run_id, broadcast, critique=critique)
+
+
 async def run_swarm(
     run_id: str,
     query: str,
@@ -329,8 +346,8 @@ async def run_swarm(
         critique = None
 
         while task_graph is None and orchestrator_retries < 2:
-            task_graph = await orchestrate_with_events(
-                query, run_id, manager.broadcast, critique=critique
+            task_graph = await _decompose(
+                query, run_id, manager.broadcast, critique
             )
             validation = validate_task_graph(task_graph)
             if not validation.valid:
@@ -352,7 +369,7 @@ async def run_swarm(
         if task_graph is None:
             # Give up after 2 retries — use whatever the last attempt produced
             logger.error("Graph validation failed after 2 retries — proceeding anyway")
-            task_graph = await orchestrate_with_events(query, run_id, manager.broadcast)
+            task_graph = await _decompose(query, run_id, manager.broadcast, None)
 
         state.task_graph = task_graph
         state.status = TaskStatus.running
