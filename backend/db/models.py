@@ -24,6 +24,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -37,8 +38,12 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+# SQLite-backed: generic JSON holds dicts AND lists (stored as JSON text). JSONB
+# was Postgres-specific; JSON covers it. List columns (e.g. step dependencies)
+# are plain JSON arrays. Repo code reads/writes Python lists/dicts unchanged.
+JSONB = JSON
 
 from backend.db.base import Base
 from backend.db.ids import uuid7_str
@@ -93,8 +98,7 @@ class Job(Base):
             "overlap_policy IN ('skip','queue','parallel')",
             name="ck_jobs_overlap",
         ),
-        Index("idx_jobs_active_due", "next_fire_at",
-              postgresql_where="status = 'active'"),
+        Index("idx_jobs_active_due", "next_fire_at"),
     )
 
 
@@ -158,7 +162,7 @@ class Step(Base):
     deliverable_format: Mapped[str | None] = mapped_column(String(48))
     source_constraints: Mapped[dict | None] = mapped_column(JSONB)
     dependencies: Mapped[list[str]] = mapped_column(
-        ARRAY(String(32)), nullable=False, default=list
+        JSON, nullable=False, default=list   # JSON array of step_keys
     )
 
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")

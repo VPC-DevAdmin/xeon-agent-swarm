@@ -8,8 +8,6 @@ COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend ./backend
-# Alembic config lives at repo root; migrate.py resolves it relative to /app.
-COPY alembic.ini ./alembic.ini
 
 # Config is mounted at /app/config via docker-compose volume
 ENV CONFIG_DIR=/app/config

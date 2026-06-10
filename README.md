@@ -24,7 +24,7 @@ sibling services it calls over the network:
 | **Output evaluation** | Per-step validator (mechanical + LLM-judge) with retry loop; async quality evals per deliverable-format after each run |
 | **Tool calls** | MCP servers (web search, code exec, doc retrieval proxy) |
 | **Scheduled runs** | Cron-scheduled Jobs (APScheduler), overlap policies, durable history |
-| **Orchestration** | Durable Jobs → Runs → Steps → Attempts in Postgres; full REST + UI |
+| **Orchestration** | Durable Jobs → Runs → Steps → Attempts in a SQLite file; full REST + UI |
 
 ## Standards
 
@@ -42,7 +42,7 @@ cron. See [`docs/standards.md`](docs/standards.md).
    REST + WS         MCP tool calls       trace export (optional)
        │                    │                    │
        ▼                    ▼                    ▼
-  Postgres            web/code/doc-proxy     Langfuse (optional overlay)
+  SQLite file         web/code/doc-proxy     Langfuse (optional overlay)
   (jobs, runs,             │
    steps, attempts,        └─▶ external: vector search + re-rank
    connectors+secrets)
@@ -84,8 +84,8 @@ python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().
 #   LLM_TIER_TOKEN=...
 #   SEMANTIC_SEARCH_ENDPOINT=https://search.internal
 
-docker compose up -d --build        # postgres + redis + MCP + backend + frontend
-# migrations run automatically on backend startup (RUN_MIGRATIONS=1)
+docker compose up -d --build        # MCP servers + backend + frontend + prometheus
+# the SQLite schema is created automatically on backend startup (no DB server)
 ```
 
 - Frontend: <http://localhost:3000> (Live Run · Jobs · Runs · Connectors)
@@ -95,7 +95,6 @@ docker compose up -d --build        # postgres + redis + MCP + backend + fronten
 ### Optional: Langfuse tracing
 
 ```bash
-docker compose exec postgres createdb -U swarm langfuse
 docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d
 # create a project in http://localhost:3001, paste keys into .env, restart backend
 ```
@@ -138,7 +137,7 @@ python3 scripts/inspect_run.py --latest
 | `LLM_TIER_ENDPOINT` / `LLM_TIER_TOKEN` | external router (OpenAI-compatible) |
 | `ORCHESTRATOR_MODEL` / `VALIDATOR_MODEL` / `WORKER_DEFAULT_MODEL` | router specialty names |
 | `SEMANTIC_SEARCH_ENDPOINT` | external vector-search service (via MCP proxy) |
-| `DATABASE_URL` | Postgres (asyncpg) |
+| `DATABASE_URL` | SQLite file (aiosqlite); default `sqlite+aiosqlite:///./data/orchestrator.db` |
 | `MASTER_ENCRYPTION_KEY` | Fernet key for connector secrets |
 | `SCHEDULER_ENABLED` | `0` disables background job firing |
 | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | enable tracing (else no-op) |
@@ -152,7 +151,7 @@ backend/
   agents/        orchestrator, worker, validator, reducer, tts
   graph/         LangGraph swarm (fan-out/fan-in, graph validation)
   inference/     router client (native structured outputs, retries, traceparent)
-  db/            SQLAlchemy models, async engine, Alembic migrations
+  db/            SQLAlchemy models, async SQLite engine, create_all schema
   repositories/  jobs / runs / connectors data access + persistence facade
   routers/       /jobs /runs /connectors REST
   scheduling/    APScheduler job scanner

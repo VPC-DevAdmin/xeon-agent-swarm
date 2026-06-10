@@ -15,7 +15,10 @@ from backend.db.models import Job, JobConnector
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    # Naive UTC. SQLite stores datetimes without tz info, so we keep everything
+    # naive-UTC to avoid "can't compare offset-naive and offset-aware" errors
+    # when comparing a Python now() against a value read back from the DB.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def compute_next_fire(cron: str | None, tz: str = "UTC", base: datetime | None = None) -> datetime | None:
@@ -171,18 +174,12 @@ async def claim_due_job(session: AsyncSession, job_id: str) -> bool:
     Atomically advance a due job's next_fire_at to the next scheduled time.
 
     Returns True if THIS caller advanced it (i.e. the job was still due), False
-    if another worker already claimed it. The scheduler calls this before firing
-    so a job can't be double-fired across the scan tick or across replicas —
-    advancing next_fire_at is the claim. Uses a row lock so concurrent schedulers
-    serialize on the job row.
+    if it was already claimed. The scheduler calls this before firing so a job
+    can't be double-fired across a scan tick. (SQLite serializes writers, so the
+    read-modify-write within one transaction is the claim — no row lock needed.)
     """
-    from sqlalchemy import select as _select
-
     now = _utcnow()
-    res = await session.execute(
-        _select(Job).where(Job.id == job_id).with_for_update()
-    )
-    job = res.scalar_one_or_none()
+    job = await session.get(Job, job_id)
     if job is None or job.status != "active":
         return False
     if job.next_fire_at is None or job.next_fire_at > now:

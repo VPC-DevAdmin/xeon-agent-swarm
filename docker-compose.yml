@@ -1,40 +1,7 @@
 services:
 
-  # ── Redis Stack (key-value + pubsub for queues, schedules, and live state) ──
-  # Used by backend.queue.task_queue (run results cache + websocket pubsub).
-  # RediSearch/RedisJSON modules remain available for future use but no
-  # corpus or vector index is kept in this project anymore — semantic search
-  # is delegated to SEMANTIC_SEARCH_ENDPOINT (sibling project).
-  redis:
-    image: redis/redis-stack:latest
-    ports:
-      - "6479:6379"
-      - "8001:8001"   # RedisInsight UI
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  # ── PostgreSQL (durable orchestration state) ────────────────────────────────
-  # Stores jobs, runs, steps, attempts, connectors, and encrypted secrets.
-  # See backend/db/models.py and docs/standards.md §2.6.
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER:-swarm}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-swarm}
-      - POSTGRES_DB=${POSTGRES_DB:-swarm}
-    ports: ["5432:5432"]
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-swarm}"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+  # Persistence is a single SQLite file under the orchestrator_data volume
+  # (backend service below) — no database server. See backend/db/models.py.
 
   # ── MCP servers ───────────────────────────────────────────────────────────
 
@@ -96,18 +63,12 @@ services:
       - VLM_ENDPOINT=${VLM_ENDPOINT:-}
       - VLM_MODEL=${VLM_MODEL:-worker-vision-v1.0}
 
-      # ── Knowledge retrieval (proxied through mcp-doc-retrieval) ──────────
-      # The endpoint values below are used by the MCP server itself; the
-      # backend just reaches it via MCP_DOC_RETRIEVAL_URL.
-      - REDIS_URL=redis://redis:6379
-
-      # ── Persistence (Postgres) ──────────────────────────────────────────
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-swarm}:${POSTGRES_PASSWORD:-swarm}@postgres:5432/${POSTGRES_DB:-swarm}
-      # Fernet key for connector-secret encryption. MUST be set in production.
+      # ── Persistence (SQLite — single file under the orchestrator_data vol) ─
+      - DATABASE_URL=sqlite+aiosqlite:////data/db/orchestrator.db
+      # Fernet key for connector-secret encryption. MUST be set to create
+      # connectors that carry secrets.
       # Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
       - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:-}
-      # Run Alembic migrations automatically on backend startup.
-      - RUN_MIGRATIONS=${RUN_MIGRATIONS:-1}
 
       # ── MCP servers ──────────────────────────────────────────────────────
       - MCP_WEB_SEARCH_URL=http://mcp-web-search:9001
@@ -116,14 +77,10 @@ services:
 
       # ── File paths (audio output) ────────────────────────────────────────
       - AUDIO_DIR=/data/audio
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
     volumes:
       - ./config:/app/config:ro
       - audio_data:/data/audio
+      - orchestrator_data:/data/db
     command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
   # ── Frontend ──────────────────────────────────────────────────────────────
@@ -142,6 +99,5 @@ services:
     ports: ["9090:9090"]
 
 volumes:
-  redis_data:
-  postgres_data:
+  orchestrator_data:
   audio_data:

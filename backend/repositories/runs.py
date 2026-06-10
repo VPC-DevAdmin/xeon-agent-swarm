@@ -18,7 +18,9 @@ from backend.db.models import Run, Step, StepAttempt
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    # Naive UTC — SQLite drops tz info; keep all datetimes naive-UTC so reads and
+    # in-Python comparisons don't mix aware/naive.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 # ── Run lifecycle ─────────────────────────────────────────────────────────────

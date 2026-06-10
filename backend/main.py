@@ -71,10 +71,8 @@ from backend.agents.worker import execute_task_with_validation
 from backend.agents.reducer import synthesize
 from backend.graph.swarm_graph import validate_task_graph
 from backend.protocols.a2a_cards import all_agent_cards, ORCHESTRATOR_CARD
-from backend.queue.task_queue import TaskQueue
 from backend.repositories import persistence as db
-from backend.db.base import dispose_engine, get_session
-from backend.db.migrate import upgrade_to_head
+from backend.db.base import dispose_engine, get_session, create_schema
 from backend.observability.metrics import (
     runs_total,
     run_latency_seconds,
@@ -87,9 +85,8 @@ from backend.observability.metrics import (
 import time
 
 
-# ── In-memory store for run results (production: use Redis) ──────────────────
+# ── In-memory cache of live run results (durable copy is in SQLite) ──────────
 _run_results: dict[str, RunResult] = {}
-_task_queue: TaskQueue | None = None
 
 # Registry of live asyncio Tasks indexed by (run_id, task_id).
 # Populated by run_swarm() so the /kill endpoint can cancel them.
@@ -180,17 +177,14 @@ def _build_writing_context(task: TaskSpec, results: dict) -> dict[str, str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _task_queue
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6479")
-    _task_queue = TaskQueue(redis_url)
-    # Apply DB migrations on startup (RUN_MIGRATIONS=1). Best-effort: a DB that
-    # isn't reachable yet shouldn't crash the API — the persistence facade
-    # degrades gracefully and the in-memory cache still works.
+    # Create the SQLite schema if it doesn't exist (no migration tooling).
+    # Best-effort: a DB problem shouldn't crash the API — the persistence facade
+    # degrades gracefully and the in-memory run cache still works.
     try:
-        upgrade_to_head()
+        await create_schema()
     except Exception as exc:
         logging.getLogger(__name__).warning(
-            "DB migration on startup failed (continuing): %s", exc
+            "DB schema creation on startup failed (continuing): %s", exc
         )
     # Start the job scheduler (scans due jobs and fires runs). Opt-out via
     # SCHEDULER_ENABLED=0 for environments that don't want background firing.

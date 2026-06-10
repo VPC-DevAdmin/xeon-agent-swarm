@@ -1,12 +1,10 @@
 # Langfuse self-host overlay — OPTIONAL observability.
 #
-# Brings up the Langfuse stack (web + worker + clickhouse + minio). Postgres and
-# Redis are reused from the main compose file (langfuse gets its own DB on the
-# same postgres server).
+# The base stack uses SQLite and has no Postgres/Redis, so this overlay is
+# fully SELF-CONTAINED: it brings its own Postgres, Redis, ClickHouse, and MinIO
+# for Langfuse only. Nothing here touches the orchestrator's SQLite store.
 #
 # Usage:
-#   # one-time: create the langfuse database on the shared postgres
-#   docker compose exec postgres createdb -U swarm langfuse
 #   docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d
 #
 # Then in .env set (keys are created in the Langfuse UI on first launch):
@@ -17,9 +15,31 @@
 # so this overlay is purely additive.
 #
 # The default `docker compose up` does NOT include this file — the base stack
-# stays lean (no clickhouse/minio).
+# stays lean (SQLite only, no Postgres/Redis/ClickHouse/MinIO).
 
 services:
+  langfuse-postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=langfuse
+      - POSTGRES_PASSWORD=langfuse
+      - POSTGRES_DB=langfuse
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  langfuse-redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   langfuse-clickhouse:
     image: clickhouse/clickhouse-server:24.3
     environment:
@@ -50,19 +70,19 @@ services:
   langfuse-worker:
     image: langfuse/langfuse-worker:3
     depends_on:
-      postgres:
+      langfuse-postgres:
         condition: service_healthy
       langfuse-clickhouse:
         condition: service_healthy
       langfuse-minio:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-swarm}:${POSTGRES_PASSWORD:-swarm}@postgres:5432/langfuse
+      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
       - CLICKHOUSE_URL=http://langfuse-clickhouse:8123
       - CLICKHOUSE_USER=clickhouse
       - CLICKHOUSE_PASSWORD=clickhouse
       - CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse-clickhouse:9000
-      - REDIS_CONNECTION_STRING=redis://redis:6379
+      - REDIS_CONNECTION_STRING=redis://langfuse-redis:6379
       - SALT=${LANGFUSE_SALT:-changeme-salt}
       - ENCRYPTION_KEY=${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
       - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
@@ -74,18 +94,18 @@ services:
   langfuse-web:
     image: langfuse/langfuse:3
     depends_on:
-      postgres:
+      langfuse-postgres:
         condition: service_healthy
       langfuse-clickhouse:
         condition: service_healthy
     ports: ["3001:3000"]
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-swarm}:${POSTGRES_PASSWORD:-swarm}@postgres:5432/langfuse
+      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
       - CLICKHOUSE_URL=http://langfuse-clickhouse:8123
       - CLICKHOUSE_USER=clickhouse
       - CLICKHOUSE_PASSWORD=clickhouse
       - CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse-clickhouse:9000
-      - REDIS_CONNECTION_STRING=redis://redis:6379
+      - REDIS_CONNECTION_STRING=redis://langfuse-redis:6379
       - SALT=${LANGFUSE_SALT:-changeme-salt}
       - ENCRYPTION_KEY=${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
       - NEXTAUTH_URL=http://localhost:3001
@@ -97,5 +117,6 @@ services:
       - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
 
 volumes:
+  langfuse_postgres_data:
   langfuse_clickhouse_data:
   langfuse_minio_data:
