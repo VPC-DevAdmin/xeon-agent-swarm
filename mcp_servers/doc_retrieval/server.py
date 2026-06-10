@@ -3,26 +3,39 @@ Document retrieval MCP server — thin proxy to the external semantic search end
 
 This server holds no corpus, no embeddings, no vector index. It exposes an MCP
 interface that workers call uniformly, and forwards each call to the sibling
-"intelligent data search" project at SEMANTIC_SEARCH_ENDPOINT.
+"intelligent data search" project (vector search + re-rank).
+
+External search contract (the service this proxies to):
+    POST {SEMANTIC_SEARCH_ENDPOINT}/query
+        body:  {"query": str, "top_k": int}
+        reply: {"results": [
+                   {"chunk_id", "text", "rerank_score",
+                    "dense_score", "metadata", "rank"}, ...]}
+
+The MCP tool interface exposed to workers is stable (search_documents takes
+query/max_results/corpus); we remap max_results→top_k internally and surface
+each chunk's text with citations derived from its metadata.
 
 If the endpoint is unreachable, tool calls return a clear error message so the
 worker can degrade gracefully (e.g., a vision task uses its fallback_behavior).
 
 Environment variables:
-  SEMANTIC_SEARCH_ENDPOINT  Base URL for the external semantic search service
-                            (e.g. https://search.internal). Required.
+  SEMANTIC_SEARCH_ENDPOINT  Base URL of the search service. Required.
+                            From inside Docker this is typically
+                            http://host.docker.internal:8080 (the service runs
+                            on the host's 127.0.0.1:8080).
+  SEMANTIC_SEARCH_QUERY_PATH  Path appended for queries (default "/query").
   SEMANTIC_SEARCH_TOKEN     Optional bearer token for the search endpoint.
-  SEMANTIC_SEARCH_TIMEOUT   Request timeout in seconds (default 20).
+  SEMANTIC_SEARCH_TIMEOUT   Request timeout in seconds (default 30).
 
 Tools exposed:
-  search_documents — text semantic search
-  search_images    — image semantic search (returns image refs the worker
-                     can pass to the vision model)
-  list_corpora     — list available corpus / collection names
+  search_documents — text semantic search (vector + re-rank)
+  search_images    — not supported by this text search service (clean stub;
+                     vision workers fall back via fallback_behavior)
+  list_corpora     — the search service is a single flat chunk index
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any
@@ -37,8 +50,9 @@ app = FastAPI(title="MCP Doc Retrieval Server (proxy)")
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 SEMANTIC_SEARCH_ENDPOINT = os.getenv("SEMANTIC_SEARCH_ENDPOINT", "").rstrip("/")
+SEMANTIC_SEARCH_QUERY_PATH = os.getenv("SEMANTIC_SEARCH_QUERY_PATH", "/query")
 SEMANTIC_SEARCH_TOKEN = os.getenv("SEMANTIC_SEARCH_TOKEN", "")
-SEMANTIC_SEARCH_TIMEOUT = float(os.getenv("SEMANTIC_SEARCH_TIMEOUT", "20"))
+SEMANTIC_SEARCH_TIMEOUT = float(os.getenv("SEMANTIC_SEARCH_TIMEOUT", "30"))
 
 
 def _auth_headers() -> dict[str, str]:
@@ -145,53 +159,54 @@ async def _post(path: str, payload: dict[str, Any]) -> dict[str, Any]:
         return resp.json()
 
 
-async def _get(path: str) -> dict[str, Any]:
-    base = _require_endpoint()
-    url = f"{base}{path}"
-    async with httpx.AsyncClient(timeout=SEMANTIC_SEARCH_TIMEOUT) as client:
-        resp = await client.get(url, headers=_auth_headers())
-        resp.raise_for_status()
-        return resp.json()
-
-
 # ── Result formatting ─────────────────────────────────────────────────────────
 
-def _format_text_hits(hits: list[dict[str, Any]]) -> str:
-    """Format a list of text-search hits as a markdown payload for the worker."""
-    if not hits:
-        return "No matching documents found."
-    lines: list[str] = []
-    for i, hit in enumerate(hits, 1):
-        title = hit.get("title") or hit.get("doc_title") or "(untitled)"
-        corpus = hit.get("corpus") or hit.get("collection") or ""
-        source = hit.get("source") or hit.get("url") or ""
-        snippet = (hit.get("text") or hit.get("snippet") or "")[:600].rstrip()
-        if hit.get("text") and len(hit["text"]) > 600:
-            snippet += "…"
-        header = f"**[{i}] {title}**"
-        if corpus:
-            header += f" ({corpus})"
-        line = header
-        if source:
-            line += f"\nSource: {source}"
-        line += f"\n{snippet}"
-        lines.append(line)
-    return "\n\n---\n\n".join(lines)
+def _citation_from_metadata(meta: dict[str, Any]) -> tuple[str, str]:
+    """Pull a (title, source) citation from a chunk's metadata, best-effort.
 
-
-def _format_image_hits(hits: list[dict[str, Any]]) -> str:
-    """Image hits are returned as a JSON string so the caller can parse the URLs.
-
-    Schema: {"hits": [{"url": str, "caption": str, "corpus": str?}, ...]}
+    The search service's metadata schema is open-ended, so we probe the common
+    keys. Anything found becomes the citation the worker can cite; missing
+    fields just don't render.
     """
-    normalized = []
-    for hit in hits:
-        normalized.append({
-            "url":     hit.get("url") or hit.get("source") or "",
-            "caption": hit.get("caption") or hit.get("description") or "",
-            "corpus":  hit.get("corpus") or hit.get("collection") or "",
-        })
-    return json.dumps({"hits": normalized})
+    if not isinstance(meta, dict):
+        return "(untitled)", ""
+    title = (
+        meta.get("title") or meta.get("doc_title") or meta.get("document")
+        or meta.get("source_title") or meta.get("filename") or "(untitled)"
+    )
+    source = (
+        meta.get("source") or meta.get("url") or meta.get("uri")
+        or meta.get("doc_id") or meta.get("path") or ""
+    )
+    return str(title), str(source)
+
+
+def _format_text_hits(results: list[dict[str, Any]]) -> str:
+    """Format ranked chunks from the search service as markdown for the worker.
+
+    Each result chunk: {chunk_id, text, rerank_score, dense_score, metadata, rank}.
+    We render text with a metadata-derived citation and the rerank score so the
+    worker can weight and attribute its findings.
+    """
+    if not results:
+        return "No matching documents found."
+    # Trust the service's ordering, but sort by rank if present for safety.
+    results = sorted(results, key=lambda c: c.get("rank", 0))
+    lines: list[str] = []
+    for i, chunk in enumerate(results, 1):
+        title, source = _citation_from_metadata(chunk.get("metadata") or {})
+        text = str(chunk.get("text") or "")
+        snippet = text[:700].rstrip() + ("…" if len(text) > 700 else "")
+        score = chunk.get("rerank_score")
+        header = f"**[{i}] {title}**"
+        if isinstance(score, (int, float)):
+            header += f"  _(relevance {score:.3f})_"
+        block = header
+        if source:
+            block += f"\nSource: {source}"
+        block += f"\n{snippet}"
+        lines.append(block)
+    return "\n\n---\n\n".join(lines)
 
 
 # ── Tool implementations ──────────────────────────────────────────────────────
@@ -199,9 +214,12 @@ def _format_image_hits(hits: list[dict[str, Any]]) -> str:
 async def search_documents(query: str, max_results: int, corpus: str) -> str:
     if not query.strip():
         return "Empty query."
-    payload = {"query": query, "max_results": max_results, "corpus": corpus}
+    # External contract: POST /query {"query", "top_k"} → {"results": [...]}.
+    # `corpus` is part of the stable MCP interface but the flat chunk index
+    # doesn't filter by it, so it's not forwarded.
+    payload = {"query": query, "top_k": max_results}
     try:
-        body = await _post("/v1/search/text", payload)
+        body = await _post(SEMANTIC_SEARCH_QUERY_PATH, payload)
     except _SearchEndpointUnconfigured as exc:
         return f"Search unavailable: {exc}"
     except httpx.HTTPStatusError as exc:
@@ -211,50 +229,26 @@ async def search_documents(query: str, max_results: int, corpus: str) -> str:
     except httpx.HTTPError as exc:
         logger.error("Text-search transport error: %s", exc)
         return f"Search transport error: {exc!s}"
-    return _format_text_hits(body.get("hits") or body.get("results") or [])
+    return _format_text_hits(body.get("results") or [])
 
 
 async def search_images(query: str, max_results: int, corpus: str) -> str:
-    if not query.strip():
-        return "Empty query."
-    payload = {"query": query, "max_results": max_results, "corpus": corpus}
-    try:
-        body = await _post("/v1/search/image", payload)
-    except _SearchEndpointUnconfigured as exc:
-        return f"Image search unavailable: {exc}"
-    except httpx.HTTPStatusError as exc:
-        # 404 from upstream → endpoint supports text but not images.
-        # Surface gracefully so vision workers can fall back.
-        if exc.response.status_code == 404:
-            return "Image search is not supported by the search service."
-        logger.error("Image-search HTTP error: %s — body=%s",
-                     exc.response.status_code, exc.response.text[:300])
-        return f"Image search error: HTTP {exc.response.status_code}."
-    except httpx.HTTPError as exc:
-        logger.error("Image-search transport error: %s", exc)
-        return f"Image search transport error: {exc!s}"
-    return _format_image_hits(body.get("hits") or body.get("results") or [])
+    # The current search service indexes text chunks only — no image search.
+    # Return a clean signal so vision workers take their fallback_behavior
+    # instead of erroring. (When/if the service grows an image endpoint, wire
+    # it here.)
+    return "Image search is not supported by the configured search service."
 
 
 async def list_corpora() -> str:
-    try:
-        body = await _get("/v1/corpora")
-    except _SearchEndpointUnconfigured as exc:
-        return f"Search unavailable: {exc}"
-    except httpx.HTTPStatusError as exc:
-        return f"List error: HTTP {exc.response.status_code}."
-    except httpx.HTTPError as exc:
-        return f"List transport error: {exc!s}"
-    corpora = body.get("corpora") or body.get("collections") or []
-    if not corpora:
-        return "No corpora reported by the search service."
-    lines = []
-    for c in corpora:
-        name = c.get("name") if isinstance(c, dict) else str(c)
-        size = c.get("size") or c.get("count") if isinstance(c, dict) else None
-        suffix = f" ({size} items)" if size is not None else ""
-        lines.append(f"- **{name}**{suffix}")
-    return "Available corpora:\n" + "\n".join(lines)
+    # The search service is a single flat chunk index (no named corpora).
+    if not SEMANTIC_SEARCH_ENDPOINT:
+        return ("Search unavailable: SEMANTIC_SEARCH_ENDPOINT is not set.")
+    return (
+        "The search service is a single flat semantic index "
+        "(vector search + re-rank). There are no named corpora to select — "
+        "just call search_documents with your query."
+    )
 
 
 # ── MCP JSON-RPC endpoint ─────────────────────────────────────────────────────

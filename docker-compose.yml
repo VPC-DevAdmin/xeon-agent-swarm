@@ -47,13 +47,20 @@ services:
 
   # Doc retrieval = thin MCP proxy to the external semantic search service.
   # See mcp_servers/doc_retrieval/server.py and docs/standards.md.
+  #
+  # The search service runs on the HOST at 127.0.0.1:8080. From inside this
+  # container, reach the host via host.docker.internal (mapped below to the
+  # docker bridge gateway so it works on Linux too).
   mcp-doc-retrieval:
     build: ./mcp_servers/doc_retrieval
     ports: ["9402:9002"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      - SEMANTIC_SEARCH_ENDPOINT=${SEMANTIC_SEARCH_ENDPOINT:-}
+      - SEMANTIC_SEARCH_ENDPOINT=${SEMANTIC_SEARCH_ENDPOINT:-http://host.docker.internal:8080}
+      - SEMANTIC_SEARCH_QUERY_PATH=${SEMANTIC_SEARCH_QUERY_PATH:-/query}
       - SEMANTIC_SEARCH_TOKEN=${SEMANTIC_SEARCH_TOKEN:-}
-      - SEMANTIC_SEARCH_TIMEOUT=${SEMANTIC_SEARCH_TIMEOUT:-20}
+      - SEMANTIC_SEARCH_TIMEOUT=${SEMANTIC_SEARCH_TIMEOUT:-30}
 
   # Code execution sandbox.
   mcp-code-exec:
