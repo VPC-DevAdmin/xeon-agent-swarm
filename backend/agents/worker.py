@@ -429,8 +429,14 @@ async def execute_task(
     broadcast,
     context: dict[str, str] | None = None,
     correction_hint: str | None = None,
+    min_tier: str | None = None,
 ) -> AgentResult:
-    """Execute a single task, broadcast events, return AgentResult."""
+    """Execute a single task, broadcast events, return AgentResult.
+
+    min_tier (spec v3 §2.5): when set, ridealong on the worker call's metadata as
+    a hard routing floor; the router clamps its classified tier up to at least it.
+    The served tier comes back on the result for escalation decisions.
+    """
     roles = _load_roles()
     role_cfg = roles.get(task.type.value, roles["general"])
     client = _client_for_role(task.type)
@@ -551,8 +557,12 @@ async def execute_task(
             latency_ms = (time.perf_counter() - t0_stream) * 1000
             agent_result = _parse_worker_response(accumulated, task.id, client, latency_ms)
         else:
-            raw, latency_ms = await client.complete(messages, max_tokens=max_tokens)
-            agent_result = _parse_worker_response(raw, task.id, client, latency_ms)
+            md = {"run_id": run_id, "step_key": f"exec:{task.id}",
+                  "tier_hint": task.tier_hint, "min_tier": min_tier}
+            raw, tel = await client.complete_t(messages, max_tokens=max_tokens, metadata=md)
+            agent_result = _parse_worker_response(raw, task.id, client, tel.latency_ms)
+            agent_result.served_tier = tel.served_tier
+            agent_result.cost_usd = tel.cost_usd
 
         agent_result.tool_calls = tool_calls_made
 
@@ -731,6 +741,65 @@ async def execute_task_with_validation(
     return last_result  # should not be reached
 
 
+_ESCALATION_RETRY_BUDGET = int(os.getenv("ESCALATION_RETRY_BUDGET", "1"))
+
+
+async def execute_task_with_escalation(
+    task: TaskSpec,
+    run_id: str,
+    broadcast,
+    context: dict[str, str] | None = None,
+    retry_budget: int = _ESCALATION_RETRY_BUDGET,
+) -> AgentResult:
+    """Run a subtask, evaluate it, and escalate the routing floor on failure
+    (decompose-verify spec v3 §6-7).
+
+    On a failed per-step evaluation, retry with metadata.min_tier bumped one tier
+    above the tier the worker was just served at, so the router cannot re-serve the
+    same tier. Saturates at L5 — an L5 failure short-circuits to the committed
+    result rather than wasting a retry at the top tier.
+    """
+    from backend.agents.evaluator import evaluate_step
+    from backend.schemas.models import bump_tier, is_top_tier
+
+    min_tier: str | None = None
+    result: AgentResult | None = None
+    for attempt in range(retry_budget + 1):
+        result = await execute_task(
+            task, run_id, broadcast, context=context, min_tier=min_tier)
+        if result.status != TaskStatus.completed:
+            return result
+
+        verdict = await evaluate_step(task, result, run_id)
+        await broadcast(run_id, SwarmEvent(
+            event=(EventType.validator_approved if verdict.passed
+                   else EventType.validator_rejected),
+            run_id=run_id,
+            payload={"task_id": task.id, "attempt": attempt + 1, "evaluator": True,
+                     "score": verdict.score, "passed": verdict.passed,
+                     "reason": verdict.reason, "served_tier": result.served_tier}))
+        if verdict.passed:
+            return result
+
+        # Escalate unless out of budget or already at the top tier.
+        if attempt >= retry_budget or is_top_tier(result.served_tier):
+            await broadcast(run_id, SwarmEvent(
+                event=EventType.worker_rejected_final, run_id=run_id,
+                payload={"task_id": task.id,
+                         "reason": ("top_tier" if is_top_tier(result.served_tier)
+                                    else "escalation_budget_exhausted")}))
+            return result
+
+        new_floor = bump_tier(result.served_tier)
+        await broadcast(run_id, SwarmEvent(
+            event=EventType.worker_retrying, run_id=run_id,
+            payload={"task_id": task.id, "next_attempt": attempt + 2,
+                     "reason": "eval_failed", "fix_hint": verdict.fix_hint,
+                     "escalate_from": result.served_tier, "escalate_to": new_floor}))
+        min_tier = new_floor
+    return result
+
+
 async def run_worker(inputs: dict) -> dict:
     """LangGraph node wrapper."""
     task: TaskSpec = inputs["task"]
@@ -739,12 +808,18 @@ async def run_worker(inputs: dict) -> dict:
     async def _noop(run_id, event):
         pass
 
-    validator_enabled = getattr(state, "validator_enabled", True)
-    result = await execute_task_with_validation(
-        task=task,
-        run_id=state.run_id,
-        broadcast=_noop,
-        validator_enabled=validator_enabled,
-    )
+    # Tasks carrying an output_contract come from the decompose-verify planner —
+    # run the per-step evaluator + tier-escalation loop. Older graphs (no
+    # contract) keep the validator correction-hint loop.
+    if task.output_contract:
+        result = await execute_task_with_escalation(task, state.run_id, _noop)
+    else:
+        validator_enabled = getattr(state, "validator_enabled", True)
+        result = await execute_task_with_validation(
+            task=task,
+            run_id=state.run_id,
+            broadcast=_noop,
+            validator_enabled=validator_enabled,
+        )
     state.results[task.id] = result
     return {"results": state.results}

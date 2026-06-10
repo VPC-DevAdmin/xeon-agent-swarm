@@ -304,6 +304,9 @@ class AgentResult(BaseModel):
     latency_ms: float
     tool_calls: list[str] = []
     total_tokens: int = 0          # for metrics tracking
+    # Routing telemetry from the worker call (spec v3 §2.4) — drives escalation.
+    served_tier: str | None = None
+    cost_usd: float = 0.0
 
 
 class AgentResultWithRetries(BaseModel):
