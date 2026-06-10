@@ -165,6 +165,21 @@ def _parse_worker_response(raw: str, task_id: str, client: InferenceClient, late
     )
 
 
+def _doc_retrieval_args(task: TaskSpec) -> dict | None:
+    """Build the semantic-search args for a subtask (decompose-verify spec v6 §3).
+
+    Returns the MCP `search_documents` arguments, or None when the plan declares
+    no external context is needed (retrieval.needed = False) so the worker skips
+    the call entirely. The query is the subtask's FOCUSED retrieval query, falling
+    back to the objective when the planner left it blank.
+    """
+    r = task.retrieval
+    if not r.needed:
+        return None
+    query = (r.query or "").strip() or (task.objective or task.description)
+    return {"query": query, "max_results": max(1, r.top_n)}
+
+
 async def _retrieve_images(query: str, top_k: int = 2) -> list[dict]:
     """Search for relevant images via the doc_retrieval MCP server.
 
@@ -506,10 +521,19 @@ async def execute_task(
             return err
 
     # ── MCP tool calls ───────────────────────────────────────────────────────
+    # Semantic search (doc_retrieval) uses the subtask's focused retrieval query +
+    # top_n and is skipped when the plan says no external context is needed
+    # (spec v6 §3/§7). Other tools retrieve against the task description.
     tool_context = ""
     tool_calls_made: list[str] = []
     for tool_name in role_cfg.get("tools", []):
-        tool_result = await call_tool(tool_name, {"query": task_desc})
+        if tool_name == "doc_retrieval":
+            args = _doc_retrieval_args(task)
+            if args is None:
+                continue  # planner declared retrieval.needed = False
+        else:
+            args = {"query": task_desc}
+        tool_result = await call_tool(tool_name, args)
         if tool_result:
             tool_context += f"\n\n[{tool_name} results]\n{tool_result}"
             tool_calls_made.append(tool_name)

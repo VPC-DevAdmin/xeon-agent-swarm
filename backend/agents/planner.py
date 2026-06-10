@@ -71,6 +71,11 @@ ADDITIONAL PLANNER RULES (decompose-verify):
 - Mark exactly ONE terminal task with `is_synthesis: true` — the node that combines
   the others into the final answer. It must `depends_on` every task whose output it
   needs, and every other task must feed it (directly or transitively).
+- Set `retrieval` per task: {{"needed": bool, "query": "...", "top_n": int}}. Set
+  needed=true ONLY when the task requires external/grounded context; then give a
+  FOCUSED search query (a few keywords or a precise question — NOT the whole
+  objective) and a top_n of 3-8. For pure-reasoning, synthesis, or code tasks set
+  needed=false so no retrieval is wasted.
 - Set `strategy_note`: one line describing the decomposition approach you took.
 - Apply THIS decomposition strategy this round: {seed}.
 """.strip()

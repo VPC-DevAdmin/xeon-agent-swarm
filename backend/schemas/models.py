@@ -52,6 +52,19 @@ class SourceConstraint(BaseModel):
     min_sources: int = 1
 
 
+class RetrievalSpec(BaseModel):
+    """Per-subtask semantic-search declaration (decompose-verify spec v6 §3).
+
+    The planner sets this per subtask so each worker retrieves against its own
+    FOCUSED query (not the whole objective) and only when external context is
+    actually required. Defaults keep backward compat with graphs that omit it:
+    needed=True + empty query → the worker retrieves using the task objective.
+    """
+    needed: bool = True
+    query: str = ""          # focused search query; empty → fall back to objective
+    top_n: int = 5           # number of passages to retrieve
+
+
 # ── Router tier vocabulary (decompose-verify spec v3 §2.2) ───────────────────
 # L1 cheapest .. L5 strongest. tier_hint is the planner's advisory estimate;
 # min_tier is a hard floor the orchestrator sets only on an escalation retry.
@@ -105,6 +118,10 @@ class TaskSpec(BaseModel):
         description="Things that must be true of the output (2-4 items)",
     )
     source_constraints: SourceConstraint = Field(default_factory=SourceConstraint)
+    # Per-subtask semantic-search declaration (spec v6 §3). The worker uses
+    # retrieval.query/top_n when retrieval.needed, instead of retrieving with the
+    # whole task description.
+    retrieval: RetrievalSpec = Field(default_factory=RetrievalSpec)
     max_retries: int = 3               # overrideable per-role default
 
     # Legacy field — kept for backward compat with existing orchestrator output
