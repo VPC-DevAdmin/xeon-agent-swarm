@@ -266,7 +266,10 @@ async def mcp_endpoint(request: dict) -> dict:
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
 
-        if tool_name == "search_documents":
+        # "doc_retrieval" is the server nickname the worker config uses as a tool
+        # entry; treat it as an alias for the default text search so a role that
+        # lists `tools: [doc_retrieval]` reaches the search service.
+        if tool_name in ("search_documents", "doc_retrieval"):
             result = await search_documents(
                 query=arguments.get("query", ""),
                 max_results=min(int(arguments.get("max_results", 4)), 20),
