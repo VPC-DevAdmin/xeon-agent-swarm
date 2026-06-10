@@ -52,11 +52,38 @@ class SourceConstraint(BaseModel):
     min_sources: int = 1
 
 
+# ── Router tier vocabulary (decompose-verify spec v3 §2.2) ───────────────────
+# L1 cheapest .. L5 strongest. tier_hint is the planner's advisory estimate;
+# min_tier is a hard floor the orchestrator sets only on an escalation retry.
+Tier = Literal["L1", "L2", "L3", "L4", "L5"]
+TIER_ORDER: list[str] = ["L1", "L2", "L3", "L4", "L5"]
+
+
+def bump_tier(tier: str | None) -> str:
+    """Next tier up, saturating at L5. Unknown/None -> 'L2' (one above the floor)."""
+    if tier not in TIER_ORDER:
+        return "L2"
+    return TIER_ORDER[min(TIER_ORDER.index(tier) + 1, len(TIER_ORDER) - 1)]
+
+
+def is_top_tier(tier: str | None) -> bool:
+    """True when there is no higher tier to escalate to."""
+    return tier == TIER_ORDER[-1]
+
+
 class TaskSpec(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     type: TaskType
     dependencies: list[str] = []
     priority: int = 1
+
+    # Routing signal (spec v3 §3): advisory difficulty estimate the planner sets.
+    # Rides along as metadata.tier_hint on the worker call; the router LOGS it but
+    # owns the real decision. Never used as a control here.
+    tier_hint: Tier = "L2"
+    # A single-sentence success definition for this subtask, written at plan time.
+    # The per-step evaluator scores the worker output against it (spec v3 §3, §6).
+    output_contract: str = ""
 
     # Contract fields — produced by orchestrator, checked by validator
     objective: str = Field(
@@ -95,6 +122,61 @@ class TaskGraph(BaseModel):
     query: str
     tasks: list[TaskSpec]
     reasoning: str
+    # Best-of-N candidate metadata (spec v3 §3-4). plan_id identifies the
+    # candidate; strategy_note records the decomposition approach the seed forced.
+    plan_id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    strategy_note: str = ""
+
+
+# ── Plan verifier (generative rubric, spec v3 §5) ────────────────────────────
+# Scores a candidate TaskGraph on five plan-level dimensions. The verifier emits
+# the scores + an interpretable rationale; the orchestrator computes the weighted
+# total (never trusts the model's arithmetic) and selects the best candidate.
+
+class VerifierScores(BaseModel):
+    coverage: float = Field(0.0, ge=0.0, le=1.0)
+    decomposition_soundness: float = Field(0.0, ge=0.0, le=1.0)
+    dependency_correctness: float = Field(0.0, ge=0.0, le=1.0)
+    tier_appropriateness: float = Field(0.0, ge=0.0, le=1.0)
+    verifiability: float = Field(0.0, ge=0.0, le=1.0)
+
+
+VERIFIER_WEIGHTS: dict[str, float] = {
+    "coverage": 0.30,
+    "decomposition_soundness": 0.25,
+    "dependency_correctness": 0.25,
+    "tier_appropriateness": 0.10,
+    "verifiability": 0.10,
+}
+
+
+def weighted_total(scores: "VerifierScores") -> float:
+    """Orchestrator-side weighted sum of the rubric (do not trust model arithmetic)."""
+    d = scores.model_dump()
+    return round(sum(d[k] * w for k, w in VERIFIER_WEIGHTS.items()), 4)
+
+
+class VerifierVerdict(BaseModel):
+    plan_id: str = ""
+    scores: VerifierScores = Field(default_factory=VerifierScores)
+    fatal_flaws: list[str] = []
+    rationale: str = ""
+    repair_hint: str = ""
+
+
+# ── Per-step evaluator (spec v3 §6) ──────────────────────────────────────────
+# Scores one subtask output against its output_contract. `pass` is a Python
+# keyword, so the field is `passed` with serialization alias "pass" to match the
+# spec body and the router's json_schema property name.
+
+class StepEvalVerdict(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    subtask_id: str = ""
+    passed: bool = Field(default=False, alias="pass")
+    score: float = Field(default=0.0, ge=0.0, le=1.0)
+    reason: str = ""
+    fix_hint: str = ""
 
 
 # ── Typed artifact system ─────────────────────────────────────────────────────
@@ -231,6 +313,25 @@ class AgentResultWithRetries(BaseModel):
     attempts: list[WorkerAttempt]
     status: Literal["approved", "approved_with_warnings", "rejected_committed", "skipped"]
     total_tokens: int
+
+
+class CallTelemetry(BaseModel):
+    """Per-call telemetry parsed from the router's response headers (spec v3 §2.4).
+
+    `route_decision` is the raw x-llm-route-decision string; classified_tier /
+    served_tier / min_tier are parsed out of it when present so the orchestrator
+    can drive escalation and the trace can show "classifier said L2, floor forced L3".
+    """
+    model_served: str = ""          # x-llm-model-served
+    route_decision: str = ""        # x-llm-route-decision (raw)
+    cost_usd: float = 0.0           # x-llm-cost-usd
+    classified_tier: str | None = None
+    served_tier: str | None = None
+    min_tier: str | None = None
+    tokens_in: int = 0
+    tokens_out: int = 0
+    latency_ms: float = 0.0
+    truncated: bool = False         # finish_reason == "length" on the final attempt
 
 
 class RunMetrics(BaseModel):

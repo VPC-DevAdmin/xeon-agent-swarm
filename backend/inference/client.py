@@ -8,9 +8,13 @@ import random
 import time
 from typing import AsyncGenerator, Type, TypeVar
 
+from urllib.parse import parse_qs
+
 import httpx
 from openai import AsyncOpenAI, APIConnectionError, APITimeoutError
 from pydantic import BaseModel, ValidationError
+
+from backend.schemas.models import CallTelemetry
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -116,6 +120,60 @@ async def _retry(coro_factory, *, label: str):
     assert last_exc is not None
     raise last_exc
 
+# ── Telemetry header parsing (router-contract / spec v3 §2.4) ────────────────
+
+def _parse_route_decision(rd: str) -> dict[str, str | None]:
+    """Pull classified/served/min tiers out of an x-llm-route-decision string.
+
+    Accepts both the rich form `worker@model?classified=L2&min=L3&served=L3`
+    and the minimal form `worker@model?tier=L2` (served falls back to tier).
+    """
+    out: dict[str, str | None] = {"classified": None, "served": None, "min": None}
+    if "?" in rd:
+        q = parse_qs(rd.split("?", 1)[1])
+        out["classified"] = (q.get("classified") or [None])[0]
+        out["served"] = (q.get("served") or q.get("tier") or [None])[0]
+        out["min"] = (q.get("min") or [None])[0]
+    return out
+
+
+def _telemetry_from(headers, parsed, latency_ms: float, truncated: bool) -> CallTelemetry:
+    """Build CallTelemetry from response headers + parsed completion."""
+    def h(key: str) -> str | None:
+        try:
+            return headers.get(key)
+        except Exception:
+            return None
+
+    rd = h("x-llm-route-decision") or ""
+    tiers = _parse_route_decision(rd)
+    try:
+        cost = float(h("x-llm-cost-usd") or 0.0)
+    except (TypeError, ValueError):
+        cost = 0.0
+    usage = getattr(parsed, "usage", None)
+    return CallTelemetry(
+        model_served=h("x-llm-model-served") or "",
+        route_decision=rd,
+        cost_usd=cost,
+        classified_tier=tiers["classified"],
+        served_tier=tiers["served"],
+        min_tier=tiers["min"],
+        tokens_in=getattr(usage, "prompt_tokens", 0) or 0,
+        tokens_out=getattr(usage, "completion_tokens", 0) or 0,
+        latency_ms=latency_ms,
+        truncated=truncated,
+    )
+
+
+def _body_for(metadata: dict[str, str] | None) -> dict | None:
+    """extra_body carrying the router `metadata` field (run_id/step_key/tier_hint/
+    min_tier). Passed via extra_body so it lands as a top-level body field across
+    OpenAI SDK versions regardless of native `metadata` kwarg support."""
+    md = {k: v for k, v in (metadata or {}).items() if v is not None}
+    return {"metadata": md} if md else None
+
+
 # Concurrency semaphore for the shared text engine.
 # Limits simultaneous requests to avoid overwhelming the single Mistral-7B engine.
 # Workers, validator, and reducer all share this semaphore.
@@ -167,34 +225,52 @@ class InferenceClient:
         messages: list[dict],
         max_tokens: int = 512,
         extra_headers: dict[str, str] | None = None,
+        metadata: dict[str, str] | None = None,
     ) -> tuple[str, float]:
-        """Plain completion. Returns (content, latency_ms).
+        """Plain completion. Returns (content, latency_ms). Backward-compatible."""
+        content, tel = await self.complete_t(messages, max_tokens, extra_headers, metadata)
+        return content, tel.latency_ms
 
-        extra_headers: forwarded to the router (e.g. W3C `traceparent`).
-        """
+    async def complete_t(
+        self,
+        messages: list[dict],
+        max_tokens: int = 512,
+        extra_headers: dict[str, str] | None = None,
+        metadata: dict[str, str] | None = None,
+    ) -> tuple[str, CallTelemetry]:
+        """Plain completion returning (content, CallTelemetry) from response headers."""
         if self.use_semaphore:
             async with _get_semaphore():
-                return await self._complete_inner(messages, max_tokens, extra_headers)
-        return await self._complete_inner(messages, max_tokens, extra_headers)
+                return await self._do_complete(messages, max_tokens, extra_headers, metadata)
+        return await self._do_complete(messages, max_tokens, extra_headers, metadata)
 
-    async def _complete_inner(
+    async def _do_complete(
         self,
         messages: list[dict],
         max_tokens: int,
-        extra_headers: dict[str, str] | None = None,
-    ) -> tuple[str, float]:
+        extra_headers: dict[str, str] | None,
+        metadata: dict[str, str] | None,
+    ) -> tuple[str, CallTelemetry]:
         t0 = time.perf_counter()
-        resp = await _retry(
-            lambda: self._raw.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=max_tokens,
-                extra_headers=extra_headers or None,
-            ),
-            label=f"complete/{self.model}",
-        )
+        attempt_tokens, truncated = max_tokens, False
+        raw = parsed = content = None
+        for attempt in range(2):  # one truncation retry on finish_reason=="length"
+            raw = await _retry(
+                lambda at=attempt_tokens: self._raw.chat.completions.with_raw_response.create(
+                    model=self.model, messages=messages, max_tokens=at,
+                    extra_headers=extra_headers or None, extra_body=_body_for(metadata),
+                ),
+                label=f"complete/{self.model}",
+            )
+            parsed = raw.parse()
+            content = parsed.choices[0].message.content or ""
+            if parsed.choices[0].finish_reason == "length" and attempt == 0:
+                truncated = True
+                attempt_tokens = int(attempt_tokens * 1.5) + 64
+                continue
+            break
         latency_ms = (time.perf_counter() - t0) * 1000
-        return resp.choices[0].message.content, latency_ms
+        return content, _telemetry_from(raw.headers, parsed, latency_ms, truncated)
 
     async def complete_structured(
         self,
@@ -202,57 +278,72 @@ class InferenceClient:
         response_model: Type[T],
         max_tokens: int = 1024,
         extra_headers: dict[str, str] | None = None,
+        metadata: dict[str, str] | None = None,
     ) -> T:
-        """
-        Structured completion using the router's native OpenAI Structured Outputs.
+        """Structured completion (native OpenAI Structured Outputs). Returns the
+        validated model. Backward-compatible — telemetry is dropped."""
+        result, _ = await self.complete_structured_t(
+            messages, response_model, max_tokens, extra_headers, metadata)
+        return result
 
-        Returns a validated instance of `response_model` (a Pydantic model).
-        The router guarantees the response body validates against the schema via
-        server-side grammar-constrained decoding (docs/router-contract.md §6.5),
-        so this never needs to retry on malformed JSON.
-
-        extra_headers: forwarded to the router (e.g. W3C `traceparent`).
-        """
+    async def complete_structured_t(
+        self,
+        messages: list[dict],
+        response_model: Type[T],
+        max_tokens: int = 1024,
+        extra_headers: dict[str, str] | None = None,
+        metadata: dict[str, str] | None = None,
+    ) -> tuple[T, CallTelemetry]:
+        """Structured completion returning (model, CallTelemetry)."""
         if self.use_semaphore:
             async with _get_semaphore():
-                return await self._complete_structured_inner(
-                    messages, response_model, max_tokens, extra_headers)
-        return await self._complete_structured_inner(
-            messages, response_model, max_tokens, extra_headers)
+                return await self._do_structured(
+                    messages, response_model, max_tokens, extra_headers, metadata)
+        return await self._do_structured(
+            messages, response_model, max_tokens, extra_headers, metadata)
 
-    async def _complete_structured_inner(
+    async def _do_structured(
         self,
         messages: list[dict],
         response_model: Type[T],
         max_tokens: int,
         extra_headers: dict[str, str] | None,
-    ) -> T:
-        schema = response_model.model_json_schema()
+        metadata: dict[str, str] | None,
+    ) -> tuple[T, CallTelemetry]:
         response_format = {
             "type": "json_schema",
             "json_schema": {
                 "name": response_model.__name__,
-                "schema": schema,
+                "schema": response_model.model_json_schema(),
                 "strict": True,
             },
         }
-
-        resp = await _retry(
-            lambda: self._raw.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=max_tokens,
-                response_format=response_format,
-                extra_headers=extra_headers or None,
-            ),
-            label=f"structured/{self.model}",
-        )
-        content = resp.choices[0].message.content or ""
+        t0 = time.perf_counter()
+        attempt_tokens, truncated = max_tokens, False
+        raw = parsed = content = None
+        for attempt in range(2):
+            raw = await _retry(
+                lambda at=attempt_tokens: self._raw.chat.completions.with_raw_response.create(
+                    model=self.model, messages=messages, max_tokens=at,
+                    response_format=response_format,
+                    extra_headers=extra_headers or None, extra_body=_body_for(metadata),
+                ),
+                label=f"structured/{self.model}",
+            )
+            parsed = raw.parse()
+            content = parsed.choices[0].message.content or ""
+            if parsed.choices[0].finish_reason == "length" and attempt == 0:
+                # Truncated mid-object → grammar-valid-so-far but unparseable.
+                # Bump the budget and retry once (spec v3 §2.6).
+                truncated = True
+                attempt_tokens = int(attempt_tokens * 1.5) + 64
+                continue
+            break
+        latency_ms = (time.perf_counter() - t0) * 1000
+        tel = _telemetry_from(raw.headers, parsed, latency_ms, truncated)
         try:
-            return response_model.model_validate_json(content)
+            return response_model.model_validate_json(content), tel
         except ValidationError as exc:
-            # The router commits to strict schema adherence; if we still get a
-            # validation error, log the payload so the contract breach is visible.
             logger.error(
                 "[structured/%s] response failed schema validation despite "
                 "strict mode: %s\npayload=%s",
