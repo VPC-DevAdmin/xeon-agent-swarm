@@ -5,10 +5,10 @@ import pytest
 from backend.schemas.models import (
     TIER_ORDER,
     CallTelemetry,
-    StepEvalVerdict,
     TaskGraph,
     TaskSpec,
     TaskType,
+    ValidationVerdict,
     VerifierScores,
     bump_tier,
     is_top_tier,
@@ -36,24 +36,27 @@ def test_weighted_total():
     assert weighted_total(VerifierScores(
         coverage=1, decomposition_soundness=1, dependency_correctness=1,
         tier_appropriateness=1, verifiability=1)) == 1.0
-    # Coverage only (weight 0.30)
-    assert weighted_total(VerifierScores(coverage=1.0)) == 0.30
+    # Coverage only (weight 0.35 — v6 gate-split weighting)
+    assert weighted_total(VerifierScores(coverage=1.0)) == 0.35
 
 
-def test_step_eval_pass_alias():
-    # The router emits `"pass": true`; the field is `passed` with alias "pass".
-    v = StepEvalVerdict.model_validate({"subtask_id": "s3", "pass": True, "score": 0.9})
-    assert v.passed is True
-    assert v.score == 0.9
-    # Schema exposes the wire name "pass", not "passed".
-    props = StepEvalVerdict.model_json_schema()["properties"]
-    assert "pass" in props and "passed" not in props
+def test_step_eval_uses_validation_verdict():
+    # The per-step evaluator reuses ValidationVerdict (spec v6 §6) + subtask_id.
+    v = ValidationVerdict.model_validate(
+        {"subtask_id": "s3", "compliant": False,
+         "failed_criteria": ["missing citations"], "correction_hint": "add sources",
+         "severity": "major"})
+    assert v.compliant is False
+    assert v.subtask_id == "s3"
+    assert v.failed_criteria == ["missing citations"]
+    assert v.severity == "major"
 
 
-def test_task_spec_defaults_have_tier_hint_and_contract():
+def test_task_spec_defaults_have_tier_hint_and_synthesis_flag():
     t = TaskSpec(type=TaskType.research)
     assert t.tier_hint == "L2"
-    assert t.output_contract == ""
+    assert t.is_synthesis is False
+    assert not hasattr(t, "output_contract")   # collapsed into success_criteria
     g = TaskGraph(query="q", tasks=[t], reasoning="r")
     assert g.plan_id and g.strategy_note == ""
 

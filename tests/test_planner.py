@@ -15,9 +15,12 @@ from backend.schemas.models import (
 
 
 def _plan(pid: str) -> TaskGraph:
+    # Single task = the synthesis sink, so it passes the mechanical gate that
+    # plan_phase now runs before verification (spec v6 §5).
     return TaskGraph(
         query="q", reasoning="r", plan_id=pid,
-        tasks=[TaskSpec(id="s1", type=TaskType.research, output_contract="x")],
+        tasks=[TaskSpec(id="s1", type=TaskType.writing, is_synthesis=True,
+                        success_criteria=["produces a correct answer"])],
     )
 
 
