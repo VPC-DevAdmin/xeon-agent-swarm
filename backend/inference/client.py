@@ -48,16 +48,24 @@ _RETRYABLE = (APIConnectionError, APITimeoutError,
 
 _ROLE_ENV = {
     "orchestrator": "ORCHESTRATOR_MODEL",
+    "planner":      "PLANNER_MODEL",
+    "verifier":     "VERIFIER_MODEL",
+    "evaluator":    "EVALUATOR_MODEL",
     "validator":    "VALIDATOR_MODEL",
     "worker":       "WORKER_DEFAULT_MODEL",
     "reducer":      "REDUCER_MODEL",
 }
 
-# Router specialty defaults — see docs/router-contract.md §2.1
+# Router specialty defaults. The decompose-verify roles (spec v3 §2.2) use bare
+# role names as the `model` value — planner/verifier/evaluator are pinned, worker
+# is semantically routed. The legacy orchestrator/validator specialties are kept.
 _ROLE_DEFAULT_SPECIALTY = {
     "orchestrator": "orchestrator-v2.1",
+    "planner":      "planner",
+    "verifier":     "verifier",
+    "evaluator":    "evaluator",
     "validator":    "validator-v1.0",
-    "worker":       "worker-default-v1.0",
+    "worker":       "worker",
     "reducer":      "worker-default-v1.0",  # writing role uses the default worker
 }
 
