@@ -122,6 +122,15 @@ class Run(Base):
     langfuse_trace_id: Mapped[str | None] = mapped_column(String(64))
     error: Mapped[str | None] = mapped_column(Text)
 
+    # ── Cost / tier savings rollup (tier-router migration) ───────────────────
+    # total_cost: summed per-call cost at the tiers actually served.
+    # baseline_cost: the same run priced as if every call ran at T5 (monolithic).
+    # savings_pct: 100 * (1 - total_cost / baseline_cost). Illustrative until the
+    # cost table is measured (see observability/cost.py).
+    total_cost: Mapped[float | None] = mapped_column(Double)
+    baseline_cost: Mapped[float | None] = mapped_column(Double)
+    savings_pct: Mapped[float | None] = mapped_column(Double)
+
     started_at: Mapped[datetime] = _now_col()
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -208,6 +217,19 @@ class StepAttempt(Base):
     tokens_out: Mapped[int | None] = mapped_column(Integer)
     model_id: Mapped[str | None] = mapped_column(String(120))  # x-llm-model-served
     latency_ms: Mapped[float | None] = mapped_column(Double)
+
+    # ── Tier routing (tier-router migration) ─────────────────────────────────
+    # Written by the RouteCaptureHandler from the gateway's x-vsr-selected-*
+    # headers. tier_requested is what the client asked for (auto / T1..T5);
+    # tier_observed is what the router actually served. category/reasoning/
+    # confidence are the router's classification trace; cache_hit flags a served
+    # cache result (no model spend).
+    tier_requested: Mapped[str | None] = mapped_column(String(8))
+    tier_observed: Mapped[str | None] = mapped_column(String(8))
+    category: Mapped[str | None] = mapped_column(String(48))
+    reasoning: Mapped[str | None] = mapped_column(Text)
+    confidence: Mapped[float | None] = mapped_column(Double)
+    cache_hit: Mapped[bool | None] = mapped_column(Boolean)
 
     started_at: Mapped[datetime] = _now_col()
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
