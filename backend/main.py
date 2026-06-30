@@ -239,10 +239,12 @@ app.add_middleware(
 from backend.routers.jobs import router as jobs_router
 from backend.routers.runs import router as runs_router
 from backend.routers.connectors import router as connectors_router
+from backend.routers.toolbox import router as toolbox_router
 
 app.include_router(jobs_router)
 app.include_router(runs_router)
 app.include_router(connectors_router)
+app.include_router(toolbox_router)
 
 
 # ── WebSocket connection manager ─────────────────────────────────────────────

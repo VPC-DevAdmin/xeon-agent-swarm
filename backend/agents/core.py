@@ -35,6 +35,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from backend.inference.model import ModelFactory
 from backend.agents.profiles import build_subagent_profiles
+from backend.agents.toolbox import build_toolbox
 
 
 ORCHESTRATOR_PROMPT = """You decompose the user's objective into the smallest useful set
@@ -66,10 +67,13 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
     mcp_tools:    LangChain tools granted to the MAIN agent (the planner). Usually a
                   small read-only set; most tool use happens inside subagents.
     tools_by_name: {nickname: LangChain tool} so each profile gets its per-role grant
-                  (profiles.py resolves the worker_roles.yaml grants).
+                  (profiles.py resolves the worker_roles.yaml grants). Defaults to the
+                  full managed toolbox (toolbox.build_toolbox) when not supplied.
     """
     mf = ModelFactory()
     planner_tier = os.environ.get("ADL_PLANNER_TIER", "T5")
+    if tools_by_name is None:
+        tools_by_name = build_toolbox()
 
     return create_deep_agent(
         model=mf.for_tier(planner_tier),                      # main agent: planner+synthesis

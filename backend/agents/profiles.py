@@ -77,3 +77,27 @@ def grant_map() -> dict[str, list[str]]:
         _NAME_MAP.get(key, key): list(cfg.get("tools", []) or [])
         for key, cfg in roles.items()
     }
+
+
+def validation_config() -> dict[str, dict]:
+    """{role_name: {level, tier, rubric, retries}} from worker_roles.yaml.
+
+    Each role's `validation` block (validation_directive.md) declares its validator
+    level (mechanical | judge | frontier), the tier the judge runs on, its rubric
+    id, and a bounded retry count. Roles without a block inherit env defaults. The
+    event adapter reads this to decide whether to run L1/L2 judging on a result.
+    """
+    default_level = os.getenv("ADL_VALIDATION_DEFAULT_LEVEL", "judge")
+    default_tier = os.getenv("ADL_DEFAULT_VALIDATOR_TIER", "tier1")
+    default_retries = int(os.getenv("ADL_MAX_VALIDATION_RETRIES", "1"))
+    out: dict[str, dict] = {}
+    for key, cfg in load_roles().items():
+        name = _NAME_MAP.get(key, key)
+        v = cfg.get("validation") or {}
+        out[name] = {
+            "level": v.get("level", default_level),
+            "tier": v.get("tier", default_tier),
+            "rubric": v.get("rubric"),
+            "retries": int(v.get("retries", default_retries)),
+        }
+    return out
