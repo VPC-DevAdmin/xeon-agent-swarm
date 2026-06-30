@@ -79,11 +79,25 @@ class EventAdapter:
     """
 
     def __init__(self, run_id: str, broadcast=None, *, persistence=db,
-                 planner_tier: str | None = None):
+                 planner_tier: str | None = None, judge=None, redispatch=None,
+                 validation_cfg: dict | None = None):
         self.run_id = run_id
         self.broadcast = broadcast
         self.db = persistence
         self.planner_tier = (planner_tier or os.environ.get("ADL_PLANNER_TIER", "T5")).upper()
+
+        # L1/L2 judging is opt-in: when no judge is injected, only L0 mechanical
+        # runs (Stage 2 behavior). The real run path passes make_judge(mf) /
+        # make_redispatch(mf) from validation_judge.py. validation_cfg maps a role
+        # to its {level, tier, rubric, retries}; loaded lazily so headless tests
+        # that don't exercise judging need no config.
+        self._judge = judge
+        self._redispatch = redispatch
+        if validation_cfg is None and judge is not None:
+            from backend.agents.profiles import validation_config
+            validation_cfg = validation_config()
+        self._validation_cfg = validation_cfg or {}
+        self.validation_cost = 0.0                  # rolled up separately from generation
 
         self.calls: list[dict] = []                 # every model call, for the cost rollup
         self.steps: dict[str, dict] = {}            # task_call_id -> {step_key, role, attempts}
@@ -105,7 +119,8 @@ class EventAdapter:
         cost = rollup_run(self.calls)
         await self.db.set_step_status(self.run_id, _ORCH_STEP, "completed",
                                       total_attempts=self._orch_attempts)
-        metrics = {"task_count": self._delegation_n, **cost.as_dict()}
+        metrics = {"task_count": self._delegation_n,
+                   "validation_cost": round(self.validation_cost, 6), **cost.as_dict()}
         await self.db.finalize_run(
             self.run_id,
             document_result={"final_answer": self.final_answer or ""},
@@ -165,7 +180,8 @@ class EventAdapter:
         desc = (tc.get("args") or {}).get("description") or ""
         step_key = f"{role}-{self._delegation_n}"[:32]
         tcid = tc.get("id")
-        self.steps[tcid] = {"step_key": step_key, "role": role, "attempts": 0}
+        self.steps[tcid] = {"step_key": step_key, "role": role, "attempts": 0,
+                            "desc": desc}
         self._open_unbound.append(tcid)
         await self.db.create_step(self.run_id, step_key=step_key, type=role,
                                   objective=desc, status="running")
@@ -178,32 +194,116 @@ class EventAdapter:
         if info is None:
             return
         step_key, role = info["step_key"], info["role"]
+        subtask = info.get("desc", "")
         result_text = m.content if isinstance(m.content, str) else str(m.content)
 
         await self._emit(EventType.validator_started, {"task_id": step_key})
-        verdict = validate_l0(result_text, role=role)
-        await self.db.record_validation(
-            self.run_id, step_key, level="mechanical", verdict=verdict["verdict"],
-            score=verdict["score"], detail={"checks": verdict["checks"],
-                                            "summary": verdict["detail"]},
-        )
-        if verdict["verdict"] == "fail":
+
+        cfg = self._validation_cfg.get(role, {})
+        level = cfg.get("level", "mechanical")
+        max_retries = int(cfg.get("retries", 0))
+        retries_used = 0
+        verdict_kind = "pass"
+        l0_failed = False
+        critique = ""
+
+        # Validate → (optionally) re-dispatch → re-validate, bounded by max_retries.
+        # L0 mechanical runs every pass (free); the judge runs only when this role is
+        # configured for judge/frontier AND a judge was injected. A flaky validator
+        # cannot loop forever — the retry cap is the latency guard (directive).
+        while True:
+            l0 = validate_l0(result_text, role=role)
+            l0_failed = l0["verdict"] == "fail"
+            await self.db.record_validation(
+                self.run_id, step_key, level="mechanical", verdict=l0["verdict"],
+                score=l0["score"], retries_used=retries_used,
+                detail={"checks": l0["checks"], "summary": l0["detail"]},
+            )
+            if l0["verdict"] == "fail":
+                verdict_kind, critique = "fail", l0["detail"]
+            elif level in ("judge", "frontier") and self._judge is not None:
+                jr = await self._judge(subtask, result_text, role, cfg)
+                self.validation_cost += float(jr.get("cost") or 0.0)
+                await self.db.record_validation(
+                    self.run_id, step_key, level=jr["level"], verdict=jr["verdict"],
+                    score=jr["score"], validator_tier=jr.get("validator_tier"),
+                    rubric_id=jr.get("rubric_id"), retries_used=retries_used,
+                    escalated=(jr["level"] == "frontier"),
+                    detail={"critique": jr.get("critique", "")},
+                    tokens_in=jr.get("tokens_in"), tokens_out=jr.get("tokens_out"),
+                    cost=jr.get("cost"),
+                )
+                verdict_kind, critique = jr["verdict"], jr.get("critique", "")
+            else:
+                verdict_kind, critique = l0["verdict"], l0["detail"]
+
+            if verdict_kind == "pass" or retries_used >= max_retries or self._redispatch is None:
+                break
+
+            # Bounded re-dispatch of the failed/degraded subtask with the critique.
+            retries_used += 1
+            await self._emit(EventType.worker_retrying,
+                             {"task_id": step_key, "attempt": retries_used,
+                              "hint": critique})
+            rd = await self._redispatch(role, subtask, critique)
+            result_text = rd.get("result", "") or ""
+            info["attempts"] += 1
+            tout = int(rd.get("tokens_out") or 0)
+            await self.db.record_attempt(
+                self.run_id, step_key, attempt_no=info["attempts"],
+                status="completed", tokens_in=int(rd.get("tokens_in") or 0),
+                tokens_out=tout, tier_requested="auto",
+                tier_observed=rd.get("tier_observed"), cache_hit=bool(rd.get("cache_hit")),
+            )
+            self.calls.append({"tokens_out": tout, "tier_observed": rd.get("tier_observed"),
+                               "cache_hit": bool(rd.get("cache_hit"))})
+
+        # Terminal mapping (directive): a genuinely unusable result (L0 empty) hard
+        # -fails the step; a judge-unsatisfied but non-empty result after the retry
+        # cap is DEGRADED (kept and surfaced to synthesis), never silently passed.
+        if l0_failed:
+            terminal = "fail"
+        elif verdict_kind == "pass":
+            terminal = "pass"
+        else:
+            terminal = "degraded"
+        await self._finish_step(step_key, terminal, result_text, info["attempts"],
+                                retries_used, critique)
+
+    async def _finish_step(self, step_key, terminal, result_text, attempts,
+                           retries_used, critique) -> None:
+        """Record terminal step state + emit events for a validated delegation.
+
+        pass     → completed, validator_approved.
+        degraded → completed (result still usable) but validator_rejected so the UI
+                   flags it amber; if retries were spent, worker_rejected_final too.
+        fail     → failed, validator_rejected + task_failed.
+        """
+        if terminal == "fail":
             await self.db.set_step_status(self.run_id, step_key, "failed",
                                           result={"text": result_text},
-                                          total_attempts=info["attempts"])
+                                          total_attempts=attempts)
             await self._emit(EventType.validator_rejected,
-                             {"task_id": step_key, "verdict": verdict})
+                             {"task_id": step_key, "verdict_kind": "fail", "critique": critique})
             await self._emit(EventType.task_failed,
-                             {"task_id": step_key, "reason": verdict["detail"]})
+                             {"task_id": step_key, "reason": critique})
+            return
+
+        await self.db.set_step_status(self.run_id, step_key, "completed",
+                                      result={"text": result_text},
+                                      total_attempts=attempts)
+        if terminal == "degraded":
+            await self._emit(EventType.validator_rejected,
+                             {"task_id": step_key, "verdict_kind": "degraded",
+                              "critique": critique})
+            if retries_used:
+                await self._emit(EventType.worker_rejected_final,
+                                 {"task_id": step_key, "retries_used": retries_used,
+                                  "critique": critique})
         else:
-            await self.db.set_step_status(self.run_id, step_key, "completed",
-                                          result={"text": result_text},
-                                          total_attempts=info["attempts"])
-            await self._emit(EventType.validator_approved,
-                             {"task_id": step_key, "verdict": verdict})
-            await self._emit(EventType.task_completed,
-                             {"task_id": step_key, "result": result_text,
-                              "model_used": "auto"})
+            await self._emit(EventType.validator_approved, {"task_id": step_key})
+        await self._emit(EventType.task_completed,
+                         {"task_id": step_key, "result": result_text, "model_used": "auto"})
 
     # ── subagent (worker) calls and tools ────────────────────────────────────
     async def _handle_subagent(self, ns: tuple, m) -> None:
@@ -251,15 +351,19 @@ class EventAdapter:
 
 async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
                            persistence=db, planner_tier: str | None = None,
+                           judge=None, redispatch=None, validation_cfg: dict | None = None,
                            recursion_limit: int = 80) -> dict:
     """Drive one deepagents run through the adapter end to end.
 
     Streams the compiled agent with subgraphs=True so subagent-internal calls
     (and their routed tiers) are visible, feeding every event to the adapter.
+    Pass judge/redispatch (from validation_judge.make_judge/make_redispatch) to
+    enable L1/L2 graded validation + bounded retry; omit for L0-only.
     Returns the adapter's run summary. The caller owns run creation/teardown.
     """
     adapter = EventAdapter(run_id, broadcast, persistence=persistence,
-                           planner_tier=planner_tier)
+                           planner_tier=planner_tier, judge=judge,
+                           redispatch=redispatch, validation_cfg=validation_cfg)
     await adapter.start(query)
     config = {"configurable": {"thread_id": run_id},
               "tags": [f"tier_req:{adapter.planner_tier}"],
