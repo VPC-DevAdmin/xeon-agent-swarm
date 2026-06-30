@@ -1,10 +1,16 @@
 # Agent Orchestrator
 
-A focused, standards-aligned **agent orchestration platform**. It decomposes a
-prompt into a validated graph of specialist sub-tasks, runs them in parallel
-through an external LLM router, validates each output against its contract,
-synthesizes a result, and scores quality — all durably persisted, observable,
-and schedulable.
+A focused, standards-aligned **agent orchestration platform**. A single
+**deepagents** deep agent decomposes a prompt into specialist worker subagents,
+delegates each through an external LLM **tier router**, validates every output
+with a tiered validator (mechanical → cheap-judge → frontier), synthesizes a
+result, and scores quality — all durably persisted, observable, and schedulable.
+
+> **Engine:** the Auto-Decomposition Layer (ADL), built on `deepagents` over
+> LangGraph, is the only run engine. The earlier hand-rolled LangGraph "swarm"
+> (orchestrator/worker/reducer/swarm_graph) was removed at cutover; see
+> [`docs/execution_plan.md`](docs/execution_plan.md) and
+> [`docs/decomposition_layer_plan.md`](docs/decomposition_layer_plan.md).
 
 This project owns **orchestration**. It deliberately delegates two concerns to
 sibling services it calls over the network:
@@ -19,10 +25,12 @@ sibling services it calls over the network:
 
 | Capability | How |
 |---|---|
-| **Prompt decomposition** | Orchestrator agent emits a contract-based `TaskGraph` (A2A-aligned), structurally validated before any work starts |
-| **Agent creation & monitoring** | Workers fan out via LangGraph `Send`; live state over WebSocket (CloudEvents 1.0 envelopes) |
-| **Output evaluation** | Per-step validator (mechanical + LLM-judge) with retry loop; async quality evals per deliverable-format after each run |
-| **Tool calls** | MCP servers (web search, code exec, doc retrieval proxy) |
+| **Prompt decomposition** | The deep agent plans (pinned to `ADL_PLANNER_TIER`) and delegates to declarative worker subagents (`config/worker_roles.yaml`); zero hand-authored agents |
+| **Tier routing** | Workers run on `auto` so the router picks the cheapest sufficient tier; a cost rollup compares routed vs all-frontier baseline |
+| **Tiered validation** | Every step: L0 mechanical (free) → L1 cheap-judge (tier1/2) → L2 frontier; bounded retry-on-critique; a frontier grader on the final synthesis ([`docs/validation_directive.md`](docs/validation_directive.md)) |
+| **Managed toolbox** | MCP tools (web search, code exec, doc retrieval) granted **per role**; catalog + grants at `GET /toolbox` |
+| **Governance** | Per-run budgets (`max_subagents`/`max_tool_hops`/`max_total_tokens`, clean partial-synthesis stop) and HITL plan approval (`POST /run/{id}/approve`) |
+| **Live monitoring** | Stream-driven `Step`/`StepAttempt`/`Validation` rows + WebSocket CloudEvents 1.0; async quality evals after each run |
 | **Scheduled runs** | Cron-scheduled Jobs (APScheduler), overlap policies, durable history |
 | **Orchestration** | Durable Jobs → Runs → Steps → Attempts in a SQLite file; full REST + UI |
 
@@ -48,20 +56,25 @@ cron. See [`docs/standards.md`](docs/standards.md).
    connectors+secrets)
 ```
 
-Pipeline per run:
+Pipeline per run (ADL / deepagents):
 
 ```
 prompt
   │
-  ▼ orchestrate ──▶ validate graph (structural rules) ──▶ [retry w/ critique]
+  ▼ deep agent plans (pinned tier) ──▶ [optional HITL plan approval]
   │
-  ▼ fan-out workers (respect deps; cascade-fail on failed deps)
-  │     each: execute ──▶ validate (contract) ──▶ retry-with-hint ──▶ commit
+  ▼ delegates worker subagents (auto tier; per-role tool grants)
+  │     each result: L0 mechanical ──▶ L1/L2 judge ──▶ [bounded re-dispatch]
+  │     (event adapter streams Step/Attempt/Validation rows + WS CloudEvents)
   │
-  ▼ reduce ──▶ DocumentResult
+  ▼ main agent synthesizes ──▶ L2 frontier grader on the final answer
   │
-  ▼ finalize (persist) ──▶ async quality eval ──▶ broadcast
+  ▼ finalize: cost + validation rollup, persist ──▶ async quality eval ──▶ broadcast
 ```
+
+The event adapter ([`backend/observability/event_adapter.py`](backend/observability/event_adapter.py))
+bridges the deepagents typed stream onto the same WS + SQLite surfaces; the app DB
+is the system of record, not the LangGraph checkpointer.
 
 ## Data model
 
@@ -103,6 +116,9 @@ docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d
 
 ```
 POST   /run                      ad-hoc run
+POST   /run/{id}/approve         HITL: approve/reject a paused plan
+POST   /run/{id}/kill            cancel an in-flight run
+GET    /toolbox                  tool catalog + per-role grants + validator policy
 POST   /jobs                     create job (query + optional cron schedule)
 GET    /jobs                     list
 GET    /jobs/scheduled           active cron jobs by next fire time
@@ -110,7 +126,6 @@ PATCH  /jobs/{id}                update (schedule, query, config)
 POST   /jobs/{id}/pause|resume|archive|run-now
 GET    /runs                     run history
 GET    /runs/{id}                full detail (steps + attempts + eval scores)
-POST   /runs/{id}/kill           cancel in-flight steps
 POST   /connectors               create (secrets encrypted on save)
 PUT    /connectors/{id}/secrets/{field}   set/replace a secret
 GET    /connectors               list (secret field NAMES only — never values)
@@ -134,9 +149,12 @@ python3 scripts/inspect_run.py --latest
 
 | Var | Purpose |
 |---|---|
-| `LLM_TIER_ENDPOINT` / `LLM_TIER_TOKEN` | external router (OpenAI-compatible) |
-| `ORCHESTRATOR_MODEL` / `VALIDATOR_MODEL` / `WORKER_DEFAULT_MODEL` | router specialty names |
-| `SEMANTIC_SEARCH_ENDPOINT` | external vector-search service (via MCP proxy) |
+| `ROUTER_BASE` / `ROUTER_BASE_URL` | external tier router (OpenAI-compatible gateway, default `:8900`) |
+| `ADL_PLANNER_TIER` / `ADL_WORKER_TIER` | planner pinned high; workers on `auto` so the router classifies |
+| `ADL_VALIDATION_DEFAULT_LEVEL` / `ADL_*_VALIDATOR_TIER` | tiered validator levels + tiers |
+| `ADL_MAX_SUBAGENTS` / `ADL_MAX_TOOL_HOPS` / `ADL_MAX_TOTAL_TOKENS` | per-run budgets |
+| `ADL_PLAN_APPROVAL` / `ADL_SENSITIVE_TOOLS` | HITL gates |
+| `CHECKPOINT_DB` | LangGraph AsyncSqliteSaver file (live/resume state) |
 | `DATABASE_URL` | SQLite file (aiosqlite); default `sqlite+aiosqlite:///./data/orchestrator.db` |
 | `MASTER_ENCRYPTION_KEY` | Fernet key for connector secrets |
 | `SCHEDULER_ENABLED` | `0` disables background job firing |
@@ -148,16 +166,15 @@ See [`env.example`](env.example) for the full list.
 
 ```
 backend/
-  agents/        orchestrator, worker, validator, reducer, tts
-  graph/         LangGraph swarm (fan-out/fan-in, graph validation)
-  inference/     router client (native structured outputs, retries, traceparent)
+  agents/        core (deepagents assembly), profiles, toolbox, tts
+  inference/     ModelFactory — the single seam to the tier router (model.py)
   db/            SQLAlchemy models, async SQLite engine, create_all schema
   repositories/  jobs / runs / connectors data access + persistence facade
-  routers/       /jobs /runs /connectors REST
+  routers/       /jobs /runs /connectors /toolbox REST
   scheduling/    APScheduler job scanner
   evals/         per-deliverable-format quality rubrics
   security/      Fernet secret encryption
-  observability/ Prometheus metrics, W3C trace helpers, optional Langfuse
+  observability/ event_adapter, validation (l0/judge), cost, callbacks, metrics
   protocols/     MCP clients, A2A agent cards
 frontend/        React + Vite console (Live Run, Jobs, Runs, Connectors)
 mcp_servers/     web_search, code_exec, doc_retrieval (search proxy)

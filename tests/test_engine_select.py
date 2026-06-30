@@ -1,11 +1,9 @@
 """
-Offline test for the ADL_ENGINE dispatch in launch_run.
+Offline test for launch_run after the cutover.
 
-No gateway, no DB: the two runners are stubbed so we assert only that launch_run
-routes to the right engine for the env flag and threads its arguments through.
-The deepagents runner's end-to-end behavior is covered by the event-adapter and
-judge tests; here we lock in the swarm⇄deepagents switch that keeps the old path
-reachable until cutover.
+The old swarm engine was removed; launch_run now always runs the deepagents
+engine and registers the run task for /kill. A stale ADL_ENGINE=swarm logs a
+warning but still runs deepagents (never silently does nothing).
 """
 from __future__ import annotations
 
@@ -14,61 +12,42 @@ import asyncio
 import backend.main as m
 
 
-def _launch_under(monkeypatch, engine: str) -> dict:
+def _launch_under(monkeypatch, engine: str | None) -> dict:
     called: dict = {}
 
-    async def fake_swarm(run_id, query, **kw):
-        called.update(engine="swarm", run_id=run_id, query=query, kw=kw)
-
     async def fake_deep(run_id, query, **kw):
-        called.update(engine="deepagents", run_id=run_id, query=query, kw=kw)
+        called.update(run_id=run_id, query=query, kw=kw)
 
-    monkeypatch.setattr(m, "run_swarm", fake_swarm)
     monkeypatch.setattr(m, "run_deepagents", fake_deep)
-    monkeypatch.setenv("ADL_ENGINE", engine)
+    if engine is None:
+        monkeypatch.delenv("ADL_ENGINE", raising=False)
+    else:
+        monkeypatch.setenv("ADL_ENGINE", engine)
 
     async def go():
         rid = m.launch_run("compare X and Y", validator_enabled=True, trigger="manual")
-        # let the background task created by launch_run run to completion
         for _ in range(3):
             await asyncio.sleep(0)
         return rid
 
-    rid = asyncio.run(go())
-    called["returned_run_id"] = rid
+    called["returned_run_id"] = asyncio.run(go())
     return called
 
 
-def test_launch_run_routes_to_deepagents(monkeypatch):
-    called = _launch_under(monkeypatch, "deepagents")
-    assert called["engine"] == "deepagents"
+def test_launch_run_runs_deepagents_by_default(monkeypatch):
+    called = _launch_under(monkeypatch, None)
     assert called["run_id"] == called["returned_run_id"]
     assert called["query"] == "compare X and Y"
     assert called["kw"]["validator_enabled"] is True
 
 
-def test_launch_run_defaults_to_swarm(monkeypatch):
-    monkeypatch.delenv("ADL_ENGINE", raising=False)
-    called: dict = {}
-
-    async def fake_swarm(run_id, query, **kw):
-        called["engine"] = "swarm"
-
-    async def fake_deep(run_id, query, **kw):
-        called["engine"] = "deepagents"
-
-    monkeypatch.setattr(m, "run_swarm", fake_swarm)
-    monkeypatch.setattr(m, "run_deepagents", fake_deep)
-
-    async def go():
-        m.launch_run("q")
-        for _ in range(3):
-            await asyncio.sleep(0)
-
-    asyncio.run(go())
-    assert called["engine"] == "swarm"          # default when ADL_ENGINE unset
+def test_launch_run_explicit_deepagents(monkeypatch):
+    called = _launch_under(monkeypatch, "deepagents")
+    assert called["run_id"] == called["returned_run_id"]
 
 
-def test_launch_run_swarm_explicit(monkeypatch):
+def test_stale_swarm_value_still_runs_deepagents(monkeypatch):
+    # A leftover ADL_ENGINE=swarm must not silently no-op — it runs deepagents.
     called = _launch_under(monkeypatch, "swarm")
-    assert called["engine"] == "swarm"
+    assert called["run_id"] == called["returned_run_id"]
+    assert called["query"] == "compare X and Y"
