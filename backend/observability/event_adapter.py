@@ -42,6 +42,25 @@ from backend.repositories import persistence as db
 _ORCH_STEP = "orchestrator"  # synthetic step holding planner + synthesis calls
 
 
+class BudgetExceeded(Exception):
+    """Raised when a run breaches a budget ceiling. Caught by run_with_adapter,
+    which stops the stream cleanly and lets synthesis work from partial results
+    (the deepagents graph is abandoned, not crashed)."""
+
+    def __init__(self, kind: str, used, limit):
+        self.kind, self.used, self.limit = kind, used, limit
+        super().__init__(f"budget '{kind}' exceeded: {used} > {limit}")
+
+
+def _budget_from_env() -> dict:
+    """Per-run budget ceilings (plan §4.4). 0/unset == unlimited for that dimension."""
+    return {
+        "max_subagents": int(os.environ.get("ADL_MAX_SUBAGENTS", "6") or 0),
+        "max_tool_hops": int(os.environ.get("ADL_MAX_TOOL_HOPS", "5") or 0),   # per agent
+        "max_total_tokens": int(os.environ.get("ADL_MAX_TOTAL_TOKENS", "0") or 0),
+    }
+
+
 def _tier_observed(m) -> str | None:
     meta = getattr(m, "response_metadata", {}) or {}
     headers = {k.lower(): v for k, v in (meta.get("headers", {}) or {}).items()}
@@ -80,7 +99,8 @@ class EventAdapter:
 
     def __init__(self, run_id: str, broadcast=None, *, persistence=db,
                  planner_tier: str | None = None, judge=None, redispatch=None,
-                 validation_cfg: dict | None = None):
+                 validation_cfg: dict | None = None, synthesis_grader=None,
+                 budget: dict | None = None):
         self.run_id = run_id
         self.broadcast = broadcast
         self.db = persistence
@@ -99,6 +119,14 @@ class EventAdapter:
         self._validation_cfg = validation_cfg or {}
         self.validation_cost = 0.0                  # rolled up separately from generation
 
+        # L2 frontier synthesis grader (opt-in): graded once in finalize against the
+        # objective + the collected subtask results — the most important validator
+        # (directive). Budgets stop a run cleanly with partial synthesis on breach.
+        self._synthesis_grader = synthesis_grader
+        self.budget = budget if budget is not None else _budget_from_env()
+        self.total_tokens = 0
+        self.budget_exceeded: dict | None = None
+
         self.calls: list[dict] = []                 # every model call, for the cost rollup
         self.steps: dict[str, dict] = {}            # task_call_id -> {step_key, role, attempts}
         self._open_unbound: list[str] = []          # task_call_ids without a namespace yet
@@ -106,21 +134,61 @@ class EventAdapter:
         self._delegation_n = 0
         self._orch_attempts = 0
         self._synthesis_emitted = False
+        self.query = ""
         self.final_answer: str | None = None
+        self._results: list[dict] = []              # per-delegation result, for synthesis grading
         self.events: list[SwarmEvent] = []
+
+    # ── budget accounting ──────────────────────────────────────────────────────
+    def _account_tokens(self, tin: int, tout: int) -> None:
+        self.total_tokens += int(tin or 0) + int(tout or 0)
+        cap = self.budget.get("max_total_tokens", 0)
+        if cap and self.total_tokens > cap:
+            raise BudgetExceeded("max_total_tokens", self.total_tokens, cap)
 
     # ── lifecycle ────────────────────────────────────────────────────────────
     async def start(self, query: str) -> None:
+        self.query = query
         await self.db.create_step(self.run_id, step_key=_ORCH_STEP, type="orchestrate",
                                   objective="planner + synthesis", status="running")
         await self._emit(EventType.run_started, {"query": query})
 
+    async def _grade_synthesis(self) -> None:
+        """Run the L2 frontier grader on the final answer (directive §Synthesis)."""
+        if not self._synthesis_grader or not (self.final_answer or "").strip():
+            return
+        await self._emit(EventType.validator_started, {"task_id": _ORCH_STEP})
+        gr = await self._synthesis_grader(self.query, self.final_answer, self._results)
+        self.validation_cost += float(gr.get("cost") or 0.0)
+        await self.db.record_validation(
+            self.run_id, _ORCH_STEP, level=gr.get("level", "frontier"),
+            verdict=gr["verdict"], score=gr.get("score"),
+            validator_tier=gr.get("validator_tier"), rubric_id=gr.get("rubric_id"),
+            escalated=True, detail={"critique": gr.get("critique", "")},
+            tokens_in=gr.get("tokens_in"), tokens_out=gr.get("tokens_out"),
+            cost=gr.get("cost"),
+        )
+        event = (EventType.validator_approved if gr["verdict"] == "pass"
+                 else EventType.validator_rejected)
+        await self._emit(event, {"task_id": _ORCH_STEP, "verdict_kind": gr["verdict"],
+                                 "critique": gr.get("critique", "")})
+
     async def finalize(self, status: str = "completed") -> dict:
+        # L2 synthesis grade runs before the run closes (even on a budget stop, so a
+        # truncated answer is still graded). A grader failure must not block finalize.
+        try:
+            await self._grade_synthesis()
+        except Exception as exc:  # noqa: BLE001
+            await self._emit(EventType.error, {"error": f"synthesis grader: {exc}"})
+
         cost = rollup_run(self.calls)
         await self.db.set_step_status(self.run_id, _ORCH_STEP, "completed",
                                       total_attempts=self._orch_attempts)
         metrics = {"task_count": self._delegation_n,
-                   "validation_cost": round(self.validation_cost, 6), **cost.as_dict()}
+                   "validation_cost": round(self.validation_cost, 6),
+                   "total_tokens": self.total_tokens, **cost.as_dict()}
+        if self.budget_exceeded:
+            metrics["budget_exceeded"] = self.budget_exceeded
         await self.db.finalize_run(
             self.run_id,
             document_result={"final_answer": self.final_answer or ""},
@@ -130,10 +198,11 @@ class EventAdapter:
         )
         await self._emit(EventType.run_completed,
                          {"final_answer": self.final_answer or "",
-                          "task_count": self._delegation_n})
+                          "task_count": self._delegation_n,
+                          "budget_exceeded": self.budget_exceeded})
         await self._emit(EventType.run_metrics, cost.as_dict())
         return {"cost": cost.as_dict(), "task_count": self._delegation_n,
-                "final_answer": self.final_answer}
+                "final_answer": self.final_answer, "budget_exceeded": self.budget_exceeded}
 
     # ── main entry: one stream event (namespace, mode, chunk) ────────────────
     async def handle(self, ns: tuple, mode: str, chunk: dict) -> None:
@@ -161,6 +230,7 @@ class EventAdapter:
                 )
                 self.calls.append({"tokens_out": tout, "tier_observed": tier,
                                    "cache_hit": _cache_hit(m)})
+                self._account_tokens(tin, tout)
             tcalls = _task_calls(m)
             if tcalls:
                 for tc in tcalls:
@@ -176,12 +246,15 @@ class EventAdapter:
 
     async def _open_delegation(self, tc: dict) -> None:
         self._delegation_n += 1
+        cap = self.budget.get("max_subagents", 0)
+        if cap and self._delegation_n > cap:
+            raise BudgetExceeded("max_subagents", self._delegation_n, cap)
         role = (tc.get("args") or {}).get("subagent_type") or "general-purpose"
         desc = (tc.get("args") or {}).get("description") or ""
         step_key = f"{role}-{self._delegation_n}"[:32]
         tcid = tc.get("id")
         self.steps[tcid] = {"step_key": step_key, "role": role, "attempts": 0,
-                            "desc": desc}
+                            "desc": desc, "tool_hops": 0}
         self._open_unbound.append(tcid)
         await self.db.create_step(self.run_id, step_key=step_key, type=role,
                                   objective=desc, status="running")
@@ -257,6 +330,7 @@ class EventAdapter:
             )
             self.calls.append({"tokens_out": tout, "tier_observed": rd.get("tier_observed"),
                                "cache_hit": bool(rd.get("cache_hit"))})
+            self._account_tokens(int(rd.get("tokens_in") or 0), tout)
 
         # Terminal mapping (directive): a genuinely unusable result (L0 empty) hard
         # -fails the step; a judge-unsatisfied but non-empty result after the retry
@@ -292,6 +366,9 @@ class EventAdapter:
         await self.db.set_step_status(self.run_id, step_key, "completed",
                                       result={"text": result_text},
                                       total_attempts=attempts)
+        # Keep the usable result for the synthesis grader's cross-check.
+        self._results.append({"step_key": step_key, "terminal": terminal,
+                              "result": result_text})
         if terminal == "degraded":
             await self._emit(EventType.validator_rejected,
                              {"task_id": step_key, "verdict_kind": "degraded",
@@ -313,7 +390,15 @@ class EventAdapter:
         info = self.steps.get(tcid)
         if info is None:
             return
-        if type(m).__name__ == "AIMessage":
+        kind = type(m).__name__
+        if kind == "ToolMessage":
+            # A worker tool call (one tool hop). Bound per agent (plan §4.4).
+            info["tool_hops"] += 1
+            cap = self.budget.get("max_tool_hops", 0)
+            if cap and info["tool_hops"] > cap:
+                raise BudgetExceeded("max_tool_hops", info["tool_hops"], cap)
+            return
+        if kind == "AIMessage":
             tin, tout = _usage(m)
             if not (tout or tin):
                 return                            # not a real model call
@@ -327,6 +412,7 @@ class EventAdapter:
             )
             self.calls.append({"tokens_out": tout, "tier_observed": tier,
                                "cache_hit": _cache_hit(m)})
+            self._account_tokens(tin, tout)
 
     def _bind_namespace(self, ns: tuple) -> str | None:
         """Map a subagent namespace to its delegation's task_call_id. First-seen
@@ -349,35 +435,80 @@ class EventAdapter:
             await self.broadcast(self.run_id, ev)
 
 
+def _interrupt_payload(chunk) -> object | None:
+    """Return the interrupt value if this stream chunk is a HITL interrupt, else None.
+    langgraph surfaces a pending interrupt as a top-level `__interrupt__` key."""
+    if isinstance(chunk, dict) and "__interrupt__" in chunk:
+        return chunk["__interrupt__"]
+    return None
+
+
 async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
                            persistence=db, planner_tier: str | None = None,
                            judge=None, redispatch=None, validation_cfg: dict | None = None,
-                           recursion_limit: int = 80) -> dict:
+                           synthesis_grader=None, budget: dict | None = None,
+                           approval=None, recursion_limit: int = 80) -> dict:
     """Drive one deepagents run through the adapter end to end.
 
     Streams the compiled agent with subgraphs=True so subagent-internal calls
     (and their routed tiers) are visible, feeding every event to the adapter.
     Pass judge/redispatch (from validation_judge.make_judge/make_redispatch) to
-    enable L1/L2 graded validation + bounded retry; omit for L0-only.
+    enable L1/L2 graded validation + bounded retry; synthesis_grader for the L2
+    output check; budget for the per-run ceilings.
+
+    HITL: when the graph hits a plan-approval interrupt (core.build_interrupts), the
+    `approval` coroutine is awaited for a decision and the graph resumes with
+    Command(resume=decision) on the same thread_id. With no `approval` the run
+    auto-approves so non-interactive runs are never blocked; a "reject" aborts.
+    The live interrupt path requires a real planning run on the gateway to exercise.
+
     Returns the adapter's run summary. The caller owns run creation/teardown.
     """
     adapter = EventAdapter(run_id, broadcast, persistence=persistence,
                            planner_tier=planner_tier, judge=judge,
-                           redispatch=redispatch, validation_cfg=validation_cfg)
+                           redispatch=redispatch, validation_cfg=validation_cfg,
+                           synthesis_grader=synthesis_grader, budget=budget)
     await adapter.start(query)
     config = {"configurable": {"thread_id": run_id},
               "tags": [f"tier_req:{adapter.planner_tier}"],
               "recursion_limit": recursion_limit}
     status = "completed"
     t0 = time.time()
+    stream_input: object = {"messages": query}
     try:
-        async for ns, mode, chunk in agent.astream(
-            {"messages": query}, config, stream_mode=["updates"], subgraphs=True
-        ):
-            await adapter.handle(ns, mode, chunk)
+        while True:                                  # resume loop for HITL interrupts
+            interrupted = False
+            async for ns, mode, chunk in agent.astream(
+                stream_input, config, stream_mode=["updates"], subgraphs=True
+            ):
+                payload = _interrupt_payload(chunk)
+                if payload is not None:
+                    interrupted = True
+                    await adapter._emit(EventType.awaiting_approval,
+                                        {"interrupt": str(payload)[:500]})
+                    await persistence.set_run_status(run_id, "awaiting_approval")
+                    break
+                await adapter.handle(ns, mode, chunk)
+            if not interrupted:
+                break
+            decision = await approval() if approval is not None else "approve"
+            if str(decision).lower() == "reject":
+                status = "aborted"
+                break
+            await adapter._emit(EventType.run_resumed, {"decision": str(decision)})
+            await persistence.set_run_status(run_id, "running")
+            from langgraph.types import Command
+            stream_input = Command(resume=decision)
+    except BudgetExceeded as be:
+        # Clean stop: abandon the graph, keep partial results, let synthesis grade
+        # whatever was produced. The run still completes (it is not a failure).
+        adapter.budget_exceeded = {"kind": be.kind, "used": be.used, "limit": be.limit}
+        await adapter._emit(EventType.error,
+                            {"error": str(be), "budget_exceeded": adapter.budget_exceeded})
     except Exception as exc:  # noqa: BLE001 — surface as a failed run, don't crash caller
         status = "failed"
         await adapter._emit(EventType.error, {"error": f"{type(exc).__name__}: {exc}"})
     summary = await adapter.finalize(status=status)
+    summary["status"] = status
     summary["elapsed_s"] = round(time.time() - t0, 1)
     return summary

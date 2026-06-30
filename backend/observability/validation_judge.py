@@ -21,6 +21,7 @@ model layer and easy to fake in tests.
 from __future__ import annotations
 
 import json
+import os
 import re
 
 from backend.observability.cost import call_cost
@@ -135,6 +136,60 @@ async def redispatch_worker(*, role: str, subtask: str, critique: str, mf,
             "tier_observed": tier_obs, "cache_hit": cache_hit}
 
 
+_SYNTH_GRADER_SYSTEM = """You are the final-output validator for a multi-agent run. You
+are given the original OBJECTIVE, the SUBTASK RESULTS the workers produced, and the
+SYNTHESIZED ANSWER that combined them. Judge ONLY the synthesized answer:
+
+- Does it actually answer the objective?
+- Is it faithful to the subtask results (no contradictions, no confabulated joins)?
+- Did it drop a requirement the subtasks covered?
+
+Do NOT re-do the work. Respond with ONLY this JSON, no fences:
+{"verdict": "pass" | "degraded" | "fail", "score": 0.0-1.0, "critique": "one specific sentence; empty if pass"}
+- pass:     answers the objective, faithful, complete.
+- degraded: usable but drops a requirement, thin, or partially unsupported.
+- fail:     does not answer the objective, or contradicts/confabulates the results.""".strip()
+
+
+async def grade_synthesis(*, objective: str, final_answer: str, results: list[dict],
+                          mf, tier: str | None = None) -> dict:
+    """L2 frontier grade of the final synthesized answer (directive §Synthesis) —
+    the single most important validator. Compares the answer against the objective
+    and the subtask results. Never raises (same guardrail as judge_result)."""
+    tier = tier or os.environ.get("ADL_SYNTHESIS_VALIDATOR_TIER", "tier4")
+    digest = "\n\n".join(
+        f"[{r.get('step_key', i)} · {r.get('terminal', '?')}]: {(r.get('result') or '')[:800]}"
+        for i, r in enumerate(results)
+    ) or "(no subtask results)"
+    prompt = (f"OBJECTIVE:\n{objective}\n\nSUBTASK RESULTS:\n{digest}\n\n"
+              f"SYNTHESIZED ANSWER:\n{(final_answer or '')[:6000]}")
+    messages = [{"role": "system", "content": _SYNTH_GRADER_SYSTEM},
+                {"role": "user", "content": prompt}]
+
+    verdict, score, critique, tier_obs = "pass", 1.0, "", tier
+    tin = tout = 0
+    try:
+        resp = await mf.for_tier(tier).ainvoke(messages)
+        tin, tout = _usage(resp)
+        raw = _headers(resp).get("x-vsr-selected-model")
+        tier_obs = to_internal_tier(raw) if raw else tier
+        parsed = _parse(resp.content if isinstance(resp.content, str) else str(resp.content))
+        if parsed:
+            v = str(parsed.get("verdict", "pass")).lower()
+            verdict = v if v in _VALID_VERDICTS else "degraded"
+            try:
+                score = float(parsed.get("score", 1.0 if verdict == "pass" else 0.5))
+            except (TypeError, ValueError):
+                score = 0.5
+            critique = str(parsed.get("critique", "") or "")
+    except Exception as exc:  # noqa: BLE001
+        verdict, score, critique, tier_obs = "pass", 1.0, f"validator error: {exc}", None
+
+    return {"level": "frontier", "verdict": verdict, "score": round(score, 3),
+            "critique": critique, "validator_tier": tier_obs, "rubric_id": "synthesis_v1",
+            "tokens_in": tin, "tokens_out": tout, "cost": call_cost(tout, tier_obs)}
+
+
 def make_judge(mf):
     """Bind a ModelFactory into a judge callable for the event adapter."""
     async def _judge(subtask: str, result_text: str, role: str, cfg: dict) -> dict:
@@ -150,3 +205,11 @@ def make_redispatch(mf):
         return await redispatch_worker(role=role, subtask=subtask, critique=critique,
                                        mf=mf, roles=roles)
     return _redispatch
+
+
+def make_synthesis_grader(mf):
+    """Bind a ModelFactory into a synthesis-grader callable for the event adapter."""
+    async def _grade(objective: str, final_answer: str, results: list[dict]) -> dict:
+        return await grade_synthesis(objective=objective, final_answer=final_answer,
+                                     results=results, mf=mf)
+    return _grade

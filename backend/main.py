@@ -552,6 +552,21 @@ async def run_swarm(
         active_runs.dec()
 
 
+# Pending HITL plan-approval decisions, keyed by run_id. POST /run/{id}/approve
+# resolves the future the run is awaiting (see run_deepagents / run_with_adapter).
+_pending_approvals: dict[str, asyncio.Future] = {}
+
+
+async def _await_approval(run_id: str):
+    """Block until POST /run/{run_id}/approve delivers a decision string."""
+    fut = asyncio.get_event_loop().create_future()
+    _pending_approvals[run_id] = fut
+    try:
+        return await fut
+    finally:
+        _pending_approvals.pop(run_id, None)
+
+
 async def run_deepagents(
     run_id: str,
     query: str,
@@ -587,23 +602,32 @@ async def run_deepagents(
         from backend.agents.core import build_agent
         from backend.inference.model import ModelFactory
         from backend.observability.event_adapter import run_with_adapter
-        from backend.observability.validation_judge import make_judge, make_redispatch
+        from backend.observability.validation_judge import (
+            make_judge, make_redispatch, make_synthesis_grader)
         from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
         mf = ModelFactory()
         judge = make_judge(mf) if validator_enabled else None
         redispatch = make_redispatch(mf) if validator_enabled else None
+        synthesis_grader = make_synthesis_grader(mf) if validator_enabled else None
         checkpoint_db = (os.environ.get("ADL_CHECKPOINT_DB")
                          or os.environ.get("CHECKPOINT_DB", "./data/adl_checkpoints.db"))
 
+        # HITL plan approval (opt-in): when ADL_PLAN_APPROVAL is on, the graph pauses
+        # after planning and run_with_adapter awaits this coroutine for a decision,
+        # delivered by POST /run/{run_id}/approve. Off → auto-approve, never blocks.
+        plan_approval = os.environ.get("ADL_PLAN_APPROVAL", "").strip().lower() in ("1", "true", "yes")
+        approval = (lambda: _await_approval(run_id)) if plan_approval else None
+
         # The adapter handles run_started, steps, validation, finalize (incl. the
-        # cost + validation rollup) and run_completed/run_metrics over the WS.
+        # cost + validation rollup), budgets, and run_completed/run_metrics over WS.
         async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
             agent = build_agent(checkpointer)
             summary = await run_with_adapter(
                 agent, query, run_id,
                 broadcast=manager.broadcast,
                 judge=judge, redispatch=redispatch,
+                synthesis_grader=synthesis_grader, approval=approval,
             )
 
         latency_ms = (time.perf_counter() - t0) * 1000
@@ -739,6 +763,20 @@ async def kill_task(run_id: str, request: KillTaskRequest):
         task.cancel()
         return {"status": "killed", "task_id": request.task_id}
     return {"status": "not_found", "task_id": request.task_id}
+
+
+@app.post("/run/{run_id}/approve")
+async def approve_run(run_id: str, body: dict):
+    """HITL plan-approval gate (deepagents engine). Deliver a decision to a run that
+    paused after planning: {"decision": "approve"} resumes, {"decision": "reject"}
+    aborts. 404 if the run is not currently awaiting approval."""
+    fut = _pending_approvals.get(run_id)
+    if fut is None or fut.done():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="no pending approval for this run")
+    decision = (body or {}).get("decision", "approve")
+    fut.set_result(decision)
+    return {"run_id": run_id, "decision": decision}
 
 
 @app.post("/run/{run_id}/retry")

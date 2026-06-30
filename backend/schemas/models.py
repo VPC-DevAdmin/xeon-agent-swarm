@@ -444,6 +444,8 @@ class EventType(str, Enum):
     worker_retrying       = "worker_retrying"      # retrying with correction hint
     worker_rejected_final = "worker_rejected_final"# exceeded retry budget
     synthesis_started     = "synthesis_started"
+    awaiting_approval     = "awaiting_approval"     # HITL: run paused for plan approval
+    run_resumed           = "run_resumed"           # HITL: resumed after a decision
     tts_started           = "tts_started"
     tts_completed         = "tts_completed"
     run_completed         = "run_completed"
@@ -469,6 +471,8 @@ CE_TYPE: dict[EventType, str] = {
     EventType.worker_retrying:       "io.xeon.swarm.step.retrying",
     EventType.worker_rejected_final: "io.xeon.swarm.step.rejected_final",
     EventType.synthesis_started:     "io.xeon.swarm.reduce.started",
+    EventType.awaiting_approval:     "io.xeon.swarm.run.awaiting_approval",
+    EventType.run_resumed:           "io.xeon.swarm.run.resumed",
     EventType.tts_started:           "io.xeon.swarm.tts.started",
     EventType.tts_completed:         "io.xeon.swarm.tts.completed",
     EventType.run_completed:         "io.xeon.swarm.run.completed",

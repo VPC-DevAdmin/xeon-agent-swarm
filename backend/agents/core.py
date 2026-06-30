@@ -53,11 +53,34 @@ answer the objective yourself without delegating."""
 
 # Gate sensitive tools at the MAIN agent (checkpointer is required and set below).
 # Values: True (approve/edit/reject/respond) or {"allowed_decisions": [...]}.
-# Subagent-level edit/reject is buggy in 0.6.10 — keep gates at the main agent.
+# Subagent-level edit/reject is buggy in 0.6.10 (#554) — keep gates at the main
+# agent, where approve works reliably (deepagents_integration_reference.md).
 INTERRUPTS: dict = {
     # "ticket_create": {"allowed_decisions": ["approve", "reject"]},
     # "code_exec": True,
 }
+
+# The planning tool deepagents uses to write the todo plan. Interrupting it yields
+# the plan-approval gate: the run pauses after the plan is produced, before any
+# delegation. Override via ADL_PLAN_TOOL if a future deepagents renames it.
+_PLAN_TOOL = os.environ.get("ADL_PLAN_TOOL", "write_todos")
+
+
+def build_interrupts() -> dict:
+    """Assemble interrupt_on from env (plan §4.5). Plan-approval is the main-agent
+    gate that works around #554; sensitive-tool gates are opt-in.
+
+      ADL_PLAN_APPROVAL=1            → pause after planning for approve/reject.
+      ADL_SENSITIVE_TOOLS=a,b,c      → gate each named tool (approve/reject).
+    """
+    interrupts = dict(INTERRUPTS)
+    if os.environ.get("ADL_PLAN_APPROVAL", "").strip().lower() in ("1", "true", "yes"):
+        interrupts[_PLAN_TOOL] = {"allowed_decisions": ["approve", "reject"]}
+    for tool in (os.environ.get("ADL_SENSITIVE_TOOLS", "") or "").split(","):
+        tool = tool.strip()
+        if tool:
+            interrupts[tool] = {"allowed_decisions": ["approve", "reject"]}
+    return interrupts
 
 
 def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
@@ -80,7 +103,7 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
         tools=mcp_tools or [],
         system_prompt=ORCHESTRATOR_PROMPT,
         subagents=build_subagent_profiles(mf, tools_by_name),  # workers on auto
-        interrupt_on=INTERRUPTS,                                # HITL at main-agent level
+        interrupt_on=build_interrupts(),                        # HITL at main-agent level
         checkpointer=checkpointer,                              # REQUIRED for HITL + resume
     )
 
