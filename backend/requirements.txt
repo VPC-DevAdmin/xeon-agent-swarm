@@ -1,26 +1,109 @@
-# NOTE: this is the loose top-level set. For a reproducible lock, install
-# backend/requirements.in and `pip freeze > backend/requirements.txt` — deepagents
-# 0.6.10 pins the matching langchain/langgraph versions (don't hand-pin them).
-fastapi>=0.111.0
-uvicorn[standard]>=0.29.0
-websockets>=12.0
-pydantic>=2.7.0
-openai>=1.30.0
-httpx>=0.27.0
-pyyaml>=6.0.1
-prometheus-client>=0.20.0
-python-dotenv>=1.0.0
-edge-tts>=6.1.9
-# ── deepagents core (tier-router migration) ────────────────────────────────
-# langchain-core / langgraph come in transitively, version-matched by deepagents.
+aiohappyeyeballs==2.6.2
+aiohttp==3.14.1
+aiosignal==1.4.0
+aiosqlite==0.22.1
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anthropic==0.113.0
+anyio==4.14.1
+APScheduler==3.11.3
+attrs==26.1.0
+backoff==2.2.1
+bracex==3.0
+certifi==2026.6.17
+cffi==2.0.0
+charset-normalizer==3.4.7
+click==8.4.2
+croniter==6.2.2
+cryptography==49.0.0
 deepagents==0.6.10
-langchain-openai            # ChatOpenAI → gateway (inference/model.py)
-langgraph-checkpoint-sqlite # AsyncSqliteSaver (live agent state + resume)
-langchain-mcp-adapters      # MCP toolbox servers → LangChain tools
-# ── Persistence (SQLite — single file, no DB server) ───────────────────────
-sqlalchemy[asyncio]>=2.0.30
-aiosqlite>=0.20.0         # async SQLite driver
-cryptography>=42.0.0      # Fernet encryption for connector secrets
-croniter>=2.0.0           # cron expression parsing for schedules
-apscheduler>=3.10.0       # background job scheduler
-langfuse>=2.0.0           # optional tracing (no-op unless LANGFUSE_* configured)
+distro==1.9.0
+docstring_parser==0.18.0
+edge-tts==7.2.8
+fastapi==0.138.2
+filetype==1.2.0
+frozenlist==1.8.0
+google-auth==2.55.1
+google-genai==2.10.0
+googleapis-common-protos==1.75.0
+greenlet==3.5.3
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+httpx-sse==0.4.3
+idna==3.18
+jiter==0.16.0
+jsonpatch==1.33
+jsonpointer==3.1.1
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+langchain==1.3.11
+langchain-anthropic==1.4.8
+langchain-core==1.4.8
+langchain-google-genai==4.2.6
+langchain-mcp-adapters==0.3.0
+langchain-openai==1.3.3
+langchain-protocol==0.0.18
+langfuse==4.12.0
+langgraph==1.2.7
+langgraph-checkpoint==4.1.1
+langgraph-checkpoint-sqlite==3.1.0
+langgraph-prebuilt==1.1.0
+langgraph-sdk==0.4.2
+langsmith==0.9.4
+mcp==1.28.1
+multidict==6.7.1
+openai==2.44.0
+opentelemetry-api==1.43.0
+opentelemetry-exporter-otlp-proto-common==1.43.0
+opentelemetry-exporter-otlp-proto-http==1.43.0
+opentelemetry-proto==1.43.0
+opentelemetry-sdk==1.43.0
+opentelemetry-semantic-conventions==0.64b0
+orjson==3.11.9
+ormsgpack==1.12.2
+packaging==26.2
+prometheus_client==0.25.0
+propcache==0.5.2
+protobuf==7.35.1
+pyasn1==0.6.3
+pyasn1_modules==0.4.2
+pycparser==3.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
+pydantic_core==2.46.4
+PyJWT==2.13.0
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.2
+python-multipart==0.0.32
+PyYAML==6.0.3
+referencing==0.37.0
+regex==2026.6.28
+requests==2.34.2
+requests-toolbelt==1.0.0
+rpds-py==2026.6.3
+six==1.17.0
+sniffio==1.3.1
+SQLAlchemy==2.0.51
+sqlite-vec==0.1.9
+sse-starlette==3.4.5
+starlette==1.3.1
+tabulate==0.10.0
+tenacity==9.1.4
+tiktoken==0.13.0
+tqdm==4.68.3
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+tzlocal==5.4.4
+urllib3==2.7.0
+uuid_utils==0.16.2
+uvicorn==0.49.0
+uvloop==0.22.1
+watchfiles==1.2.0
+wcmatch==10.2
+websockets==15.0.1
+wrapt==2.2.2
+xxhash==3.8.0
+yarl==1.24.2
+zstandard==0.25.0

@@ -58,6 +58,14 @@ class ModelFactory:
         self.base_url = os.environ.get("ROUTER_BASE_URL", f"{base}/v1")
         self.api_key = os.environ.get("ROUTER_API_KEY", "unused")  # gateway ignores it
         self.max_completion_tokens = int(os.environ.get("ADL_MAX_COMPLETION_TOKENS", "2048"))
+        # Workers get their own (typically lower) ceiling. A pinned planner needs
+        # headroom to emit a full multi-subtask plan and the final synthesis, but a
+        # worker on a slow cold-CPU tier must finish a generation under the gateway's
+        # 180s upstream timeout — a large worker budget invites a connection drop.
+        self.worker_max_completion_tokens = int(
+            os.environ.get("ADL_WORKER_MAX_COMPLETION_TOKENS",
+                           str(self.max_completion_tokens))
+        )
         # Salvaged from inference/client.py — slow CPU warmup tolerance.
         self.request_timeout = float(os.environ.get("ROUTER_REQUEST_TIMEOUT", "300"))
         self.max_retries = int(
@@ -74,24 +82,36 @@ class ModelFactory:
             }
         return {}
 
-    def _make(self, model: str, temperature: float) -> ChatOpenAI:
+    def _make(self, model: str, temperature: float | None,
+              max_completion_tokens: int | None = None) -> ChatOpenAI:
+        # Temperature is OMITTED unless explicitly requested. The gateway owns model
+        # identity, so a tier may resolve to a reasoning model (e.g. Claude/o-series
+        # with extended thinking), and those reject temperature != 1 with a 400. The
+        # same principle that keeps model names out of this layer keeps sampling
+        # params out of it: let the server apply its own default. Callers that truly
+        # need determinism on a known non-reasoning tier can pass temperature.
+        kwargs: dict = {}
+        if temperature is not None:
+            kwargs["temperature"] = temperature
         return ChatOpenAI(
             base_url=self.base_url,
             api_key=self.api_key,
             model=model,                       # "auto" or "tierN", never a model id
-            temperature=temperature,
             default_headers=self._auth_headers or None,
             include_response_headers=True,     # surfaces x-vsr-* in response_metadata
             disable_streaming=True,            # gateway rejects stream
             timeout=self.request_timeout,      # cold-CPU ceiling (salvaged)
             max_retries=self.max_retries,      # cold-engine warmup retries (salvaged)
-            model_kwargs={"max_completion_tokens": self.max_completion_tokens},
+            model_kwargs={
+                "max_completion_tokens": max_completion_tokens or self.max_completion_tokens
+            },
+            **kwargs,
         )
 
-    def auto(self, temperature: float = 0.2) -> ChatOpenAI:
+    def auto(self, temperature: float | None = None) -> ChatOpenAI:
         """Worker default: let the router classify and choose the tier."""
-        return self._make("auto", temperature)
+        return self._make("auto", temperature, self.worker_max_completion_tokens)
 
-    def for_tier(self, tier: str, temperature: float = 0.2) -> ChatOpenAI:
+    def for_tier(self, tier: str, temperature: float | None = None) -> ChatOpenAI:
         """Pin a structural role to a tier, e.g. for_tier('T5') -> model='tier5'."""
         return self._make(to_wire_tier(tier), temperature)

@@ -43,7 +43,12 @@ subtasks. Delegate independent subtasks before dependent ones; pass an upstream
 subtask's result to a dependent one. After the workers return, compose a single
 coherent answer that uses their specific findings — numbers, citations, comparisons —
 not vague generalities. Do not author new agent types; use the worker types available
-to you."""
+to you.
+
+Do NOT ask the user clarifying questions. The objective is the only input you get;
+proceed with reasonable, explicit assumptions and decompose immediately. State any
+assumptions you made in the final answer. Always delegate via the task tool — do not
+answer the objective yourself without delegating."""
 
 # Gate sensitive tools at the MAIN agent (checkpointer is required and set below).
 # Values: True (approve/edit/reject/respond) or {"allowed_decisions": [...]}.

@@ -224,3 +224,6 @@ dist/
 .venv/
 repomix-output.xml
 .DS_Store
+
+# ADL gateway credentials (local only)
+.env.adl
