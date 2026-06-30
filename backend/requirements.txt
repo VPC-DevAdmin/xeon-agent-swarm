@@ -1,15 +1,22 @@
+# NOTE: this is the loose top-level set. For a reproducible lock, install
+# backend/requirements.in and `pip freeze > backend/requirements.txt` — deepagents
+# 0.6.10 pins the matching langchain/langgraph versions (don't hand-pin them).
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 websockets>=12.0
 pydantic>=2.7.0
 openai>=1.30.0
-langgraph>=0.1.0
-langchain-core>=0.2.0
 httpx>=0.27.0
 pyyaml>=6.0.1
 prometheus-client>=0.20.0
 python-dotenv>=1.0.0
 edge-tts>=6.1.9
+# ── deepagents core (tier-router migration) ────────────────────────────────
+# langchain-core / langgraph come in transitively, version-matched by deepagents.
+deepagents==0.6.10
+langchain-openai            # ChatOpenAI → gateway (inference/model.py)
+langgraph-checkpoint-sqlite # AsyncSqliteSaver (live agent state + resume)
+langchain-mcp-adapters      # MCP toolbox servers → LangChain tools
 # ── Persistence (SQLite — single file, no DB server) ───────────────────────
 sqlalchemy[asyncio]>=2.0.30
 aiosqlite>=0.20.0         # async SQLite driver
