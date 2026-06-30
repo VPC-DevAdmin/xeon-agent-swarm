@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.db.ids import uuid7_str
-from backend.db.models import Run, Step, StepAttempt
+from backend.db.models import Run, Step, StepAttempt, Validation
 
 
 def _utcnow() -> datetime:
@@ -103,6 +103,9 @@ async def finalize_run(
     document_result: dict | None = None,
     metrics: dict | None = None,
     status: str = "completed",
+    total_cost: float | None = None,
+    baseline_cost: float | None = None,
+    savings_pct: float | None = None,
 ) -> None:
     run = await session.get(Run, run_id)
     if run is None:
@@ -111,6 +114,12 @@ async def finalize_run(
         run.document_result = document_result
     if metrics is not None:
         run.metrics = metrics
+    if total_cost is not None:
+        run.total_cost = total_cost
+    if baseline_cost is not None:
+        run.baseline_cost = baseline_cost
+    if savings_pct is not None:
+        run.savings_pct = savings_pct
     run.status = status
     run.completed_at = _utcnow()
     await session.flush()
@@ -123,6 +132,42 @@ async def _get_step(session: AsyncSession, run_id: str, step_key: str) -> Step |
         select(Step).where(Step.run_id == run_id, Step.step_key == step_key)
     )
     return res.scalar_one_or_none()
+
+
+async def create_step(
+    session: AsyncSession,
+    run_id: str,
+    *,
+    step_key: str,
+    type: str,
+    objective: str | None = None,
+    dependencies: list[str] | None = None,
+    status: str = "running",
+) -> Step:
+    """Create a Step row on the fly.
+
+    The deepagents engine delegates incrementally (one subagent dispatch at a
+    time) rather than materializing a full TaskGraph up front, so the event
+    adapter creates each Step as the delegation appears instead of via
+    save_task_graph(). Idempotent on (run_id, step_key): returns the existing row
+    if already present.
+    """
+    existing = await _get_step(session, run_id, step_key)
+    if existing is not None:
+        return existing
+    step = Step(
+        id=uuid7_str(),
+        run_id=run_id,
+        step_key=step_key,
+        type=type,
+        objective=objective,
+        dependencies=dependencies or [],
+        status=status,
+        started_at=_utcnow() if status == "running" else None,
+    )
+    session.add(step)
+    await session.flush()
+    return step
 
 
 async def set_step_status(
@@ -169,6 +214,13 @@ async def record_attempt(
     tokens_out: int | None = None,
     model_id: str | None = None,
     latency_ms: float | None = None,
+    # ── Tier routing (populated by the event adapter from the gateway headers) ──
+    tier_requested: str | None = None,
+    tier_observed: str | None = None,
+    category: str | None = None,
+    reasoning: str | None = None,
+    confidence: float | None = None,
+    cache_hit: bool | None = None,
 ) -> None:
     step = await _get_step(session, run_id, step_key)
     if step is None:
@@ -185,9 +237,55 @@ async def record_attempt(
         tokens_out=tokens_out,
         model_id=model_id,
         latency_ms=latency_ms,
+        tier_requested=tier_requested,
+        tier_observed=tier_observed,
+        category=category,
+        reasoning=reasoning,
+        confidence=confidence,
+        cache_hit=cache_hit,
         completed_at=_utcnow(),
     )
     session.add(attempt)
+    await session.flush()
+
+
+async def record_validation(
+    session: AsyncSession,
+    run_id: str,
+    step_key: str,
+    *,
+    level: str,
+    verdict: str,
+    validator_tier: str | None = None,
+    rubric_id: str | None = None,
+    score: float | None = None,
+    detail: dict | None = None,
+    retries_used: int = 0,
+    escalated: bool = False,
+    tokens_in: int | None = None,
+    tokens_out: int | None = None,
+    cost: float | None = None,
+) -> None:
+    """Record one tiered validation pass over a step (see validation_directive.md)."""
+    step = await _get_step(session, run_id, step_key)
+    if step is None:
+        return
+    session.add(Validation(
+        id=uuid7_str(),
+        step_id=step.id,
+        run_id=run_id,
+        level=level,
+        validator_tier=validator_tier,
+        rubric_id=rubric_id,
+        verdict=verdict,
+        score=score,
+        detail=detail,
+        retries_used=retries_used,
+        escalated=escalated,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        cost=cost,
+    ))
     await session.flush()
 
 

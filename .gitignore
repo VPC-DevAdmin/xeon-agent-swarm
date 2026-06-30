@@ -227,3 +227,6 @@ repomix-output.xml
 
 # ADL gateway credentials (local only)
 .env.adl
+
+# Runtime SQLite store (orchestrator.db, checkpoints, test DBs)
+data/

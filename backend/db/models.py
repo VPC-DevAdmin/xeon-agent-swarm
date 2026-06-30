@@ -245,6 +245,56 @@ class StepAttempt(Base):
     )
 
 
+# ── Validation (tiered per-step validation) ───────────────────────────────────
+
+class Validation(Base):
+    """One validation pass over a step's output (see docs/validation_directive.md).
+
+    Validation is a tier: L0 mechanical (zero tokens) -> L1 cheap judge (tier1/2)
+    -> L2 frontier (tier4/5). Each pass records the level it ran at, the validator
+    tier (for judge/frontier), the rubric, the verdict + score, how many retries it
+    drove, and whether it escalated. Validation cost is rolled up separately from
+    generation cost so the two stay distinguishable in the UI and summary.
+    """
+
+    __tablename__ = "validations"
+
+    id: Mapped[str] = _pk()
+    step_id: Mapped[str] = mapped_column(
+        ForeignKey("steps.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
+    )
+    level: Mapped[str] = mapped_column(String(12), nullable=False)  # mechanical|judge|frontier
+    validator_tier: Mapped[str | None] = mapped_column(String(8))   # tierN when level != mechanical
+    rubric_id: Mapped[str | None] = mapped_column(String(48))
+    verdict: Mapped[str] = mapped_column(String(12), nullable=False)  # pass|fail|degraded
+    score: Mapped[float | None] = mapped_column(Double)
+    detail: Mapped[dict | None] = mapped_column(JSONB)             # per-criterion / failure detail
+    retries_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    escalated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Validation cost, kept separate from generation cost (directive §"Data model").
+    tokens_in: Mapped[int | None] = mapped_column(Integer)
+    tokens_out: Mapped[int | None] = mapped_column(Integer)
+    cost: Mapped[float | None] = mapped_column(Double)
+
+    created_at: Mapped[datetime] = _now_col()
+
+    step: Mapped["Step"] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "level IN ('mechanical','judge','frontier')", name="ck_validation_level"
+        ),
+        CheckConstraint(
+            "verdict IN ('pass','fail','degraded')", name="ck_validation_verdict"
+        ),
+        Index("idx_validations_run", "run_id"),
+        Index("idx_validations_step", "step_id"),
+    )
+
+
 # ── Connectors ────────────────────────────────────────────────────────────────
 
 class Connector(Base):

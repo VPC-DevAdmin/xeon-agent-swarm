@@ -58,6 +58,13 @@ async def save_task_graph(run_id, task_graph: dict):
     )
 
 
+async def create_step(run_id, *, step_key, type, **kw):
+    return await _run(
+        lambda s: runs_repo.create_step(s, run_id, step_key=step_key, type=type, **kw),
+        f"create_step:{step_key}",
+    )
+
+
 async def set_step_status(run_id, step_key, status, **kw):
     return await _run(
         lambda s: runs_repo.set_step_status(s, run_id, step_key, status, **kw),
@@ -72,11 +79,20 @@ async def record_attempt(run_id, step_key, **kw):
     )
 
 
-async def finalize_run(run_id, *, document_result=None, metrics=None, status="completed"):
+async def record_validation(run_id, step_key, *, level, verdict, **kw):
+    return await _run(
+        lambda s: runs_repo.record_validation(
+            s, run_id, step_key, level=level, verdict=verdict, **kw),
+        f"record_validation:{step_key}:{level}",
+    )
+
+
+async def finalize_run(run_id, *, document_result=None, metrics=None,
+                       status="completed", **cost):
     return await _run(
         lambda s: runs_repo.finalize_run(
             s, run_id, document_result=document_result,
-            metrics=metrics, status=status,
+            metrics=metrics, status=status, **cost,
         ),
         "finalize_run",
     )
