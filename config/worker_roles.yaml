@@ -2,6 +2,11 @@ roles:
   research:
     description: "Find and synthesize factual information from corpus and web"
     max_retries: 2
+    validation:
+      level: judge          # mechanical | judge | frontier
+      tier: tier1           # validator tier when level != mechanical
+      rubric: research_v1
+      retries: 1
     system_prompt: |
       You are a research specialist. Retrieve and clearly summarize the most relevant
       factual information for the subtask. Cite specific sources.
@@ -30,6 +35,11 @@ roles:
   analysis:
     description: "Analyze data, find patterns, produce a comparison table and optional chart"
     max_retries: 2
+    validation:
+      level: judge
+      tier: tier2
+      rubric: analysis_v1
+      retries: 1
     system_prompt: |
       You are an analysis specialist. Given the subtask and any research findings,
       perform structured analysis. Your primary output is a comparison table — not
@@ -85,6 +95,11 @@ roles:
   code:
     description: "Write working code snippets and Mermaid architecture diagrams"
     max_retries: 3
+    validation:
+      level: judge
+      tier: tier2
+      rubric: code_v1
+      retries: 1
     system_prompt: |
       You are a code specialist. Produce correct, well-commented code for the subtask.
       Prefer concise, runnable examples (20-40 lines). Include all necessary imports.
@@ -124,6 +139,11 @@ roles:
   vision:
     description: "Extract specific data from charts, architecture diagrams, and technical figures"
     max_retries: 1
+    validation:
+      level: judge
+      tier: tier1
+      rubric: vision_v1
+      retries: 1
     system_prompt: |
       You are a technical vision analyst. Extract SPECIFIC, ACTIONABLE information from the
       images provided. Do NOT say images "appear to show" something or describe them at a high
@@ -163,6 +183,9 @@ roles:
   fact_check:
     description: "Verify specific claims and flag unsupported assertions"
     max_retries: 0
+    validation:
+      level: mechanical     # claim_verdict presence is a mechanical check; no judge spend
+      retries: 0
     system_prompt: |
       You are a fact-checking specialist. Pick the 2-3 most important claims from
       the research context and verify each against the provided evidence.
@@ -193,6 +216,11 @@ roles:
   writing:
     description: "Synthesize all agent results into a structured intelligence report"
     max_retries: 3
+    validation:
+      level: frontier       # the report is a high-stakes deliverable; grade it strong
+      tier: tier4
+      rubric: writing_v1
+      retries: 1
     system_prompt: |
       You are a technical writing specialist. You have received typed artifacts and
       detailed findings from specialist agents (research, analysis, code, vision,
@@ -251,6 +279,9 @@ roles:
 
   summarization:
     description: "Condense and summarize content"
+    validation:
+      level: mechanical
+      retries: 0
     system_prompt: |
       You are a summarization specialist. Condense the provided content into a clear,
       concise summary that captures the key points.
