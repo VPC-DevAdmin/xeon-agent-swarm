@@ -552,6 +552,76 @@ async def run_swarm(
         active_runs.dec()
 
 
+async def run_deepagents(
+    run_id: str,
+    query: str,
+    validator_enabled: bool = True,
+    *,
+    job_id: str | None = None,
+    trigger: str = "manual",
+):
+    """deepagents (ADL) engine: a single deep agent decomposes + delegates + synthesizes,
+    streamed through the event adapter onto the same WS + DB surfaces as the old swarm.
+
+    Drop-in alternative to run_swarm, selected by ADL_ENGINE=deepagents. The adapter
+    owns step/attempt/validation rows, the cost rollup, and run finalize; this wrapper
+    owns run creation, the checkpointer lifecycle, metrics, and the Langfuse trace.
+    When validator_enabled, L1/L2 judging + bounded retry are wired in (Stage 3).
+    """
+    t0 = time.perf_counter()
+    active_runs.inc()
+    runs_total.inc()
+
+    await db.create_run(
+        run_id, query, job_id=job_id, trigger=trigger,
+        config={"engine": "deepagents", "validator_enabled": validator_enabled},
+    )
+    if job_id:
+        await db.set_job_last_run(job_id, run_id)
+
+    from backend.observability import langfuse_client as lf
+    trace_id = lf.start_run_trace(run_id, query, {"engine": "deepagents"})
+    await db.set_run_status(run_id, "running", langfuse_trace_id=trace_id)
+
+    try:
+        from backend.agents.core import build_agent
+        from backend.inference.model import ModelFactory
+        from backend.observability.event_adapter import run_with_adapter
+        from backend.observability.validation_judge import make_judge, make_redispatch
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+        mf = ModelFactory()
+        judge = make_judge(mf) if validator_enabled else None
+        redispatch = make_redispatch(mf) if validator_enabled else None
+        checkpoint_db = (os.environ.get("ADL_CHECKPOINT_DB")
+                         or os.environ.get("CHECKPOINT_DB", "./data/adl_checkpoints.db"))
+
+        # The adapter handles run_started, steps, validation, finalize (incl. the
+        # cost + validation rollup) and run_completed/run_metrics over the WS.
+        async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
+            agent = build_agent(checkpointer)
+            summary = await run_with_adapter(
+                agent, query, run_id,
+                broadcast=manager.broadcast,
+                judge=judge, redispatch=redispatch,
+            )
+
+        latency_ms = (time.perf_counter() - t0) * 1000
+        run_latency_seconds.observe(latency_ms / 1000)
+        lf.complete_run_trace(
+            run_id, output=summary.get("final_answer") or "",
+            metrics=summary.get("cost", {}), status="completed",
+        )
+    except Exception as exc:  # checkpointer/agent-build failures (run errors are
+        # caught inside run_with_adapter and reported as a failed run there).
+        logger.exception("deepagents run %s failed to start", run_id)
+        await db.set_run_status(run_id, "failed", error=str(exc))
+        await manager.broadcast(run_id, SwarmEvent(
+            event=EventType.error, run_id=run_id, payload={"error": str(exc)}))
+    finally:
+        active_runs.dec()
+
+
 def launch_run(
     query: str,
     *,
@@ -559,13 +629,17 @@ def launch_run(
     job_id: str | None = None,
     trigger: str = "manual",
 ) -> str:
-    """Create a run_id and kick off run_swarm in the background. Returns run_id.
+    """Create a run_id and kick off the configured engine in the background.
 
-    Shared entry point for ad-hoc /run, scheduled fires, and /jobs/{id}/run-now,
-    so they all go through identical pipeline + persistence paths.
+    Shared entry point for ad-hoc /run, scheduled fires, and /jobs/{id}/run-now, so
+    they all go through identical persistence paths. ADL_ENGINE selects the engine:
+    `swarm` (the original LangGraph pipeline, default) or `deepagents` (the ADL deep
+    agent). The flag keeps the old path reachable until the deepagents path is green.
     """
     run_id = str(uuid.uuid4())
-    asyncio.create_task(run_swarm(
+    engine = os.environ.get("ADL_ENGINE", "swarm").strip().lower()
+    runner = run_deepagents if engine == "deepagents" else run_swarm
+    asyncio.create_task(runner(
         run_id, query,
         validator_enabled=validator_enabled,
         job_id=job_id,
