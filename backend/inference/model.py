@@ -68,9 +68,13 @@ class ModelFactory:
         )
         # Salvaged from inference/client.py — slow CPU warmup tolerance.
         self.request_timeout = float(os.environ.get("ROUTER_REQUEST_TIMEOUT", "300"))
+        # The gateway occasionally drops a connection mid-flight (observed live). The
+        # OpenAI client retries APIConnectionError with exponential backoff, so a
+        # generous default lets a transient blip ride over instead of failing the whole
+        # run — a planner-turn drop is otherwise fatal (no plan). Tune via ROUTER_MAX_RETRIES.
         self.max_retries = int(
             os.environ.get("ROUTER_MAX_RETRIES",
-                           os.environ.get("INFERENCE_MAX_RETRIES", "3"))
+                           os.environ.get("INFERENCE_MAX_RETRIES", "6"))
         )
         self._auth_headers = self._build_auth_headers()
 
