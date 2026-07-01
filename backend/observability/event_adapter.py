@@ -443,6 +443,21 @@ def _interrupt_payload(chunk) -> object | None:
     return None
 
 
+def _decision_count(payload) -> int:
+    """Number of action_requests carried by a HITL interrupt payload.
+
+    langchain's HumanInTheLoopMiddleware resumes via `interrupt(request)["decisions"]`
+    and requires exactly one decision per interrupted tool call, so the resume value
+    must be a list of that length — a bare string raises `TypeError: string indices`."""
+    items = payload if isinstance(payload, (list, tuple)) else [payload]
+    n = 0
+    for it in items:
+        val = getattr(it, "value", it)
+        if isinstance(val, dict):
+            n += len(val.get("action_requests") or [])
+    return n or 1
+
+
 async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
                            persistence=db, planner_tier: str | None = None,
                            judge=None, redispatch=None, validation_cfg: dict | None = None,
@@ -478,12 +493,14 @@ async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
     try:
         while True:                                  # resume loop for HITL interrupts
             interrupted = False
+            interrupt_payload = None
             async for ns, mode, chunk in agent.astream(
                 stream_input, config, stream_mode=["updates"], subgraphs=True
             ):
                 payload = _interrupt_payload(chunk)
                 if payload is not None:
                     interrupted = True
+                    interrupt_payload = payload
                     await adapter._emit(EventType.awaiting_approval,
                                         {"interrupt": str(payload)[:500]})
                     await persistence.set_run_status(run_id, "awaiting_approval")
@@ -498,7 +515,11 @@ async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
             await adapter._emit(EventType.run_resumed, {"decision": str(decision)})
             await persistence.set_run_status(run_id, "running")
             from langgraph.types import Command
-            stream_input = Command(resume=decision)
+            # HumanInTheLoopMiddleware expects interrupt(...)["decisions"]: one
+            # {"type": <decision>} per interrupted tool call, not a bare string.
+            decisions = [{"type": str(decision).lower()}
+                         for _ in range(_decision_count(interrupt_payload))]
+            stream_input = Command(resume={"decisions": decisions})
     except BudgetExceeded as be:
         # Clean stop: abandon the graph, keep partial results, let synthesis grade
         # whatever was produced. The run still completes (it is not a failure).

@@ -188,10 +188,22 @@ manager = ConnectionManager()
 # Pending HITL plan-approval decisions, keyed by run_id. POST /run/{id}/approve
 # resolves the future the run is awaiting (see run_deepagents / run_with_adapter).
 _pending_approvals: dict[str, asyncio.Future] = {}
+# Decisions delivered before the run registered its awaiter. run_with_adapter emits
+# the `awaiting_approval` WS event just *before* _await_approval registers the future,
+# so a client that reacts immediately would otherwise 404 and hang the run. We stash
+# the decision here and _await_approval consumes it as soon as it arms.
+_early_decisions: dict[str, str] = {}
 
 
 async def _await_approval(run_id: str):
-    """Block until POST /run/{run_id}/approve delivers a decision string."""
+    """Block until POST /run/{run_id}/approve delivers a decision string.
+
+    Order-independent: if a decision already arrived (client raced ahead of the
+    awaiter), consume it immediately instead of waiting on a future no one will
+    resolve. A fresh future is created per call, so multiple interrupts re-arm."""
+    early = _early_decisions.pop(run_id, None)
+    if early is not None:
+        return early
     fut = asyncio.get_event_loop().create_future()
     _pending_approvals[run_id] = fut
     try:
@@ -403,14 +415,19 @@ async def kill_run(run_id: str):
 async def approve_run(run_id: str, body: dict):
     """HITL plan-approval gate (deepagents engine). Deliver a decision to a run that
     paused after planning: {"decision": "approve"} resumes, {"decision": "reject"}
-    aborts. 404 if the run is not currently awaiting approval."""
-    fut = _pending_approvals.get(run_id)
-    if fut is None or fut.done():
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="no pending approval for this run")
+    aborts.
+
+    Delivery is order-independent: the `awaiting_approval` WS event is emitted just
+    before the run registers its awaiter, so a responsive client can arrive first.
+    When the future is present we resolve it; otherwise we stash the decision for the
+    awaiter to pick up when it arms (see _await_approval), avoiding a 404-then-hang."""
     decision = (body or {}).get("decision", "approve")
-    fut.set_result(decision)
-    return {"run_id": run_id, "decision": decision}
+    fut = _pending_approvals.get(run_id)
+    if fut is not None and not fut.done():
+        fut.set_result(decision)
+        return {"run_id": run_id, "decision": decision, "delivery": "resolved"}
+    _early_decisions[run_id] = decision
+    return {"run_id": run_id, "decision": decision, "delivery": "queued"}
 
 
 
