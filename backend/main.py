@@ -248,13 +248,16 @@ async def run_deepagents(
         from backend.inference.model import ModelFactory
         from backend.observability.event_adapter import run_with_adapter
         from backend.observability.validation_judge import (
-            make_judge, make_redispatch, make_synthesis_grader)
+            make_judge, make_redispatch, make_synthesis_grader, make_partial_synthesizer)
         from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
         mf = ModelFactory()
         judge = make_judge(mf) if validator_enabled else None
         redispatch = make_redispatch(mf) if validator_enabled else None
         synthesis_grader = make_synthesis_grader(mf) if validator_enabled else None
+        # Always available: only fires when a budget stop abandons the graph before the
+        # main agent synthesized, so partial results still yield a final answer.
+        partial_synthesizer = make_partial_synthesizer(mf)
         checkpoint_db = (os.environ.get("ADL_CHECKPOINT_DB")
                          or os.environ.get("CHECKPOINT_DB", "./data/adl_checkpoints.db"))
 
@@ -272,7 +275,8 @@ async def run_deepagents(
                 agent, query, run_id,
                 broadcast=manager.broadcast,
                 judge=judge, redispatch=redispatch,
-                synthesis_grader=synthesis_grader, approval=approval,
+                synthesis_grader=synthesis_grader,
+                partial_synthesizer=partial_synthesizer, approval=approval,
             )
 
         latency_ms = (time.perf_counter() - t0) * 1000

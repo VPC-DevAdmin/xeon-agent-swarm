@@ -144,6 +144,11 @@ SYNTHESIZED ANSWER that combined them. Judge ONLY the synthesized answer:
 - Is it faithful to the subtask results (no contradictions, no confabulated joins)?
 - Did it drop a requirement the subtasks covered?
 
+Judge SUBSTANCE, not phrasing: do not penalize incidental preamble, tone, or minor
+formatting if the answer's content is correct and complete. Reserve `fail` for a genuine
+substance failure (wrong, missing the objective, or contradicting/confabulating results),
+not for a stylistic blemish.
+
 Do NOT re-do the work. Respond with ONLY this JSON, no fences:
 {"verdict": "pass" | "degraded" | "fail", "score": 0.0-1.0, "critique": "one specific sentence; empty if pass"}
 - pass:     answers the objective, faithful, complete.
@@ -190,6 +195,43 @@ async def grade_synthesis(*, objective: str, final_answer: str, results: list[di
             "tokens_in": tin, "tokens_out": tout, "cost": call_cost(tout, tier_obs)}
 
 
+_PARTIAL_SYNTH_SYSTEM = """You are composing the FINAL answer for a multi-agent run that was
+stopped early (a budget ceiling was hit) before the orchestrator could write its own
+synthesis. Using the OBJECTIVE and the SUBTASK RESULTS gathered so far, write the best single
+coherent answer the available material supports — use the workers' specific findings, and note
+briefly and honestly if it is partial. Output ONLY the answer: no preamble, no meta-commentary.""".strip()
+
+
+async def synthesize_partial(*, objective: str, results: list[dict], mf,
+                             tier: str | None = None) -> dict:
+    """Compose a fallback final answer from partial subtask results after a budget stop.
+
+    The orchestrator graph is abandoned on breach before it synthesizes, so without this
+    the run would finalize with an empty answer. Uses the planner tier (plan quality can't
+    tolerate a downgrade). Never raises: on failure returns an empty answer so finalize
+    proceeds. Returns telemetry for the cost rollup alongside `final_answer`."""
+    tier = tier or os.environ.get("ADL_PLANNER_TIER", "T5")
+    digest = "\n\n".join(
+        f"[{r.get('step_key', i)} · {r.get('terminal', '?')}]: {(r.get('result') or '')[:1200]}"
+        for i, r in enumerate(results)
+    ) or "(no subtask results)"
+    messages = [{"role": "system", "content": _PARTIAL_SYNTH_SYSTEM},
+                {"role": "user", "content": f"OBJECTIVE:\n{objective}\n\nSUBTASK RESULTS:\n{digest}"}]
+
+    text, tin, tout, tier_obs = "", 0, 0, tier
+    try:
+        resp = await mf.for_tier(tier).ainvoke(messages)
+        text = resp.content if isinstance(resp.content, str) else str(resp.content)
+        tin, tout = _usage(resp)
+        raw = _headers(resp).get("x-vsr-selected-model")
+        tier_obs = to_internal_tier(raw) if raw else tier
+    except Exception:  # noqa: BLE001 — empty answer lets finalize proceed cleanly
+        text = ""
+
+    return {"final_answer": text, "tokens_in": tin, "tokens_out": tout,
+            "tier_observed": tier_obs, "cost": call_cost(tout, tier_obs)}
+
+
 def make_judge(mf):
     """Bind a ModelFactory into a judge callable for the event adapter."""
     async def _judge(subtask: str, result_text: str, role: str, cfg: dict) -> dict:
@@ -213,3 +255,10 @@ def make_synthesis_grader(mf):
         return await grade_synthesis(objective=objective, final_answer=final_answer,
                                      results=results, mf=mf)
     return _grade
+
+
+def make_partial_synthesizer(mf):
+    """Bind a ModelFactory into a partial-synthesis callable for the event adapter."""
+    async def _synth(objective: str, results: list[dict]) -> dict:
+        return await synthesize_partial(objective=objective, results=results, mf=mf)
+    return _synth

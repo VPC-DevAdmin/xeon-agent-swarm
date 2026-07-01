@@ -130,6 +130,60 @@ def test_max_subagents_budget_stops_cleanly():
     assert fdb.steps["research-1"]["status"] == "completed"
 
 
+def test_partial_synthesis_fills_empty_answer_on_breach():
+    """When the graph is abandoned (budget stop) before the main agent synthesizes,
+    finalize composes a final answer from the collected results via the partial
+    synthesizer — the run delivers content instead of an empty answer."""
+    fdb = FakeDB()
+    calls = {}
+
+    async def partial(objective, results):
+        calls["objective"], calls["n"] = objective, len(results)
+        return {"final_answer": "Partial: A beats B on speed.",
+                "tokens_in": 300, "tokens_out": 60, "tier_observed": "T5", "cost": 0.001}
+
+    adapter = EventAdapter("s4", persistence=fdb, partial_synthesizer=partial,
+                           budget={"max_subagents": 1})
+
+    async def go():
+        await adapter.start("compare A and B")
+        # one delegation completes, giving a usable result — but NO synthesis turn runs
+        await adapter.handle((), "updates", {"model": {"messages": [_task("t1", "research")]}})
+        await adapter.handle((), "updates", {"tools": {"messages": [ToolMessage(
+            name="task", tool_call_id="t1", content='{"result":"A is fast","confidence":0.8}')]}})
+        adapter.budget_exceeded = {"kind": "max_subagents", "used": 2, "limit": 1}
+        return await adapter.finalize(status="completed")
+
+    summary = asyncio.run(go())
+    assert calls["n"] == 1                                  # composed from the one result
+    assert adapter.final_answer == "Partial: A beats B on speed."
+    assert summary["final_answer"] == "Partial: A beats B on speed."
+    assert fdb.run["document_result"]["final_answer"].startswith("Partial:")
+    assert adapter.total_tokens >= 360                      # partial-synth tokens rolled in
+
+
+def test_partial_synthesis_skipped_when_answer_present():
+    """The partial synthesizer must not overwrite a real synthesis the main agent produced."""
+    fdb = FakeDB()
+
+    async def partial(objective, results):  # should never be called
+        raise AssertionError("partial synthesizer ran despite a real answer")
+
+    adapter = EventAdapter("s5", persistence=fdb, partial_synthesizer=partial, budget={})
+
+    async def go():
+        await adapter.start("q")
+        await adapter.handle((), "updates", {"model": {"messages": [_task("t1", "research")]}})
+        await adapter.handle((), "updates", {"tools": {"messages": [ToolMessage(
+            name="task", tool_call_id="t1", content='{"result":"finding","confidence":0.8}')]}})
+        await adapter.handle((), "updates", {"model": {"messages": [AIMessage(
+            tier="tier5", tokens=(200, 80), content="Real synthesis answer.")]}})
+        return await adapter.finalize()
+
+    summary = asyncio.run(go())
+    assert summary["final_answer"] == "Real synthesis answer."
+
+
 def test_run_with_adapter_catches_budget_and_completes():
     """End-to-end through run_with_adapter: a budget breach mid-stream stops the run,
     grades partial synthesis, and completes (not fails)."""

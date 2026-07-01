@@ -49,7 +49,11 @@ to you.
 Do NOT ask the user clarifying questions. The objective is the only input you get;
 proceed with reasonable, explicit assumptions and decompose immediately. State any
 assumptions you made in the final answer. Always delegate via the task tool — do not
-answer the objective yourself without delegating."""
+answer the objective yourself without delegating.
+
+Your final message is the deliverable the user sees. Output ONLY the answer itself —
+no preamble, no status narration (never write things like "Composing the answer now"
+or "I have enough material"), and no meta-commentary about your process."""
 
 # Appended to the orchestrator prompt only when plan approval is enabled. The one-shot
 # submit_plan tool is the approval gate: called exactly once, before any delegation, so

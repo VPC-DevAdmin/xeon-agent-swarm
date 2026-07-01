@@ -54,9 +54,14 @@ class BudgetExceeded(Exception):
 
 def _budget_from_env() -> dict:
     """Per-run budget ceilings (plan §4.4). 0/unset == unlimited for that dimension."""
+    # Defaults are SAFETY CEILINGS (catch a runaway loop), not tight operating limits.
+    # They must clear a normal run: max_tool_hops is per-agent and a worker spends several
+    # hops on deepagents' built-in tools (write_todos, filesystem) before real work, and
+    # max_subagents is per-run and must leave room for validation re-dispatches. Earlier
+    # defaults (5 / 6) tripped on ordinary runs. 0 == unlimited for that dimension.
     return {
-        "max_subagents": int(os.environ.get("ADL_MAX_SUBAGENTS", "6") or 0),
-        "max_tool_hops": int(os.environ.get("ADL_MAX_TOOL_HOPS", "5") or 0),   # per agent
+        "max_subagents": int(os.environ.get("ADL_MAX_SUBAGENTS", "16") or 0),
+        "max_tool_hops": int(os.environ.get("ADL_MAX_TOOL_HOPS", "30") or 0),  # per agent
         "max_total_tokens": int(os.environ.get("ADL_MAX_TOTAL_TOKENS", "0") or 0),
     }
 
@@ -100,7 +105,7 @@ class EventAdapter:
     def __init__(self, run_id: str, broadcast=None, *, persistence=db,
                  planner_tier: str | None = None, judge=None, redispatch=None,
                  validation_cfg: dict | None = None, synthesis_grader=None,
-                 budget: dict | None = None):
+                 partial_synthesizer=None, budget: dict | None = None):
         self.run_id = run_id
         self.broadcast = broadcast
         self.db = persistence
@@ -123,6 +128,9 @@ class EventAdapter:
         # objective + the collected subtask results — the most important validator
         # (directive). Budgets stop a run cleanly with partial synthesis on breach.
         self._synthesis_grader = synthesis_grader
+        # Fallback synthesizer: composes a final answer from partial results when the
+        # graph was abandoned (budget stop) before the main agent synthesized.
+        self._partial_synthesizer = partial_synthesizer
         self.budget = budget if budget is not None else _budget_from_env()
         self.total_tokens = 0
         self.budget_exceeded: dict | None = None
@@ -174,6 +182,25 @@ class EventAdapter:
                                  "critique": gr.get("critique", "")})
 
     async def finalize(self, status: str = "completed") -> dict:
+        # Partial-synthesis fallback: if the graph was abandoned (budget stop) before the
+        # main agent composed an answer, build one from the collected subtask results so
+        # the run delivers something instead of an empty answer. Tokens roll into cost but
+        # skip the budget check (we are already at/over the ceiling — finalize must close).
+        if (self._partial_synthesizer is not None and self._results
+                and not (self.final_answer or "").strip()):
+            try:
+                ps = await self._partial_synthesizer(self.query, self._results)
+                self.final_answer = ps.get("final_answer") or self.final_answer
+                tin, tout = int(ps.get("tokens_in") or 0), int(ps.get("tokens_out") or 0)
+                if tin or tout:
+                    self.total_tokens += tin + tout
+                    self.calls.append({"tokens_out": tout,
+                                       "tier_observed": ps.get("tier_observed"),
+                                       "cache_hit": False})
+                await self._emit(EventType.synthesis_started, {"partial": True})
+            except Exception as exc:  # noqa: BLE001 — never block finalize
+                await self._emit(EventType.error, {"error": f"partial synthesis: {exc}"})
+
         # L2 synthesis grade runs before the run closes (even on a budget stop, so a
         # truncated answer is still graded). A grader failure must not block finalize.
         try:
@@ -461,7 +488,8 @@ def _decision_count(payload) -> int:
 async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
                            persistence=db, planner_tier: str | None = None,
                            judge=None, redispatch=None, validation_cfg: dict | None = None,
-                           synthesis_grader=None, budget: dict | None = None,
+                           synthesis_grader=None, partial_synthesizer=None,
+                           budget: dict | None = None,
                            approval=None, recursion_limit: int = 80) -> dict:
     """Drive one deepagents run through the adapter end to end.
 
@@ -482,7 +510,8 @@ async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
     adapter = EventAdapter(run_id, broadcast, persistence=persistence,
                            planner_tier=planner_tier, judge=judge,
                            redispatch=redispatch, validation_cfg=validation_cfg,
-                           synthesis_grader=synthesis_grader, budget=budget)
+                           synthesis_grader=synthesis_grader,
+                           partial_synthesizer=partial_synthesizer, budget=budget)
     await adapter.start(query)
     config = {"configurable": {"thread_id": run_id},
               "tags": [f"tier_req:{adapter.planner_tier}"],
