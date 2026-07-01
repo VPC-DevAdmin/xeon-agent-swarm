@@ -68,11 +68,22 @@ class InterruptingAgent:
 def test_build_interrupts_env(monkeypatch):
     monkeypatch.setenv("ADL_PLAN_APPROVAL", "1")
     monkeypatch.setenv("ADL_SENSITIVE_TOOLS", "code_exec, ticket_create")
-    monkeypatch.setenv("ADL_PLAN_TOOL", "write_todos")
     ints = core.build_interrupts()
-    assert "write_todos" in ints
+    # The plan-approval gate is the one-shot submit_plan tool by default (_PLAN_TOOL,
+    # bound from ADL_PLAN_TOOL at import). Sensitive-tool gates are additive.
+    assert core._PLAN_TOOL in ints
+    assert core._PLAN_TOOL == "submit_plan"
+    assert ints[core._PLAN_TOOL]["allowed_decisions"] == ["approve", "reject"]
     assert ints["code_exec"]["allowed_decisions"] == ["approve", "reject"]
     assert "ticket_create" in ints
+
+
+def test_submit_plan_tool_shape():
+    tool = core.build_submit_plan_tool()
+    assert tool.name == "submit_plan"
+    assert "plan" in tool.args
+    # Executing it (post-approval) returns a go-ahead, never raises.
+    assert "delegate" in tool.func(plan="1. do x\n2. do y").lower()
 
 
 def test_build_interrupts_default_empty(monkeypatch):

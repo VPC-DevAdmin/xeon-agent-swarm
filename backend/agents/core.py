@@ -51,6 +51,17 @@ proceed with reasonable, explicit assumptions and decompose immediately. State a
 assumptions you made in the final answer. Always delegate via the task tool — do not
 answer the objective yourself without delegating."""
 
+# Appended to the orchestrator prompt only when plan approval is enabled. The one-shot
+# submit_plan tool is the approval gate: called exactly once, before any delegation, so
+# the run pauses precisely once (unlike write_todos, which fires on every todo edit and
+# is inherited by every subagent).
+PLAN_APPROVAL_SUFFIX = """
+
+PLAN APPROVAL: Before delegating anything, call the submit_plan tool EXACTLY ONCE with
+your finalized subtask plan (a short numbered list) and wait for it to return. Only after
+it returns approval may you delegate via the task tool. Never call submit_plan more than
+once, and never delegate before it has returned."""
+
 # Gate sensitive tools at the MAIN agent (checkpointer is required and set below).
 # Values: True (approve/edit/reject/respond) or {"allowed_decisions": [...]}.
 # Subagent-level edit/reject is buggy in 0.6.10 (#554) — keep gates at the main
@@ -60,10 +71,39 @@ INTERRUPTS: dict = {
     # "code_exec": True,
 }
 
-# The planning tool deepagents uses to write the todo plan. Interrupting it yields
-# the plan-approval gate: the run pauses after the plan is produced, before any
-# delegation. Override via ADL_PLAN_TOOL if a future deepagents renames it.
-_PLAN_TOOL = os.environ.get("ADL_PLAN_TOOL", "write_todos")
+# The tool whose call is the plan-approval gate. Default is our dedicated one-shot
+# `submit_plan` tool (granted to the main agent only, in build_agent), which the
+# orchestrator calls exactly once before delegating — so the run pauses precisely once.
+# (deepagents' built-in `write_todos` is unsuitable: it fires on every todo edit and is
+# inherited by every subagent, causing repeated + concurrent interrupts.) Override via
+# ADL_PLAN_TOOL only to gate a different tool.
+_PLAN_TOOL = os.environ.get("ADL_PLAN_TOOL", "submit_plan")
+
+
+def _plan_approval_on() -> bool:
+    return os.environ.get("ADL_PLAN_APPROVAL", "").strip().lower() in ("1", "true", "yes")
+
+
+def build_submit_plan_tool():
+    """The one-shot plan-approval gate tool (main agent only). Executing it (post-approve)
+    just returns a go-ahead; its whole purpose is to be the single interrupt point."""
+    from langchain_core.tools import StructuredTool
+    from pydantic import BaseModel, Field
+
+    class SubmitPlanArgs(BaseModel):
+        plan: str = Field(description="Your finalized subtask plan as a short numbered list.")
+
+    def _submit_plan(plan: str) -> str:
+        return "Plan approved. Proceed to delegate the subtasks via the task tool."
+
+    return StructuredTool.from_function(
+        func=_submit_plan,
+        name="submit_plan",
+        description=("Submit your finalized subtask plan for one-time human approval BEFORE any "
+                     "delegation. Call EXACTLY ONCE, right after deciding the plan and before the "
+                     "task tool. Returns approval to proceed."),
+        args_schema=SubmitPlanArgs,
+    )
 
 
 def build_interrupts() -> dict:
@@ -74,7 +114,7 @@ def build_interrupts() -> dict:
       ADL_SENSITIVE_TOOLS=a,b,c      → gate each named tool (approve/reject).
     """
     interrupts = dict(INTERRUPTS)
-    if os.environ.get("ADL_PLAN_APPROVAL", "").strip().lower() in ("1", "true", "yes"):
+    if _plan_approval_on():
         interrupts[_PLAN_TOOL] = {"allowed_decisions": ["approve", "reject"]}
     for tool in (os.environ.get("ADL_SENSITIVE_TOOLS", "") or "").split(","):
         tool = tool.strip()
@@ -98,10 +138,19 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
     if tools_by_name is None:
         tools_by_name = build_toolbox()
 
+    # Plan approval (opt-in): grant the one-shot submit_plan gate to the MAIN agent only
+    # (subagents never receive it, so they cannot inherit or re-trigger the interrupt) and
+    # tell the orchestrator to call it once before delegating. Gate applies to _PLAN_TOOL.
+    main_tools = list(mcp_tools or [])
+    system_prompt = ORCHESTRATOR_PROMPT
+    if _plan_approval_on() and _PLAN_TOOL == "submit_plan":
+        main_tools.append(build_submit_plan_tool())
+        system_prompt = ORCHESTRATOR_PROMPT + PLAN_APPROVAL_SUFFIX
+
     return create_deep_agent(
         model=mf.for_tier(planner_tier),                      # main agent: planner+synthesis
-        tools=mcp_tools or [],
-        system_prompt=ORCHESTRATOR_PROMPT,
+        tools=main_tools,
+        system_prompt=system_prompt,
         subagents=build_subagent_profiles(mf, tools_by_name),  # workers on auto
         interrupt_on=build_interrupts(),                        # HITL at main-agent level
         checkpointer=checkpointer,                              # REQUIRED for HITL + resume
