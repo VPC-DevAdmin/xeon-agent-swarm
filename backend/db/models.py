@@ -146,7 +146,7 @@ class Run(Base):
         ),
         CheckConstraint(
             "status IN ('pending','orchestrating','running','reducing',"
-            "'completed','failed','killed')",
+            "'awaiting_approval','completed','failed','killed','aborted')",
             name="ck_runs_status",
         ),
         Index("idx_runs_job_started", "job_id", "started_at"),
