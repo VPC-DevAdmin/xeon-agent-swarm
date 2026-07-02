@@ -86,6 +86,16 @@ Job ──< Run ──< Step ──< StepAttempt
 
 ## Quick start
 
+Fastest path — no Docker, no config, no cloud calls (uses the bundled mock router):
+
+```bash
+make setup      # Python venv + frontend deps (once)
+make demo       # mock router + backend + frontend; Ctrl-C stops all three
+# open http://localhost:3000  ·  `make demo-live` runs against the real router
+```
+
+Full stack with Docker:
+
 ```bash
 cp env.example .env
 
