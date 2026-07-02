@@ -224,7 +224,7 @@ async def run_deepagents(
     streamed through the event adapter onto the same WS + DB surfaces as the old swarm.
 
     The single ADL run engine (the old swarm engine was removed at cutover). The adapter
-    owns step/attempt/validation rows, the cost rollup, and run finalize; this wrapper
+    owns step/attempt/validation rows, the routing rollup, and run finalize; this wrapper
     owns run creation, the checkpointer lifecycle, metrics, and the Langfuse trace.
     When validator_enabled, L1/L2 judging + bounded retry are wired in (Stage 3).
     """
@@ -268,7 +268,7 @@ async def run_deepagents(
         approval = (lambda: _await_approval(run_id)) if plan_approval else None
 
         # The adapter handles run_started, steps, validation, finalize (incl. the
-        # cost + validation rollup), budgets, and run_completed/run_metrics over WS.
+        # routing + validation rollup), budgets, and run_completed/run_metrics over WS.
         async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
             agent = build_agent(checkpointer)
             summary = await run_with_adapter(
@@ -283,7 +283,7 @@ async def run_deepagents(
         run_latency_seconds.observe(latency_ms / 1000)
         lf.complete_run_trace(
             run_id, output=summary.get("final_answer") or "",
-            metrics=summary.get("cost", {}), status="completed",
+            metrics=summary.get("routing", {}), status="completed",
         )
     except Exception as exc:  # checkpointer/agent-build failures (run errors are
         # caught inside run_with_adapter and reported as a failed run there).
@@ -361,8 +361,28 @@ def _run_to_dict(run) -> dict:
                         "model_id": a.model_id,
                         "correction_hint": a.correction_hint,
                         "latency_ms": a.latency_ms,
+                        # routing telemetry: what the router decided for this call
+                        "tier_requested": a.tier_requested,
+                        "tier_observed": a.tier_observed,
+                        "category": a.category,
+                        "cache_hit": a.cache_hit,
+                        "tokens_in": a.tokens_in,
+                        "tokens_out": a.tokens_out,
                     }
                     for a in sorted(s.attempts, key=lambda x: x.attempt_no)
+                ],
+                "validations": [
+                    {
+                        "level": v.level,
+                        "verdict": v.verdict,
+                        "score": v.score,
+                        "validator_tier": v.validator_tier,
+                        "rubric_id": v.rubric_id,
+                        "retries_used": v.retries_used,
+                        "escalated": v.escalated,
+                        "detail": v.detail,
+                    }
+                    for v in sorted(s.validations, key=lambda x: x.created_at)
                 ],
             }
             for s in sorted(run.steps, key=lambda x: x.step_key)

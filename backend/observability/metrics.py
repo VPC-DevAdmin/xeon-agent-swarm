@@ -46,7 +46,7 @@ websocket_connections = Gauge(
     "Current number of active WebSocket connections",
 )
 
-# ── Tier routing + cost (tier-router migration §5) ───────────────────────────
+# ── Tier routing ──────────────────────────────────────────────────────────────
 
 # How often each tier was actually served vs requested — the routing distribution
 # that makes the "auto picked T2, not T5" story visible in metrics.
@@ -54,17 +54,4 @@ tier_calls_total = Counter(
     "orchestrator_tier_calls_total",
     "LLM calls by requested and observed router tier",
     ["tier_requested", "tier_observed", "cache_hit"],
-)
-
-# Per-run cost rollup (illustrative pricing — see observability/cost.py).
-run_cost_usd = Histogram(
-    "orchestrator_run_cost_usd",
-    "Per-run cost at served tiers (USD, illustrative)",
-    buckets=[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0],
-)
-
-run_savings_pct = Histogram(
-    "orchestrator_run_savings_pct",
-    "Per-run decomposed-vs-monolithic-T5 savings (%)",
-    buckets=[0, 10, 25, 50, 70, 85, 95, 100],
 )

@@ -450,7 +450,6 @@ class EventType(str, Enum):
     tts_completed         = "tts_completed"
     run_completed         = "run_completed"
     run_metrics           = "run_metrics"          # final metrics packet
-    eval_completed        = "eval_completed"       # async quality eval finished
     error                 = "error"
 
 
@@ -477,7 +476,6 @@ CE_TYPE: dict[EventType, str] = {
     EventType.tts_completed:         "io.xeon.swarm.tts.completed",
     EventType.run_completed:         "io.xeon.swarm.run.completed",
     EventType.run_metrics:           "io.xeon.swarm.run.metrics",
-    EventType.eval_completed:        "io.xeon.swarm.eval.completed",
     EventType.error:                 "io.xeon.swarm.error",
 }
 

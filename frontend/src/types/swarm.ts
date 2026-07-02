@@ -89,6 +89,15 @@ export interface AgentResult {
   latency_ms: number
   tool_calls: string[]
   total_tokens?: number
+  // Routing telemetry (from the semantic tier router, per task_completed)
+  tier_observed?: string | null   // tier the router actually served (T1..T5)
+  category?: string | null        // router's difficulty classification
+  cache_hits?: number
+  tokens_out?: number
+  tool_hops?: number
+  verdict?: string                // pass | degraded (validation terminal state)
+  attempts?: number
+  retries_used?: number
 }
 
 export interface SwarmState {
@@ -112,22 +121,17 @@ export interface ValidationVerdict {
   severity: 'minor' | 'major' | 'unfixable'
 }
 
-// ── Run metrics ───────────────────────────────────────────────────────────────
+// ── Run metrics (the run_metrics WS packet: routing rollup + token totals) ────
 
 export interface RunMetrics {
-  run_id: string
-  validator_enabled: boolean
-  total_tasks: number
-  total_attempts: number
-  total_retries: number
-  validations_run: number
-  validations_passed: number
-  validations_failed: number
-  workers_rejected_committed: number
-  total_tokens_in: number
-  total_tokens_out: number
-  total_tokens_validator: number
-  wall_clock_ms: number
+  call_count: number                        // model calls across the whole run
+  cached_calls: number                      // served from the router cache
+  tokens_out: number
+  tier_calls: Record<string, number>        // tier -> calls (the routing distribution)
+  tier_tokens_out: Record<string, number>
+  task_count: number                        // worker delegations
+  total_tokens: number                      // generation in+out
+  validation_tokens: number                 // validator spend, kept separate
 }
 
 // ── Intelligence report ───────────────────────────────────────────────────────
@@ -179,6 +183,8 @@ export type EventType =
   | 'worker_retrying'         // retrying with correction hint
   | 'worker_rejected_final'   // exceeded retry budget
   | 'synthesis_started'
+  | 'awaiting_approval'       // HITL: run paused for plan approval
+  | 'run_resumed'             // HITL: resumed after a decision
   | 'tts_started'
   | 'tts_completed'
   | 'run_completed'

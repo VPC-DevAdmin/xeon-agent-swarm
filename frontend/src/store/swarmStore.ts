@@ -69,9 +69,14 @@ interface SwarmStore {
   // Run-level metrics (received at end of run)
   runMetrics: RunMetrics | null
 
+  // ── HITL plan approval ─────────────────────────────────────────────────────
+  awaitingApproval: boolean
+  approvalInterrupt: string | null      // the paused plan payload, for display
+
   // Actions
   startRun: (runId: string, query: string) => void
   setValidatorEnabled: (enabled: boolean) => void
+  approveRun: (decision: 'approve' | 'reject') => void
   killTask: (taskId: string) => void
   retryTask: (taskId: string) => void
   retryRun: () => Promise<void>
@@ -101,6 +106,8 @@ const initialState = {
   workerValidating: {},
   workerRejectedFinal: {},
   runMetrics: null,
+  awaitingApproval: false,
+  approvalInterrupt: null,
 }
 
 export const useSwarmStore = create<SwarmStore>((set, get) => ({
@@ -118,6 +125,20 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
     })),
 
   setValidatorEnabled: (enabled) => set({ validatorEnabled: enabled }),
+
+  approveRun: (decision) => {
+    const { runId } = get()
+    if (!runId) return
+    // Optimistic: close the modal; the run_resumed WS event (or an aborted run)
+    // is the authoritative confirmation.
+    set({ awaitingApproval: false })
+    fetch(`${API_BASE}/run/${runId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision }),
+    }).catch(() => {/* network failure — the run stays paused; modal can be reopened */})
+    if (decision === 'reject') set({ isRunning: false })
+  },
 
   reset: () => set(initialState),
 
@@ -247,6 +268,15 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
               hardware: payload.hardware as string,
               latency_ms: payload.latency_ms as number,
               tool_calls: (payload.tool_calls as string[]) || [],
+              // Routing telemetry from the semantic tier router
+              tier_observed: (payload.tier_observed as string | null) ?? null,
+              category: (payload.category as string | null) ?? null,
+              cache_hits: (payload.cache_hits as number) ?? 0,
+              tokens_out: (payload.tokens_out as number) ?? 0,
+              tool_hops: (payload.tool_hops as number) ?? 0,
+              verdict: payload.verdict as string | undefined,
+              attempts: payload.attempts as number | undefined,
+              retries_used: payload.retries_used as number | undefined,
             },
           },
           // Collect artifacts from all non-writing workers into the global list
@@ -305,7 +335,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
       case 'validator_rejected': {
         const vrTaskId = payload.task_id as string
-        const hint = payload.correction_hint as string
+        const hint = payload.critique as string
         set((s) => ({
           workerValidating: { ...s.workerValidating, [vrTaskId]: false },
           workerCorrections: { ...s.workerCorrections, [vrTaskId]: hint },
@@ -315,8 +345,10 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
       case 'worker_retrying': {
         const wrTaskId = payload.task_id as string
-        const nextAttempt = payload.next_attempt as number
-        const retryHint = payload.correction_hint as string
+        // Adapter payload: {task_id, attempt, hint} — attempt is the retry ordinal,
+        // so the attempt being started is attempt + 1.
+        const nextAttempt = ((payload.attempt as number) ?? 0) + 1
+        const retryHint = payload.hint as string
         set((s) => ({
           taskStatuses: { ...s.taskStatuses, [wrTaskId]: 'running' },
           workerAttempts: { ...s.workerAttempts, [wrTaskId]: nextAttempt },
@@ -327,11 +359,26 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
 
       case 'worker_rejected_final': {
         const wfTaskId = payload.task_id as string
-        const reason = payload.reason as string
+        const reason = payload.critique as string
         set((s) => ({
           workerRejectedFinal: { ...s.workerRejectedFinal, [wfTaskId]: reason },
           workerValidating: { ...s.workerValidating, [wfTaskId]: false },
         }))
+        break
+      }
+
+      // ── HITL plan approval ───────────────────────────────────────────────────
+
+      case 'awaiting_approval': {
+        set({
+          awaitingApproval: true,
+          approvalInterrupt: (payload.interrupt as string) ?? null,
+        })
+        break
+      }
+
+      case 'run_resumed': {
+        set({ awaitingApproval: false })
         break
       }
 

@@ -10,8 +10,8 @@ worker with the critique, bounded by the role's `retries`; on exhaustion the ste
 is marked degraded and surfaced — never silently passed (directive guardrail).
 
 The judge runs through ModelFactory like any other call, so it routes to its
-declared tier and its cost is captured on the Validation row, kept separate from
-generation cost. A validator failure must not break the run, so any grader error
+declared tier; its token spend is captured on the Validation row, kept separate
+from generation. A validator failure must not break the run, so any grader error
 degrades to a non-blocking pass with the error noted.
 
 These are pure functions over a ModelFactory; the event adapter is handed already
@@ -24,7 +24,6 @@ import json
 import os
 import re
 
-from backend.observability.cost import call_cost
 from backend.observability.callbacks import to_internal_tier
 from backend.agents.profiles import load_roles
 
@@ -101,7 +100,7 @@ async def judge_result(*, subtask: str, result_text: str, role: str, cfg: dict, 
     return {
         "level": level, "verdict": verdict, "score": round(score, 3),
         "critique": critique, "validator_tier": tier_obs, "rubric_id": rubric,
-        "tokens_in": tin, "tokens_out": tout, "cost": call_cost(tout, tier_obs),
+        "tokens_in": tin, "tokens_out": tout,
     }
 
 
@@ -192,7 +191,7 @@ async def grade_synthesis(*, objective: str, final_answer: str, results: list[di
 
     return {"level": "frontier", "verdict": verdict, "score": round(score, 3),
             "critique": critique, "validator_tier": tier_obs, "rubric_id": "synthesis_v1",
-            "tokens_in": tin, "tokens_out": tout, "cost": call_cost(tout, tier_obs)}
+            "tokens_in": tin, "tokens_out": tout}
 
 
 _PARTIAL_SYNTH_SYSTEM = """You are composing the FINAL answer for a multi-agent run that was
@@ -209,7 +208,7 @@ async def synthesize_partial(*, objective: str, results: list[dict], mf,
     The orchestrator graph is abandoned on breach before it synthesizes, so without this
     the run would finalize with an empty answer. Uses the planner tier (plan quality can't
     tolerate a downgrade). Never raises: on failure returns an empty answer so finalize
-    proceeds. Returns telemetry for the cost rollup alongside `final_answer`."""
+    proceeds. Returns telemetry for the routing rollup alongside `final_answer`."""
     tier = tier or os.environ.get("ADL_PLANNER_TIER", "T5")
     digest = "\n\n".join(
         f"[{r.get('step_key', i)} · {r.get('terminal', '?')}]: {(r.get('result') or '')[:1200]}"
@@ -229,7 +228,7 @@ async def synthesize_partial(*, objective: str, results: list[dict], mf,
         text = ""
 
     return {"final_answer": text, "tokens_in": tin, "tokens_out": tout,
-            "tier_observed": tier_obs, "cost": call_cost(tout, tier_obs)}
+            "tier_observed": tier_obs}
 
 
 def make_judge(mf):

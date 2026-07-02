@@ -3,7 +3,7 @@ backend/observability/event_adapter.py
 
 Bridges the deepagents (LangGraph) event stream into the app's two existing
 surfaces: the WebSocket CloudEvents feed (SwarmEvent) and the SQLite system of
-record (Step / StepAttempt / Validation rows + the run cost rollup).
+record (Step / StepAttempt / Validation rows + the run routing rollup).
 
 Why a stream adapter and not the checkpointer: a subagent has its own context and
 its tool history can be truncated in checkpoint state (deepagents #573), so the
@@ -23,7 +23,7 @@ Correlation: a delegation is keyed by its `task` tool_call id (the closing
 ToolMessage carries the same id). Subagent namespaces are bound to the open
 delegation in dispatch order — deepagents runs subagents sequentially, so exactly
 one delegation is open at a time. The planner/synthesis calls (NS=()) are pinned
-to a synthetic 'orchestrator' step so their (large) cost is captured too.
+to a synthetic 'orchestrator' step so their (large) token spend is captured too.
 
 L0 mechanical validation runs on each subagent result as it lands (zero tokens),
 emitting validator_* events and a Validation row. L1/L2 judging is Stage 3/5.
@@ -35,7 +35,7 @@ import time
 
 from backend.schemas.models import EventType, SwarmEvent
 from backend.observability.callbacks import to_internal_tier
-from backend.observability.cost import rollup_run
+from backend.observability.routing import rollup_routing
 from backend.observability.validation_l0 import validate_l0
 from backend.repositories import persistence as db
 
@@ -122,7 +122,7 @@ class EventAdapter:
             from backend.agents.profiles import validation_config
             validation_cfg = validation_config()
         self._validation_cfg = validation_cfg or {}
-        self.validation_cost = 0.0                  # rolled up separately from generation
+        self.validation_tokens = 0                  # validator spend, separate from generation
 
         # L2 frontier synthesis grader (opt-in): graded once in finalize against the
         # objective + the collected subtask results — the most important validator
@@ -135,7 +135,7 @@ class EventAdapter:
         self.total_tokens = 0
         self.budget_exceeded: dict | None = None
 
-        self.calls: list[dict] = []                 # every model call, for the cost rollup
+        self.calls: list[dict] = []                 # every model call, for the routing rollup
         self.steps: dict[str, dict] = {}            # task_call_id -> {step_key, role, attempts}
         self._open_unbound: list[str] = []          # task_call_ids without a namespace yet
         self._ns_to_tcid: dict[tuple, str] = {}     # subagent namespace -> task_call_id
@@ -167,14 +167,13 @@ class EventAdapter:
             return
         await self._emit(EventType.validator_started, {"task_id": _ORCH_STEP})
         gr = await self._synthesis_grader(self.query, self.final_answer, self._results)
-        self.validation_cost += float(gr.get("cost") or 0.0)
+        self.validation_tokens += int(gr.get("tokens_in") or 0) + int(gr.get("tokens_out") or 0)
         await self.db.record_validation(
             self.run_id, _ORCH_STEP, level=gr.get("level", "frontier"),
             verdict=gr["verdict"], score=gr.get("score"),
             validator_tier=gr.get("validator_tier"), rubric_id=gr.get("rubric_id"),
             escalated=True, detail={"critique": gr.get("critique", "")},
             tokens_in=gr.get("tokens_in"), tokens_out=gr.get("tokens_out"),
-            cost=gr.get("cost"),
         )
         event = (EventType.validator_approved if gr["verdict"] == "pass"
                  else EventType.validator_rejected)
@@ -184,8 +183,8 @@ class EventAdapter:
     async def finalize(self, status: str = "completed") -> dict:
         # Partial-synthesis fallback: if the graph was abandoned (budget stop) before the
         # main agent composed an answer, build one from the collected subtask results so
-        # the run delivers something instead of an empty answer. Tokens roll into cost but
-        # skip the budget check (we are already at/over the ceiling — finalize must close).
+        # the run delivers something instead of an empty answer. Tokens roll into the
+        # rollup but skip the budget check (already at the ceiling — finalize must close).
         if (self._partial_synthesizer is not None and self._results
                 and not (self.final_answer or "").strip()):
             try:
@@ -208,27 +207,30 @@ class EventAdapter:
         except Exception as exc:  # noqa: BLE001
             await self._emit(EventType.error, {"error": f"synthesis grader: {exc}"})
 
-        cost = rollup_run(self.calls)
+        routing = rollup_routing(self.calls)
         await self.db.set_step_status(self.run_id, _ORCH_STEP, "completed",
                                       total_attempts=self._orch_attempts)
         metrics = {"task_count": self._delegation_n,
-                   "validation_cost": round(self.validation_cost, 6),
-                   "total_tokens": self.total_tokens, **cost.as_dict()}
+                   "validation_tokens": self.validation_tokens,
+                   "total_tokens": self.total_tokens, **routing.as_dict()}
         if self.budget_exceeded:
             metrics["budget_exceeded"] = self.budget_exceeded
         await self.db.finalize_run(
             self.run_id,
             document_result={"final_answer": self.final_answer or ""},
             metrics=metrics, status=status,
-            total_cost=cost.total_cost, baseline_cost=cost.baseline_cost,
-            savings_pct=cost.savings_pct,
         )
         await self._emit(EventType.run_completed,
                          {"final_answer": self.final_answer or "",
                           "task_count": self._delegation_n,
                           "budget_exceeded": self.budget_exceeded})
-        await self._emit(EventType.run_metrics, cost.as_dict())
-        return {"cost": cost.as_dict(), "task_count": self._delegation_n,
+        await self._emit(EventType.run_metrics, {
+            **routing.as_dict(),
+            "task_count": self._delegation_n,
+            "total_tokens": self.total_tokens,
+            "validation_tokens": self.validation_tokens,
+        })
+        return {"routing": routing.as_dict(), "task_count": self._delegation_n,
                 "final_answer": self.final_answer, "budget_exceeded": self.budget_exceeded}
 
     # ── main entry: one stream event (namespace, mode, chunk) ────────────────
@@ -281,7 +283,10 @@ class EventAdapter:
         step_key = f"{role}-{self._delegation_n}"[:32]
         tcid = tc.get("id")
         self.steps[tcid] = {"step_key": step_key, "role": role, "attempts": 0,
-                            "desc": desc, "tool_hops": 0}
+                            "desc": desc, "tool_hops": 0,
+                            # routing telemetry for this worker (surfaced on task_completed)
+                            "tier_observed": None, "category": None,
+                            "cache_hits": 0, "tokens_out": 0}
         self._open_unbound.append(tcid)
         await self.db.create_step(self.run_id, step_key=step_key, type=role,
                                   objective=desc, status="running")
@@ -323,7 +328,8 @@ class EventAdapter:
                 verdict_kind, critique = "fail", l0["detail"]
             elif level in ("judge", "frontier") and self._judge is not None:
                 jr = await self._judge(subtask, result_text, role, cfg)
-                self.validation_cost += float(jr.get("cost") or 0.0)
+                self.validation_tokens += (int(jr.get("tokens_in") or 0)
+                                           + int(jr.get("tokens_out") or 0))
                 await self.db.record_validation(
                     self.run_id, step_key, level=jr["level"], verdict=jr["verdict"],
                     score=jr["score"], validator_tier=jr.get("validator_tier"),
@@ -331,7 +337,6 @@ class EventAdapter:
                     escalated=(jr["level"] == "frontier"),
                     detail={"critique": jr.get("critique", "")},
                     tokens_in=jr.get("tokens_in"), tokens_out=jr.get("tokens_out"),
-                    cost=jr.get("cost"),
                 )
                 verdict_kind, critique = jr["verdict"], jr.get("critique", "")
             else:
@@ -349,6 +354,9 @@ class EventAdapter:
             result_text = rd.get("result", "") or ""
             info["attempts"] += 1
             tout = int(rd.get("tokens_out") or 0)
+            info["tier_observed"] = rd.get("tier_observed") or info["tier_observed"]
+            info["cache_hits"] += 1 if rd.get("cache_hit") else 0
+            info["tokens_out"] += tout
             await self.db.record_attempt(
                 self.run_id, step_key, attempt_no=info["attempts"],
                 status="completed", tokens_in=int(rd.get("tokens_in") or 0),
@@ -369,10 +377,18 @@ class EventAdapter:
         else:
             terminal = "degraded"
         await self._finish_step(step_key, terminal, result_text, info["attempts"],
-                                retries_used, critique)
+                                retries_used, critique, info)
+
+    def _routing_of(self, info: dict) -> dict:
+        """Per-worker routing telemetry for the WS events (the router's decision)."""
+        return {"tier_observed": info.get("tier_observed"),
+                "category": info.get("category"),
+                "cache_hits": info.get("cache_hits", 0),
+                "tokens_out": info.get("tokens_out", 0),
+                "tool_hops": info.get("tool_hops", 0)}
 
     async def _finish_step(self, step_key, terminal, result_text, attempts,
-                           retries_used, critique) -> None:
+                           retries_used, critique, info) -> None:
         """Record terminal step state + emit events for a validated delegation.
 
         pass     → completed, validator_approved.
@@ -387,7 +403,8 @@ class EventAdapter:
             await self._emit(EventType.validator_rejected,
                              {"task_id": step_key, "verdict_kind": "fail", "critique": critique})
             await self._emit(EventType.task_failed,
-                             {"task_id": step_key, "reason": critique})
+                             {"task_id": step_key, "reason": critique,
+                              "attempts": attempts, **self._routing_of(info)})
             return
 
         await self.db.set_step_status(self.run_id, step_key, "completed",
@@ -407,7 +424,9 @@ class EventAdapter:
         else:
             await self._emit(EventType.validator_approved, {"task_id": step_key})
         await self._emit(EventType.task_completed,
-                         {"task_id": step_key, "result": result_text, "model_used": "auto"})
+                         {"task_id": step_key, "result": result_text,
+                          "verdict": terminal, "attempts": attempts,
+                          "retries_used": retries_used, **self._routing_of(info)})
 
     # ── subagent (worker) calls and tools ────────────────────────────────────
     async def _handle_subagent(self, ns: tuple, m) -> None:
@@ -431,14 +450,20 @@ class EventAdapter:
                 return                            # not a real model call
             info["attempts"] += 1
             tier = _tier_observed(m)
+            category = _category(m)
+            hit = _cache_hit(m)
+            info["tier_observed"] = tier or info["tier_observed"]
+            info["category"] = category or info["category"]
+            info["cache_hits"] += 1 if hit else 0
+            info["tokens_out"] += tout
             await self.db.record_attempt(
                 self.run_id, info["step_key"], attempt_no=info["attempts"],
                 status="completed", tokens_in=tin, tokens_out=tout,
                 tier_requested="auto", tier_observed=tier,
-                category=_category(m), cache_hit=_cache_hit(m),
+                category=category, cache_hit=hit,
             )
             self.calls.append({"tokens_out": tout, "tier_observed": tier,
-                               "cache_hit": _cache_hit(m)})
+                               "cache_hit": hit})
             self._account_tokens(tin, tout)
 
     def _bind_namespace(self, ns: tuple) -> str | None:

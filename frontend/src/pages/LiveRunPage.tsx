@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { QueryInput } from '../components/QueryInput'
 import { FlowCanvas } from '../components/FlowCanvas'
 import { OutputPanel } from '../components/OutputPanel'
+import { ApprovalModal } from '../components/ApprovalModal'
 import { useSwarmSocket } from '../hooks/useSwarmSocket'
 import { useSwarmStore } from '../store/swarmStore'
 
@@ -29,6 +30,7 @@ export function LiveRunPage() {
 
   return (
     <div className="flex flex-col">
+      <ApprovalModal />
       <div className="sticky top-12 z-10 bg-gray-950/95 backdrop-blur border-b border-gray-800 px-6 py-3">
         <QueryInput onRunStart={handleRunStart} presets={PRESET_QUERIES} />
       </div>
@@ -60,10 +62,10 @@ function LandingHero() {
       <div className="grid grid-cols-5 gap-4 max-w-3xl w-full text-left">
         {[
           { label: 'Decompose', color: 'border-blue-700', icon: '🧭' },
-          { label: 'Fan-out', color: 'border-purple-700', icon: '⚡' },
+          { label: 'Route', color: 'border-cyan-700', icon: '🚦' },
+          { label: 'Delegate', color: 'border-purple-700', icon: '⚡' },
           { label: 'Validate', color: 'border-amber-700', icon: '🔍' },
           { label: 'Synthesize', color: 'border-green-700', icon: '📋' },
-          { label: 'Evaluate', color: 'border-cyan-700', icon: '📊' },
         ].map((step, i) => (
           <div key={step.label} className={`rounded-lg border ${step.color} bg-gray-900/50 p-3`}>
             <div className="flex items-center gap-2 mb-1">

@@ -23,6 +23,16 @@ const STATUS_COLORS: Record<string, string> = {
   killed:    'border-gray-600 bg-gray-900 opacity-60',
 }
 
+// Router tier badge colors: cool/cheap tiers → warm/frontier tiers.
+const TIER_COLORS: Record<string, string> = {
+  T1: 'bg-emerald-900 text-emerald-300 border-emerald-700',
+  T2: 'bg-teal-900 text-teal-300 border-teal-700',
+  T3: 'bg-sky-900 text-sky-300 border-sky-700',
+  T4: 'bg-orange-900 text-orange-300 border-orange-700',
+  T5: 'bg-red-900 text-red-300 border-red-700',
+  default: 'bg-gray-800 text-gray-300 border-gray-600',
+}
+
 const STATUS_DOT: Record<string, string> = {
   pending:   'bg-gray-500',
   running:   'bg-blue-400 animate-pulse',
@@ -84,27 +94,32 @@ export function WorkerCard({ task }: Props) {
           <span className={clsx('text-xs px-1.5 py-0.5 rounded border font-mono', typeColor)}>
             {task.type}
           </span>
-          {meta && (
-            <span className={clsx(
-              'text-xs px-1.5 py-0.5 rounded border',
-              meta.hardware === 'gpu'
-                ? 'bg-green-900 text-green-300 border-green-700'
-                : 'bg-gray-800 text-gray-400 border-gray-600',
-            )}>
-              {meta.hardware?.toUpperCase()}
-            </span>
-          )}
+          {/* Routed tier badge: the semantic router's decision for this worker */}
+          <span className={clsx(
+            'text-xs px-1.5 py-0.5 rounded border font-mono',
+            result?.tier_observed
+              ? TIER_COLORS[result.tier_observed] ?? TIER_COLORS.default
+              : 'bg-gray-800 text-gray-500 border-gray-600',
+          )}>
+            {result?.tier_observed ?? 'auto'}
+          </span>
         </div>
       </div>
 
       {meta && (
         <div className="mt-1.5 flex items-center gap-3 text-xs text-gray-500">
-          <span className="truncate">{meta.model}</span>
+          {result?.category && (
+            <span className="flex-shrink-0 text-cyan-500">↳ {result.category}</span>
+          )}
           <span className="flex-shrink-0">{elapsed(meta)}</span>
-          {result && (
-            <span className="flex-shrink-0 text-gray-400">
-              conf {(result.confidence * 100).toFixed(0)}%
-            </span>
+          {(result?.tokens_out ?? 0) > 0 && (
+            <span className="flex-shrink-0">{result?.tokens_out} tok</span>
+          )}
+          {(result?.cache_hits ?? 0) > 0 && (
+            <span className="flex-shrink-0 text-blue-400">cache ×{result?.cache_hits}</span>
+          )}
+          {result?.verdict === 'degraded' && (
+            <span className="flex-shrink-0 text-amber-400">degraded</span>
           )}
           {result?.tool_calls?.length > 0 && (
             <span className="flex-shrink-0 text-purple-400">

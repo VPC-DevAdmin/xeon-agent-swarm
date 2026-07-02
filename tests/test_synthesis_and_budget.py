@@ -4,7 +4,7 @@ Offline tests for Stage 5: the L2 synthesis grader and per-run budget stops.
 No gateway: a fake synthesis grader returns a canned verdict, and budgets are set
 low so a synthetic stream breaches them. Covers:
   - the synthesis grader runs once in finalize, on the orchestrator step, against
-    the objective + collected results, and its cost rolls up as validation_cost,
+    the objective + collected results, and its token spend rolls up as validation_tokens,
   - a max_subagents breach stops the run cleanly (status completed, partial
     synthesis preserved, budget_exceeded reported) rather than crashing.
 """
@@ -71,9 +71,8 @@ def test_synthesis_grader_runs_on_orchestrator_step():
         seen["n_results"] = len(results)
         seen["answer"] = final_answer
         return {"level": "frontier", "verdict": "degraded", "score": 0.6,
-                "critique": "dropped the cost comparison", "validator_tier": "tier4",
-                "rubric_id": "synthesis_v1", "tokens_in": 500, "tokens_out": 40,
-                "cost": 0.0012}
+                "critique": "dropped the speed comparison", "validator_tier": "tier4",
+                "rubric_id": "synthesis_v1", "tokens_in": 500, "tokens_out": 40}
 
     adapter = EventAdapter("s1", persistence=fdb, synthesis_grader=grader, budget={})
 
@@ -98,7 +97,7 @@ def test_synthesis_grader_runs_on_orchestrator_step():
     assert len(frontier) == 1
     assert frontier[0]["step_key"] == "orchestrator"    # graded on the synthesis step
     assert frontier[0]["verdict"] == "degraded"
-    assert adapter.validation_cost >= 0.0012            # rolled up separately
+    assert adapter.validation_tokens == 540             # rolled up separately
     emitted = {e.event for e in adapter.events}
     assert EventType.validator_rejected in emitted      # degraded => flagged
 
@@ -140,7 +139,7 @@ def test_partial_synthesis_fills_empty_answer_on_breach():
     async def partial(objective, results):
         calls["objective"], calls["n"] = objective, len(results)
         return {"final_answer": "Partial: A beats B on speed.",
-                "tokens_in": 300, "tokens_out": 60, "tier_observed": "T5", "cost": 0.001}
+                "tokens_in": 300, "tokens_out": 60, "tier_observed": "T5"}
 
     adapter = EventAdapter("s4", persistence=fdb, partial_synthesizer=partial,
                            budget={"max_subagents": 1})

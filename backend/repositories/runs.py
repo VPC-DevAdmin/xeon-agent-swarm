@@ -103,9 +103,6 @@ async def finalize_run(
     document_result: dict | None = None,
     metrics: dict | None = None,
     status: str = "completed",
-    total_cost: float | None = None,
-    baseline_cost: float | None = None,
-    savings_pct: float | None = None,
 ) -> None:
     run = await session.get(Run, run_id)
     if run is None:
@@ -114,12 +111,6 @@ async def finalize_run(
         run.document_result = document_result
     if metrics is not None:
         run.metrics = metrics
-    if total_cost is not None:
-        run.total_cost = total_cost
-    if baseline_cost is not None:
-        run.baseline_cost = baseline_cost
-    if savings_pct is not None:
-        run.savings_pct = savings_pct
     run.status = status
     run.completed_at = _utcnow()
     await session.flush()
@@ -264,7 +255,6 @@ async def record_validation(
     escalated: bool = False,
     tokens_in: int | None = None,
     tokens_out: int | None = None,
-    cost: float | None = None,
 ) -> None:
     """Record one tiered validation pass over a step (see validation_directive.md)."""
     step = await _get_step(session, run_id, step_key)
@@ -284,7 +274,6 @@ async def record_validation(
         escalated=escalated,
         tokens_in=tokens_in,
         tokens_out=tokens_out,
-        cost=cost,
     ))
     await session.flush()
 
@@ -295,7 +284,10 @@ async def get_run(session: AsyncSession, run_id: str) -> Run | None:
     res = await session.execute(
         select(Run)
         .where(Run.id == run_id)
-        .options(selectinload(Run.steps).selectinload(Step.attempts))
+        .options(
+            selectinload(Run.steps).selectinload(Step.attempts),
+            selectinload(Run.steps).selectinload(Step.validations),
+        )
     )
     return res.scalar_one_or_none()
 

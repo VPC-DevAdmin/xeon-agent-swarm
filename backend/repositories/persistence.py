@@ -88,11 +88,11 @@ async def record_validation(run_id, step_key, *, level, verdict, **kw):
 
 
 async def finalize_run(run_id, *, document_result=None, metrics=None,
-                       status="completed", **cost):
+                       status="completed"):
     return await _run(
         lambda s: runs_repo.finalize_run(
             s, run_id, document_result=document_result,
-            metrics=metrics, status=status, **cost,
+            metrics=metrics, status=status,
         ),
         "finalize_run",
     )

@@ -6,7 +6,7 @@ canned worker output, so the retry loop's control flow is deterministic. Covers:
   - judge runs only for judge/frontier roles (mechanical roles skip it),
   - reject → re-dispatch → pass within the retry cap,
   - reject every time → exhaust the cap → degraded (never silently passed),
-  - judge token cost rolls up separately as validation_cost.
+  - judge token spend rolls up separately as validation_tokens.
 """
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def test_judge_passes_clean_result():
         calls.append(role)
         return {"level": "judge", "verdict": "pass", "score": 0.95, "critique": "",
                 "validator_tier": "tier1", "rubric_id": "research_v1",
-                "tokens_in": 80, "tokens_out": 12, "cost": 0.0001}
+                "tokens_in": 80, "tokens_out": 12}
 
     adapter = EventAdapter("r1", persistence=fdb, judge=judge, redispatch=None,
                            validation_cfg={"research": {"level": "judge", "tier": "tier1",
@@ -97,7 +97,7 @@ def test_judge_passes_clean_result():
     assert fdb.steps["research-1"]["status"] == "completed"
     emitted = {e.event for e in adapter.events}
     assert EventType.validator_approved in emitted
-    assert adapter.validation_cost > 0                             # rolled up separately
+    assert adapter.validation_tokens == 92                         # rolled up separately
 
 
 def test_mechanical_role_skips_judge():
@@ -123,7 +123,7 @@ def test_reject_then_redispatch_then_pass():
         return {"level": "judge", "verdict": v, "score": 0.4 if v == "fail" else 0.9,
                 "critique": "missing numbers" if v == "fail" else "",
                 "validator_tier": "tier1", "rubric_id": "analysis_v1",
-                "tokens_in": 50, "tokens_out": 10, "cost": 0.00005}
+                "tokens_in": 50, "tokens_out": 10}
 
     async def redispatch(role, subtask, critique):
         return {"result": '{"result":"now with 24x speedup numbers","confidence":0.9}',
@@ -152,7 +152,7 @@ def test_reject_exhausts_cap_then_degraded():
     async def judge(subtask, result_text, role, cfg):
         return {"level": "judge", "verdict": "fail", "score": 0.2, "critique": "still wrong",
                 "validator_tier": "tier1", "rubric_id": "analysis_v1",
-                "tokens_in": 50, "tokens_out": 10, "cost": 0.00005}
+                "tokens_in": 50, "tokens_out": 10}
 
     redispatch_n = {"n": 0}
 

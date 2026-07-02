@@ -122,14 +122,8 @@ class Run(Base):
     langfuse_trace_id: Mapped[str | None] = mapped_column(String(64))
     error: Mapped[str | None] = mapped_column(Text)
 
-    # ── Cost / tier savings rollup (tier-router migration) ───────────────────
-    # total_cost: summed per-call cost at the tiers actually served.
-    # baseline_cost: the same run priced as if every call ran at T5 (monolithic).
-    # savings_pct: 100 * (1 - total_cost / baseline_cost). Illustrative until the
-    # cost table is measured (see observability/cost.py).
-    total_cost: Mapped[float | None] = mapped_column(Double)
-    baseline_cost: Mapped[float | None] = mapped_column(Double)
-    savings_pct: Mapped[float | None] = mapped_column(Double)
+    # The routing rollup (per-tier call/token distribution, cache hits — see
+    # observability/routing.py) lives in the `metrics` JSON blob above.
 
     started_at: Mapped[datetime] = _now_col()
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -185,6 +179,9 @@ class Step(Base):
 
     run: Mapped["Run"] = relationship(back_populates="steps")
     attempts: Mapped[list["StepAttempt"]] = relationship(
+        back_populates="step", cascade="all, delete-orphan"
+    )
+    validations: Mapped[list["Validation"]] = relationship(
         back_populates="step", cascade="all, delete-orphan"
     )
 
@@ -253,8 +250,8 @@ class Validation(Base):
     Validation is a tier: L0 mechanical (zero tokens) -> L1 cheap judge (tier1/2)
     -> L2 frontier (tier4/5). Each pass records the level it ran at, the validator
     tier (for judge/frontier), the rubric, the verdict + score, how many retries it
-    drove, and whether it escalated. Validation cost is rolled up separately from
-    generation cost so the two stay distinguishable in the UI and summary.
+    drove, and whether it escalated. Validation token spend is recorded per pass,
+    kept separate from generation tokens so the two stay distinguishable.
     """
 
     __tablename__ = "validations"
@@ -274,14 +271,13 @@ class Validation(Base):
     detail: Mapped[dict | None] = mapped_column(JSONB)             # per-criterion / failure detail
     retries_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     escalated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    # Validation cost, kept separate from generation cost (directive §"Data model").
+    # Validator token spend, kept separate from generation (directive §"Data model").
     tokens_in: Mapped[int | None] = mapped_column(Integer)
     tokens_out: Mapped[int | None] = mapped_column(Integer)
-    cost: Mapped[float | None] = mapped_column(Double)
 
     created_at: Mapped[datetime] = _now_col()
 
-    step: Mapped["Step"] = relationship()
+    step: Mapped["Step"] = relationship(back_populates="validations")
 
     __table_args__ = (
         CheckConstraint(

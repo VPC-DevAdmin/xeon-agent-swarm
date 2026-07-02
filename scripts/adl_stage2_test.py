@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-ADL Stage-2 acceptance harness — event adapter + L0 validation + cost.
+ADL Stage-2 acceptance harness — event adapter + L0 validation + routing rollup.
 
 Runs one real deepagents decomposition through the EventAdapter against a fresh
 temp SQLite DB, then asserts the run produced complete telemetry:
@@ -8,7 +8,7 @@ temp SQLite DB, then asserts the run produced complete telemetry:
   - Steps: an 'orchestrator' step + one per delegation
   - StepAttempts: with tier_observed populated (planner pinned, workers routed)
   - Validations: an L0 mechanical row per delegation
-  - Run: total_cost / baseline_cost / savings_pct populated
+  - Run: metrics carry the routing rollup (tier_calls / cached_calls / tokens)
   - Events: run_started, task_started, validator_*, task_completed, run_completed, run_metrics
 
 Run with the ADL venv:
@@ -72,9 +72,11 @@ async def main() -> int:
         vals = list((await s.execute(
             select(Validation).where(Validation.run_id == run_id))).scalars())
 
+    metrics = run.metrics or {}
     print("\n── DB state ──")
-    print(f"  Run.status={run.status} total_cost={run.total_cost} "
-          f"baseline_cost={run.baseline_cost} savings_pct={run.savings_pct}")
+    print(f"  Run.status={run.status} tier_calls={metrics.get('tier_calls')} "
+          f"cached_calls={metrics.get('cached_calls')} "
+          f"total_tokens={metrics.get('total_tokens')}")
     print(f"  Steps ({len(steps)}):")
     for st in steps:
         print(f"    {st.step_key:22} type={st.type:14} status={st.status}")
@@ -99,8 +101,8 @@ async def main() -> int:
         "worker attempts present (tier_requested=auto)": len(worker_attempts) >= 1,
         "planner attempts present": len(planner_attempts) >= 1,
         "validation row per delegation": len(vals) >= len(delegation_steps) and bool(vals),
-        "run cost populated": run.total_cost is not None and run.baseline_cost is not None
-                              and run.savings_pct is not None,
+        "routing rollup populated": bool(metrics.get("tier_calls"))
+                                    and metrics.get("call_count", 0) >= 1,
         "run completed": run.status == "completed",
     }
     print("\n── acceptance gates ──")

@@ -138,10 +138,17 @@ def test_adapter_builds_full_telemetry():
     assert len(fdb.validations) == 2
     assert all(v["level"] == "mechanical" for v in fdb.validations)
 
-    # Cost rollup populated; baseline (all-T5) >= total since one worker ran T3
-    assert summary["cost"]["call_count"] == 6      # 3 planner + 3 worker calls
-    assert fdb.run["total_cost"] <= fdb.run["baseline_cost"]
-    assert fdb.run["savings_pct"] >= 0.0
+    # Routing rollup populated: 3 planner calls at T5, 2 research at T5 + 1 writing at T3
+    assert summary["routing"]["call_count"] == 6   # 3 planner + 3 worker calls
+    assert fdb.run["metrics"]["tier_calls"] == {"T5": 5, "T3": 1}
+    assert fdb.run["metrics"]["cached_calls"] == 0
+
+    # Per-worker routing telemetry rides on task_completed (the router's decision)
+    completed = {e.payload["task_id"]: e.payload for e in adapter.events
+                 if e.event == EventType.task_completed}
+    assert completed["research-1"]["tier_observed"] == "T5"
+    assert completed["writing-2"]["tier_observed"] == "T3"
+    assert completed["writing-2"]["verdict"] == "pass"
 
     # Final answer captured from the synthesis turn
     assert "Final brief" in (summary["final_answer"] or "")
