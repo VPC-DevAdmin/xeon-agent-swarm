@@ -495,6 +495,22 @@ def _interrupt_payload(chunk) -> object | None:
     return None
 
 
+def _plan_from_interrupt(payload) -> str | None:
+    """Extract the submitted plan text from a HITL interrupt payload, so the UI can
+    render the proposed task breakdown instead of a raw repr. The submit_plan gate's
+    action_request args carry {"plan": "<numbered list>"} (core.build_submit_plan_tool)."""
+    items = payload if isinstance(payload, (list, tuple)) else [payload]
+    for it in items:
+        val = getattr(it, "value", it)
+        if not isinstance(val, dict):
+            continue
+        for req in val.get("action_requests") or []:
+            args = req.get("args") if isinstance(req, dict) else getattr(req, "args", None)
+            if isinstance(args, dict) and args.get("plan"):
+                return str(args["plan"])
+    return None
+
+
 def _decision_count(payload) -> int:
     """Number of action_requests carried by a HITL interrupt payload.
 
@@ -555,8 +571,15 @@ async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
                 if payload is not None:
                     interrupted = True
                     interrupt_payload = payload
+                    plan_text = _plan_from_interrupt(payload)
                     await adapter._emit(EventType.awaiting_approval,
-                                        {"interrupt": str(payload)[:500]})
+                                        {"interrupt": str(payload)[:500],
+                                         "plan": plan_text})
+                    # Persist the proposed plan so a client arriving later (or the
+                    # Activity page) can render it and approve — not just the live
+                    # WS listener that caught the event.
+                    if plan_text:
+                        await persistence.save_task_graph(run_id, {"plan": plan_text})
                     await persistence.set_run_status(run_id, "awaiting_approval")
                     break
                 await adapter.handle(ns, mode, chunk)

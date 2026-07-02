@@ -522,6 +522,9 @@ class RunRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=10_000)
     validator_enabled: bool = True      # toggle contract enforcement + retry loop
     max_worker_retries: int = 3         # overall cap; per-role overrides in worker_roles.yaml
+    # Per-run HITL plan approval. None → the ADL_PLAN_APPROVAL env default (manual
+    # runs only — scheduled runs never pause; they would hang unattended).
+    plan_approval: Optional[bool] = None
 
 
 class KillTaskRequest(BaseModel):

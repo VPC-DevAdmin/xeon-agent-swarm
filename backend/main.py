@@ -219,6 +219,7 @@ async def run_deepagents(
     *,
     job_id: str | None = None,
     trigger: str = "manual",
+    plan_approval: bool | None = None,
 ):
     """deepagents (ADL) engine: a single deep agent decomposes + delegates + synthesizes,
     streamed through the event adapter onto the same WS + DB surfaces as the old swarm.
@@ -261,16 +262,19 @@ async def run_deepagents(
         checkpoint_db = (os.environ.get("ADL_CHECKPOINT_DB")
                          or os.environ.get("CHECKPOINT_DB", "./data/adl_checkpoints.db"))
 
-        # HITL plan approval (opt-in): when ADL_PLAN_APPROVAL is on, the graph pauses
-        # after planning and run_with_adapter awaits this coroutine for a decision,
-        # delivered by POST /run/{run_id}/approve. Off → auto-approve, never blocks.
-        plan_approval = os.environ.get("ADL_PLAN_APPROVAL", "").strip().lower() in ("1", "true", "yes")
+        # HITL plan approval: per-run flag wins; None falls back to the ADL_PLAN_APPROVAL
+        # env default for MANUAL runs only — a scheduled run must never pause (it would
+        # hang unattended). When on, the graph pauses after planning and run_with_adapter
+        # awaits this coroutine for a decision (POST /run/{run_id}/approve).
+        if plan_approval is None:
+            env_flag = os.environ.get("ADL_PLAN_APPROVAL", "").strip().lower() in ("1", "true", "yes")
+            plan_approval = env_flag and trigger == "manual"
         approval = (lambda: _await_approval(run_id)) if plan_approval else None
 
         # The adapter handles run_started, steps, validation, finalize (incl. the
         # routing + validation rollup), budgets, and run_completed/run_metrics over WS.
         async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
-            agent = build_agent(checkpointer)
+            agent = build_agent(checkpointer, plan_approval=plan_approval)
             summary = await run_with_adapter(
                 agent, query, run_id,
                 broadcast=manager.broadcast,
@@ -301,6 +305,7 @@ def launch_run(
     validator_enabled: bool = True,
     job_id: str | None = None,
     trigger: str = "manual",
+    plan_approval: bool | None = None,
 ) -> str:
     """Create a run_id and kick off the ADL deepagents engine in the background.
 
@@ -318,6 +323,7 @@ def launch_run(
         validator_enabled=validator_enabled,
         job_id=job_id,
         trigger=trigger,
+        plan_approval=plan_approval,
     ))
     _run_tasks[run_id] = task
     task.add_done_callback(lambda _t, rid=run_id: _run_tasks.pop(rid, None))
@@ -399,6 +405,7 @@ async def start_run(request: RunRequest):
         request.query,
         validator_enabled=request.validator_enabled,
         trigger="manual",
+        plan_approval=request.plan_approval,
     )
     return {"run_id": run_id}
 

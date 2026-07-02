@@ -79,9 +79,25 @@ export const connectorsApi = {
 }
 
 // ── Ad-hoc run ──────────────────────────────────────────────────────────────────
-export function startAdHocRun(query: string, validator_enabled = true) {
+export function startAdHocRun(
+  query: string,
+  opts?: { validator_enabled?: boolean; plan_approval?: boolean },
+) {
   return req<{ run_id: string }>('/run', {
     method: 'POST',
-    body: JSON.stringify({ query, validator_enabled }),
+    body: JSON.stringify({
+      query,
+      validator_enabled: opts?.validator_enabled ?? true,
+      plan_approval: opts?.plan_approval ?? null,
+    }),
   })
+}
+
+// Deliver a HITL plan decision to a paused run (works from any page, not just
+// the live WS listener).
+export function approveRun(runId: string, decision: 'approve' | 'reject') {
+  return req<{ run_id: string; decision: string; delivery: string }>(
+    `/run/${runId}/approve`,
+    { method: 'POST', body: JSON.stringify({ decision }) },
+  )
 }

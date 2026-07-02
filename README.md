@@ -101,7 +101,7 @@ docker compose up -d --build        # MCP servers + backend + frontend + prometh
 # the SQLite schema is created automatically on backend startup (no DB server)
 ```
 
-- Frontend: <http://localhost:3000> (Live Run · Jobs · Runs · Connectors)
+- Frontend: <http://localhost:3000> (New Task · Activity · Connectors)
 - API docs: <http://localhost:8000/docs> (OpenAPI 3.1)
 - Metrics: <http://localhost:8000/metrics> (Prometheus)
 
@@ -115,7 +115,7 @@ docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d
 ## REST API (selected)
 
 ```
-POST   /run                      ad-hoc run
+POST   /run                      ad-hoc run ({query, plan_approval?} — pause for plan review)
 POST   /run/{id}/approve         HITL: approve/reject a paused plan
 POST   /run/{id}/kill            cancel an in-flight run
 GET    /toolbox                  tool catalog + per-role grants + validator policy
@@ -143,6 +143,17 @@ python3 scripts/dashboard.py --validator "your query here"
 
 # Inspect a finished run's per-step outputs.
 python3 scripts/inspect_run.py --latest
+```
+
+### Mock router (offline end-to-end testing)
+
+```bash
+# Terminal 1: OpenAI-compatible stand-in for the tier router — canned planner/worker/judge
+# responses drive the real deepagents engine with ZERO cloud API calls (safe scale testing).
+python scripts/mock_router.py                                    # port 8901 (MOCK_ROUTER_PORT)
+
+# Terminal 2: point the engine at it, then run anything above as usual.
+export ROUTER_BASE=http://localhost:8901 ROUTER_BASE_URL=http://localhost:8901/v1
 ```
 
 ## Key environment variables

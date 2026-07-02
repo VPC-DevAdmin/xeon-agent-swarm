@@ -46,6 +46,24 @@ export interface StepAttempt {
   model_id?: string | null
   correction_hint?: string | null
   latency_ms?: number | null
+  // Routing telemetry: the semantic router's decision for this call
+  tier_requested?: string | null
+  tier_observed?: string | null
+  category?: string | null
+  cache_hit?: boolean | null
+  tokens_in?: number | null
+  tokens_out?: number | null
+}
+
+export interface StepValidation {
+  level: 'mechanical' | 'judge' | 'frontier'
+  verdict: 'pass' | 'degraded' | 'fail'
+  score?: number | null
+  validator_tier?: string | null
+  rubric_id?: string | null
+  retries_used: number
+  escalated: boolean
+  detail?: Record<string, unknown> | null
 }
 
 export interface RunStep {
@@ -60,6 +78,7 @@ export interface RunStep {
   total_attempts: number
   latency_ms?: number | null
   attempts: StepAttempt[]
+  validations: StepValidation[]
 }
 
 export interface RunDetail {

@@ -1,8 +1,8 @@
-import { Routes, Route } from 'react-router-dom'
+import { Navigate, Routes, Route } from 'react-router-dom'
 import { NavBar } from './components/NavBar'
 import { LiveRunPage } from './pages/LiveRunPage'
-import { JobsPage } from './pages/JobsPage'
-import { RunsPage, RunDetailPage } from './pages/RunsPage'
+import { ActivityPage } from './pages/ActivityPage'
+import { RunDetailPage } from './pages/RunsPage'
 import { ConnectorsPage } from './pages/ConnectorsPage'
 
 export default function App() {
@@ -12,10 +12,12 @@ export default function App() {
       <div className="flex-1">
         <Routes>
           <Route path="/" element={<LiveRunPage />} />
-          <Route path="/jobs" element={<JobsPage />} />
-          <Route path="/runs" element={<RunsPage />} />
+          <Route path="/activity" element={<ActivityPage />} />
           <Route path="/runs/:runId" element={<RunDetailPage />} />
           <Route path="/connectors" element={<ConnectorsPage />} />
+          {/* Legacy routes fold into Activity */}
+          <Route path="/jobs" element={<Navigate to="/activity?tab=scheduled" replace />} />
+          <Route path="/runs" element={<Navigate to="/activity?tab=history" replace />} />
         </Routes>
       </div>
     </div>

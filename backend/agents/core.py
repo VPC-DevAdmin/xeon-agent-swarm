@@ -110,15 +110,17 @@ def build_submit_plan_tool():
     )
 
 
-def build_interrupts() -> dict:
+def build_interrupts(plan_approval: bool | None = None) -> dict:
     """Assemble interrupt_on from env (plan §4.5). Plan-approval is the main-agent
     gate that works around #554; sensitive-tool gates are opt-in.
 
+      plan_approval                  → per-run override; None falls back to env.
       ADL_PLAN_APPROVAL=1            → pause after planning for approve/reject.
       ADL_SENSITIVE_TOOLS=a,b,c      → gate each named tool (approve/reject).
     """
+    approval_on = _plan_approval_on() if plan_approval is None else plan_approval
     interrupts = dict(INTERRUPTS)
-    if _plan_approval_on():
+    if approval_on:
         interrupts[_PLAN_TOOL] = {"allowed_decisions": ["approve", "reject"]}
     for tool in (os.environ.get("ADL_SENSITIVE_TOOLS", "") or "").split(","):
         tool = tool.strip()
@@ -128,7 +130,8 @@ def build_interrupts() -> dict:
 
 
 def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
-                tools_by_name: dict | None = None):
+                tools_by_name: dict | None = None,
+                plan_approval: bool | None = None):
     """Assemble the deep agent.
 
     mcp_tools:    LangChain tools granted to the MAIN agent (the planner). Usually a
@@ -136,18 +139,20 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
     tools_by_name: {nickname: LangChain tool} so each profile gets its per-role grant
                   (profiles.py resolves the worker_roles.yaml grants). Defaults to the
                   full managed toolbox (toolbox.build_toolbox) when not supplied.
+    plan_approval: per-run HITL override; None falls back to ADL_PLAN_APPROVAL.
     """
     mf = ModelFactory()
     planner_tier = os.environ.get("ADL_PLANNER_TIER", "T5")
     if tools_by_name is None:
         tools_by_name = build_toolbox()
+    approval_on = _plan_approval_on() if plan_approval is None else plan_approval
 
     # Plan approval (opt-in): grant the one-shot submit_plan gate to the MAIN agent only
     # (subagents never receive it, so they cannot inherit or re-trigger the interrupt) and
     # tell the orchestrator to call it once before delegating. Gate applies to _PLAN_TOOL.
     main_tools = list(mcp_tools or [])
     system_prompt = ORCHESTRATOR_PROMPT
-    if _plan_approval_on() and _PLAN_TOOL == "submit_plan":
+    if approval_on and _PLAN_TOOL == "submit_plan":
         main_tools.append(build_submit_plan_tool())
         system_prompt = ORCHESTRATOR_PROMPT + PLAN_APPROVAL_SUFFIX
 
@@ -156,7 +161,7 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
         tools=main_tools,
         system_prompt=system_prompt,
         subagents=build_subagent_profiles(mf, tools_by_name),  # workers on auto
-        interrupt_on=build_interrupts(),                        # HITL at main-agent level
+        interrupt_on=build_interrupts(approval_on),             # HITL at main-agent level
         checkpointer=checkpointer,                              # REQUIRED for HITL + resume
     )
 

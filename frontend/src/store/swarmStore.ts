@@ -71,7 +71,8 @@ interface SwarmStore {
 
   // ── HITL plan approval ─────────────────────────────────────────────────────
   awaitingApproval: boolean
-  approvalInterrupt: string | null      // the paused plan payload, for display
+  approvalInterrupt: string | null      // raw interrupt repr (fallback display)
+  approvalPlan: string | null           // the proposed plan (numbered list text)
 
   // Actions
   startRun: (runId: string, query: string) => void
@@ -108,6 +109,7 @@ const initialState = {
   runMetrics: null,
   awaitingApproval: false,
   approvalInterrupt: null,
+  approvalPlan: null,
 }
 
 export const useSwarmStore = create<SwarmStore>((set, get) => ({
@@ -373,6 +375,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
         set({
           awaitingApproval: true,
           approvalInterrupt: (payload.interrupt as string) ?? null,
+          approvalPlan: (payload.plan as string) ?? null,
         })
         break
       }

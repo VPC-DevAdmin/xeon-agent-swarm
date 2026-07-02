@@ -1,55 +1,24 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { runsApi } from '../api/client'
-import type { RunDetail, RunSummary } from '../api/types'
-import { Button, Card, Empty, StatusBadge, timeAgo } from '../components/ui'
+import { useParams } from 'react-router-dom'
+import { approveRun, runsApi } from '../api/client'
+import type { RunDetail } from '../api/types'
+import { planToTasks } from '../components/ApprovalModal'
+import { Button, Card, Empty, StatusBadge } from '../components/ui'
 
-export function RunsPage() {
-  const [runs, setRuns] = useState<RunSummary[]>([])
-  const [loading, setLoading] = useState(true)
-  const navigate = useNavigate()
+const LIVE_STATUSES = ['pending', 'running', 'awaiting_approval']
 
-  async function refresh() {
-    try {
-      setRuns(await runsApi.list({ limit: 100 }))
-    } finally {
-      setLoading(false)
-    }
-  }
+const TIER_TEXT: Record<string, string> = {
+  T1: 'text-emerald-400',
+  T2: 'text-teal-400',
+  T3: 'text-sky-400',
+  T4: 'text-orange-400',
+  T5: 'text-red-400',
+}
 
-  useEffect(() => {
-    refresh()
-    const t = setInterval(refresh, 5000)
-    return () => clearInterval(t)
-  }, [])
-
-  return (
-    <div className="max-w-5xl mx-auto px-6 py-6">
-      <h1 className="text-lg font-semibold text-white mb-4">Run History</h1>
-      {loading ? (
-        <Empty message="Loading…" />
-      ) : runs.length === 0 ? (
-        <Empty message="No runs yet." />
-      ) : (
-        <div className="space-y-1.5">
-          {runs.map((r) => (
-            <button key={r.id}
-              onClick={() => navigate(`/runs/${r.id}`)}
-              className="w-full text-left">
-              <Card className="p-3 hover:border-gray-700 transition-colors">
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={r.status} />
-                  <span className="text-xs text-gray-300 truncate flex-1">{r.query}</span>
-                  <span className="text-[11px] text-gray-600 font-mono shrink-0">{r.trigger}</span>
-                  <span className="text-[11px] text-gray-600 shrink-0">{timeAgo(r.started_at)}</span>
-                </div>
-              </Card>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+const VERDICT_CHIP: Record<string, string> = {
+  pass: 'bg-green-900/50 text-green-300 border-green-800',
+  degraded: 'bg-amber-900/50 text-amber-300 border-amber-800',
+  fail: 'bg-red-900/50 text-red-300 border-red-800',
 }
 
 export function RunDetailPage() {
@@ -72,7 +41,7 @@ export function RunDetailPage() {
 
   useEffect(() => {
     refresh()
-    const active = run && ['pending', 'orchestrating', 'running', 'reducing'].includes(run.status)
+    const active = run && LIVE_STATUSES.includes(run.status)
     const t = setInterval(refresh, active ? 2000 : 8000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,9 +51,8 @@ export function RunDetailPage() {
   if (error) return <div className="max-w-4xl mx-auto px-6 py-6 text-red-400 text-sm">{error}</div>
   if (!run) return <Empty message="Run not found." />
 
-  const evals = (run.metrics?.evals ?? null) as
-    | { avg_score: number; pass_rate: number; steps_evaluated: number }
-    | null
+  const planTasks = planToTasks((run.task_graph?.plan as string) ?? null)
+  const finalAnswer = (run.document?.final_answer as string) ?? null
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-6 space-y-4">
@@ -92,51 +60,108 @@ export function RunDetailPage() {
         <div>
           <div className="flex items-center gap-2">
             <StatusBadge status={run.status} />
-            <span className="text-xs text-gray-500 font-mono">{run.run_id.slice(0, 8)}</span>
-            <span className="text-[11px] text-gray-600">{run.trigger}</span>
+            <span className="text-[11px] text-gray-600">
+              {run.trigger === 'schedule' ? 'scheduled run' : `${run.trigger} run`}
+            </span>
           </div>
           <p className="text-sm text-gray-300 mt-1">{run.query}</p>
         </div>
-        {['pending', 'orchestrating', 'running', 'reducing'].includes(run.status) && (
+        {['pending', 'running'].includes(run.status) && (
           <Button variant="danger" onClick={() => runsApi.kill(run.run_id).then(refresh)}>
-            Kill run
+            Stop run
           </Button>
         )}
       </div>
 
-      {evals && (
-        <Card className="p-3">
-          <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Quality eval</div>
-          <div className="flex gap-6 text-xs">
-            <Metric label="avg score" value={evals.avg_score.toFixed(2)}
-              good={evals.avg_score >= 0.7} />
-            <Metric label="pass rate" value={`${Math.round(evals.pass_rate * 100)}%`}
-              good={evals.pass_rate >= 0.7} />
-            <Metric label="steps" value={String(evals.steps_evaluated)} />
+      {/* Plan approval banner — actionable from here, not just the live view */}
+      {run.status === 'awaiting_approval' && (
+        <Card className="p-4 border-amber-700">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span className="text-xs font-semibold text-amber-300 uppercase tracking-wider">
+              Waiting for your approval
+            </span>
+          </div>
+          {planTasks.length > 0 && (
+            <ol className="space-y-1.5 mb-3">
+              {planTasks.map((t, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-gray-200">
+                  <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-blue-900 text-blue-300 text-xs flex items-center justify-center font-mono">
+                    {i + 1}
+                  </span>
+                  {t}
+                </li>
+              ))}
+            </ol>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => approveRun(run.run_id, 'approve').then(refresh)}
+              className="px-4 py-1.5 text-sm rounded bg-green-700 hover:bg-green-600 text-white transition-colors"
+            >
+              Approve &amp; run
+            </button>
+            <button
+              onClick={() => approveRun(run.run_id, 'reject').then(refresh)}
+              className="px-4 py-1.5 text-sm rounded border border-red-700 text-red-300 hover:bg-red-900/40 transition-colors"
+            >
+              Reject
+            </button>
           </div>
         </Card>
       )}
 
+      {/* The approved plan, once past approval */}
+      {run.status !== 'awaiting_approval' && planTasks.length > 0 && (
+        <Card className="p-3">
+          <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Plan</div>
+          <ol className="space-y-1">
+            {planTasks.map((t, i) => (
+              <li key={i} className="text-xs text-gray-400">
+                <span className="text-gray-600 font-mono mr-1.5">{i + 1}.</span>{t}
+              </li>
+            ))}
+          </ol>
+        </Card>
+      )}
+
+      {/* Final answer */}
+      {finalAnswer && (
+        <Card className="p-4">
+          <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Result</div>
+          <div className="text-sm text-gray-200 whitespace-pre-wrap">{finalAnswer}</div>
+        </Card>
+      )}
+
+      {/* Per-agent breakdown */}
       <div className="space-y-2">
-        {run.steps.map((s) => (
+        {run.steps.filter((s) => s.step_key !== 'orchestrator').map((s) => (
           <Card key={s.step_key} className="p-3">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <StatusBadge status={s.status} />
-              <span className="text-xs font-mono text-gray-400">{s.step_key}</span>
-              <span className="text-[11px] text-blue-400">{s.type}</span>
-              {s.deliverable_format && (
-                <span className="text-[11px] text-gray-600 font-mono">{s.deliverable_format}</span>
-              )}
+              <span className="text-[11px] text-blue-400">{s.type} agent</span>
+              {(() => {
+                const tier = s.attempts.filter((a) => a.tier_observed).slice(-1)[0]?.tier_observed
+                return tier ? (
+                  <span className={`text-[11px] font-mono ${TIER_TEXT[tier] ?? 'text-gray-400'}`}>
+                    {tier}
+                  </span>
+                ) : null
+              })()}
+              {(s.validations ?? []).slice(-1).map((v, i) => (
+                <span
+                  key={i}
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full border ${VERDICT_CHIP[v.verdict] ?? ''}`}
+                >
+                  {v.verdict === 'pass' ? '✓ verified' : v.verdict}
+                </span>
+              ))}
               <span className="ml-auto text-[11px] text-gray-600">
                 {s.total_attempts} attempt{s.total_attempts === 1 ? '' : 's'}
                 {s.latency_ms ? ` · ${(s.latency_ms / 1000).toFixed(1)}s` : ''}
-                {s.confidence != null ? ` · conf ${s.confidence.toFixed(2)}` : ''}
               </span>
             </div>
             {s.objective && <p className="text-xs text-gray-500">{s.objective}</p>}
-            {s.dependencies.length > 0 && (
-              <p className="text-[11px] text-gray-600 mt-1">deps: {s.dependencies.join(', ')}</p>
-            )}
             {s.attempts.some((a) => a.correction_hint) && (
               <div className="mt-2 space-y-1">
                 {s.attempts.filter((a) => a.correction_hint).map((a) => (
@@ -146,25 +171,18 @@ export function RunDetailPage() {
                 ))}
               </div>
             )}
+            {typeof s.result?.text === 'string' && s.status === 'completed' && (
+              <details className="mt-2">
+                <summary className="text-[11px] text-gray-600 cursor-pointer hover:text-gray-400">
+                  agent output
+                </summary>
+                <div className="mt-1 text-xs text-gray-400 bg-gray-950 rounded p-2 max-h-48 overflow-y-auto whitespace-pre-wrap">
+                  {s.result.text as string}
+                </div>
+              </details>
+            )}
           </Card>
         ))}
-      </div>
-
-      {run.langfuse_trace_id && (
-        <p className="text-[11px] text-gray-600">
-          Langfuse trace: <span className="font-mono">{run.langfuse_trace_id.slice(0, 16)}…</span>
-        </p>
-      )}
-    </div>
-  )
-}
-
-function Metric({ label, value, good }: { label: string; value: string; good?: boolean }) {
-  return (
-    <div>
-      <div className="text-gray-600 text-[10px] uppercase">{label}</div>
-      <div className={`font-mono ${good === undefined ? 'text-gray-300' : good ? 'text-green-400' : 'text-amber-400'}`}>
-        {value}
       </div>
     </div>
   )
