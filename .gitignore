@@ -228,5 +228,6 @@ repomix-output.xml
 # ADL gateway credentials (local only)
 .env.adl
 
-# Runtime SQLite store (orchestrator.db, checkpoints, test DBs)
-data/
+# Runtime SQLite store (orchestrator.db, checkpoints, test DBs) — root only;
+# a bare "data/" would also swallow source dirs like frontend/src/data/
+/data/
