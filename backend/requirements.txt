@@ -19,7 +19,6 @@ cryptography==49.0.0
 deepagents==0.6.10
 distro==1.9.0
 docstring_parser==0.18.0
-edge-tts==7.2.8
 fastapi==0.138.2
 filetype==1.2.0
 frozenlist==1.8.0

@@ -9,8 +9,8 @@ result, and scores quality — all durably persisted, observable, and schedulabl
 > **Engine:** the Auto-Decomposition Layer (ADL), built on `deepagents` over
 > LangGraph, is the only run engine. The earlier hand-rolled LangGraph "swarm"
 > (orchestrator/worker/reducer/swarm_graph) was removed at cutover; see
-> [`docs/execution_plan.md`](docs/execution_plan.md) and
-> [`docs/decomposition_layer_plan.md`](docs/decomposition_layer_plan.md).
+> [`docs/decomposition_layer_plan.md`](docs/decomposition_layer_plan.md)
+> (design) and [`docs/archive/`](docs/archive) (completed migration plans).
 
 This project owns **orchestration**. It deliberately delegates two concerns to
 sibling services it calls over the network:
@@ -26,11 +26,11 @@ sibling services it calls over the network:
 | Capability | How |
 |---|---|
 | **Prompt decomposition** | The deep agent plans (pinned to `ADL_PLANNER_TIER`) and delegates to declarative worker subagents (`config/worker_roles.yaml`); zero hand-authored agents |
-| **Tier routing** | Workers run on `auto` so the router picks the cheapest sufficient tier; a cost rollup compares routed vs all-frontier baseline |
+| **Tier routing** | Workers run on `auto` so the router classifies each task's difficulty and picks the tier; requested vs served tier, category, and cache hits are recorded per attempt from the `x-vsr-*` headers |
 | **Tiered validation** | Every step: L0 mechanical (free) → L1 cheap-judge (tier1/2) → L2 frontier; bounded retry-on-critique; a frontier grader on the final synthesis ([`docs/validation_directive.md`](docs/validation_directive.md)) |
 | **Managed toolbox** | MCP tools (web search, code exec, doc retrieval) granted **per role**; catalog + grants at `GET /toolbox` |
 | **Governance** | Per-run budgets (`max_subagents`/`max_tool_hops`/`max_total_tokens`, clean partial-synthesis stop) and HITL plan approval (`POST /run/{id}/approve`) |
-| **Live monitoring** | Stream-driven `Step`/`StepAttempt`/`Validation` rows + WebSocket CloudEvents 1.0; async quality evals after each run |
+| **Live monitoring** | Stream-driven `Step`/`StepAttempt`/`Validation` rows + WebSocket CloudEvents 1.0 |
 | **Scheduled runs** | Cron-scheduled Jobs (APScheduler), overlap policies, durable history |
 | **Orchestration** | Durable Jobs → Runs → Steps → Attempts in a SQLite file; full REST + UI |
 
@@ -69,7 +69,7 @@ prompt
   │
   ▼ main agent synthesizes ──▶ L2 frontier grader on the final answer
   │
-  ▼ finalize: cost + validation rollup, persist ──▶ async quality eval ──▶ broadcast
+  ▼ finalize: validation + routing rollup, persist ──▶ broadcast
 ```
 
 The event adapter ([`backend/observability/event_adapter.py`](backend/observability/event_adapter.py))
@@ -135,7 +135,7 @@ GET    /connectors               list (secret field NAMES only — never values)
 
 ```bash
 # End-to-end smoke test: connector + secret hygiene, scheduled job lifecycle,
-# run-to-completion, step/attempt detail, quality eval, history, cleanup.
+# run-to-completion, step/attempt detail, history, cleanup.
 python3 scripts/smoke_test.py
 
 # Watch one run live in the terminal (rich dashboard).
@@ -166,13 +166,12 @@ See [`env.example`](env.example) for the full list.
 
 ```
 backend/
-  agents/        core (deepagents assembly), profiles, toolbox, tts
+  agents/        core (deepagents assembly), profiles, toolbox
   inference/     ModelFactory — the single seam to the tier router (model.py)
   db/            SQLAlchemy models, async SQLite engine, create_all schema
   repositories/  jobs / runs / connectors data access + persistence facade
   routers/       /jobs /runs /connectors /toolbox REST
   scheduling/    APScheduler job scanner
-  evals/         per-deliverable-format quality rubrics
   security/      Fernet secret encryption
   observability/ event_adapter, validation (l0/judge), cost, callbacks, metrics
   protocols/     MCP clients, A2A agent cards

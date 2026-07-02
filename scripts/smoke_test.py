@@ -139,20 +139,6 @@ def main() -> int:
     rd = _req(f"{base}/runs/{run_id}")
     check("run detail has steps", len(rd.get("steps", [])) > 0,
           f"{len(rd.get('steps', []))} steps")
-    # evals populate async — poll briefly
-    evals = None
-    for _ in range(10):
-        rd = _req(f"{base}/runs/{run_id}")
-        evals = (rd.get("metrics") or {}).get("evals")
-        if evals:
-            break
-        time.sleep(3)
-    if status == "completed":
-        check("quality eval populated", bool(evals),
-              f"avg={evals.get('avg_score') if evals else 'n/a'}")
-    else:
-        print(f"    {DIM}(skipping eval check — run did not complete){RESET}")
-
     # 6. history listing
     print("history")
     runs = _req(f"{base}/runs?limit=10")

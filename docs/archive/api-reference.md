@@ -1,4 +1,9 @@
-# Xeon Agent Swarm — Backend API Reference
+# [ARCHIVED — describes the pre-ADL swarm engine] Xeon Agent Swarm — Backend API Reference
+
+> **Archived 2026-07-02.** Written for the old hand-rolled swarm; endpoint
+> details and event payloads have drifted. The live, always-current API
+> reference is the OpenAPI page served by the backend at `/docs`
+> (<http://localhost:8000/docs>). Event vocabulary: `docs/standards.md`.
 
 This document describes every endpoint, WebSocket event, and data model exposed by the
 backend. It is intended as the integration spec for any frontend that connects to this

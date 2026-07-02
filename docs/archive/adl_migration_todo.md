@@ -1,4 +1,13 @@
-# ADL / Tier-Router Migration — Status & Remaining Work
+# [ARCHIVED — migration complete] ADL / Tier-Router Migration — Status & Remaining Work
+
+> **Archived 2026-07-02.** The remaining-work items below were resolved the same
+> day: the orphaned evaluator/evals and `inference/client.py` were **deleted**
+> (the L0/L1/L2 validators + synthesis grader are the quality story), the stale
+> configs (`endpoints.yaml`, `decomposition_templates.yaml`, `tts.py`, legacy
+> env vars) were removed, and — correcting item 5 — `scripts/adl_stage2_test.py`
+> was verified to import only live modules and was **kept**. The cost story
+> (item 3 / P4 surfacing) was **dropped by decision**, not completed. The
+> "Caveats / gotchas" section remains accurate and useful.
 
 > **Reconciled 2026-07-02.** This file was originally a takeover TODO written at the
 > `d393d73` state (old swarm still running, deepagents modules unwired). That migration

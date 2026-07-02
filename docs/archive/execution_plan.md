@@ -1,4 +1,8 @@
-# Execution Plan — deepagents / ADL Migration
+# [ARCHIVED — migration complete] Execution Plan — deepagents / ADL Migration
+
+> **Archived 2026-07-02.** All six stages landed and were verified live on the
+> R470; the deepagents ADL is the only engine. Kept for history — do not treat
+> the "Current state" section below as current.
 
 Working plan for migrating the hand-rolled LangGraph "swarm" orchestrator onto
 **deepagents 0.6.10**, talking to the tier-router gateway (`:8900`) as an external
