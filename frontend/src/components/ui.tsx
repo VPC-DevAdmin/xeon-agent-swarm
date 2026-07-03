@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { parseServerDate } from '../lib/thread'
 
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -72,8 +73,9 @@ export const inputClass =
   'focus:outline-none focus:border-blue-600 placeholder-gray-600'
 
 export function timeAgo(iso?: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso).getTime()
+  const parsed = parseServerDate(iso)
+  if (!parsed) return '—'
+  const d = parsed.getTime()
   const diff = Date.now() - d
   const s = Math.floor(diff / 1000)
   if (s < 0) return formatFuture(-s)

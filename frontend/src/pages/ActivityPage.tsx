@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { approveRun, jobsApi, runsApi } from '../api/client'
+import { parseServerDate } from '../lib/thread'
 import type { Job, RunSummary } from '../api/types'
 import { Card, Empty, StatusBadge, timeAgo } from '../components/ui'
 
@@ -176,7 +177,7 @@ function ScheduledJobs({ jobs, runs, onChanged }:
                 <p className="text-[11px] text-gray-500 mt-0.5">
                   {cadenceLabel(j.schedule_cron)}
                   {j.next_fire_at && j.status === 'active' && (
-                    <> · next {new Date(j.next_fire_at).toLocaleString()}</>
+                    <> · next {parseServerDate(j.next_fire_at)?.toLocaleString()}</>
                   )}
                   {last && (
                     <>

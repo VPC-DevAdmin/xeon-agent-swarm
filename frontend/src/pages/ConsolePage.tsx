@@ -99,7 +99,7 @@ export function ConsolePage() {
   return (
     <div className="flex h-screen overflow-hidden">
       <HistorySidebar
-        runs={runs}
+        runs={runs.filter((r) => r.trigger !== 'schedule')}
         focusId={focusId}
         collapsed={collapsed}
         onFocus={(id) => { setFocusId(id); setView('thread') }}

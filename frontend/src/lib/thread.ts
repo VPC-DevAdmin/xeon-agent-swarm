@@ -48,6 +48,20 @@ export interface ThreadModel {
   error: string | null
 }
 
+// ── time helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Parse a backend timestamp. The API emits naive-UTC ISO strings (no tz suffix,
+ * e.g. "2026-07-03T14:38:43"); JS would otherwise read those as LOCAL time and
+ * be off by the viewer's UTC offset. Treat a tz-less value as UTC.
+ */
+export function parseServerDate(iso?: string | null): Date | null {
+  if (!iso) return null
+  const hasTz = /[zZ]$|[+-]\d\d:?\d\d$/.test(iso)
+  const d = new Date(hasTz ? iso : iso + 'Z')
+  return isNaN(d.getTime()) ? null : d
+}
+
 // ── tier helpers ──────────────────────────────────────────────────────────────
 
 export const TIER_ORDER = ['T1', 'T2', 'T3', 'T4', 'T5'] as const
@@ -203,8 +217,8 @@ export function buildDetailThread(d: RunDetail): ThreadModel {
 // ── sidebar grouping ──────────────────────────────────────────────────────────
 
 export function dayGroup(iso: string | null | undefined): string {
-  if (!iso) return 'Earlier'
-  const d = new Date(iso)
+  const d = parseServerDate(iso)
+  if (!d) return 'Earlier'
   const now = new Date()
   const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
   const diffDays = Math.floor((startOfDay(now) - startOfDay(d)) / 86_400_000)

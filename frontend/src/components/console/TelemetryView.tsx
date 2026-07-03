@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { runsApi } from '../../api/client'
 import type { Job, RunSummary } from '../../api/types'
 import type { RunMetrics } from '../../types/swarm'
-import { TIER_ORDER, tierColor, dayGroup } from '../../lib/thread'
+import { TIER_ORDER, tierColor, dayGroup, parseServerDate } from '../../lib/thread'
 
 interface Props {
   runs: RunSummary[]
@@ -27,8 +27,9 @@ export function TelemetryView({ runs, jobs }: Props) {
   const activeNow = runs.filter((r) => ['pending', 'running', 'awaiting_approval'].includes(r.status)).length
   const completedToday = runs.filter((r) => r.status === 'completed' && dayGroup(r.started_at) === 'Today').length
   const next24h = jobs.filter((j) => {
-    if (j.status !== 'active' || !j.next_fire_at) return false
-    const dt = new Date(j.next_fire_at).getTime() - Date.now()
+    const fire = parseServerDate(j.next_fire_at)
+    if (j.status !== 'active' || !fire) return false
+    const dt = fire.getTime() - Date.now()
     return dt >= 0 && dt <= 86_400_000
   }).length
 
