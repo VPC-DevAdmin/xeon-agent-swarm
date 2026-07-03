@@ -14,8 +14,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# root-anchored: a bare "lib/" would swallow source dirs like frontend/src/lib/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
