@@ -72,6 +72,7 @@ async def _scan_and_fire() -> None:
                 validator_enabled=validator_enabled,
                 job_id=job.id,
                 trigger="schedule",
+                enabled_tools=list(job.config.get("enabled_tools", []) or []),
             )
             fired += 1
             logger.info("scheduler fired job %s → run %s", job.id, run_id)

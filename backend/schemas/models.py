@@ -525,6 +525,9 @@ class RunRequest(BaseModel):
     # Per-run HITL plan approval. None → the ADL_PLAN_APPROVAL env default (manual
     # runs only — scheduled runs never pause; they would hang unattended).
     plan_approval: Optional[bool] = None
+    # Tool ids (from the catalog) enabled for this run. The planner sees their manifest
+    # and can route tool-using subtasks to the tool_user worker.
+    enabled_tools: list[str] = Field(default_factory=list)
 
 
 class KillTaskRequest(BaseModel):

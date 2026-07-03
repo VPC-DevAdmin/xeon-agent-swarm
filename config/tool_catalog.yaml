@@ -1,0 +1,266 @@
+# The managed tool catalog — a curated, fixed set the planner can compose with and
+# users can set up. Data-driven: this file feeds the /tools API, the planner's tool
+# manifest, and the execution layer (backend/agents/tool_catalog.py + toolbox.py).
+#
+# Per tool:
+#   name          display name
+#   category      messaging | social | data | knowledge | dev
+#   description    one line — this is exactly what the planner sees in its manifest
+#   capabilities   any of: read, write, notify, compute (drives how the planner uses it)
+#   backing        builtin (live MCP server) | api (real impl in tool_impls) | stub (catalogued, not wired)
+#   write_risk     true → the tool acts on the outside world; it rides the plan-approval gate
+#   setup          credential/config fields the user provides; secret:true values are Fernet-encrypted
+#
+# "backing: api" tools with an implementation in tool_impls.py execute for real once
+# their setup fields are configured; the rest are catalogued + configurable but return a
+# clear "not wired in this build" message at call time.
+
+tools:
+  # ── Messaging & alerts ──────────────────────────────────────────────────────
+  telegram:
+    name: Telegram
+    category: messaging
+    description: "Send a message to, or read recent messages from, a Telegram chat or channel."
+    capabilities: [read, notify]
+    backing: api
+    write_risk: true
+    setup:
+      - {field: bot_token, label: "Bot token", secret: true}
+      - {field: chat_id, label: "Chat / channel ID", secret: false}
+
+  discord:
+    name: Discord
+    category: messaging
+    description: "Post to, or read history from, a Discord channel."
+    capabilities: [read, notify]
+    backing: stub
+    write_risk: true
+    setup:
+      - {field: bot_token, label: "Bot token (needed for reading)", secret: true}
+      - {field: channel_id, label: "Channel ID", secret: false}
+
+  slack:
+    name: Slack
+    category: messaging
+    description: "Post a message to, or read history from, a Slack channel."
+    capabilities: [read, notify]
+    backing: stub
+    write_risk: true
+    setup:
+      - {field: bot_token, label: "Bot token", secret: true}
+      - {field: channel, label: "Channel", secret: false}
+
+  email:
+    name: Email
+    category: messaging
+    description: "Send an email, or read recent inbox messages."
+    capabilities: [read, notify]
+    backing: api
+    write_risk: true
+    setup:
+      - {field: smtp_host, label: "SMTP host", secret: false}
+      - {field: smtp_port, label: "SMTP port", secret: false}
+      - {field: username, label: "Username / from address", secret: false}
+      - {field: password, label: "Password / app password", secret: true}
+      - {field: imap_host, label: "IMAP host (for reading)", secret: false}
+
+  sms:
+    name: SMS
+    category: messaging
+    description: "Send an SMS text message, or read recent inbound texts (via Twilio)."
+    capabilities: [read, notify]
+    backing: api
+    write_risk: true
+    setup:
+      - {field: account_sid, label: "Twilio account SID", secret: false}
+      - {field: auth_token, label: "Twilio auth token", secret: true}
+      - {field: from_number, label: "From number", secret: false}
+
+  webhook:
+    name: Webhook
+    category: messaging
+    description: "Fire an HTTP POST to an arbitrary endpoint with a JSON payload."
+    capabilities: [notify]
+    backing: api
+    write_risk: true
+    setup:
+      - {field: url, label: "Webhook URL", secret: false}
+      - {field: signing_secret, label: "Signing secret (optional)", secret: true}
+
+  # ── Social ──────────────────────────────────────────────────────────────────
+  x_twitter:
+    name: X (Twitter)
+    category: social
+    description: "Read your timeline, mentions, and search results, or post a tweet."
+    capabilities: [read, write]
+    backing: api
+    write_risk: true
+    setup:
+      - {field: bearer_token, label: "Bearer token (v2)", secret: true}
+      - {field: api_key, label: "API key (for posting)", secret: true}
+      - {field: api_secret, label: "API secret (for posting)", secret: true}
+
+  linkedin:
+    name: LinkedIn
+    category: social
+    description: "Publish a post, or read your own posts and their analytics (not the public feed)."
+    capabilities: [read, write]
+    backing: stub
+    write_risk: true
+    setup:
+      - {field: access_token, label: "OAuth access token", secret: true}
+
+  instagram:
+    name: Instagram
+    category: social
+    description: "Publish media, or read your own account's media, comments, and insights."
+    capabilities: [read, write]
+    backing: stub
+    write_risk: true
+    setup:
+      - {field: access_token, label: "Meta Graph access token", secret: true}
+      - {field: account_id, label: "Business account ID", secret: false}
+
+  # ── Data stores ─────────────────────────────────────────────────────────────
+  sql_database:
+    name: SQL database
+    category: data
+    description: "Run a SQL query, or insert/update rows, against a database."
+    capabilities: [read, write]
+    backing: api
+    write_risk: true
+    setup:
+      - {field: connection_string, label: "Connection string (sqlite:///…, postgresql://…)", secret: true}
+
+  csv_file:
+    name: CSV / spreadsheet
+    category: data
+    description: "Read, append, or update rows in a CSV file on the server."
+    capabilities: [read, write]
+    backing: api
+    write_risk: true
+    setup:
+      - {field: file_path, label: "CSV file path", secret: false}
+
+  google_sheets:
+    name: Google Sheets
+    category: data
+    description: "Read or write cells and rows in a Google Sheet."
+    capabilities: [read, write]
+    backing: stub
+    write_risk: true
+    setup:
+      - {field: service_account_json, label: "Service-account JSON", secret: true}
+      - {field: sheet_id, label: "Spreadsheet ID", secret: false}
+
+  airtable:
+    name: Airtable
+    category: data
+    description: "Read or write records in an Airtable base."
+    capabilities: [read, write]
+    backing: stub
+    write_risk: true
+    setup:
+      - {field: api_key, label: "API key", secret: true}
+      - {field: base_id, label: "Base ID", secret: false}
+
+  notion:
+    name: Notion
+    category: data
+    description: "Create or update pages and database rows in Notion."
+    capabilities: [read, write]
+    backing: stub
+    write_risk: true
+    setup:
+      - {field: integration_token, label: "Integration token", secret: true}
+
+  # ── Knowledge & web ─────────────────────────────────────────────────────────
+  web_search:
+    name: Web search
+    category: knowledge
+    description: "Search the web for current information."
+    capabilities: [read]
+    backing: builtin
+    write_risk: false
+    setup: []
+
+  fetch_url:
+    name: Fetch & extract URL
+    category: knowledge
+    description: "Fetch a web page and extract its readable text content."
+    capabilities: [read]
+    backing: api
+    write_risk: false
+    setup: []
+
+  doc_retrieval:
+    name: Document retrieval
+    category: knowledge
+    description: "Search the on-box document corpus for relevant passages."
+    capabilities: [read]
+    backing: builtin
+    write_risk: false
+    setup: []
+
+  rss_feed:
+    name: RSS / news feed
+    category: knowledge
+    description: "Pull the latest items from an RSS or Atom feed."
+    capabilities: [read]
+    backing: api
+    write_risk: false
+    setup:
+      - {field: feed_url, label: "Feed URL", secret: false}
+
+  # ── Dev & work ──────────────────────────────────────────────────────────────
+  github:
+    name: GitHub
+    category: dev
+    description: "Read issues and pull requests, or create issues and comments."
+    capabilities: [read, write]
+    backing: stub
+    write_risk: true
+    setup:
+      - {field: access_token, label: "Personal access token", secret: true}
+      - {field: repo, label: "owner/repo", secret: false}
+
+  linear:
+    name: Linear
+    category: dev
+    description: "Read, create, or update issues in Linear."
+    capabilities: [read, write]
+    backing: stub
+    write_risk: true
+    setup:
+      - {field: api_key, label: "API key", secret: true}
+
+  google_calendar:
+    name: Google Calendar
+    category: dev
+    description: "Read upcoming events, or create new calendar events."
+    capabilities: [read, write]
+    backing: stub
+    write_risk: true
+    setup:
+      - {field: service_account_json, label: "Service-account JSON", secret: true}
+      - {field: calendar_id, label: "Calendar ID", secret: false}
+
+  code_exec:
+    name: Python sandbox
+    category: dev
+    description: "Run a short Python snippet in a sandbox and return its output."
+    capabilities: [compute]
+    backing: builtin
+    write_risk: false
+    setup: []
+
+  rest_api:
+    name: REST API caller
+    category: dev
+    description: "Make an authenticated GET or POST request to any REST endpoint."
+    capabilities: [read, write]
+    backing: api
+    write_risk: true
+    setup:
+      - {field: base_url, label: "Base URL", secret: false}
+      - {field: auth_header, label: "Authorization header value", secret: true}

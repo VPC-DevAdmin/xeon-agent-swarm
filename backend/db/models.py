@@ -321,7 +321,7 @@ class Connector(Base):
         ),
         CheckConstraint(
             "kind IN ('slack','github','gmail','mcp_server','http_webhook',"
-            "'router','search_endpoint')",
+            "'router','search_endpoint','tool')",
             name="ck_connectors_kind",
         ),
     )

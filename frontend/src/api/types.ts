@@ -122,3 +122,27 @@ export const CONNECTOR_KINDS = [
   'slack', 'github', 'gmail', 'mcp_server',
   'http_webhook', 'router', 'search_endpoint',
 ] as const
+
+// ── Tools ──────────────────────────────────────────────────────────────────────
+export interface ToolSetupField {
+  field: string
+  label: string
+  secret: boolean
+}
+
+export interface Tool {
+  id: string
+  name: string
+  category: string
+  description: string
+  capabilities: string[]
+  backing: 'builtin' | 'api' | 'stub'
+  write_risk: boolean
+  setup: ToolSetupField[]
+  configured: boolean
+}
+
+export interface ToolsResponse {
+  categories: string[]
+  tools: Tool[]
+}

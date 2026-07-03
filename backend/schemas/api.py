@@ -107,7 +107,7 @@ class ConnectorCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     kind: Literal[
         "slack", "github", "gmail", "mcp_server",
-        "http_webhook", "router", "search_endpoint",
+        "http_webhook", "router", "search_endpoint", "tool",
     ]
     config: dict = Field(default_factory=dict)
     # Secret field values — encrypted on save, never echoed back.

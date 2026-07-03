@@ -49,6 +49,7 @@ import hashlib
 import itertools
 import json
 import os
+import re
 import time
 
 from fastapi import FastAPI, Request
@@ -162,6 +163,55 @@ _ROLE_MARKERS: list[tuple[str, str]] = [
 ]
 
 _CATEGORY = {"research": "research", "writing": "writing"}
+
+# Tool-echo: when a run enables tools, the planner's system prompt carries the
+# manifest ("AVAILABLE TOOLS … - <id> (caps): …"). The mock then inserts a
+# tool_user delegation and, for that worker, actually invokes the granted tool so
+# the real StructuredTool executes offline (e.g. csv_file writes a file).
+_TOOL_MANIFEST_MARKER = "available tools"
+_TOOL_USER_MARKER = "tool-using agent"
+_DEEPAGENTS_BUILTINS = {"task", "submit_plan", "write_todos", "read_file",
+                        "write_file", "edit_file", "ls"}
+
+
+def _enabled_tool(system_text: str) -> str | None:
+    """First tool id from the planner manifest, or None when no tools are enabled."""
+    if _TOOL_MANIFEST_MARKER not in system_text:
+        return None
+    m = re.search(r"^- (\w+) \(", system_text, re.MULTILINE)
+    return m.group(1) if m else None
+
+
+def _granted_tool(body: dict) -> str | None:
+    """The first catalog tool granted to this (tool_user) subagent request."""
+    for name in _tool_names(body):
+        if name not in _DEEPAGENTS_BUILTINS:
+            return name
+    return None
+
+
+def _tool_call_args(tool_id: str, obj: str) -> dict:
+    """A safe, deterministic {action, params} for the given tool (impls tolerate
+    unknown shapes and degrade to an error string, so any of these is safe)."""
+    o = obj[:80]
+    table = {
+        "csv_file":     {"action": "append", "params": {"row": {"finding": o, "status": "recorded"}}},
+        "sql_database": {"action": "query", "params": {"sql": "SELECT 1 AS ok"}},
+        "telegram":     {"action": "send", "params": {"text": f"Digest ready: {o}"}},
+        "sms":          {"action": "send", "params": {"to": "+10000000000", "body": f"Digest: {o}"}},
+        "email":        {"action": "send", "params": {"to": "demo@example.com", "subject": "Digest", "body": o}},
+        "webhook":      {"action": "post", "params": {"payload": {"summary": o}}},
+        "x_twitter":    {"action": "read", "params": {"query": o}},
+    }
+    return table.get(tool_id, {"action": "read", "params": {}})
+
+
+def _tool_results_present(messages: list[dict]) -> bool:
+    """True once a non-delegation tool result (an actual tool call) is in the thread."""
+    for m in messages:
+        if m.get("role") == "tool" and m.get("name") not in ("task", "submit_plan"):
+            return True
+    return False
 
 # The delegation script the mock planner follows (roles exist in worker_roles.yaml).
 _SUBTASKS: list[tuple[str, str]] = [
@@ -449,17 +499,39 @@ async def chat_completions(request: Request):
         return _completion(tier=tier, category="general", seed=seed,
                            messages=messages, tool_calls=[tc])
 
-    # (c) main agent: sequential delegation loop, then synthesis.
+    # (c) main agent: sequential delegation loop, then synthesis. When tools are
+    # enabled (manifest present), splice in a tool_user delegation before writing.
     if "task" in tools:
+        script = list(_SUBTASKS)
+        tool_id = _enabled_tool(system)
+        if tool_id:
+            script.insert(2, ("tool_user",
+                              f"Use {tool_id} to record and act on the findings for: {{obj}}"))
         done = _tool_result_count(messages, "task")
-        if done < len(_SUBTASKS):
-            role, desc_tpl = _SUBTASKS[done]
+        if done < len(script):
+            role, desc_tpl = script[done]
             tc = _tool_call("task", {"subagent_type": role,
                                      "description": desc_tpl.format(obj=obj[:300])})
             return _completion(tier=tier, category="general", seed=seed,
                                messages=messages, tool_calls=[tc])
         return _completion(tier=tier, category="general", seed=seed,
                            messages=messages, content=_synthesis_text(obj))
+
+    # (c2) tool_user subagent: actually invoke the granted tool, then report its result.
+    if _TOOL_USER_MARKER in system:
+        tool_id = _granted_tool(body)
+        if tool_id and not _tool_results_present(messages):
+            tc = _tool_call(tool_id, _tool_call_args(tool_id, obj))
+            return _completion(tier=tier, category="general", seed=seed,
+                               messages=messages, tool_calls=[tc])
+        # tool has run (its result is in the thread) — report it on-contract for L0.
+        content = json.dumps({
+            "result": (f"Called {tool_id or 'the tool'}; it executed and returned its result "
+                       "(see the tool output above)."),
+            "confidence": 0.8,
+        })
+        return _completion(tier=tier, category="general", seed=seed,
+                           messages=messages, content=content)
 
     # Budget-stop partial synthesis (no tools, distinctive system prompt): prose answer.
     if _PARTIAL_SYNTH_MARKER in system:

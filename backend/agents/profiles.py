@@ -48,23 +48,31 @@ def _granted_tools(role_cfg: dict, tools_by_name: dict | None) -> list:
     return granted
 
 
-def build_subagent_profiles(mf, tools_by_name: dict | None = None) -> list[dict]:
+def build_subagent_profiles(mf, tools_by_name: dict | None = None,
+                            enabled_tools: list[str] | None = None) -> list[dict]:
     """Build the deepagents `subagents=[...]` list from worker_roles.yaml.
 
     mf: a ModelFactory (backend.inference.model.ModelFactory). Workers run on
         mf.auto() so the router picks the cheapest sufficient tier per subtask.
-    tools_by_name: optional {nickname: LangChain tool} from the MCP adapter wiring.
+    tools_by_name: optional {tool_id: LangChain tool} from build_toolbox().
+    enabled_tools: the workflow's per-run tool selection. The `tool_user` role is
+        granted exactly this set (dynamic), so decomposition can route tool-using
+        subtasks to it; the other roles keep their static worker_roles.yaml grants.
     """
     worker_model = mf.auto()
     roles = load_roles()
     profiles: list[dict] = []
     for key, cfg in roles.items():
         name = _NAME_MAP.get(key, key)
+        if key == "tool_user":
+            grant = {"tools": list(enabled_tools or [])}
+        else:
+            grant = cfg
         profiles.append({
             "name": name,
             "description": cfg.get("description", f"{key} specialist"),
             "system_prompt": cfg.get("system_prompt", "").strip(),
-            "tools": _granted_tools(cfg, tools_by_name),
+            "tools": _granted_tools(grant, tools_by_name),
             "model": worker_model,
         })
     return profiles

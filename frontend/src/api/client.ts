@@ -5,6 +5,7 @@ import type {
   JobCreate,
   RunDetail,
   RunSummary,
+  ToolsResponse,
 } from './types'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -78,10 +79,15 @@ export const connectorsApi = {
   revoke: (id: string) => req<Connector>(`/connectors/${id}`, { method: 'DELETE' }),
 }
 
+// ── Tools ─────────────────────────────────────────────────────────────────────
+export const toolsApi = {
+  list: () => req<ToolsResponse>('/tools'),
+}
+
 // ── Ad-hoc run ──────────────────────────────────────────────────────────────────
 export function startAdHocRun(
   query: string,
-  opts?: { validator_enabled?: boolean; plan_approval?: boolean },
+  opts?: { validator_enabled?: boolean; plan_approval?: boolean; enabled_tools?: string[] },
 ) {
   return req<{ run_id: string }>('/run', {
     method: 'POST',
@@ -89,6 +95,7 @@ export function startAdHocRun(
       query,
       validator_enabled: opts?.validator_enabled ?? true,
       plan_approval: opts?.plan_approval ?? null,
+      enabled_tools: opts?.enabled_tools ?? [],
     }),
   })
 }

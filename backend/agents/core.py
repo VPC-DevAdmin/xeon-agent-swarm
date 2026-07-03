@@ -36,6 +36,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from backend.inference.model import ModelFactory
 from backend.agents.profiles import build_subagent_profiles
 from backend.agents.toolbox import build_toolbox
+from backend.agents import tool_catalog
 
 
 ORCHESTRATOR_PROMPT = """You decompose the user's objective into the smallest useful set
@@ -131,19 +132,25 @@ def build_interrupts(plan_approval: bool | None = None) -> dict:
 
 def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
                 tools_by_name: dict | None = None,
-                plan_approval: bool | None = None):
+                plan_approval: bool | None = None,
+                enabled_tools: list[str] | None = None):
     """Assemble the deep agent.
 
     mcp_tools:    LangChain tools granted to the MAIN agent (the planner). Usually a
                   small read-only set; most tool use happens inside subagents.
-    tools_by_name: {nickname: LangChain tool} so each profile gets its per-role grant
-                  (profiles.py resolves the worker_roles.yaml grants). Defaults to the
-                  full managed toolbox (toolbox.build_toolbox) when not supplied.
+    tools_by_name: {tool_id: LangChain tool} so each profile gets its grant. Defaults
+                  to the managed toolbox restricted to `enabled_tools` when supplied.
     plan_approval: per-run HITL override; None falls back to ADL_PLAN_APPROVAL.
+    enabled_tools: the workflow's tool selection. Its manifest is injected into the
+                  planner prompt (so decomposition can compose tool-using subtasks)
+                  and the `tool_user` worker is granted exactly this set.
     """
     mf = ModelFactory()
     planner_tier = os.environ.get("ADL_PLANNER_TIER", "T5")
     if tools_by_name is None:
+        # Build the whole catalog (tools are lazy at call time); the enabled selection
+        # only drives the planner manifest + the tool_user grant, not construction, so
+        # static roles (research → web_search, code → code_exec) keep their grants.
         tools_by_name = build_toolbox()
     approval_on = _plan_approval_on() if plan_approval is None else plan_approval
 
@@ -152,15 +159,20 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
     # tell the orchestrator to call it once before delegating. Gate applies to _PLAN_TOOL.
     main_tools = list(mcp_tools or [])
     system_prompt = ORCHESTRATOR_PROMPT
+    # Tool-awareness: show the planner the enabled tools so it can plan tasks that use
+    # them (delegated to the tool_user worker). No selection → no manifest, no change.
+    manifest = tool_catalog.manifest(enabled_tools) if enabled_tools else ""
+    if manifest:
+        system_prompt = system_prompt + "\n\n" + manifest
     if approval_on and _PLAN_TOOL == "submit_plan":
         main_tools.append(build_submit_plan_tool())
-        system_prompt = ORCHESTRATOR_PROMPT + PLAN_APPROVAL_SUFFIX
+        system_prompt = system_prompt + PLAN_APPROVAL_SUFFIX
 
     return create_deep_agent(
         model=mf.for_tier(planner_tier),                      # main agent: planner+synthesis
         tools=main_tools,
         system_prompt=system_prompt,
-        subagents=build_subagent_profiles(mf, tools_by_name),  # workers on auto
+        subagents=build_subagent_profiles(mf, tools_by_name, enabled_tools),  # workers on auto
         interrupt_on=build_interrupts(approval_on),             # HITL at main-agent level
         checkpointer=checkpointer,                              # REQUIRED for HITL + resume
     )

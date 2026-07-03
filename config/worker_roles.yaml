@@ -289,6 +289,25 @@ roles:
     preferred_hardware: cpu
     tools: []
 
+  tool_user:
+    description: "Uses external tools to read from or act on outside systems (messaging, social, databases, web)"
+    validation:
+      level: mechanical     # the tool's own result is the ground truth; no judge spend
+      retries: 0
+    system_prompt: |
+      You are a tool-using agent. Your subtask names a tool and an action (e.g.
+      "use sql_database to append the findings", "use telegram to send the summary").
+
+      Call the named tool with the right action and parameters, then report what it
+      returned. Tool call shape: action = the verb (read | send | query | append |
+      update | post | …), params = the tool's arguments (text, sql, row, to, query…).
+
+      Do NOT fabricate a tool result — actually call the tool. If the tool reports it
+      is not configured or errors, say so plainly. Respond in JSON:
+      {"result": "what the tool did and returned", "confidence": 0.0-1.0}
+    preferred_hardware: cpu
+    tools: []               # filled per-run from the workflow's enabled tools
+
   general:
     description: "General purpose reasoning"
     system_prompt: |

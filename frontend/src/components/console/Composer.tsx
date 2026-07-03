@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
-import { jobsApi, startAdHocRun } from '../../api/client'
+import { jobsApi, startAdHocRun, toolsApi } from '../../api/client'
+import type { Tool } from '../../api/types'
 import { SamplePromptGallery } from '../SamplePromptGallery'
+import { ToolGallery } from './ToolGallery'
 
 export interface SchedulePreset {
   id: string
@@ -38,6 +40,17 @@ export function Composer({ disabled, onRunStart, onScheduled }: Props) {
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  // Tool picker: which tools are enabled for the next run.
+  const [tools, setTools] = useState<Tool[]>([])
+  const [enabledTools, setEnabledTools] = useState<string[]>([])
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const [toolGalleryOpen, setToolGalleryOpen] = useState(false)
+
+  const loadTools = () => {
+    toolsApi.list().then((res) => setTools(res.tools)).catch(() => { /* offline — retry on next open */ })
+  }
+  useEffect(() => { loadTools() }, [])
+
   const recurring = schedule.cron !== null
 
   async function submit() {
@@ -51,12 +64,13 @@ export function Composer({ disabled, onRunStart, onScheduled }: Props) {
           name: q.length > 60 ? `${q.slice(0, 57)}…` : q,
           query: q,
           schedule_cron: schedule.cron,
+          config: enabledTools.length ? { enabled_tools: enabledTools } : undefined,
         })
         setPrompt('')
         setSchedule(SCHEDULE_PRESETS[0])
         onScheduled(job.name, schedule.label)
       } else {
-        const { run_id } = await startAdHocRun(q, { plan_approval: review })
+        const { run_id } = await startAdHocRun(q, { plan_approval: review, enabled_tools: enabledTools })
         setPrompt('')
         onRunStart(run_id, q)
       }
@@ -98,6 +112,37 @@ export function Composer({ disabled, onRunStart, onScheduled }: Props) {
         >
           ✨
         </button>
+
+        {/* tool picker */}
+        <div className="relative flex-none">
+          <button
+            title="Enable tools for this run"
+            onClick={() => { setToolsOpen((v) => !v); if (!tools.length) loadTools() }}
+            className="relative w-9 h-9 grid place-items-center rounded-lg text-[15px] hover:bg-[var(--elev)] transition-colors"
+            style={{ color: enabledTools.length ? 'var(--accent)' : 'var(--muted)' }}
+          >
+            🧰
+            {enabledTools.length > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-1 grid place-items-center rounded-full font-code text-[9px] font-semibold"
+                style={{ background: 'var(--accent)', color: '#0b0f18' }}
+              >
+                {enabledTools.length}
+              </span>
+            )}
+          </button>
+          {toolsOpen && (
+            <ToolPicker
+              tools={tools}
+              enabled={enabledTools}
+              onToggle={(id) =>
+                setEnabledTools((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+              }
+              onClose={() => setToolsOpen(false)}
+              onManage={() => { setToolsOpen(false); setToolGalleryOpen(true) }}
+            />
+          )}
+        </div>
 
         {/* schedule select */}
         <div className="relative flex-none">
@@ -170,6 +215,92 @@ export function Composer({ disabled, onRunStart, onScheduled }: Props) {
           inputRef.current?.focus()
         }}
       />
+
+      <ToolGallery
+        open={toolGalleryOpen}
+        onClose={() => setToolGalleryOpen(false)}
+        onConfigured={loadTools}
+      />
     </div>
+  )
+}
+
+/**
+ * ToolPicker — a compact popover of enable-checkboxes for the next run.
+ * Configured tools sort first; unconfigured ones stay selectable with a hint.
+ */
+function ToolPicker({
+  tools,
+  enabled,
+  onToggle,
+  onClose,
+  onManage,
+}: {
+  tools: Tool[]
+  enabled: string[]
+  onToggle: (id: string) => void
+  onClose: () => void
+  onManage: () => void
+}) {
+  const sorted = [...tools].sort((a, b) => {
+    if (a.configured !== b.configured) return a.configured ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+
+  return (
+    <>
+      <div className="fixed inset-0 z-10" onClick={onClose} />
+      <div
+        className="absolute right-0 bottom-[calc(100%+6px)] z-20 w-72 max-h-[340px] flex flex-col rounded-[10px] anim-pop"
+        style={{ background: 'var(--elev2)', border: '1px solid var(--line)', boxShadow: 'var(--shadow)' }}
+      >
+        <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--line)' }}>
+          <span className="eyebrow">Tools for this run</span>
+          {enabled.length > 0 && (
+            <span className="font-code text-[10.5px]" style={{ color: 'var(--accent)' }}>{enabled.length} on</span>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto p-1.5">
+          {sorted.length === 0 ? (
+            <p className="text-center py-4 text-[12px]" style={{ color: 'var(--faint)' }}>No tools available.</p>
+          ) : (
+            sorted.map((t) => {
+              const on = enabled.includes(t.id)
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => onToggle(t.id)}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-[var(--panel)] transition-colors text-left"
+                >
+                  <span
+                    className="flex-none w-4 h-4 grid place-items-center rounded-[5px] border text-[10px] font-bold"
+                    style={{
+                      borderColor: on ? 'var(--accent)' : 'var(--line)',
+                      background: on ? 'var(--accent)' : 'transparent',
+                      color: '#0b0f18',
+                    }}
+                  >
+                    {on ? '✓' : ''}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[12.5px] truncate" style={{ color: 'var(--text)' }}>{t.name}</span>
+                    {!t.configured && (
+                      <span className="block font-code text-[9.5px]" style={{ color: 'var(--faint)' }}>not set up</span>
+                    )}
+                  </span>
+                </button>
+              )
+            })
+          )}
+        </div>
+        <button
+          onClick={onManage}
+          className="px-3 py-2 border-t text-[11.5px] text-left hover:bg-[var(--panel)] transition-colors"
+          style={{ borderColor: 'var(--line)', color: 'var(--accent)' }}
+        >
+          Manage tools →
+        </button>
+      </div>
+    </>
   )
 }

@@ -235,3 +235,6 @@ repomix-output.xml
 
 # Local env overrides (vite)
 *.local
+
+# Local preview config (per-machine port)
+.claude/launch.json

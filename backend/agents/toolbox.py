@@ -1,23 +1,20 @@
 """
 backend/agents/toolbox.py
 
-The managed tool catalog. Roles are *granted* subsets of it (worker_roles.yaml),
-and the grant is enforced by handing each subagent only its allowed tools
-(profiles.py). One catalog, per-role access, auditable usage — the management
-story the plan asks for (§5).
+Turns the curated catalog (config/tool_catalog.yaml, via tool_catalog.py) into live
+LangChain tools the workers can call. Three backings:
 
-Why not langchain-mcp-adapters here: the in-repo mcp_servers/ implement a
-simplified JSON-RPC `/mcp` POST (tools/list + tools/call), not full MCP
-streamable-HTTP (no initialize handshake, no SSE), so MultiServerMCPClient can't
-connect to them as-is and would also require the servers to be live at
-agent-build time. Instead each catalog entry is wrapped as a LangChain
-StructuredTool over the existing HTTP transport (protocols/mcp_servers). This is
-the single swap point: if the servers migrate to FastMCP, replace build_toolbox()
-with a MultiServerMCPClient and nothing else changes.
+  - builtin   web_search / doc_retrieval / code_exec — the in-repo MCP servers,
+              wrapped over the existing HTTP JSON-RPC transport (protocols/mcp_servers).
+  - api       telegram / sms / email / sql_database / csv_file / x_twitter / … —
+              real implementations in tool_impls.py, invoked with credentials
+              resolved from the connector store at call time.
+  - stub      catalogued + configurable but not wired in this build; returns a clear
+              message so the planner/worker sees it exists but degrades cleanly.
 
-A grant names a *server nickname* (web_search, doc_retrieval, code_exec). A server
-may host its tool under a different name (the doc_retrieval server's tool is
-`search_documents`), so the catalog records the real tool name to call.
+Credentials for `api` tools come from a Connector named after the tool_id (kind
+'tool'): non-secret setup fields in `config`, secret fields Fernet-encrypted. The
+resolver is injectable so tests need no DB.
 """
 from __future__ import annotations
 
@@ -25,9 +22,11 @@ from pydantic import BaseModel, Field
 from langchain_core.tools import StructuredTool
 
 from backend.protocols.mcp_servers import MCP_REGISTRY, call_named_tool
+from backend.agents import tool_catalog
+from backend.agents.tool_impls import IMPLS
 
 
-# ── per-tool argument schemas (mirror each server's advertised inputSchema) ──────
+# ── builtin MCP-backed tools: id -> (server nickname, real tool name, arg schema) ──
 
 class _WebSearchArgs(BaseModel):
     query: str = Field(description="Search query")
@@ -43,59 +42,122 @@ class _CodeExecArgs(BaseModel):
     code: str = Field(description="Python source to execute in the sandbox")
 
 
-# The managed catalog: grant nickname -> the server + real tool it routes to.
-_CATALOG: dict[str, dict] = {
-    "web_search": {
-        "server": "web_search", "tool": "web_search",
-        "description": "Search the web for current information.",
-        "args_schema": _WebSearchArgs,
-    },
-    "doc_retrieval": {
-        "server": "doc_retrieval", "tool": "search_documents",
-        "description": "Search the on-box document corpus for relevant passages.",
-        "args_schema": _DocRetrievalArgs,
-    },
-    "code_exec": {
-        "server": "code_exec", "tool": "execute_python",
-        "description": "Run a short Python snippet in a sandbox and return its output.",
-        "args_schema": _CodeExecArgs,
-    },
+_BUILTIN: dict[str, dict] = {
+    "web_search":    {"server": "web_search", "tool": "web_search", "args": _WebSearchArgs},
+    "doc_retrieval": {"server": "doc_retrieval", "tool": "search_documents", "args": _DocRetrievalArgs},
+    "code_exec":     {"server": "code_exec", "tool": "execute_python", "args": _CodeExecArgs},
 }
 
 
-def toolbox_catalog() -> dict[str, dict]:
-    """{nickname: {description, server, tool}} — the catalog, for the audit/UI view."""
-    return {
-        nick: {"description": spec["description"], "server": spec["server"],
-               "tool": spec["tool"]}
-        for nick, spec in _CATALOG.items()
-    }
+# ── generic arg schema for api/stub tools ───────────────────────────────────────
+
+class _ToolArgs(BaseModel):
+    action: str = Field(default="read",
+                        description="What to do: read | send | query | append | update | post | etc.")
+    params: dict = Field(default_factory=dict,
+                         description="Tool-specific arguments (text, sql, row, to, query, …)")
 
 
-def build_toolbox(registry: dict | None = None) -> dict[str, StructuredTool]:
-    """Build {nickname: StructuredTool} for the whole catalog.
+# ── credential resolution (injectable) ──────────────────────────────────────────
 
-    Tools are built unconditionally so the catalog and per-role grants are stable
-    regardless of which servers are currently up; a tool whose server URL is unset
-    returns a clear unavailable message at call time rather than failing the build.
-    registry overridable for tests (defaults to the env-driven MCP_REGISTRY).
+async def _resolve_creds(tool_id: str) -> dict | None:
+    """Merge a configured tool's non-secret config + decrypted secrets, or None.
+
+    A configured tool is a Connector named `tool_id`. Opens its own session so it
+    can be called from inside a tool coroutine mid-run.
+    """
+    from backend.db.base import get_sessionmaker
+    from backend.repositories import connectors as conn_repo
+    try:
+        sm = get_sessionmaker()
+        async with sm() as session:
+            conn = await conn_repo.get_connector_by_name(session, tool_id)
+            if conn is None or conn.status != "active":
+                return None
+            secrets = await conn_repo.resolve_secrets(session, conn.id)
+            return {**(conn.config or {}), **secrets}
+    except Exception:  # noqa: BLE001 — a resolver failure must degrade, not crash a run
+        return None
+
+
+# ── build ────────────────────────────────────────────────────────────────────
+
+def build_toolbox(tool_ids: list[str] | None = None, *, registry: dict | None = None,
+                  creds_resolver=_resolve_creds) -> dict[str, StructuredTool]:
+    """Build {tool_id: StructuredTool} for the catalog (or a subset).
+
+    tool_ids:      restrict to these ids; None = the whole catalog. Unknown ids skipped.
+    registry:      MCP server URL registry override (tests); defaults to env-driven.
+    creds_resolver: async (tool_id) -> creds dict | None; injected for tests.
     """
     reg = registry if registry is not None else MCP_REGISTRY
+    ids = tool_ids if tool_ids is not None else tool_catalog.tool_ids()
     tools: dict[str, StructuredTool] = {}
-    for nick, spec in _CATALOG.items():
-        server, real_tool = spec["server"], spec["tool"]
-
-        async def _call(server=server, real_tool=real_tool, **kwargs) -> str:
-            url = reg.get(server)
-            if not url:
-                return (f"[toolbox] '{real_tool}' unavailable: no URL configured for "
-                        f"server '{server}'")
-            return await call_named_tool(url, real_tool, kwargs)
-
-        tools[nick] = StructuredTool.from_function(
-            coroutine=_call,
-            name=nick,
-            description=spec["description"],
-            args_schema=spec["args_schema"],
-        )
+    for tid in ids:
+        spec = tool_catalog.spec(tid)
+        if spec is None:
+            continue
+        backing = spec.get("backing", "stub")
+        if backing == "builtin" and tid in _BUILTIN:
+            tools[tid] = _build_builtin(tid, reg)
+        elif backing == "api" and tid in IMPLS:
+            tools[tid] = _build_api(tid, spec, creds_resolver)
+        else:
+            tools[tid] = _build_stub(tid, spec)
     return tools
+
+
+def _build_builtin(tid: str, reg: dict) -> StructuredTool:
+    b = _BUILTIN[tid]
+    server, real_tool = b["server"], b["tool"]
+
+    async def _call(server=server, real_tool=real_tool, **kwargs) -> str:
+        url = reg.get(server)
+        if not url:
+            return f"[{real_tool}] unavailable: no URL configured for server '{server}'"
+        return await call_named_tool(url, real_tool, kwargs)
+
+    return StructuredTool.from_function(
+        coroutine=_call, name=tid,
+        description=tool_catalog.spec(tid)["description"], args_schema=b["args"],
+    )
+
+
+def _build_api(tid: str, spec: dict, creds_resolver) -> StructuredTool:
+    impl = IMPLS[tid]
+    needs_creds = bool(spec.get("setup"))
+
+    async def _call(action: str = "read", params: dict | None = None, _tid=tid,
+                    _impl=impl, _needs=needs_creds) -> str:
+        creds = await creds_resolver(_tid) if _needs else {}
+        if _needs and not creds:
+            return (f"[{_tid}] not configured — set it up in the Tools gallery before use.")
+        merged = {**(params or {}), "action": action}
+        return await _impl(merged, creds or {})
+
+    return StructuredTool.from_function(
+        coroutine=_call, name=tid,
+        description=spec["description"], args_schema=_ToolArgs,
+    )
+
+
+def _build_stub(tid: str, spec: dict) -> StructuredTool:
+    async def _call(action: str = "read", params: dict | None = None, _tid=tid) -> str:
+        return (f"[{_tid}] is in the catalog and configurable, but live execution is not "
+                f"wired in this build. (Requested action: {action}.)")
+
+    return StructuredTool.from_function(
+        coroutine=_call, name=tid,
+        description=spec["description"], args_schema=_ToolArgs,
+    )
+
+
+# ── audit/UI catalog view (kept for the existing /toolbox endpoint) ──────────────
+
+def toolbox_catalog() -> dict[str, dict]:
+    """{tool_id: {description, category, capabilities, backing}} — catalog summary."""
+    return {
+        tid: {"description": s["description"], "category": s["category"],
+              "capabilities": s.get("capabilities", []), "backing": s.get("backing")}
+        for tid, s in tool_catalog.catalog().items()
+    }

@@ -145,11 +145,13 @@ app.add_middleware(
 from backend.routers.jobs import router as jobs_router
 from backend.routers.runs import router as runs_router
 from backend.routers.connectors import router as connectors_router
+from backend.routers.tools import router as tools_router
 from backend.routers.toolbox import router as toolbox_router
 
 app.include_router(jobs_router)
 app.include_router(runs_router)
 app.include_router(connectors_router)
+app.include_router(tools_router)
 app.include_router(toolbox_router)
 
 
@@ -220,6 +222,7 @@ async def run_deepagents(
     job_id: str | None = None,
     trigger: str = "manual",
     plan_approval: bool | None = None,
+    enabled_tools: list[str] | None = None,
 ):
     """deepagents (ADL) engine: a single deep agent decomposes + delegates + synthesizes,
     streamed through the event adapter onto the same WS + DB surfaces as the old swarm.
@@ -235,7 +238,8 @@ async def run_deepagents(
 
     await db.create_run(
         run_id, query, job_id=job_id, trigger=trigger,
-        config={"engine": "deepagents", "validator_enabled": validator_enabled},
+        config={"engine": "deepagents", "validator_enabled": validator_enabled,
+                "enabled_tools": enabled_tools or []},
     )
     if job_id:
         await db.set_job_last_run(job_id, run_id)
@@ -274,7 +278,8 @@ async def run_deepagents(
         # The adapter handles run_started, steps, validation, finalize (incl. the
         # routing + validation rollup), budgets, and run_completed/run_metrics over WS.
         async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
-            agent = build_agent(checkpointer, plan_approval=plan_approval)
+            agent = build_agent(checkpointer, plan_approval=plan_approval,
+                                enabled_tools=enabled_tools)
             summary = await run_with_adapter(
                 agent, query, run_id,
                 broadcast=manager.broadcast,
@@ -306,6 +311,7 @@ def launch_run(
     job_id: str | None = None,
     trigger: str = "manual",
     plan_approval: bool | None = None,
+    enabled_tools: list[str] | None = None,
 ) -> str:
     """Create a run_id and kick off the ADL deepagents engine in the background.
 
@@ -324,6 +330,7 @@ def launch_run(
         job_id=job_id,
         trigger=trigger,
         plan_approval=plan_approval,
+        enabled_tools=enabled_tools,
     ))
     _run_tasks[run_id] = task
     task.add_done_callback(lambda _t, rid=run_id: _run_tasks.pop(rid, None))
@@ -406,6 +413,7 @@ async def start_run(request: RunRequest):
         validator_enabled=request.validator_enabled,
         trigger="manual",
         plan_approval=request.plan_approval,
+        enabled_tools=request.enabled_tools,
     )
     return {"run_id": run_id}
 
