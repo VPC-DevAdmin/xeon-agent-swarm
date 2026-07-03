@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { approveRun, runsApi } from '../api/client'
 import type { RunDetail } from '../api/types'
-import { planToTasks } from '../components/ApprovalModal'
+import { planToTasks } from '../lib/thread'
 import { Button, Card, Empty, StatusBadge } from '../components/ui'
 
 const LIVE_STATUSES = ['pending', 'running', 'awaiting_approval']

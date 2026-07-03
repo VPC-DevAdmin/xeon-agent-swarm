@@ -2,24 +2,189 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Console design tokens ──────────────────────────────────────────────────── */
+:root {
+  --ink: #0e141f;
+  --panel: #131a26;
+  --elev: #19222f;
+  --elev2: #1f2a39;
+  --line: #26313f;
+  --line-soft: #1d2531;
+  --text: #e9edf4;
+  --muted: #8a94a8;
+  --faint: #596273;
+  --accent: #7c87f5;
+  --t1: #5ec8e5;
+  --t2: #54d2a6;
+  --t3: #e4c56a;
+  --t4: #e89b5c;
+  --t5: #e56a82;
+  --ok: #57c98a;
+  --bad: #e56a82;
+  --warn: #e4c56a;
+  --shadow: 0 12px 34px -20px rgba(0, 0, 0, 0.75);
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: Inter, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
 @layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
   body {
-    @apply bg-gray-950 text-gray-100 font-mono;
+    background: var(--ink);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 9px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
 
-/* React Flow custom styles */
-.react-flow__node {
-  font-family: ui-monospace, monospace;
+@layer components {
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .font-code {
+    font-family: var(--font-mono);
+  }
+  .console-card {
+    background: var(--elev);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+  .console-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--faint);
+  }
 }
 
-/* Streaming cursor blink */
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+/* ── Console animations ─────────────────────────────────────────────────────── */
+
+/* task card entrance */
+@keyframes taskIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
-.cursor-blink::after {
-  content: '▋';
-  animation: blink 1s step-end infinite;
+.anim-task-in {
+  animation: taskIn 0.4s ease both;
+}
+
+/* progress segment pulse (current stage) */
+@keyframes segpulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.anim-seg-pulse {
+  animation: segpulse 1.2s ease-in-out infinite;
+}
+
+/* timeline node pulse while its task runs */
+@keyframes mkpulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(124, 135, 245, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(124, 135, 245, 0.14);
+  }
+}
+.anim-mk-pulse {
+  animation: mkpulse 1.6s ease-in-out infinite;
+}
+
+/* streaming caret */
+@keyframes caretBlink {
+  50% {
+    opacity: 0;
+  }
+}
+.answer-caret {
+  display: inline-block;
+  width: 7px;
+  height: 16px;
+  background: var(--accent);
+  vertical-align: -2px;
   margin-left: 1px;
+  animation: caretBlink 1s steps(1) infinite;
+}
+
+/* spinner */
+@keyframes spin360 {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.anim-spin {
+  animation: spin360 0.8s linear infinite;
+}
+
+/* soft pulse for live dots */
+@keyframes dotpulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.anim-dot-pulse {
+  animation: dotpulse 1.4s ease-in-out infinite;
+}
+
+/* menu pop */
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.anim-pop {
+  animation: pop 0.13s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
 }

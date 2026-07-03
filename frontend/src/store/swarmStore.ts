@@ -74,6 +74,9 @@ interface SwarmStore {
   approvalInterrupt: string | null      // raw interrupt repr (fallback display)
   approvalPlan: string | null           // the proposed plan (numbered list text)
 
+  // Final composed answer (from run_completed)
+  finalAnswer: string | null
+
   // Actions
   startRun: (runId: string, query: string) => void
   setValidatorEnabled: (enabled: boolean) => void
@@ -110,6 +113,7 @@ const initialState = {
   awaitingApproval: false,
   approvalInterrupt: null,
   approvalPlan: null,
+  finalAnswer: null,
 }
 
 export const useSwarmStore = create<SwarmStore>((set, get) => ({
@@ -406,6 +410,7 @@ export const useSwarmStore = create<SwarmStore>((set, get) => ({
           isRunning: false,
           runCompleted: true,
           demoStage: 'done',
+          finalAnswer: (payload.final_answer as string) || null,
         })
         const runId = get().runId
         if (runId) {

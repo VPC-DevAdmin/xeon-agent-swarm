@@ -231,3 +231,6 @@ repomix-output.xml
 # Runtime SQLite store (orchestrator.db, checkpoints, test DBs) — root only;
 # a bare "data/" would also swallow source dirs like frontend/src/data/
 /data/
+
+# Local env overrides (vite)
+*.local

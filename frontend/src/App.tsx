@@ -1,25 +1,34 @@
-import { Navigate, Routes, Route } from 'react-router-dom'
+import { Navigate, Outlet, Routes, Route } from 'react-router-dom'
 import { NavBar } from './components/NavBar'
-import { LiveRunPage } from './pages/LiveRunPage'
+import { ConsolePage } from './pages/ConsolePage'
 import { ActivityPage } from './pages/ActivityPage'
 import { RunDetailPage } from './pages/RunsPage'
 import { ConnectorsPage } from './pages/ConnectorsPage'
 
-export default function App() {
+/** Secondary pages keep the classic nav shell; the console owns its own chrome. */
+function WithNav() {
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <NavBar />
       <div className="flex-1">
-        <Routes>
-          <Route path="/" element={<LiveRunPage />} />
-          <Route path="/activity" element={<ActivityPage />} />
-          <Route path="/runs/:runId" element={<RunDetailPage />} />
-          <Route path="/connectors" element={<ConnectorsPage />} />
-          {/* Legacy routes fold into Activity */}
-          <Route path="/jobs" element={<Navigate to="/activity?tab=scheduled" replace />} />
-          <Route path="/runs" element={<Navigate to="/activity?tab=history" replace />} />
-        </Routes>
+        <Outlet />
       </div>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<ConsolePage />} />
+      <Route element={<WithNav />}>
+        <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/runs/:runId" element={<RunDetailPage />} />
+        <Route path="/connectors" element={<ConnectorsPage />} />
+        {/* Legacy routes fold into Activity */}
+        <Route path="/jobs" element={<Navigate to="/activity?tab=scheduled" replace />} />
+        <Route path="/runs" element={<Navigate to="/activity?tab=history" replace />} />
+      </Route>
+    </Routes>
   )
 }
