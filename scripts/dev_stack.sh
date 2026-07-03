@@ -35,6 +35,25 @@ wait_up() { # url  name  logfile
   exit 1
 }
 
+port_busy() { # $1 = port; portable across lsof / ss / fuser
+  if command -v lsof >/dev/null 2>&1; then lsof -ti "tcp:$1" >/dev/null 2>&1
+  elif command -v ss >/dev/null 2>&1; then ss -ltn "sport = :$1" 2>/dev/null | grep -q LISTEN
+  elif command -v fuser >/dev/null 2>&1; then fuser "$1/tcp" >/dev/null 2>&1
+  else return 1; fi
+}
+
+# Pre-flight the ports up front, so a stale process gives one clear message
+# instead of a half-started stack that fails at the frontend step.
+CHECK_PORTS="$BACKEND_PORT $FRONTEND_PORT"
+[ "$MODE" = "live" ] || CHECK_PORTS="$CHECK_PORTS $MOCK_PORT"
+for port in $CHECK_PORTS; do
+  if port_busy "$port"; then
+    echo "✗ port $port is already in use (a previous run may still be up)."
+    echo "  Free the demo ports with 'make stop', or override, e.g. make demo FRONTEND_PORT=3001"
+    exit 1
+  fi
+done
+
 if [ "$MODE" = "live" ]; then
   # Real router: load gateway creds first, then honor whatever ROUTER_BASE resolves to.
   if [ -f .env.adl ]; then echo "  (loading .env.adl)"; set -a; . ./.env.adl; set +a; fi

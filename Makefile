@@ -71,9 +71,14 @@ reset-db:
 
 stop:
 	@for p in $(BACKEND_PORT) $(MOCK_PORT) $(FRONTEND_PORT); do \
-	  pids=$$(lsof -ti tcp:$$p 2>/dev/null); \
-	  if [ -n "$$pids" ]; then echo "killing :$$p ($$pids)"; kill $$pids 2>/dev/null || true; fi; \
-	done; true
+	  if command -v lsof >/dev/null 2>&1; then \
+	    pids=$$(lsof -ti tcp:$$p 2>/dev/null); \
+	    if [ -n "$$pids" ]; then echo "killing :$$p ($$pids)"; kill $$pids 2>/dev/null || true; fi; \
+	  elif command -v fuser >/dev/null 2>&1; then \
+	    fuser -k $$p/tcp >/dev/null 2>&1 && echo "killed :$$p" || true; \
+	  fi; \
+	done; \
+	pkill -f 'vite --host --port $(FRONTEND_PORT)' 2>/dev/null || true
 
 clean: stop
 	rm -rf $(VENV) frontend/node_modules
