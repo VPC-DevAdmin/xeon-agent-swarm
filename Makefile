@@ -49,7 +49,10 @@ setup:
 	$(BIN)/pip install -q -r backend/requirements.txt
 	$(BIN)/pip install -q pytest
 	@echo "→ Frontend deps (npm)"
-	npm --prefix frontend install
+	@# npm ci installs strictly from package-lock.json and never rewrites it, so a
+	@# different local npm version can't leave the lockfile "modified". Falls back to
+	@# install only when there is no lockfile yet.
+	@if [ -f frontend/package-lock.json ]; then npm --prefix frontend ci; else npm --prefix frontend install; fi
 	@echo ""
 	@echo "✓ setup complete — now run:  make demo"
 
