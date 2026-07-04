@@ -413,10 +413,440 @@ def test_rest_api_missing_creds(monkeypatch):
     assert out.startswith("[rest_api] error:")
 
 
+# ── 11. slack ─────────────────────────────────────────────────────────────────
+
+def test_slack_send(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"ok": True}))
+    out = asyncio.run(ti.slack(
+        {"action": "send", "text": "hi"},
+        {"bot_token": "TOK", "channel": "C1"}))
+    assert out == "Sent to Slack channel C1."
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "POST" and url == "https://slack.com/api/chat.postMessage"
+    assert kwargs["json"] == {"channel": "C1", "text": "hi"}
+    assert FakeAsyncClient.init_kwargs[-1]["headers"]["Authorization"] == "Bearer TOK"
+
+
+def test_slack_send_channel_override(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"ok": True}))
+    out = asyncio.run(ti.slack(
+        {"action": "send", "text": "hi", "channel": "OVERRIDE"},
+        {"bot_token": "TOK", "channel": "C1"}))
+    assert "OVERRIDE" in out
+    assert FakeAsyncClient.calls[-1][2]["json"]["channel"] == "OVERRIDE"
+
+
+def test_slack_send_error(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(
+        json_data={"ok": False, "error": "channel_not_found"}))
+    out = asyncio.run(ti.slack(
+        {"action": "send", "text": "hi"},
+        {"bot_token": "TOK", "channel": "C1"}))
+    assert out.startswith("[slack] error:") and "channel_not_found" in out
+
+
+def test_slack_read(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(
+        json_data={"ok": True, "messages": [{"text": "one"}, {"text": "two"}]}))
+    out = asyncio.run(ti.slack(
+        {"action": "read", "limit": 5},
+        {"bot_token": "TOK", "channel": "C1"}))
+    assert "one" in out and "two" in out
+    _, url, kwargs = FakeAsyncClient.calls[-1]
+    assert url == "https://slack.com/api/conversations.history"
+    assert kwargs["params"] == {"channel": "C1", "limit": 5}
+
+
+def test_slack_missing_creds(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.slack({"action": "send", "text": "x"}, {}))
+    assert out.startswith("[slack] error:")
+
+
+# ── 12. discord ───────────────────────────────────────────────────────────────
+
+def test_discord_send(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"id": "1"}))
+    out = asyncio.run(ti.discord(
+        {"action": "send", "text": "hi"},
+        {"bot_token": "TOK", "channel_id": "999"}))
+    assert out == "Sent to Discord channel 999."
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "POST"
+    assert url == "https://discord.com/api/v10/channels/999/messages"
+    assert kwargs["json"] == {"content": "hi"}
+    assert FakeAsyncClient.init_kwargs[-1]["headers"]["Authorization"] == "Bot TOK"
+
+
+def test_discord_read(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(
+        json_data=[{"content": "a"}, {"content": "b"}]))
+    out = asyncio.run(ti.discord(
+        {"action": "read", "limit": 3},
+        {"bot_token": "TOK", "channel_id": "999"}))
+    assert "a" in out and "b" in out
+    assert FakeAsyncClient.calls[-1][2]["params"] == {"limit": 3}
+
+
+def test_discord_missing_creds(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.discord({"action": "send", "text": "x"}, {}))
+    assert out.startswith("[discord] error:")
+
+
+# ── 13. github ────────────────────────────────────────────────────────────────
+
+def test_github_read(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(
+        json_data=[{"number": 1, "title": "Bug"}, {"number": 2, "title": "Feat"}]))
+    out = asyncio.run(ti.github(
+        {"action": "read", "limit": 5},
+        {"access_token": "TOK", "repo": "o/r"}))
+    assert "#1 Bug" in out and "#2 Feat" in out
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "GET" and url == "https://api.github.com/repos/o/r/issues"
+    assert kwargs["params"] == {"per_page": 5}
+    hdrs = FakeAsyncClient.init_kwargs[-1]["headers"]
+    assert hdrs["Authorization"] == "Bearer TOK"
+    assert hdrs["Accept"] == "application/vnd.github+json"
+
+
+def test_github_create(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"number": 7}))
+    out = asyncio.run(ti.github(
+        {"action": "create", "title": "T", "body": "B"},
+        {"access_token": "TOK", "repo": "o/r"}))
+    assert out == "Created GitHub issue #7 in o/r."
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "POST" and url == "https://api.github.com/repos/o/r/issues"
+    assert kwargs["json"] == {"title": "T", "body": "B"}
+
+
+def test_github_missing_creds(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.github({"action": "read"}, {}))
+    assert out.startswith("[github] error:")
+
+
+# ── 14. notion ────────────────────────────────────────────────────────────────
+
+def test_notion_search(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"results": [
+        {"id": "p1", "properties": {"Name": {"type": "title",
+         "title": [{"plain_text": "My page"}]}}},
+        {"id": "p2", "properties": {}}]}))
+    out = asyncio.run(ti.notion(
+        {"action": "read", "query": "foo"}, {"integration_token": "TOK"}))
+    assert "My page" in out and "p2" in out
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "POST" and url == "https://api.notion.com/v1/search"
+    assert kwargs["json"] == {"query": "foo"}
+    hdrs = FakeAsyncClient.init_kwargs[-1]["headers"]
+    assert hdrs["Authorization"] == "Bearer TOK"
+    assert hdrs["Notion-Version"] == "2022-06-28"
+
+
+def test_notion_create(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"id": "newpage"}))
+    out = asyncio.run(ti.notion(
+        {"action": "create", "parent_id": "par", "title": "Hi"},
+        {"integration_token": "TOK"}))
+    assert "newpage" in out
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "POST" and url == "https://api.notion.com/v1/pages"
+    assert kwargs["json"]["parent"] == {"page_id": "par"}
+    assert (kwargs["json"]["properties"]["title"]["title"][0]["text"]["content"]
+            == "Hi")
+
+
+def test_notion_create_no_parent(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.notion(
+        {"action": "create", "title": "Hi"}, {"integration_token": "TOK"}))
+    assert out == "[notion] error: parent_id required to create a page"
+
+
+def test_notion_missing_creds(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.notion({"action": "read"}, {}))
+    assert out.startswith("[notion] error:")
+
+
+# ── 15. airtable ──────────────────────────────────────────────────────────────
+
+def test_airtable_read(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"records": [
+        {"id": "rec1", "fields": {"Name": "Al", "Age": 3}}]}))
+    out = asyncio.run(ti.airtable(
+        {"action": "read", "table": "T1"},
+        {"api_key": "KEY", "base_id": "B1"}))
+    assert "rec1" in out and "Name=Al" in out
+    method, url, _ = FakeAsyncClient.calls[-1]
+    assert method == "GET" and url == "https://api.airtable.com/v0/B1/T1"
+    assert FakeAsyncClient.init_kwargs[-1]["headers"]["Authorization"] == "Bearer KEY"
+
+
+def test_airtable_create(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"id": "rec9"}))
+    out = asyncio.run(ti.airtable(
+        {"action": "create", "table": "T1", "fields": {"Name": "Bo"}},
+        {"api_key": "KEY", "base_id": "B1"}))
+    assert "rec9" in out
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "POST" and url == "https://api.airtable.com/v0/B1/T1"
+    assert kwargs["json"] == {"fields": {"Name": "Bo"}}
+
+
+def test_airtable_missing_creds(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.airtable({"action": "read", "table": "T"}, {}))
+    assert out.startswith("[airtable] error:")
+
+
+# ── 16. linear ────────────────────────────────────────────────────────────────
+
+def test_linear_read(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"data": {"issues": {
+        "nodes": [{"identifier": "ENG-1", "title": "Fix",
+                   "state": {"name": "Todo"}}]}}}))
+    out = asyncio.run(ti.linear({"action": "read"}, {"api_key": "KEY"}))
+    assert "ENG-1 Fix (Todo)" in out
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "POST" and url == "https://api.linear.app/graphql"
+    assert "issues(first:" in kwargs["json"]["query"]
+    # raw api_key, NOT Bearer
+    assert FakeAsyncClient.init_kwargs[-1]["headers"]["Authorization"] == "KEY"
+
+
+def test_linear_create(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"data": {
+        "issueCreate": {"success": True, "issue": {"identifier": "ENG-9"}}}}))
+    out = asyncio.run(ti.linear(
+        {"action": "create", "title": "New", "team_id": "team123"},
+        {"api_key": "KEY"}))
+    assert "ENG-9" in out
+    kwargs = FakeAsyncClient.calls[-1][2]
+    assert "issueCreate" in kwargs["json"]["query"]
+    assert kwargs["json"]["variables"] == {"t": "New", "tid": "team123"}
+
+
+def test_linear_create_no_team(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.linear(
+        {"action": "create", "title": "New"}, {"api_key": "KEY"}))
+    assert out.startswith("[linear] error:") and "team_id" in out
+
+
+def test_linear_missing_creds(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.linear({"action": "read"}, {}))
+    assert out.startswith("[linear] error:")
+
+
+# ── 17. linkedin ──────────────────────────────────────────────────────────────
+
+def test_linkedin_post(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"id": "urn:1"}))
+    out = asyncio.run(ti.linkedin(
+        {"action": "post", "text": "hello", "author_urn": "urn:li:person:X"},
+        {"access_token": "TOK"}))
+    assert out == "Published LinkedIn post."
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "POST" and url == "https://api.linkedin.com/v2/ugcPosts"
+    body = kwargs["json"]
+    assert body["author"] == "urn:li:person:X"
+    assert body["lifecycleState"] == "PUBLISHED"
+    assert (body["specificContent"]["com.linkedin.ugc.ShareContent"]
+            ["shareCommentary"]["text"] == "hello")
+    hdrs = FakeAsyncClient.init_kwargs[-1]["headers"]
+    assert hdrs["Authorization"] == "Bearer TOK"
+    assert hdrs["X-Restli-Protocol-Version"] == "2.0.0"
+
+
+def test_linkedin_post_no_urn(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.linkedin(
+        {"action": "post", "text": "hi"}, {"access_token": "TOK"}))
+    assert out.startswith("[linkedin] error:") and "author_urn" in out
+
+
+def test_linkedin_read(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.linkedin({"action": "read"}, {"access_token": "TOK"}))
+    assert "does not expose feed reads" in out
+    assert not out.startswith("[linkedin] error:")
+
+
+def test_linkedin_missing_creds(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.linkedin({"action": "post", "text": "x"}, {}))
+    assert out.startswith("[linkedin] error:")
+
+
+# ── 18. instagram ─────────────────────────────────────────────────────────────
+
+def test_instagram_read(monkeypatch):
+    install(monkeypatch, lambda m, u, k: FakeResponse(json_data={"data": [
+        {"caption": "sunset"}, {"caption": "coffee"}]}))
+    out = asyncio.run(ti.instagram(
+        {"action": "read"}, {"access_token": "TOK", "account_id": "acc"}))
+    assert "sunset" in out and "coffee" in out
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "GET"
+    assert url == "https://graph.facebook.com/v19.0/acc/media"
+    assert kwargs["params"] == {"fields": "caption,timestamp", "access_token": "TOK"}
+
+
+def test_instagram_publish(monkeypatch):
+    def responder(m, u, k):
+        if u.endswith("/media_publish"):
+            return FakeResponse(json_data={"id": "pub1"})
+        return FakeResponse(json_data={"id": "creation1"})
+    install(monkeypatch, responder)
+    out = asyncio.run(ti.instagram(
+        {"action": "publish", "image_url": "http://img", "caption": "hi"},
+        {"access_token": "TOK", "account_id": "acc"}))
+    assert "pub1" in out
+    # first POST → media (creation), second → media_publish with creation_id
+    (m1, u1, k1), (m2, u2, k2) = FakeAsyncClient.calls[-2], FakeAsyncClient.calls[-1]
+    assert u1 == "https://graph.facebook.com/v19.0/acc/media"
+    assert k1["data"] == {"image_url": "http://img", "caption": "hi",
+                          "access_token": "TOK"}
+    assert u2 == "https://graph.facebook.com/v19.0/acc/media_publish"
+    assert k2["data"] == {"creation_id": "creation1", "access_token": "TOK"}
+
+
+def test_instagram_publish_no_image(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.instagram(
+        {"action": "publish", "caption": "hi"},
+        {"access_token": "TOK", "account_id": "acc"}))
+    assert out.startswith("[instagram] error:") and "image_url" in out
+
+
+def test_instagram_missing_creds(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.instagram({"action": "read"}, {}))
+    assert out.startswith("[instagram] error:")
+
+
+# ── shared google service-account JSON (real throwaway RSA key) ─────────────────
+
+def _fake_service_account_json():
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()).decode("ascii")
+    return __import__("json").dumps({
+        "client_email": "svc@proj.iam.gserviceaccount.com",
+        "private_key": pem,
+        "token_uri": "https://oauth2.googleapis.com/token",
+    })
+
+
+def _google_responder(api_response):
+    """Return {"access_token": "fake"} for the token POST, api_response otherwise."""
+    def responder(method, url, kwargs):
+        if url == "https://oauth2.googleapis.com/token":
+            return FakeResponse(json_data={"access_token": "fake"})
+        return api_response
+    return responder
+
+
+# ── 19. google_sheets ─────────────────────────────────────────────────────────
+
+def test_google_sheets_read(monkeypatch):
+    install(monkeypatch, _google_responder(
+        FakeResponse(json_data={"values": [["a", "b"], ["c", "d"]]})))
+    creds = {"service_account_json": _fake_service_account_json(),
+             "sheet_id": "SHEET"}
+    out = asyncio.run(ti.google_sheets({"action": "read", "range": "A1:B2"}, creds))
+    assert "a, b" in out and "c, d" in out
+    # token POST happened, then the sheets GET with Bearer fake
+    token_call = FakeAsyncClient.calls[0]
+    assert token_call[1] == "https://oauth2.googleapis.com/token"
+    assert token_call[2]["data"]["grant_type"] == (
+        "urn:ietf:params:oauth:grant-type:jwt-bearer")
+    method, url, _ = FakeAsyncClient.calls[-1]
+    assert method == "GET"
+    assert url == ("https://sheets.googleapis.com/v4/spreadsheets/SHEET/"
+                   "values/A1:B2")
+    assert FakeAsyncClient.init_kwargs[-1]["headers"]["Authorization"] == "Bearer fake"
+
+
+def test_google_sheets_append(monkeypatch):
+    install(monkeypatch, _google_responder(
+        FakeResponse(json_data={"updates": {}})))
+    creds = {"service_account_json": _fake_service_account_json(),
+             "sheet_id": "SHEET"}
+    out = asyncio.run(ti.google_sheets(
+        {"action": "append", "range": "A1", "row": ["x", "y"]}, creds))
+    assert "Appended" in out
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "POST"
+    assert url == ("https://sheets.googleapis.com/v4/spreadsheets/SHEET/"
+                   "values/A1:append")
+    assert kwargs["params"] == {"valueInputOption": "RAW"}
+    assert kwargs["json"] == {"values": [["x", "y"]]}
+
+
+def test_google_sheets_missing_creds(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.google_sheets({"action": "read"}, {}))
+    assert out.startswith("[google_sheets] error:")
+
+
+# ── 20. google_calendar ───────────────────────────────────────────────────────
+
+def test_google_calendar_read(monkeypatch):
+    install(monkeypatch, _google_responder(
+        FakeResponse(json_data={"items": [{"summary": "Standup"},
+                                          {"summary": "Lunch"}]})))
+    creds = {"service_account_json": _fake_service_account_json(),
+             "calendar_id": "CAL"}
+    out = asyncio.run(ti.google_calendar({"action": "read", "limit": 5}, creds))
+    assert "Standup" in out and "Lunch" in out
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "GET"
+    assert url == ("https://www.googleapis.com/calendar/v3/calendars/CAL/events")
+    assert kwargs["params"]["singleEvents"] == "true"
+    assert FakeAsyncClient.init_kwargs[-1]["headers"]["Authorization"] == "Bearer fake"
+
+
+def test_google_calendar_create(monkeypatch):
+    install(monkeypatch, _google_responder(
+        FakeResponse(json_data={"id": "evt1"})))
+    creds = {"service_account_json": _fake_service_account_json(),
+             "calendar_id": "CAL"}
+    out = asyncio.run(ti.google_calendar(
+        {"action": "create", "summary": "Sync",
+         "start": "2026-01-01T10:00:00Z", "end": "2026-01-01T11:00:00Z"}, creds))
+    assert "evt1" in out
+    method, url, kwargs = FakeAsyncClient.calls[-1]
+    assert method == "POST"
+    assert url == "https://www.googleapis.com/calendar/v3/calendars/CAL/events"
+    assert kwargs["json"] == {
+        "summary": "Sync",
+        "start": {"dateTime": "2026-01-01T10:00:00Z"},
+        "end": {"dateTime": "2026-01-01T11:00:00Z"}}
+
+
+def test_google_calendar_missing_creds(monkeypatch):
+    install(monkeypatch)
+    out = asyncio.run(ti.google_calendar({"action": "read"}, {}))
+    assert out.startswith("[google_calendar] error:")
+
+
 # ── registry ────────────────────────────────────────────────────────────────────
 
 def test_registry_complete():
     expected = {"csv_file", "sql_database", "telegram", "sms", "email",
-                "x_twitter", "fetch_url", "webhook", "rss_feed", "rest_api"}
+                "x_twitter", "fetch_url", "webhook", "rss_feed", "rest_api",
+                "slack", "discord", "github", "notion", "airtable", "linear",
+                "linkedin", "instagram", "google_sheets", "google_calendar"}
     assert set(ti.IMPLS) == expected
     assert all(callable(fn) for fn in ti.IMPLS.values())

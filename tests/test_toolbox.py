@@ -54,10 +54,15 @@ def test_unconfigured_api_tool_reports_not_configured():
     assert "not configured" in out.lower()
 
 
-def test_stub_tool_returns_clear_message():
-    tools = build_toolbox(registry={})
-    out = asyncio.run(tools["notion"].ainvoke({"action": "read", "params": {}}))
-    assert "not wired" in out.lower()
+def test_every_catalog_tool_is_backed():
+    """All catalog tools are builtin or api (no unwired stubs remain), and every
+    api tool has a real implementation."""
+    from backend.agents import tool_catalog
+    from backend.agents.tool_impls import IMPLS
+    for tid, s in tool_catalog.catalog().items():
+        assert s["backing"] in ("builtin", "api"), f"{tid} is an unwired stub"
+        if s["backing"] == "api":
+            assert tid in IMPLS, f"{tid} is api but has no impl"
 
 
 def test_grant_enforcement_per_role():

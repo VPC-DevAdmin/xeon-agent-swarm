@@ -33,7 +33,7 @@ tools:
     category: messaging
     description: "Post to, or read history from, a Discord channel."
     capabilities: [read, notify]
-    backing: stub
+    backing: api
     write_risk: true
     setup:
       - {field: bot_token, label: "Bot token (needed for reading)", secret: true}
@@ -44,7 +44,7 @@ tools:
     category: messaging
     description: "Post a message to, or read history from, a Slack channel."
     capabilities: [read, notify]
-    backing: stub
+    backing: api
     write_risk: true
     setup:
       - {field: bot_token, label: "Bot token", secret: true}
@@ -105,7 +105,7 @@ tools:
     category: social
     description: "Publish a post, or read your own posts and their analytics (not the public feed)."
     capabilities: [read, write]
-    backing: stub
+    backing: api
     write_risk: true
     setup:
       - {field: access_token, label: "OAuth access token", secret: true}
@@ -115,7 +115,7 @@ tools:
     category: social
     description: "Publish media, or read your own account's media, comments, and insights."
     capabilities: [read, write]
-    backing: stub
+    backing: api
     write_risk: true
     setup:
       - {field: access_token, label: "Meta Graph access token", secret: true}
@@ -147,7 +147,7 @@ tools:
     category: data
     description: "Read or write cells and rows in a Google Sheet."
     capabilities: [read, write]
-    backing: stub
+    backing: api
     write_risk: true
     setup:
       - {field: service_account_json, label: "Service-account JSON", secret: true}
@@ -158,7 +158,7 @@ tools:
     category: data
     description: "Read or write records in an Airtable base."
     capabilities: [read, write]
-    backing: stub
+    backing: api
     write_risk: true
     setup:
       - {field: api_key, label: "API key", secret: true}
@@ -169,7 +169,7 @@ tools:
     category: data
     description: "Create or update pages and database rows in Notion."
     capabilities: [read, write]
-    backing: stub
+    backing: api
     write_risk: true
     setup:
       - {field: integration_token, label: "Integration token", secret: true}
@@ -218,7 +218,7 @@ tools:
     category: dev
     description: "Read issues and pull requests, or create issues and comments."
     capabilities: [read, write]
-    backing: stub
+    backing: api
     write_risk: true
     setup:
       - {field: access_token, label: "Personal access token", secret: true}
@@ -229,7 +229,7 @@ tools:
     category: dev
     description: "Read, create, or update issues in Linear."
     capabilities: [read, write]
-    backing: stub
+    backing: api
     write_risk: true
     setup:
       - {field: api_key, label: "API key", secret: true}
@@ -239,7 +239,7 @@ tools:
     category: dev
     description: "Read upcoming events, or create new calendar events."
     capabilities: [read, write]
-    backing: stub
+    backing: api
     write_risk: true
     setup:
       - {field: service_account_json, label: "Service-account JSON", secret: true}
