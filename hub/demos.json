@@ -5,10 +5,10 @@
     {
       "id": "agents",
       "name": "Agent Orchestrator",
-      "blurb": "Decomposes a prompt into a plan you approve, runs a team of specialist agents across routed model tiers, validates every output, and composes the answer.",
+      "blurb": "Create persistent agents with tools, budgets, and schedules; decompose a prompt into a plan you approve; watch a validated team execute it live.",
       "tags": [
+        "agent setup",
         "multi-agent",
-        "tier routing",
         "tool calling"
       ],
       "url": "https://agents.enterpriseai.center",
@@ -16,9 +16,22 @@
       "accent": "#7c87f5"
     },
     {
+      "id": "capacity",
+      "name": "Capacity Planner",
+      "blurb": "Benchmark this server for agent workloads: ramp fixed tiles of real agent traces until an SLO breaks, see which profile and resource gated, and compare runs over time.",
+      "tags": [
+        "capacity planning",
+        "tiles",
+        "SLOs"
+      ],
+      "url": "https://capacity.enterpriseai.center",
+      "health": "/health",
+      "accent": "#54d2a6"
+    },
+    {
       "id": "router",
       "name": "Semantic Router",
-      "blurb": "Classifies each query by difficulty and routes it to the cheapest sufficient model tier — on-box for easy work, escalating off-box only when needed.",
+      "blurb": "Classifies each query by difficulty and routes it to the cheapest sufficient model tier \u2014 on-box for easy work, escalating off-box only when needed.",
       "tags": [
         "semantic routing",
         "tiering"
@@ -30,7 +43,7 @@
     {
       "id": "voice",
       "name": "Voice Assistant",
-      "blurb": "Talk to the server from a browser tab. Speech recognition, Qwen3-30B reasoning and speech synthesis all run on Xeon CPU with no GPU — and it starts speaking after the first phrase rather than waiting for the whole answer.",
+      "blurb": "Talk to the server from a browser tab. Speech recognition, Qwen3-30B reasoning and speech synthesis all run on Xeon CPU with no GPU \u2014 and it starts speaking after the first phrase rather than waiting for the whole answer.",
       "tags": [
         "webrtc",
         "cpu inference",

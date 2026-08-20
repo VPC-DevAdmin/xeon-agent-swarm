@@ -1,6 +1,7 @@
 import { Navigate, Outlet, Routes, Route } from 'react-router-dom'
 import { NavBar } from './components/NavBar'
 import { ConsolePage } from './pages/ConsolePage'
+import { CapacityPage } from './pages/CapacityPage'
 import { ActivityPage } from './pages/ActivityPage'
 import { RunDetailPage } from './pages/RunsPage'
 import { ConnectorsPage } from './pages/ConnectorsPage'
@@ -20,7 +21,10 @@ function WithNav() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<ConsolePage />} />
+      {/* Two demos, one app: the capacity.* hostname fronts the planner. */}
+      <Route path="/" element={window.location.hostname.startsWith('capacity.')
+        ? <CapacityPage /> : <ConsolePage />} />
+      <Route path="/planner" element={<CapacityPage />} />
       <Route element={<WithNav />}>
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="/runs/:runId" element={<RunDetailPage />} />

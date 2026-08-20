@@ -22,7 +22,10 @@ Target state — one tunnel, three hostnames, everything under systemd:
 
 ```
 livedemos.enterpriseai.center   → :8088   hub — the front door, pick a demo
-agents.enterpriseai.center      → :8010   Agent Orchestrator (UI+API+WS, one origin)
+agents.enterpriseai.center      → :8010   Agent Orchestrator (agent setup demo)
+capacity.enterpriseai.center    → :8010   Capacity Planner (same app/process —
+                                          the e2e benchmark drives the
+                                          orchestrator in-process)
 router-origin.enterpriseai...   → :8900   tier router gateway (unchanged)
 ```
 
@@ -82,7 +85,7 @@ sudo mkdir -p /etc/cloudflared && sudo cp ~/work/repos/xeon-agent-swarm/deploy/c
 Route the two new hostnames (the existing one is already routed):
 
 ```bash
-cloudflared tunnel route dns router-origin agents.enterpriseai.center && cloudflared tunnel route dns router-origin livedemos.enterpriseai.center
+cloudflared tunnel route dns router-origin agents.enterpriseai.center && cloudflared tunnel route dns router-origin livedemos.enterpriseai.center && cloudflared tunnel route dns router-origin capacity.enterpriseai.center
 ```
 
 Stop the hand-started tunnel and install the service:
@@ -107,9 +110,10 @@ risk a second prompt on the click-through.
 **Zero Trust → Access → Applications → Add an application → Self-hosted:**
 
 - Name: `Demos`
-- Add **both** public hostnames to the *same* application:
+- Add **all three** public hostnames to the *same* application (one sign-in):
   - `livedemos.enterpriseai.center`
   - `agents.enterpriseai.center`
+  - `capacity.enterpriseai.center`
 - Policy: **Allow** → Include → *Emails* (list people) or *Emails ending in* `@yourdomain`
 - **Settings → Authentication → Global session duration** — this is what keeps the
   second hop silent; set it to a working session (e.g. 24h).

@@ -113,7 +113,7 @@ docker compose up -d --build        # MCP servers + backend + frontend + prometh
 # the SQLite schema is created automatically on backend startup (no DB server)
 ```
 
-- Frontend: <http://localhost:3000> (New Task · Activity · Connectors)
+- Frontend: <http://localhost:3000> — the agent console; the Capacity Planner is its own demo surface at `/planner` (fronted by `capacity.<domain>` in production)
 - API docs: <http://localhost:8000/docs> (OpenAPI 3.1)
 - Metrics: <http://localhost:8000/metrics> (Prometheus)
 

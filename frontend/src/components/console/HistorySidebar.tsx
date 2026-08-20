@@ -83,6 +83,7 @@ export function HistorySidebar({ runs, focusId, collapsed, onFocus, onNew, onCol
       </div>
 
       <div className="px-4 py-3 border-t flex gap-4 text-[11.5px]" style={{ borderColor: 'var(--line-soft)' }}>
+        <a href="/planner" className="text-[var(--faint)] hover:text-[var(--muted)]">Capacity planner</a>
         <a href="/connectors" className="text-[var(--faint)] hover:text-[var(--muted)]">Connectors</a>
         <a href="/activity" className="text-[var(--faint)] hover:text-[var(--muted)]">Classic view</a>
       </div>

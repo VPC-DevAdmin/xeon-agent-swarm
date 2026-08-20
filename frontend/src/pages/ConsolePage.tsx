@@ -10,7 +10,6 @@ import { ThreadView } from '../components/console/ThreadView'
 import { Composer } from '../components/console/Composer'
 import { AgentsDrawer } from '../components/console/AgentsDrawer'
 import { TelemetryView } from '../components/console/TelemetryView'
-import { CapacityView } from '../components/console/CapacityView'
 
 const ACTIVE_STATUSES = ['pending', 'running', 'awaiting_approval']
 
@@ -25,7 +24,7 @@ export function ConsolePage() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [focusId, setFocusId] = useState<string | null>(null)
   const [detail, setDetail] = useState<RunDetail | null>(null)
-  const [view, setView] = useState<'thread' | 'telemetry' | 'capacity'>('thread')
+  const [view, setView] = useState<'thread' | 'telemetry'>('thread')
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -93,10 +92,8 @@ export function ConsolePage() {
     + jobs.filter((j) => j.schedule_cron && j.status === 'active').length
 
   const title = view === 'telemetry' ? 'Telemetry'
-    : view === 'capacity' ? 'Capacity test'
     : thread ? thread.prompt : 'New prompt'
   const meta = view === 'telemetry' ? 'live picture'
-    : view === 'capacity' ? 'inference capacity — synthetic agent traces'
     : thread ? `${thread.tasks.length ? `${thread.tasks.length} tasks · ` : ''}${thread.phase.replace('_', ' ')}` : ''
 
   return (
@@ -124,11 +121,11 @@ export function ConsolePage() {
 
           <div className="ml-auto flex gap-0.5 p-[3px] rounded-[10px] border"
             style={{ background: 'var(--panel)', borderColor: 'var(--line)' }}>
-            {(['thread', 'telemetry', 'capacity'] as const).map((v) => (
+            {(['thread', 'telemetry'] as const).map((v) => (
               <button key={v} onClick={() => setView(v)}
                 className={clsx('px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium capitalize transition-colors',
                   view === v ? 'bg-[var(--elev)] text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]')}>
-                {v === 'thread' ? 'Console' : v === 'telemetry' ? 'Telemetry' : 'Capacity'}
+                {v === 'thread' ? 'Console' : 'Telemetry'}
               </button>
             ))}
           </div>
@@ -146,9 +143,7 @@ export function ConsolePage() {
 
         {/* center */}
         <div className="flex-1 overflow-y-auto px-7 pt-6">
-          {view === 'capacity' ? (
-            <CapacityView />
-          ) : view === 'telemetry' ? (
+          {view === 'telemetry' ? (
             <TelemetryView runs={runs} jobs={jobs} />
           ) : thread ? (
             <ThreadView thread={thread} onApprove={handleApprove} />

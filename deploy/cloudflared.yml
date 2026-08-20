@@ -20,8 +20,13 @@ ingress:
   - hostname: livedemos.enterpriseai.center
     service: http://localhost:8088
 
-  # This demo: Agent Orchestrator, single-origin (UI + REST + WebSocket on one port).
+  # Agent Orchestrator demo — single-origin (UI + REST + WebSocket on one port).
   - hostname: agents.enterpriseai.center
+    service: http://localhost:8010
+
+  # Capacity Planner demo — SAME app/process (the e2e benchmark drives the
+  # orchestrator in-process); the SPA fronts the planner on this hostname.
+  - hostname: capacity.enterpriseai.center
     service: http://localhost:8010
 
   # Existing: the semantic tier router gateway (unchanged).
