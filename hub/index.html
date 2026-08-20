@@ -3,133 +3,176 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Demos</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>Live demos — Enterprise AI Center</title>
+<meta name="robots" content="noindex, nofollow"/>
 <style>
+/* Design tokens lifted from enterpriseai.center (src/styles.css) so this page
+   and the main site stay in step. No web fonts: the site uses the system stack
+   via Tailwind's defaults, and loading Space Grotesk/Inter here was the single
+   biggest reason the hub read as a different product. */
 :root{
-  --ink:#0E141F;--panel:#131A26;--elev:#19222F;--line:#26313F;--line-soft:#1D2531;
-  --text:#E9EDF4;--muted:#8A94A8;--faint:#596273;--accent:#7C87F5;--ok:#57C98A;
-  --shadow:0 12px 34px -20px rgba(0,0,0,.75);
+  --background:hsl(0 0% 100%);
+  --foreground:hsl(222.2 84% 4.9%);
+  --muted:hsl(210 40% 96.1%);
+  --muted-foreground:hsl(215.4 16.3% 46.9%);
+  --border:hsl(214.3 31.8% 91.4%);
+  --brand-blue:oklch(0.55 0.22 256);
+  --brand-orange:oklch(0.72 0.18 55);
+  --brand-green:oklch(0.62 0.18 150);
+  --brand-purple:oklch(0.55 0.2 295);
+  --radius:0.5rem;
+  --ease-out-quint:cubic-bezier(0.22,1,0.36,1);
+  --accent:var(--brand-blue);
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%}
-body{background:var(--ink);color:var(--text);font-family:Inter,system-ui,sans-serif;
+body{
+  background:var(--background);color:var(--foreground);
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
-  display:flex;flex-direction:column;align-items:center;padding:0 20px}
-header{width:100%;max-width:880px;padding:64px 0 28px}
-.brandrow{display:flex;align-items:center;gap:10px;margin-bottom:18px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);
-  box-shadow:0 0 0 4px rgba(124,135,245,.16)}
-.eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;text-transform:uppercase;
-  letter-spacing:.1em;color:var(--faint)}
-h1{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:34px;
-  letter-spacing:-.025em;margin:0 0 8px}
-.sub{color:var(--muted);font-size:15px;max-width:560px;margin:0}
-main{width:100%;max-width:880px;display:grid;gap:14px;
-  grid-template-columns:repeat(auto-fit,minmax(340px,1fr));padding-bottom:48px}
-.card{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);
-  border-radius:14px;padding:20px;text-decoration:none;color:inherit;box-shadow:var(--shadow);
-  transition:border-color .18s,transform .18s}
-.card:hover{border-color:#39445c;transform:translateY(-2px)}
-.card .top{display:flex;align-items:center;gap:9px;margin-bottom:9px}
-.card h2{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:17px;margin:0;flex:1}
-.status{display:flex;align-items:center;gap:6px;font-family:"JetBrains Mono",monospace;
-  font-size:10.5px;color:var(--faint);white-space:nowrap}
-.sdot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
-.sdot.up{background:var(--ok);box-shadow:0 0 0 3px rgba(87,201,138,.15)}
-.sdot.down{background:#E56A82}
-.sdot.checking{background:var(--faint);animation:pulse 1.2s ease-in-out infinite}
-@keyframes pulse{50%{opacity:.35}}
-.blurb{color:var(--muted);font-size:13.5px;margin:0 0 14px;flex:1}
-.tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
-.tag{font-family:"JetBrains Mono",monospace;font-size:10.5px;padding:2px 7px;border-radius:6px;
-  background:var(--elev);border:1px solid var(--line);color:var(--muted)}
-.open{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
-  color:var(--accent)}
-.card:hover .open .arrow{transform:translateX(3px)}
-.arrow{transition:transform .18s}
-footer{width:100%;max-width:880px;padding:0 0 48px;color:var(--faint);font-size:12px;
-  border-top:1px solid var(--line-soft);padding-top:18px}
-.empty{color:var(--muted);padding:24px;border:1px dashed var(--line);border-radius:14px;
-  grid-column:1/-1;text-align:center}
+}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+.wrap{max-width:72rem;margin:0 auto;padding:0 1.5rem}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+.topbar{border-bottom:1px solid var(--border)}
+.topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:56px;gap:1rem}
+.brand{display:flex;align-items:center;gap:.625rem;text-decoration:none;color:inherit}
+/* Square, not round — the site marks journeys with a small filled square. */
+.brand .sq{width:.75rem;height:.75rem;border-radius:3px;background:var(--brand-blue);flex:none}
+.brand strong{font-size:13px;font-weight:700;letter-spacing:-.01em}
+.backlink{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-foreground);
+  text-decoration:none;display:inline-flex;align-items:center;gap:.375rem;transition:color .2s var(--ease-out-quint)}
+.backlink:hover{color:var(--foreground)}
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+header.hero{padding:4.5rem 0 2.5rem}
+.eyebrow{display:inline-flex;align-items:center;border:1px solid var(--border);
+  padding:.25rem .75rem;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted-foreground)}
+h1{font-size:clamp(2rem,5vw,3.25rem);font-weight:300;line-height:1.05;letter-spacing:-.02em;
+  margin:1.25rem 0 0;max-width:22ch;text-wrap:balance}
+.sub{color:var(--muted-foreground);font-size:15px;max-width:56ch;margin:1rem 0 0}
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+main{padding-bottom:4rem}
+.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(20rem,1fr))}
+.card{
+  --card-accent:var(--brand-blue);
+  display:flex;flex-direction:column;background:var(--background);
+  border:1px solid var(--border);border-radius:var(--radius);
+  padding:1.5rem;text-decoration:none;color:inherit;
+  box-shadow:0 1px 2px rgba(0,0,0,.04);
+  transition:transform 220ms var(--ease-out-quint),box-shadow 220ms var(--ease-out-quint),
+             border-color 220ms var(--ease-out-quint);
+}
+/* Hover only on pointer devices — on touch, :hover sticks after a tap. */
+@media (hover:hover){
+  .card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(0,0,0,.12);
+    border-color:color-mix(in oklab,var(--card-accent) 45%,transparent)}
+  .card:hover .cta{color:var(--card-accent)}
+  .card:hover .chev{transform:translateX(3px)}
+}
+.card:focus-visible{outline:2px solid var(--card-accent);outline-offset:2px}
+.card-head{display:flex;align-items:flex-start;gap:.625rem;margin-bottom:.75rem}
+.card-head .sq{width:.5rem;height:.5rem;border-radius:2px;background:var(--card-accent);
+  flex:none;margin-top:.4rem}
+.card h2{font-size:15px;font-weight:700;letter-spacing:-.01em;line-height:1.3;margin:0}
+.blurb{color:var(--muted-foreground);font-size:13px;line-height:1.6;margin:0 0 1.25rem;flex:1}
+.tags{display:flex;flex-wrap:wrap;gap:.375rem;margin-bottom:1.25rem}
+.tag{border:1px solid var(--border);padding:.125rem .5rem;font-size:10px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)}
+.cta{display:inline-flex;align-items:center;gap:.375rem;margin-top:auto;
+  font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted-foreground);transition:color 220ms var(--ease-out-quint)}
+.chev{transition:transform 220ms var(--ease-out-quint)}
+.empty{grid-column:1/-1;border:1px dashed var(--border);border-radius:var(--radius);
+  padding:3rem 1.5rem;text-align:center;color:var(--muted-foreground)}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+footer{border-top:1px solid var(--border)}
+footer .wrap{display:flex;flex-wrap:wrap;gap:.75rem;justify-content:space-between;
+  padding-top:1.25rem;padding-bottom:3rem;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted-foreground)}
+footer a{color:inherit;text-decoration:none}
+footer a:hover{color:var(--foreground)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-  <header>
-    <div class="brandrow"><span class="dot"></span><span class="eyebrow" id="eyebrow">Xeon server</span></div>
-    <h1 id="title">Demos</h1>
+
+<div class="topbar">
+  <div class="wrap">
+    <a class="brand" href="https://enterpriseai.center">
+      <span class="sq"></span><strong>Enterprise AI Center</strong>
+    </a>
+    <a class="backlink mono" href="https://enterpriseai.center">Back to site →</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <span class="eyebrow mono" id="eyebrow">Live environment</span>
+    <h1 id="title">Live demos</h1>
     <p class="sub" id="subtitle"></p>
   </header>
-  <main id="grid"></main>
-  <footer id="footer"></footer>
+
+  <main>
+    <div class="grid" id="grid"></div>
+  </main>
+</div>
+
+<footer>
+  <div class="wrap mono">
+    <span id="count"></span>
+    <a href="https://enterpriseai.center">enterpriseai.center</a>
+  </div>
+</footer>
 
 <script>
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-async function checkUp(demo) {
-  // Cross-origin liveness: no-cors resolves (opaque) when reachable, rejects on
-  // network failure. We only need up/down, not the body.
-  const url = demo.url.replace(/\/+$/, '') + (demo.health || '/health');
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 4000);
-  try {
-    await fetch(url, { mode: 'no-cors', signal: ctl.signal, cache: 'no-store' });
-    return true;
-  } catch { return false; }
-  finally { clearTimeout(t); }
-}
+// An accent may be a brand name (preferred — stays in step with the site) or a
+// raw hex, so existing demos.json files keep working.
+const BRAND = { blue:'var(--brand-blue)', orange:'var(--brand-orange)',
+                green:'var(--brand-green)', purple:'var(--brand-purple)' };
+const accentOf = a => BRAND[a] || (/^#|^oklch|^hsl|^rgb/.test(a || '') ? a : 'var(--brand-blue)');
 
 function card(d) {
   const a = document.createElement('a');
   a.className = 'card';
   a.href = d.url;
-  a.style.borderTopColor = d.accent || 'var(--line)';
+  a.style.setProperty('--card-accent', accentOf(d.accent));
   a.innerHTML = `
-    <div class="top">
+    <div class="card-head">
+      <span class="sq"></span>
       <h2>${esc(d.name)}</h2>
-      <span class="status"><span class="sdot checking" id="s-${esc(d.id)}"></span>
-        <span id="t-${esc(d.id)}">checking</span></span>
     </div>
     <p class="blurb">${esc(d.blurb)}</p>
-    <div class="tags">${(d.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
-    <span class="open">Open demo <span class="arrow">→</span></span>`;
+    <div class="tags mono">${(d.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+    <span class="cta mono">Open demo <span class="chev">&rarr;</span></span>`;
   return a;
 }
 
 (async () => {
+  const grid = document.getElementById('grid');
   let cfg;
   try {
     cfg = await (await fetch('demos.json', { cache: 'no-store' })).json();
   } catch {
-    document.getElementById('grid').innerHTML =
-      '<div class="empty">Could not load demos.json</div>';
+    grid.innerHTML = '<div class="empty">Could not load demos.json</div>';
     return;
   }
-  document.title = cfg.title || 'Demos';
-  document.getElementById('title').textContent = cfg.title || 'Demos';
-  document.getElementById('subtitle').textContent = cfg.subtitle || '';
-  const grid = document.getElementById('grid');
   const demos = cfg.demos || [];
+  if (cfg.title) { document.getElementById('title').textContent = cfg.title; }
+  document.title = (cfg.title || 'Live demos') + ' — Enterprise AI Center';
+  document.getElementById('subtitle').textContent = cfg.subtitle || '';
+  if (cfg.eyebrow) document.getElementById('eyebrow').textContent = cfg.eyebrow;
+
   if (!demos.length) { grid.innerHTML = '<div class="empty">No demos configured.</div>'; return; }
   demos.forEach(d => grid.appendChild(card(d)));
-  document.getElementById('footer').textContent =
-    `${demos.length} demo${demos.length === 1 ? '' : 's'} · status refreshes every 30s`;
-
-  async function refresh() {
-    for (const d of demos) {
-      const up = await checkUp(d);
-      const dot = document.getElementById(`s-${d.id}`);
-      const txt = document.getElementById(`t-${d.id}`);
-      if (!dot) continue;
-      dot.className = 'sdot ' + (up ? 'up' : 'down');
-      txt.textContent = up ? 'online' : 'offline';
-    }
-  }
-  refresh();
-  setInterval(refresh, 30000);
+  document.getElementById('count').textContent =
+    `${demos.length} demo${demos.length === 1 ? '' : 's'}`;
 })();
 </script>
 </body>

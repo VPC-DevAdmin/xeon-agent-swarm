@@ -130,10 +130,13 @@ covered by the same session.
 > `SameSite` will break an embedded frame. Plain links are fine (which is what
 > `hub/index.html` does).
 
-> **Hub status dots:** the hub polls each demo's `/health` cross-origin. With Access
-> in front, that poll is redirected to the login page and the card may read
-> "offline" even when the demo is up. Either add a **Bypass** policy scoped to path
-> `/health`, or treat the hub purely as a link page.
+> **No hub status dots.** The hub used to poll each demo's `/health` cross-origin.
+> With Access in front that poll is answered by the login page, and because the
+> check used `mode: 'no-cors'` the opaque response resolved — so every card would
+> have read "online" whether the demo was up or not. The hub is now purely a link
+> page. If liveness is wanted back, do it server-side: `hub_server.py` runs on the
+> box and can reach `localhost:8010` / `localhost:8900` directly, with no Access
+> hop, no CORS exception, and an answer that reflects reality.
 
 ## 5. Verify — including the reboot
 
