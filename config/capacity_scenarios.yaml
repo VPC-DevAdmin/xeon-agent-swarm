@@ -33,6 +33,9 @@ tile:
   ops_analyst: 1
   deep_agent: 1
 
+# Bump when scenario/tile semantics change — part of every result's repro block.
+version: 2
+
 scenarios:
   support_agent:
     name: "Customer support agent"

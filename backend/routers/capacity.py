@@ -41,6 +41,9 @@ class StartBody(BaseModel):
     max_users: int | None = Field(None, ge=1, le=512)
     step_interval_s: float | None = Field(None, ge=3, le=120)
     step_users: int | None = Field(None, ge=1, le=8)
+    seed: int | None = Field(None, ge=0)             # reproducible corpus + report
+    cache_mode: str = Field("warm", pattern="^(warm|cold)$")
+    warmup_s: float | None = Field(None, ge=0, le=120)
     confirm_real: bool = False  # must be true for remote_real
 
 
@@ -79,7 +82,8 @@ async def start_test(body: StartBody) -> dict:
                                   "Capacity tab (or POST /capacity/engine/start)")
     cfg = {"mock_ms": body.mock_ms, "mock_sigma": body.mock_sigma,
            "max_users": body.max_users, "step_interval_s": body.step_interval_s,
-           "step_users": body.step_users}
+           "step_users": body.step_users, "seed": body.seed,
+           "cache_mode": body.cache_mode, "warmup_s": body.warmup_s}
     _current = CapacityTest(body.mode, body.scenarios, cfg, mix=body.mix)
     _task = asyncio.create_task(_run_and_keep(_current))
     logger.info("capacity test started: mode=%s scenarios=%s", body.mode,

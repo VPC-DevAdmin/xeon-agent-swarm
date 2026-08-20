@@ -9,11 +9,48 @@ import yaml
 _CONFIG_DIR = os.getenv("CONFIG_DIR", "config")
 _PATH = os.path.join(_CONFIG_DIR, "capacity_scenarios.yaml")
 
-# Deterministic filler used to pad prompts to a target token count (~4 chars/token).
-_FILLER = (
-    "Throughput benchmarking sentence about agents, routers, tiers, tokens, "
-    "latency, memory bandwidth, and Xeon cores. "
-)
+def benchmark_version() -> int:
+    return int(_load_file().get("version", 1))
+
+
+# ── seeded synthetic corpus ────────────────────────────────────────────────────
+# Prompts are built from seeded, per-call-varied word sequences instead of one
+# repeated filler sentence. Repeated identical text let RadixAttention-style
+# prefix caches serve most of the prefill for free, exaggerating capacity; a
+# varied corpus exercises realistic attention while staying EXACTLY reproducible
+# for a given (seed, session, call) key. Sizing remains the documented ~4
+# chars/token approximation (tokenizer-exact calibration is a planned upgrade).
+_VOCAB = (
+    "the quarterly report shows revenue increased across enterprise segments while "
+    "operating margins compressed due to infrastructure investment and headcount growth "
+    "customers migrating workloads toward managed inference platforms cite latency "
+    "predictability compliance requirements and total cost of ownership as primary "
+    "decision factors meanwhile engineering teams evaluate quantization strategies "
+    "batching schedulers cache hierarchies memory bandwidth utilization and thermal "
+    "envelopes when planning capacity for concurrent agent sessions each running "
+    "retrieval augmented pipelines with tool integrations database queries document "
+    "processing validation stages scheduled digests and multi turn conversations that "
+    "accumulate context over time the analysis compares deployment options including "
+    "dedicated servers cloud endpoints and hybrid routing policies weighing throughput "
+    "against per token economics service levels operational complexity vendor risk and "
+    "upgrade paths findings indicate sustained utilization patterns differ sharply from "
+    "burst traffic profiles requiring distinct provisioning headroom monitoring alerts "
+    "and failover procedures summarized recommendations follow with supporting metrics"
+).split()
+
+
+def synthetic_text(vary_key: str, n_chars: int) -> str:
+    """Deterministic varied text: same key -> same text; different keys share no
+    meaningful prefix. Pure function of (vary_key, n_chars)."""
+    import random as _random
+    rng = _random.Random(vary_key)
+    words: list[str] = []
+    size = 0
+    while size < n_chars:
+        w = _VOCAB[rng.randrange(len(_VOCAB))]
+        words.append(w)
+        size += len(w) + 1
+    return " ".join(words)[:n_chars]
 
 
 @lru_cache(maxsize=1)
@@ -90,18 +127,27 @@ def scenario_list() -> list[dict]:
     return items
 
 
-def build_prompt(step: dict, scenario_name: str, extra_context_tokens: int = 0) -> list[dict]:
+def build_prompt(step: dict, scenario_name: str, extra_context_tokens: int = 0,
+                 *, vary_key: str = "0", cache_mode: str = "warm") -> list[dict]:
     """Deterministic chat messages approximating prompt_tokens + carried context.
 
     extra_context_tokens models the agent's accumulated state — prior step
     outputs, injected tool results, session history — so prompts grow the way a
-    real agent's do instead of staying chatbot-flat."""
+    real agent's do instead of staying chatbot-flat.
+
+    vary_key seeds the corpus so every call's body is different (no prefix-cache
+    freebies) yet exactly reproducible for a given benchmark seed. cache_mode
+    "warm" keeps the short shared system preamble (agents in production share
+    their system prompt — the realistic case); "cold" salts it per call so
+    NOTHING is prefix-cacheable."""
     target_chars = (int(step.get("prompt_tokens", 200)) + int(extra_context_tokens)) * 4
-    body = (_FILLER * (target_chars // len(_FILLER) + 1))[:target_chars]
+    body = synthetic_text(vary_key, target_chars)
+    system = (f"You are the '{step.get('label', 'step')}' stage of a fixed "
+              f"'{scenario_name}' benchmark scenario. Answer the task directly.")
+    if cache_mode == "cold":
+        system = f"[run {vary_key}] " + system
     return [
-        {"role": "system",
-         "content": f"You are the '{step.get('label', 'step')}' stage of a fixed "
-                    f"'{scenario_name}' benchmark scenario. Answer the task directly."},
+        {"role": "system", "content": system},
         {"role": "user",
          "content": f"Benchmark task ({step.get('label')}): process the following "
                     f"context and produce your stage's output.\n\n{body}"},

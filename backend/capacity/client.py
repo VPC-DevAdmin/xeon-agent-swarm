@@ -36,10 +36,11 @@ class StepCaller:
     """Bound to a mode for the duration of one capacity test."""
 
     def __init__(self, mode: str, *, mock_ms: float = 2000.0, mock_sigma: float = 300.0,
-                 http: httpx.AsyncClient | None = None):
+                 cache_mode: str = "warm", http: httpx.AsyncClient | None = None):
         self.mode = mode
         self.mock_ms = float(mock_ms)
         self.mock_sigma = float(mock_sigma)
+        self.cache_mode = cache_mode if cache_mode in ("warm", "cold") else "warm"
         self._http = http  # injected in tests; else created per test run
         if mode in ("local", "remote_real") and http is None:
             self._http = httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=15.0))
@@ -49,7 +50,7 @@ class StepCaller:
             await self._http.aclose()
 
     async def call(self, scenario: dict, step: dict,
-                   extra_context_tokens: int = 0) -> dict:
+                   extra_context_tokens: int = 0, vary_key: str = "0") -> dict:
         t0 = time.perf_counter()
         try:
             if self.mode == "remote_mock":
@@ -72,7 +73,9 @@ class StepCaller:
                 json={
                     "model": model,
                     "messages": build_prompt(step, scenario.get("name", "?"),
-                                             extra_context_tokens),
+                                             extra_context_tokens,
+                                             vary_key=vary_key,
+                                             cache_mode=self.cache_mode),
                     "max_tokens": int(step.get("max_tokens", 200)),
                     "temperature": 0,
                 },

@@ -44,6 +44,7 @@ export function CapacityView() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [armReal, setArmReal] = useState(false)   // cloud mode needs an explicit second click
+  const [cacheMode, setCacheMode] = useState<'warm' | 'cold'>('warm')
 
   useEffect(() => {
     capacityApi.scenarios().then((r) => {
@@ -85,6 +86,7 @@ export function CapacityView() {
         scenarios: mix === 'custom' ? enabled : undefined,
         mock_ms: mode === 'remote_mock' ? mockMs : undefined,
         mock_sigma: mode === 'remote_mock' ? mockSigma : undefined,
+        cache_mode: cacheMode,
         confirm_real: mode === 'remote_real' ? true : undefined,
       })
       const s = await capacityApi.status(); setStatus(s)
@@ -116,6 +118,23 @@ export function CapacityView() {
             ))}
           </div>
           <p className="text-[11.5px] text-[var(--faint)] mt-2">{MODES.find((m) => m.id === mode)?.hint}</p>
+          {mode !== 'remote_mock' && (
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="font-code text-[10px] text-[var(--faint)] uppercase">cache</span>
+              {(['warm', 'cold'] as const).map((cm) => (
+                <button key={cm} disabled={active} onClick={() => setCacheMode(cm)}
+                  title={cm === 'warm'
+                    ? 'Warm: the short shared system preamble may prefix-cache (the realistic production case); prompt bodies are always unique'
+                    : 'Cold: every call is salted so NOTHING prefix-caches — the worst-case prefill number'}
+                  className={clsx('px-2 py-0.5 rounded-full border font-code text-[10.5px] transition-colors',
+                    cacheMode === cm ? 'text-[var(--text)]' : 'text-[var(--faint)]')}
+                  style={{ borderColor: cacheMode === cm ? 'rgba(124,135,245,.45)' : 'var(--line)',
+                           background: cacheMode === cm ? 'var(--elev)' : 'transparent' }}>
+                  {cm}
+                </button>
+              ))}
+            </div>
+          )}
 
           {mode === 'remote_mock' && (
             <div className="flex gap-4 mt-2.5 text-[12px] text-[var(--muted)]">
@@ -558,6 +577,19 @@ function ResultCard({ result }: { result: CapacityResult }) {
           ))}
         </div>
       </div>
+
+      {result.repro && (
+        <p className="font-code text-[10px] mt-3 pt-2 border-t leading-relaxed"
+          style={{ color: 'var(--faint)', borderColor: 'var(--line-soft)' }}>
+          repro: seed {result.repro.seed} · {result.repro.cache_mode} cache · scenarios v{result.repro.benchmark_version}
+          {result.repro.scenario_fingerprint && ` (${result.repro.scenario_fingerprint})`}
+          {result.repro.git_commit && ` · commit ${result.repro.git_commit}`}
+          {result.repro.model && ` · ${result.repro.model}`}
+          {result.repro.host?.cpu_count && ` · ${result.repro.host.cpu_count} cores`}
+          {result.repro.host?.mem_total_gb != null && ` / ${result.repro.host.mem_total_gb} GB`}
+          {result.repro.host?.numa_nodes != null && ` / ${result.repro.host.numa_nodes} NUMA`}
+        </p>
+      )}
     </div>
   )
 }

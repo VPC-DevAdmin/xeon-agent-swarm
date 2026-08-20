@@ -126,6 +126,8 @@ export const capacityApi = {
     mock_ms?: number
     mock_sigma?: number
     max_users?: number
+    seed?: number
+    cache_mode?: 'warm' | 'cold'
     confirm_real?: boolean
   }) => req<{ started: boolean }>('/capacity/start', { method: 'POST', body: JSON.stringify(body) }),
   stop: () => req<{ stopping: boolean }>('/capacity/stop', { method: 'POST' }),

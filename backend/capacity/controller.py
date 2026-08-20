@@ -39,6 +39,8 @@ import json
 import random
 import statistics
 import time
+
+from collections import defaultdict
 from collections import deque
 from pathlib import Path
 
@@ -47,8 +49,19 @@ from backend.capacity.scenarios import load_scenarios, load_tile, tile_sessions
 from backend.capacity.telemetry import (SystemSampler, mem_slope_mb_per_user,
                                          sample_bandwidth_gbs, sample_kv_pct)
 from backend.capacity.client import LOCAL_BASE
+from backend.capacity import repro as repro_mod
 
 RESULTS_DIR = Path("data/capacity")
+
+
+def _scen_version() -> int:
+    from backend.capacity.scenarios import benchmark_version
+    return benchmark_version()
+
+
+def _remote_model() -> str | None:
+    from backend.capacity.client import REMOTE_MODEL
+    return REMOTE_MODEL or None
 
 DEFAULTS = dict(
     start_users=1,
@@ -64,6 +77,9 @@ DEFAULTS = dict(
     slo_p95_ms=None,       # absolute p95 cap in ms (applies in addition to the multiplier)
     slo_err=0.05,          # SLO: max error rate per profile while a rung counts as "good"
     min_samples=3,         # completed calls per profile per interval to certify a rung
+    warmup_s=5.0,          # rung-1 warm-up discarded before baselines are measured
+    seed=None,             # benchmark seed (auto-generated when unset; always recorded)
+    cache_mode="warm",     # warm: shared system preamble | cold: nothing prefix-cacheable
     plateau_frac=0.25,     # gain < 25% of the expected linear gain, twice = knee
     error_rate_limit=0.10, # hard stop
 
@@ -166,8 +182,14 @@ class CapacityTest:
         self.total_requests = 0
         self.result: dict | None = None
 
+        if self.cfg.get("seed") is None:
+            self.cfg["seed"] = random.randrange(1, 10**9)
+        self.seed = int(self.cfg["seed"])
+        self._user_call_n: dict[int, int] = defaultdict(int)
+        self._engine_info: dict | None = None
         self._caller = StepCaller(mode, mock_ms=self.cfg["mock_ms"],
-                                  mock_sigma=self.cfg["mock_sigma"])
+                                  mock_sigma=self.cfg["mock_sigma"],
+                                  cache_mode=str(self.cfg.get("cache_mode") or "warm"))
         self._sampler = SystemSampler()
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task] = []
@@ -175,6 +197,8 @@ class CapacityTest:
     # ── lifecycle ────────────────────────────────────────────────────────────
     async def run(self):
         try:
+            if self.mode == "local":
+                self._engine_info = await repro_mod.engine_info(LOCAL_BASE)
             self._tasks.append(asyncio.create_task(self._sample_loop()))
             await self._ramp()
         except Exception as exc:  # noqa: BLE001
@@ -249,7 +273,10 @@ class CapacityTest:
             self.stop()  # hard budget: never spray a cloud API
             return None
         self.total_requests += 1
-        rec = await self._caller.call(scenario, step, extra_context_tokens=extra_tokens)
+        self._user_call_n[idx] += 1
+        vary_key = f"{self.seed}:{idx}:{self._user_call_n[idx]}"
+        rec = await self._caller.call(scenario, step, extra_context_tokens=extra_tokens,
+                                      vary_key=vary_key)
         rec.update(scenario=sid, step=label, user=idx, ts=time.time())
         self.calls.append(rec)
         return rec
@@ -345,6 +372,19 @@ class CapacityTest:
                 self._add_user()
         self.phase = "ramping"
         interval = float(self.cfg["step_interval_s"])
+        # Warm-up: let rung 1 run (caches, allocators, thermals settle), then
+        # discard those calls/samples so baselines reflect steady behavior.
+        warm = float(self.cfg.get("warmup_s") or 0)
+        self._t_measure = time.time()
+        if warm > 0:
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=warm)
+                return
+            except asyncio.TimeoutError:
+                pass
+            self.calls.clear()
+            self.samples.clear()
+            self._t_measure = time.time()
         prev_tps: float | None = None
         prev_users = int(self.cfg["start_users"])
         self._baselines_ready = False
@@ -375,7 +415,7 @@ class CapacityTest:
             # min_samples, then lock its baseline. No SLO evaluation and no
             # ramping until baselines exist (bounded by 4 intervals).
             if not self._baselines_ready:
-                elapsed_rung1 = time.time() - self.started_at
+                elapsed_rung1 = time.time() - self._t_measure
                 window = elapsed_rung1  # whole rung-1 period so far
                 missing = []
                 for sid in self.scenario_ids:
@@ -555,6 +595,21 @@ class CapacityTest:
                         "mock_ms", "mock_sigma")},
             "started_at": self.started_at,
             "ended_at": self.ended_at,
+            "repro": {
+                "seed": self.seed,
+                "cache_mode": self._caller.cache_mode,
+                "warmup_s": self.cfg.get("warmup_s"),
+                "benchmark_version": _scen_version(),
+                "scenario_fingerprint": repro_mod.scenario_fingerprint(),
+                "git_commit": repro_mod.git_commit(),
+                "model": (self._engine_info or {}).get("served_model_name")
+                          if self.mode == "local" else
+                          (None if self.mode == "remote_mock" else _remote_model()),
+                "engine": self._engine_info,
+                "host": repro_mod.host_info(),
+                "mix": self.mix,
+                "tile": self.tile,
+            },
         }
         try:
             RESULTS_DIR.mkdir(parents=True, exist_ok=True)

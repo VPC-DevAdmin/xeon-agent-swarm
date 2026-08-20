@@ -237,6 +237,19 @@ export interface CapacityResult {
   per_scenario: Record<string, CapacityScenarioStat>
   timeline: CapacitySample[]
   error?: string | null
+  repro?: {
+    seed: number
+    cache_mode: string
+    warmup_s?: number | null
+    benchmark_version: number
+    scenario_fingerprint?: string | null
+    git_commit?: string | null
+    model?: string | null
+    engine?: Record<string, unknown> | null
+    host?: { platform?: string; cpu_count?: number; mem_total_gb?: number | null; numa_nodes?: number | null }
+    mix?: string
+    tile?: Record<string, number> | null
+  } | null
 }
 
 export interface CapacityStatus {

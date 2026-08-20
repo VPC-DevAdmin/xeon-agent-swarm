@@ -1,0 +1,71 @@
+"""
+Reproducibility metadata stamped into every capacity result: enough to rerun
+the same benchmark and to explain a different number later. All best-effort —
+a field that can't be read is None, never an error.
+"""
+from __future__ import annotations
+
+import glob
+import hashlib
+import os
+import platform
+import subprocess
+
+import httpx
+
+from backend.capacity import scenarios as scen_mod
+
+
+def scenario_fingerprint() -> str | None:
+    """Hash of the scenario/tile file — catches ANY workload edit, versioned or not."""
+    try:
+        with open(scen_mod._PATH, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()[:12]
+    except OSError:
+        return None
+
+
+def git_commit() -> str | None:
+    try:
+        out = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                             capture_output=True, text=True, timeout=2,
+                             cwd=os.path.dirname(os.path.dirname(os.path.dirname(
+                                 os.path.abspath(__file__)))))
+        return out.stdout.strip() or None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def host_info() -> dict:
+    mem_gb = None
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    mem_gb = round(int(line.split()[1]) / 1048576, 1)
+                    break
+    except OSError:
+        pass
+    return {
+        "platform": platform.platform(),
+        "cpu_count": os.cpu_count(),
+        "mem_total_gb": mem_gb,
+        "numa_nodes": len(glob.glob("/sys/devices/system/node/node[0-9]*")) or None,
+    }
+
+
+async def engine_info(base_url: str) -> dict | None:
+    """SGLang /get_server_info subset: the flags that change a capacity number."""
+    root = base_url.rstrip("/").removesuffix("/v1")
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as http:
+            r = await http.get(f"{root}/get_server_info")
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        keys = ("model_path", "served_model_name", "quantization",
+                "attention_backend", "max_running_requests", "context_length",
+                "chunked_prefill_size", "max_total_tokens", "mem_fraction_static")
+        return {k: data.get(k) for k in keys if data.get(k) is not None} or None
+    except Exception:  # noqa: BLE001
+        return None
