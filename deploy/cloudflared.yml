@@ -1,4 +1,4 @@
-# Merged ingress for the `router-origin` tunnel — one tunnel, three hostnames.
+# Merged ingress for the `router-origin` tunnel — one tunnel, five hostnames.
 #
 # Install to /etc/cloudflared/config.yml (the path `cloudflared service install`
 # uses), NOT the per-repo path the tunnel was started from by hand. See
@@ -32,5 +32,11 @@ ingress:
   # Existing: the semantic tier router gateway (unchanged).
   - hostname: router-origin.enterpriseai.center
     service: http://localhost:8900
+
+  # Voice assistant demo — WebRTC browser client (xeon-voice-assistant repo,
+  # `make live-demo`). The tunnel carries HTTPS signaling only; audio flows
+  # directly via STUN/TURN.
+  - hostname: voice.enterpriseai.center
+    service: http://localhost:8080
 
   - service: http_status:404
