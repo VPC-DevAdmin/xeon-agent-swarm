@@ -14,22 +14,29 @@ from backend.capacity.telemetry import cpu_pct_from, parse_meminfo, parse_proc_s
 
 # ── scenarios ─────────────────────────────────────────────────────────────────
 
-def test_five_scenarios_with_expected_shapes():
+def test_six_real_agent_scenarios():
     items = scenario_list()
-    assert len(items) == 5
+    assert len(items) == 6
     by_id = {s["id"]: s for s in items}
-    assert by_id["quick_answer"]["calls_per_loop"] == 1
-    assert by_id["quick_answer"]["tool_calls_per_loop"] == 0     # the chatbot contrast
+    # THE invariant: real agents only — every flow calls tools, and every flow
+    # either carries context within its loop or compounds across a session.
+    # A stateless single-call "chatbot" scenario must never enter this mix.
+    for s in items:
+        assert s["tool_calls_per_loop"] > 0, f"{s['id']} has no tool calls"
+        agentic = s["session_turns"] > 1 or any(st["carry_context"] for st in s["steps"])
+        assert agentic, f"{s['id']} neither carries context nor compounds a session"
+        assert s["calls_per_loop"] > 1, f"{s['id']} is a single-call ping"
     # 5 steps + 3 tool continuations — every tool round-trip is an extra LLM call
     assert by_id["deep_agent"]["calls_per_loop"] == 8
     assert by_id["deep_agent"]["tool_calls_per_loop"] == 3
     assert by_id["deep_agent"]["session_turns"] == 3
+    assert by_id["support_agent"]["session_turns"] == 4          # ticket conversation
     assert all(s["tokens_out_per_loop"] > 0 for s in items)
 
 
 def test_prompt_padding_tracks_target():
-    step = load_scenarios()["summarizer"]["steps"][0]
-    msgs = build_prompt(step, "Document summarizer")
+    step = load_scenarios()["doc_intelligence"]["steps"][0]
+    msgs = build_prompt(step, "Document intelligence")
     # ~4 chars/token; allow slack for the fixed preamble
     assert abs(len(msgs[1]["content"]) - step["prompt_tokens"] * 4) < 300
 
@@ -60,17 +67,20 @@ def test_parsers_tolerate_garbage():
 
 def test_mock_mode_bell_curve_latency():
     caller = StepCaller("remote_mock", mock_ms=80, mock_sigma=10)
-    scen = load_scenarios()["quick_answer"]
+    scen = load_scenarios()["support_agent"]
     recs = [asyncio.run(caller.call(scen, scen["steps"][0])) for _ in range(8)]
     assert all(r["ok"] for r in recs)
     lats = [r["latency_ms"] for r in recs]
     assert 40 < min(lats) and max(lats) < 400          # clustered near the set point
     assert recs[0]["tokens_out"] == int(scen["steps"][0]["max_tokens"] * 0.8)
+    # carried context is reflected in the reported prompt size
+    rec = asyncio.run(caller.call(scen, scen["steps"][0], extra_context_tokens=1000))
+    assert rec["tokens_in"] == scen["steps"][0]["prompt_tokens"] + 1000
 
 
 def test_unknown_mode_is_an_error_record_not_a_raise():
     caller = StepCaller("bogus")
-    scen = load_scenarios()["quick_answer"]
+    scen = load_scenarios()["support_agent"]
     rec = asyncio.run(caller.call(scen, scen["steps"][0]))
     assert rec["ok"] is False and "bogus" in rec["error"]
 
@@ -96,7 +106,7 @@ def test_full_ramp_reaches_cap_and_reports(tmp_path, monkeypatch):
     assert r["verdict"] == "capped"
     assert r["max_users"] == 3
     assert r["total_requests"] > 0
-    assert len(r["per_scenario"]) == 5
+    assert len(r["per_scenario"]) == 6
     assert r["steady"]["p50_ms"] is not None
     # memory-telemetry fields are always present (None where unmeasurable)
     assert "bw_gbs" in r["steady"] and "kv_pct" in r["steady"]
@@ -107,7 +117,7 @@ def test_full_ramp_reaches_cap_and_reports(tmp_path, monkeypatch):
 
 def test_stop_mid_ramp(tmp_path, monkeypatch):
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
-    test = ctl.CapacityTest("remote_mock", ["quick_answer"], _fast_cfg(max_users=50))
+    test = ctl.CapacityTest("remote_mock", ["support_agent"], _fast_cfg(max_users=50))
 
     async def go():
         task = asyncio.create_task(test.run())
@@ -118,7 +128,7 @@ def test_stop_mid_ramp(tmp_path, monkeypatch):
     asyncio.run(go())
     assert test.phase == "stopped"
     assert test.result["verdict"] == "stopped"
-    assert test.result["per_scenario"]["quick_answer"]["calls"] > 0
+    assert test.result["per_scenario"]["support_agent"]["calls"] > 0
 
 
 def test_status_shape_while_idleish(tmp_path, monkeypatch):
@@ -132,13 +142,13 @@ def test_status_shape_while_idleish(tmp_path, monkeypatch):
 # ── agentic loop semantics: compounding context, tools, sessions ─────────────
 
 def test_loop_compounds_context_and_tools():
-    """research_brief: prompts must GROW across the loop (agent, not chatbot):
+    """research_agent: prompts must GROW across the loop (agent, not chatbot):
     gather -> 2 tool continuations with injected results -> analyze/write carry
     everything accumulated so far."""
     from backend.capacity.controller import run_scenario_loop
     from backend.capacity.scenarios import load_scenarios
 
-    scen = load_scenarios()["research_brief"]
+    scen = load_scenarios()["research_agent"]
     seen: list[tuple[str, int]] = []
 
     async def fake_call(scenario, step, sid, idx, extra_tokens, label):
@@ -147,7 +157,7 @@ def test_loop_compounds_context_and_tools():
                 "tokens_in": step["prompt_tokens"] + extra_tokens,
                 "tokens_out": int(step["max_tokens"] * 0.8)}
 
-    carry = asyncio.run(run_scenario_loop(fake_call, scen, "research_brief", 0, 0))
+    carry = asyncio.run(run_scenario_loop(fake_call, scen, "research_agent", 0, 0))
 
     labels = [l for l, _ in seen]
     assert labels == ["gather", "gather+tool1", "gather+tool2", "analyze", "write"]
@@ -183,17 +193,28 @@ def test_session_compounds_across_turns_then_resets():
     assert t2 <= scen["context_cap"]             # bounded by the context window
 
 
-def test_chatbot_baseline_stays_flat():
-    """quick_answer is the deliberate contrast: no tools, no carry, no session."""
+def test_support_session_compounds_like_a_ticket():
+    """support_agent: a 4-turn ticket conversation — turn 2's triage must start
+    with turn 1's context (the running conversation), not from zero."""
     from backend.capacity.controller import run_scenario_loop
     from backend.capacity.scenarios import load_scenarios
 
-    scen = load_scenarios()["quick_answer"]
+    scen = load_scenarios()["support_agent"]
     seen = []
 
     async def fake_call(scenario, step, sid, idx, extra_tokens, label):
         seen.append((label, extra_tokens))
-        return {"ok": True, "latency_ms": 1.0, "tokens_in": 150, "tokens_out": 96}
+        return {"ok": True, "latency_ms": 1.0,
+                "tokens_in": step["prompt_tokens"] + extra_tokens,
+                "tokens_out": int(step["max_tokens"] * 0.8)}
 
-    asyncio.run(run_scenario_loop(fake_call, scen, "quick_answer", 0, 0))
-    assert seen == [("answer", 0)]
+    async def go():
+        t1 = await run_scenario_loop(fake_call, scen, "support_agent", 0, 0)
+        await run_scenario_loop(fake_call, scen, "support_agent", 0, t1)
+        return t1
+
+    t1 = asyncio.run(go())
+    labels = [l for l, _ in seen]
+    assert labels[:3] == ["triage+lookup", "triage+lookup+tool1", "triage+lookup+tool2"]
+    turn2_first_extra = seen[5][1]          # first call of the second turn
+    assert turn2_first_extra >= t1 > 0      # the conversation carried over

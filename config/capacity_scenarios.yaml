@@ -1,59 +1,63 @@
-# Capacity-test agent scenarios — five FIXED workload blocks at different
-# complexities. A "virtual user" is one of these blocks looping continuously;
-# the ramp adds users until the system saturates.
+# Capacity-test agent scenarios — six REAL agent flows for capacity planning.
+# A "virtual user" is one of these blocks looping continuously; the ramp adds
+# users until the system saturates.
 #
-# These are AGENT loops, not chatbot pings. Three behaviors distinguish them
-# (and are what makes memory saturate before CPU):
-#   carry_context: true   the step's prompt includes everything accumulated so
-#                         far this turn (prior step outputs, tool results) —
-#                         compounding prefill + resident KV
-#   tool_calls: N         the step makes N tool round-trips: after the initial
-#                         call, each tool result (tool_result_tokens) is
-#                         injected into context and the model is called again
-#                         (a continuation) — more calls AND bigger prompts.
-#                         tool_latency_ms simulates the external tool's time
-#                         (the agent holds its context while it waits)
-#   session_turns: K      context compounds ACROSS loops for K turns (a user
-#                         session), then resets — the saw-tooth context-growth
-#                         pattern of real agent sessions. context_cap bounds it.
+# Every scenario is a genuine agent loop (no chatbot pings): tools are called
+# and their results injected into context, later steps re-read what earlier
+# steps produced, and sessions compound across turns where the real workflow
+# is conversational. That growing-prefill / resident-KV behavior is what makes
+# agent capacity different from chat capacity — and is what this test measures.
 #
-# quick_answer is deliberately the exception: a plain stateless chatbot ping,
-# kept as the baseline so the contrast with real agent loops is visible.
+# Step fields:
+#   carry_context: true   prompt includes everything accumulated this turn
+#   tool_calls: N         N tool round-trips: wait tool_latency_ms (agent holds
+#                         its context), inject tool_result_tokens, call again —
+#                         every tool call is an extra LLM continuation
+# Scenario fields:
+#   session_turns: K      context compounds across K loops (a user session or
+#                         ticket conversation), then resets; context_cap bounds it
 
 scenarios:
-  quick_answer:
-    name: "Chatbot baseline"
-    blurb: "A stateless single-shot Q&A — what a plain user hitting a chat endpoint looks like. The contrast case."
-    complexity: light
-    think_ms: 1000
-    session_turns: 1
-    steps:
-      - {label: "answer", prompt_tokens: 150, max_tokens: 120}
-
-  summarizer:
-    name: "Document summarizer"
-    blurb: "Retrieves a long document via a tool, injects it into context, and produces a tight summary — data-inclusion prefill."
+  support_agent:
+    name: "Customer support agent"
+    blurb: "Pulls the customer record and KB articles, then answers within a running ticket conversation that compounds over 4 turns."
     complexity: light
     think_ms: 1500
-    session_turns: 1
+    session_turns: 4
+    context_cap: 5000
     steps:
-      - {label: "retrieve+summarize", prompt_tokens: 300, max_tokens: 250,
-         tool_calls: 1, tool_result_tokens: 2500, tool_latency_ms: 400}
+      - {label: "triage+lookup", prompt_tokens: 250, max_tokens: 150,
+         tool_calls: 2, tool_result_tokens: 500, tool_latency_ms: 350}
+      - {label: "respond", prompt_tokens: 150, max_tokens: 300, carry_context: true}
 
-  code_assistant:
-    name: "Code agent"
-    blurb: "Writes code, runs it through a sandbox tool, then reviews with the code AND the run output in context. Session spans 2 turns."
+  doc_intelligence:
+    name: "Document intelligence"
+    blurb: "Retrieves two large document chunks, extracts the key data over them, then composes a structured summary — data-inclusion prefill at its heaviest."
+    complexity: medium
+    think_ms: 1500
+    session_turns: 1
+    context_cap: 8000
+    steps:
+      - {label: "ingest", prompt_tokens: 300, max_tokens: 200,
+         tool_calls: 2, tool_result_tokens: 1500, tool_latency_ms: 400}
+      - {label: "extract", prompt_tokens: 200, max_tokens: 300, carry_context: true}
+      - {label: "summarize", prompt_tokens: 200, max_tokens: 300, carry_context: true}
+
+  code_agent:
+    name: "Coding agent (fix loop)"
+    blurb: "Writes code, runs the tests in a sandbox, fixes with the failure output in context, re-runs to verify — the classic agentic fix loop over a 2-turn session."
     complexity: medium
     think_ms: 1200
     session_turns: 2
-    context_cap: 4000
+    context_cap: 6000
     steps:
-      - {label: "generate", prompt_tokens: 400, max_tokens: 500}
-      - {label: "test+review", prompt_tokens: 200, max_tokens: 200,
-         carry_context: true, tool_calls: 1, tool_result_tokens: 150,
-         tool_latency_ms: 600}
+      - {label: "implement", prompt_tokens: 400, max_tokens: 500}
+      - {label: "test+fix", prompt_tokens: 150, max_tokens: 300,
+         carry_context: true, tool_calls: 1, tool_result_tokens: 250, tool_latency_ms: 700}
+      - {label: "verify", prompt_tokens: 100, max_tokens: 150,
+         carry_context: true, tool_calls: 1, tool_result_tokens: 150, tool_latency_ms: 700}
 
-  research_brief:
+  research_agent:
     name: "Research agent"
     blurb: "Two web searches injected into context, analysis over the findings, then a brief written over everything gathered — compounding context each step."
     complexity: medium
@@ -62,9 +66,22 @@ scenarios:
     context_cap: 6000
     steps:
       - {label: "gather", prompt_tokens: 300, max_tokens: 350,
-         tool_calls: 2, tool_result_tokens: 400, tool_latency_ms: 500}
+         tool_calls: 2, tool_result_tokens: 600, tool_latency_ms: 500}
       - {label: "analyze", prompt_tokens: 300, max_tokens: 300, carry_context: true}
       - {label: "write", prompt_tokens: 250, max_tokens: 400, carry_context: true}
+
+  ops_analyst:
+    name: "Ops / BI analyst agent"
+    blurb: "Runs two database queries, interprets the result sets in context, and writes the digest — the scheduled monitoring agent pattern."
+    complexity: medium
+    think_ms: 2000
+    session_turns: 1
+    context_cap: 6000
+    steps:
+      - {label: "query", prompt_tokens: 350, max_tokens: 200,
+         tool_calls: 2, tool_result_tokens: 800, tool_latency_ms: 600}
+      - {label: "interpret", prompt_tokens: 200, max_tokens: 300, carry_context: true}
+      - {label: "report", prompt_tokens: 150, max_tokens: 350, carry_context: true}
 
   deep_agent:
     name: "Deep multi-agent pipeline"
