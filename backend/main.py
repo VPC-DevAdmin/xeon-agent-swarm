@@ -127,18 +127,38 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    allow_private_network=True,  # Starlette 0.27+ native PNA support — required for
-                                 # Lovable (public HTTPS) → Tailscale (private IP) requests.
-                                 # Without this, CORSMiddleware returns HTTP 400
-                                 # "Disallowed CORS private-network" for any preflight
-                                 # that includes Access-Control-Request-Private-Network.
-)
+# CORS is OFF by default, and that is the correct production posture: the tunnel
+# serves the UI, REST and WebSocket from ONE origin, so the browser never makes a
+# cross-origin request and needs no CORS headers at all.
+#
+# It matters that this is not permissive by default. `allow_origins=["*"]` together
+# with `allow_credentials=True` makes Starlette echo back whichever Origin asked,
+# which would let ANY website make credentialed requests to a backend that executes
+# code and fires real tools (email, SMS, SQL writes).
+#
+# Opt in only for a genuinely cross-origin dev workflow — e.g. a hosted editor on
+# public HTTPS calling this box on a private Tailscale IP:
+#   DEV_CORS_ORIGINS=https://editor.example        # explicit origin (preferred)
+#   DEV_CORS_ORIGINS=https://a.example,https://b   # several
+#   DEV_CORS_ORIGINS=*                             # any origin — dev boxes ONLY
+_dev_cors = os.getenv("DEV_CORS_ORIGINS", "").strip()
+if _dev_cors:
+    _cors_origins = [o.strip() for o in _dev_cors.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        # Starlette 0.27+ native Private Network Access. Required for a public-HTTPS
+        # origin to preflight a private-IP target; without it CORSMiddleware returns
+        # HTTP 400 "Disallowed CORS private-network". Dev-only, so it lives here.
+        allow_private_network=True,
+    )
+    logger.warning(
+        "DEV CORS enabled for origins=%s (private-network preflight allowed) — "
+        "never set DEV_CORS_ORIGINS on a public deployment", _cors_origins,
+    )
 
 
 # ── Routers (jobs / runs / connectors — durable orchestration API) ───────────
@@ -527,9 +547,13 @@ async def metrics():
 # instead of silently returning index.html.
 _DIST = Path(os.getenv("FRONTEND_DIST", "frontend/dist"))
 
+# HAND-MAINTAINED: every top-level API path prefix must be listed here, or an
+# unmatched path under it silently returns index.html with a 200 instead of a 404.
+# Add an entry whenever a new top-level route or router prefix is registered.
 _API_PREFIXES = (
     "run", "runs", "jobs", "connectors", "toolbox", "tools", "ws",
     "health", "metrics", "docs", "redoc", "openapi.json", "audio",
+    "agents", ".well-known",
 )
 
 if _DIST.is_dir():

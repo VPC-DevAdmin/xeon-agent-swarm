@@ -94,20 +94,46 @@ pkill -f 'cloudflared tunnel --config' ; sudo cloudflared service install && sud
 *(Optional: `cloudflared` is on 2026.3.0, current is 2026.8.2 — upgrade before
 installing the service if you want to be current.)*
 
-## 4. Gate access to specific people
+## 4. Gate access — ONE application, one sign-in
 
-This demo runs the **live router and real tools**, so it must not be open to the
-world. In **Zero Trust → Access → Applications → Add → Self-hosted**:
+This demo runs the **live router and real tools** (it can send email/SMS, write to
+SQL, post to Slack), so it must not be open to the world.
 
-- Application domain: `agents.enterpriseai.center` (repeat for `livedemos.`)
-- Policy: **Allow** → Include → *Emails* (or *Emails ending in* your domain)
-- Access authenticates at the edge, in front of the tunnel — the WebSocket is
-  covered too.
+**Create a single multi-domain application, not one per hostname.** Cloudflare
+issues an *application* token covering every domain listed in one application, so
+signing in at the hub silently carries into the demo. Two separate applications
+risk a second prompt on the click-through.
+
+**Zero Trust → Access → Applications → Add an application → Self-hosted:**
+
+- Name: `Demos`
+- Add **both** public hostnames to the *same* application:
+  - `livedemos.enterpriseai.center`
+  - `agents.enterpriseai.center`
+- Policy: **Allow** → Include → *Emails* (list people) or *Emails ending in* `@yourdomain`
+- **Settings → Authentication → Global session duration** — this is what keeps the
+  second hop silent; set it to a working session (e.g. 24h).
+
+> **Do not use a `*.enterpriseai.center` wildcard.** It would also capture
+> `scaleshift.enterpriseai.center` (the public kiosk game) and `router-origin`,
+> putting a login wall in front of things that should stay open.
+
+`router-origin.enterpriseai.center` already has its own application. Leaving it
+separate usually still avoids a second prompt via the global session token, but that
+is not guaranteed — folding it into this same application is the only way to be
+certain.
+
+Access authenticates at the edge, in front of the tunnel, so the WebSocket is
+covered by the same session.
+
+> **Link to the demos from the hub — never iframe them.** Access cookies and
+> `SameSite` will break an embedded frame. Plain links are fine (which is what
+> `hub/index.html` does).
 
 > **Hub status dots:** the hub polls each demo's `/health` cross-origin. With Access
 > in front, that poll is redirected to the login page and the card may read
-> "offline" even when the demo is up. Either add a **Bypass** policy for path
-> `/health` on each app, or treat the hub purely as a link page.
+> "offline" even when the demo is up. Either add a **Bypass** policy scoped to path
+> `/health`, or treat the hub purely as a link page.
 
 ## 5. Verify — including the reboot
 
