@@ -32,7 +32,10 @@ _last_result: dict | None = None
 
 class StartBody(BaseModel):
     mode: str = Field(..., pattern="^(local|remote_mock|remote_real)$")
-    scenarios: list[str] = Field(default_factory=list)  # empty = all five
+    # "tile": ramp complete reference tiles (comparable benchmark, default).
+    # "custom": round-robin over `scenarios` (diagnosis; non-comparable).
+    mix: str = Field("tile", pattern="^(tile|custom)$")
+    scenarios: list[str] = Field(default_factory=list)  # custom mix only
     mock_ms: float | None = Field(None, ge=100, le=60_000)
     mock_sigma: float | None = Field(None, ge=0, le=20_000)
     max_users: int | None = Field(None, ge=1, le=512)
@@ -43,7 +46,8 @@ class StartBody(BaseModel):
 
 @router.get("/scenarios")
 async def get_scenarios() -> dict:
-    return {"scenarios": scenario_list(), "defaults": DEFAULTS}
+    from backend.capacity.scenarios import load_tile
+    return {"scenarios": scenario_list(), "tile": load_tile(), "defaults": DEFAULTS}
 
 
 @router.get("/engine")
@@ -76,11 +80,12 @@ async def start_test(body: StartBody) -> dict:
     cfg = {"mock_ms": body.mock_ms, "mock_sigma": body.mock_sigma,
            "max_users": body.max_users, "step_interval_s": body.step_interval_s,
            "step_users": body.step_users}
-    _current = CapacityTest(body.mode, body.scenarios, cfg)
+    _current = CapacityTest(body.mode, body.scenarios, cfg, mix=body.mix)
     _task = asyncio.create_task(_run_and_keep(_current))
     logger.info("capacity test started: mode=%s scenarios=%s", body.mode,
                 _current.scenario_ids)
-    return {"started": True, "mode": body.mode, "scenarios": _current.scenario_ids}
+    return {"started": True, "mode": body.mode, "mix": _current.mix,
+            "scenarios": _current.scenario_ids}
 
 
 async def _run_and_keep(test: CapacityTest):

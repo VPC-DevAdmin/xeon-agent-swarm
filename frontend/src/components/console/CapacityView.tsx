@@ -33,6 +33,8 @@ const COMPLEXITY_COLOR: Record<string, string> = {
 export function CapacityView() {
   const [scenarios, setScenarios] = useState<CapacityScenario[]>([])
   const [enabled, setEnabled] = useState<string[]>([])
+  const [tile, setTile] = useState<Record<string, number>>({})
+  const [mix, setMix] = useState<'tile' | 'custom'>('tile')
   const [mode, setMode] = useState<Mode>('remote_mock')
   const [mockMs, setMockMs] = useState(2000)
   const [mockSigma, setMockSigma] = useState(300)
@@ -47,6 +49,7 @@ export function CapacityView() {
     capacityApi.scenarios().then((r) => {
       setScenarios(r.scenarios)
       setEnabled(r.scenarios.map((s) => s.id))
+      setTile(r.tile ?? {})
     }).catch(() => {})
   }, [])
 
@@ -78,7 +81,8 @@ export function CapacityView() {
     try {
       await capacityApi.start({
         mode,
-        scenarios: enabled,
+        mix,
+        scenarios: mix === 'custom' ? enabled : undefined,
         mock_ms: mode === 'remote_mock' ? mockMs : undefined,
         mock_sigma: mode === 'remote_mock' ? mockSigma : undefined,
         confirm_real: mode === 'remote_real' ? true : undefined,
@@ -172,10 +176,32 @@ export function CapacityView() {
 
       {/* scenario blocks */}
       <div className="console-panel p-3.5 mb-4">
-        <div className="eyebrow mb-2">Workload profiles in the mix — each virtual session replays one agent trace on repeat</div>
+        <div className="flex items-center gap-3 mb-2 flex-wrap">
+          <span className="eyebrow">Workload mix — each virtual session replays one agent trace on repeat</span>
+          <div className="ml-auto flex gap-0.5 p-[2px] rounded-lg border"
+            style={{ background: 'var(--ink)', borderColor: 'var(--line)' }}>
+            <button disabled={active} onClick={() => setMix('tile')}
+              title="One Agent Capacity Unit (fixed weighted bundle) per rung — the same mix at every load level, so rungs and systems are comparable"
+              className={clsx('px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors',
+                mix === 'tile' ? 'bg-[var(--elev)] text-[var(--text)]' : 'text-[var(--muted)]')}>
+              Reference tile · comparable
+            </button>
+            <button disabled={active} onClick={() => setMix('custom')}
+              title="Pick your own profile mix for customer-specific planning — results are NOT comparable across runs with different mixes"
+              className={clsx('px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors',
+                mix === 'custom' ? 'bg-[var(--elev)] text-[var(--text)]' : 'text-[var(--muted)]')}>
+              Custom · non-comparable
+            </button>
+          </div>
+        </div>
+        {mix === 'tile' && (
+          <p className="font-code text-[10.5px] mb-2" style={{ color: 'var(--faint)' }}>
+            1 tile (ACU) = {Object.entries(tile).map(([sid, n]) => `${n}× ${scenarios.find((s) => s.id === sid)?.name ?? sid}`).join(' + ')} — ramps add whole tiles
+          </p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           {scenarios.map((s) => {
-            const on = enabled.includes(s.id)
+            const on = mix === 'tile' || enabled.includes(s.id)
             const open = expanded === s.id
             const live = status?.per_scenario?.[s.id]
             return (
@@ -186,6 +212,13 @@ export function CapacityView() {
                 style={{ borderColor: open ? 'rgba(124,135,245,.5)' : on ? 'rgba(124,135,245,.35)' : 'var(--line)' }}>
                 <div className="flex items-center gap-2">
                   {/* enable toggle */}
+                  {mix === 'tile' ? (
+                    <span className="flex-none font-code text-[10px] px-1.5 py-0.5 rounded-full"
+                      title="Sessions of this profile per tile"
+                      style={{ background: 'rgba(124,135,245,.15)', color: 'var(--accent)' }}>
+                      ×{tile[s.id] ?? 0}
+                    </span>
+                  ) : (
                   <button disabled={active} title={on ? 'Remove from the mix' : 'Add to the mix'}
                     onClick={() => setEnabled((prev) => on ? prev.filter((x) => x !== s.id) : [...prev, s.id])}
                     className="flex-none w-4 h-4 grid place-items-center rounded border disabled:cursor-default"
@@ -193,6 +226,7 @@ export function CapacityView() {
                              background: on ? 'var(--accent)' : 'transparent' }}>
                     {on && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0b0f18" strokeWidth="3.5"><path d="M20 6 9 17l-5-5" /></svg>}
                   </button>
+                  )}
                   <span className="w-1.5 h-1.5 rounded-full flex-none"
                     style={{ background: COMPLEXITY_COLOR[s.complexity] }} />
                   <span className="text-[13px] font-medium flex-1 truncate">{s.name}</span>
@@ -357,7 +391,10 @@ function LivePanel({ status }: { status: CapacityStatus }) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Dial label="sessions" value={String(status.users ?? 0)} accent />
+        <Dial label={status.mix === 'tile' && status.tile_size ? 'tiles · sessions' : 'sessions'}
+          value={status.mix === 'tile' && status.tile_size
+            ? `${Math.floor((status.users ?? 0) / status.tile_size)} · ${status.users ?? 0}`
+            : String(status.users ?? 0)} accent />
         <Dial label="tokens/s" value={fmtNum(latest.tps)} />
         <Dial label="req/min" value={fmtNum(latest.rpm)} />
         <Dial label="p95" value={fmtMs(latest.p95_ms)} />
@@ -450,13 +487,31 @@ function ResultCard({ result }: { result: CapacityResult }) {
       <div className="eyebrow mb-1">Inference capacity — {result.mode.replace('_', ' ')} · synthetic agent traces</div>
       <div className="flex items-baseline gap-3 flex-wrap">
         <span className="font-display font-bold text-[40px] tracking-[-0.03em]" style={{ color: 'var(--accent)' }}>
-          {result.capacity_users ?? result.max_users}
+          {result.mix === 'tile' && result.capacity_tiles != null
+            ? result.capacity_tiles : (result.capacity_users ?? result.max_users)}
         </span>
-        <span className="text-[15px] text-[var(--text)]">concurrent agent sessions within SLO</span>
+        <span className="text-[15px] text-[var(--text)]">
+          {result.mix === 'tile' && result.capacity_tiles != null
+            ? `tile${result.capacity_tiles === 1 ? '' : 's'} (${result.capacity_users} agent sessions) within SLO`
+            : 'concurrent agent sessions within SLO'}
+        </span>
         <span className="text-[12.5px] text-[var(--muted)]">
           {VERDICT_TEXT[result.verdict ?? ''] ?? result.verdict}
         </span>
       </div>
+      {result.breach && (
+        <p className="text-[12.5px] mt-1" style={{ color: 'var(--warn)' }}>
+          The next rung failed the <b>{result.breach.profile}</b> {result.breach.metric === 'p95_ms' ? 'p95 latency' : 'error-rate'} SLO
+          {result.breach.metric === 'p95_ms'
+            ? ` (${Math.round(result.breach.value)}ms > ${Math.round(result.breach.limit)}ms limit${result.breach.baseline_ms != null ? `, baseline ${Math.round(result.breach.baseline_ms)}ms` : ''})`
+            : ` (${(result.breach.value * 100).toFixed(1)}% > ${(result.breach.limit * 100).toFixed(0)}%)`}
+        </p>
+      )}
+      {result.comparable === false && (
+        <p className="font-code text-[10.5px] mt-1" style={{ color: 'var(--faint)' }}>
+          custom mix — not comparable across runs or systems
+        </p>
+      )}
       <p className="font-code text-[11px] mt-1" style={{ color: 'var(--faint)' }}>
         SLO: p95 ≤ {result.slo?.p95_ms != null ? `${result.slo.p95_ms}ms`
           : `${result.slo?.p95_x ?? 3}× the healthy baseline${result.baseline_p95_ms != null ? ` (${Math.round(result.baseline_p95_ms)}ms → ${Math.round(result.baseline_p95_ms * (result.slo?.p95_x ?? 3))}ms)` : ''}`}

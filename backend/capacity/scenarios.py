@@ -17,9 +17,31 @@ _FILLER = (
 
 
 @lru_cache(maxsize=1)
-def load_scenarios() -> dict[str, dict]:
+def _load_file() -> dict:
     with open(_PATH) as f:
-        data = yaml.safe_load(f) or {}
+        return yaml.safe_load(f) or {}
+
+
+def load_tile() -> dict[str, int]:
+    """The reference tile (ACU): {scenario_id: sessions}, filtered to scenarios
+    that exist. Falls back to one of each when the file defines no tile."""
+    scen = load_scenarios()
+    raw = _load_file().get("tile") or {}
+    tile = {sid: int(n) for sid, n in raw.items() if sid in scen and int(n) > 0}
+    return tile or {sid: 1 for sid in scen}
+
+
+def tile_sessions() -> list[str]:
+    """The tile expanded to an ordered session assignment list."""
+    out: list[str] = []
+    for sid, n in load_tile().items():
+        out.extend([sid] * n)
+    return out
+
+
+@lru_cache(maxsize=1)
+def load_scenarios() -> dict[str, dict]:
+    data = _load_file()
     out = data.get("scenarios", {})
     for sid, s in out.items():
         s.setdefault("name", sid)

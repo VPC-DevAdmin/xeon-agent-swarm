@@ -43,7 +43,7 @@ from collections import deque
 from pathlib import Path
 
 from backend.capacity.client import StepCaller
-from backend.capacity.scenarios import load_scenarios
+from backend.capacity.scenarios import load_scenarios, load_tile, tile_sessions
 from backend.capacity.telemetry import (SystemSampler, mem_slope_mb_per_user,
                                          sample_bandwidth_gbs, sample_kv_pct)
 from backend.capacity.client import LOCAL_BASE
@@ -60,9 +60,10 @@ DEFAULTS = dict(
     cpu_target=90.0,       # local-mode saturation line
     mem_target=92.0,       # local-mode RAM saturation line (%)
     kv_target=90.0,        # local-mode KV-pool saturation line (%)
-    slo_p95_x=3.0,         # SLO: p95 may grow to this multiple of the baseline
-    slo_p95_ms=None,       # absolute p95 SLO in ms (overrides the multiplier)
-    slo_err=0.05,          # SLO: max error rate while a level counts as "good"
+    slo_p95_x=3.0,         # SLO: a profile's p95 may grow to this multiple of ITS baseline
+    slo_p95_ms=None,       # absolute p95 cap in ms (applies in addition to the multiplier)
+    slo_err=0.05,          # SLO: max error rate per profile while a rung counts as "good"
+    min_samples=3,         # completed calls per profile per interval to certify a rung
     plateau_frac=0.25,     # gain < 25% of the expected linear gain, twice = knee
     error_rate_limit=0.10, # hard stop
 
@@ -126,17 +127,34 @@ def _pct(values: list[float], p: float) -> float | None:
 
 
 class CapacityTest:
-    def __init__(self, mode: str, scenario_ids: list[str], cfg: dict):
+    def __init__(self, mode: str, scenario_ids: list[str], cfg: dict,
+                 mix: str = "custom"):
         self.mode = mode
         self.cfg = {**DEFAULTS, **{k: v for k, v in cfg.items() if v is not None}}
         all_scen = load_scenarios()
-        self.scenario_ids = [s for s in scenario_ids if s in all_scen] or list(all_scen)
+        # mix="tile": ramp one complete reference tile (ACU) per rung — the
+        # comparable benchmark. mix="custom": round-robin over the selected
+        # profiles (diagnosis / customer-specific planning; NON-comparable).
+        self.mix = mix if mix in ("tile", "custom") else "custom"
+        if self.mix == "tile":
+            self.tile = load_tile()
+            self.tile_assignment = tile_sessions()
+            self.tile_size = len(self.tile_assignment)
+            self.scenario_ids = list(self.tile.keys())
+        else:
+            self.tile = None
+            self.tile_assignment = []
+            self.tile_size = 0
+            self.scenario_ids = [s for s in scenario_ids if s in all_scen] or list(all_scen)
         self.scenarios = {sid: all_scen[sid] for sid in self.scenario_ids}
 
         self.phase = "starting"        # starting | ramping | holding | done | stopped | error
         self.verdict: str | None = None
-        self.baseline_p95: float | None = None   # low-load p95, the SLO reference
-        self.capacity_users: int | None = None   # last level where the SLO held
+        self.baseline_p95: float | None = None       # aggregate low-load p95 (context)
+        self.baselines: dict[str, float] = {}        # per-profile p95 at rung 1 — the SLO refs
+        self.capacity_users: int | None = None       # last session count where every SLO held
+        self.capacity_tiles: int | None = None       # same, in tiles (tile mix)
+        self.breach: dict | None = None              # which profile broke which limit
         self.started_at = time.time()
         self.ended_at: float | None = None
         self.error: str | None = None
@@ -177,11 +195,20 @@ class CapacityTest:
         self._stop.set()
 
     # ── virtual users ────────────────────────────────────────────────────────
-    def _add_user(self):
+    def _add_user(self, sid: str | None = None):
         idx = len(self.users)
-        sid = self.scenario_ids[idx % len(self.scenario_ids)]
+        if sid is None:
+            sid = self.scenario_ids[idx % len(self.scenario_ids)]
         self.user_scenario.append(sid)
         self.users.append(asyncio.create_task(self._user_loop(idx, sid)))
+
+    def _add_tile(self) -> bool:
+        """Add one complete reference tile; False if it would exceed max_users."""
+        if len(self.users) + self.tile_size > int(self.cfg["max_users"]):
+            return False
+        for sid in self.tile_assignment:
+            self._add_user(sid)
+        return True
 
     def _remove_users(self, n: int):
         """Scale back down (SLO breach): capacity is measured at a level that
@@ -250,6 +277,51 @@ class CapacityTest:
             self.samples.append(s)
             await asyncio.sleep(self.cfg["sample_interval_s"])
 
+    def _scenario_window(self, sid: str, window_s: float) -> dict:
+        """Per-profile stats over the window: the unit of SLO evaluation."""
+        cut = time.time() - window_s
+        recent = [c for c in self.calls if c["ts"] >= cut and c["scenario"] == sid]
+        ok = [c for c in recent if c["ok"]]
+        return {
+            "n": len(recent),
+            "p95_ms": _pct([c["latency_ms"] for c in ok], 95),
+            "err_rate": round(1 - len(ok) / len(recent), 3) if recent else 0.0,
+        }
+
+    def _slo_limit(self, sid: str) -> float | None:
+        """A profile's p95 limit: multiplier x its own baseline, tightened by the
+        absolute cap when configured."""
+        base = self.baselines.get(sid)
+        rel = base * float(self.cfg["slo_p95_x"]) if base else None
+        abs_ms = self.cfg["slo_p95_ms"]
+        if rel and abs_ms:
+            return min(rel, float(abs_ms))
+        return rel or (float(abs_ms) if abs_ms else None)
+
+    def _evaluate_rung(self, window_s: float) -> tuple[str, dict | None]:
+        """Certify the current rung against every profile's SLO.
+
+        Returns (state, breach): state is 'good' (every profile has enough
+        samples and passes), 'bad' (a profile violated its limit — breach names
+        it), or 'inconclusive' (insufficient samples somewhere: neither certify
+        nor condemn)."""
+        min_n = int(self.cfg["min_samples"])
+        state = "good"
+        for sid in self.scenario_ids:
+            s = self._scenario_window(sid, window_s)
+            if s["err_rate"] > float(self.cfg["slo_err"]) and s["n"] >= min_n:
+                return "bad", {"profile": sid, "metric": "error_rate",
+                                "value": s["err_rate"],
+                                "limit": float(self.cfg["slo_err"])}
+            limit = self._slo_limit(sid)
+            if limit and s["p95_ms"] is not None and s["n"] >= min_n                     and s["p95_ms"] > limit:
+                return "bad", {"profile": sid, "metric": "p95_ms",
+                                "value": s["p95_ms"], "limit": round(limit, 1),
+                                "baseline_ms": self.baselines.get(sid)}
+            if s["n"] < min_n:
+                state = "inconclusive"
+        return state, None
+
     def _window_stats(self, window_s: float) -> dict:
         cut = time.time() - window_s
         recent = [c for c in self.calls if c["ts"] >= cut]
@@ -266,12 +338,16 @@ class CapacityTest:
 
     # ── the ramp ─────────────────────────────────────────────────────────────
     async def _ramp(self):
-        for _ in range(int(self.cfg["start_users"])):
-            self._add_user()
+        if self.mix == "tile":
+            self._add_tile()
+        else:
+            for _ in range(int(self.cfg["start_users"])):
+                self._add_user()
         self.phase = "ramping"
         interval = float(self.cfg["step_interval_s"])
         prev_tps: float | None = None
         prev_users = int(self.cfg["start_users"])
+        self._baselines_ready = False
         cpu_hot = 0
         mem_hot = 0
         kv_hot = 0
@@ -294,22 +370,44 @@ class CapacityTest:
             avg_cpu, avg_mem, avg_kv = _avg("cpu_pct"), _avg("mem_pct"), _avg("kv_pct")
             elapsed = time.time() - self.started_at
 
-            # SLO evaluation: the baseline is the first interval's p95 at the
-            # starting load — the reference for "how the service behaves when
-            # healthy". A level is GOOD when p95 and errors are within the SLO.
-            if self.baseline_p95 is None and stats["p95_ms"] is not None:
-                self.baseline_p95 = stats["p95_ms"]
-            slo_ms = (self.cfg["slo_p95_ms"]
-                      or (self.baseline_p95 * self.cfg["slo_p95_x"]
-                          if self.baseline_p95 else None))
-            good = ((slo_ms is None or stats["p95_ms"] is None
-                     or stats["p95_ms"] <= slo_ms)
-                    and stats["err_rate"] <= self.cfg["slo_err"])
-            if good:
+            # Per-profile baselines are measured at rung 1 (the healthy
+            # reference, VMmark-style): hold rung 1 until every profile has
+            # min_samples, then lock its baseline. No SLO evaluation and no
+            # ramping until baselines exist (bounded by 4 intervals).
+            if not self._baselines_ready:
+                elapsed_rung1 = time.time() - self.started_at
+                window = elapsed_rung1  # whole rung-1 period so far
+                missing = []
+                for sid in self.scenario_ids:
+                    s = self._scenario_window(sid, window)
+                    if s["n"] >= int(self.cfg["min_samples"]) and s["p95_ms"] is not None:
+                        self.baselines.setdefault(sid, s["p95_ms"])
+                    else:
+                        missing.append(sid)
+                if not missing or elapsed_rung1 > 4 * interval:
+                    self._baselines_ready = True
+                    if self.baseline_p95 is None:
+                        self.baseline_p95 = (stats["p95_ms"]
+                                             if stats["p95_ms"] is not None
+                                             else (round(statistics.median(
+                                                 self.baselines.values()), 1)
+                                                   if self.baselines else None))
+                else:
+                    continue  # keep measuring rung 1; do not ramp yet
+
+            # Evaluate over a wider window than the ramp cadence: slow-cadence
+            # profiles (long think times, tool waits) need room to produce
+            # min_samples, or every rung reads as inconclusive.
+            rung_state, breach = self._evaluate_rung(3 * interval)
+            if rung_state == "good":
                 self.capacity_users = len(self.users)
+                if self.mix == "tile":
+                    self.capacity_tiles = len(self.users) // max(1, self.tile_size)
                 slo_bad = 0
-            else:
+            elif rung_state == "bad":
                 slo_bad = slo_bad + 1
+                self.breach = breach
+            # inconclusive: neither certify nor condemn — hold judgment
 
             local = self.mode == "local"
             cpu_hot = cpu_hot + 1 if (
@@ -359,9 +457,15 @@ class CapacityTest:
                 await self._hold()
                 return
 
-            for _ in range(int(self.cfg["step_users"])):
-                if len(self.users) < int(self.cfg["max_users"]):
-                    self._add_user()
+            if self.mix == "tile":
+                if not self._add_tile():
+                    self.verdict = "capped"
+                    await self._hold()
+                    return
+            else:
+                for _ in range(int(self.cfg["step_users"])):
+                    if len(self.users) < int(self.cfg["max_users"]):
+                        self._add_user()
 
     async def _hold(self):
         """Hold at the saturation level and measure a clean steady state."""
@@ -422,9 +526,19 @@ class CapacityTest:
             # THE capacity number: the highest level at which the SLO held.
             # Falls back to the held level when the SLO was never breached.
             "capacity_users": self.capacity_users or len(self.users),
+            "capacity_tiles": (self.capacity_tiles
+                                if self.capacity_tiles is not None
+                                else ((self.capacity_users or len(self.users))
+                                      // self.tile_size if self.tile_size else None)),
+            "mix": self.mix,
+            "comparable": self.mix == "tile",
+            "tile": self.tile,
+            "tile_size": self.tile_size or None,
+            "breach": self.breach,
             "baseline_p95_ms": self.baseline_p95,
+            "baselines": {k: round(v, 1) for k, v in self.baselines.items()},
             "slo": {"p95_x": self.cfg["slo_p95_x"], "p95_ms": self.cfg["slo_p95_ms"],
-                     "err": self.cfg["slo_err"]},
+                     "err": self.cfg["slo_err"], "min_samples": self.cfg["min_samples"]},
             "max_users": len(self.users),
             "duration_s": round(dur, 1),
             "total_requests": self.total_requests,
@@ -472,6 +586,10 @@ class CapacityTest:
             "mode": self.mode,
             "users": len(self.users),
             "capacity_users": self.capacity_users,
+            "capacity_tiles": self.capacity_tiles,
+            "mix": self.mix,
+            "tile_size": self.tile_size or None,
+            "breach": self.breach,
             "baseline_p95_ms": self.baseline_p95,
             "elapsed_s": round(time.time() - self.started_at, 1),
             "total_requests": self.total_requests,

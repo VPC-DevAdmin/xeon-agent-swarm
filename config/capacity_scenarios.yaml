@@ -20,6 +20,19 @@
 #   session_turns: K      context compounds across K loops (a user session or
 #                         ticket conversation), then resets; context_cap bounds it
 
+# The reference tile — one "Agent Capacity Unit" (ACU). Capacity ramps add one
+# COMPLETE tile at a time so every rung has the same workload mix and adjacent
+# rungs are comparable (the VMmark tile idea). Weighted toward support because
+# that's the dominant real-world deployment. Custom mixes remain available for
+# customer-specific planning but are marked non-comparable.
+tile:
+  support_agent: 2
+  doc_intelligence: 1
+  code_agent: 1
+  research_agent: 1
+  ops_analyst: 1
+  deep_agent: 1
+
 scenarios:
   support_agent:
     name: "Customer support agent"

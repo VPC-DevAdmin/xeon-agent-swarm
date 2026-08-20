@@ -201,10 +201,25 @@ export interface CapacityScenarioStat {
   avg_tokens_in_flight?: number
 }
 
+export interface CapacityBreach {
+  profile: string
+  metric: string
+  value: number
+  limit: number
+  baseline_ms?: number | null
+}
+
 export interface CapacityResult {
   mode: string
   verdict: string | null
   capacity_users: number
+  capacity_tiles?: number | null
+  mix?: string
+  comparable?: boolean
+  tile?: Record<string, number> | null
+  tile_size?: number | null
+  breach?: CapacityBreach | null
+  baselines?: Record<string, number>
   baseline_p95_ms?: number | null
   slo?: { p95_x: number; p95_ms?: number | null; err: number }
   max_users: number
@@ -231,6 +246,10 @@ export interface CapacityStatus {
   mode?: string
   users?: number
   capacity_users?: number | null
+  capacity_tiles?: number | null
+  mix?: string
+  tile_size?: number | null
+  breach?: CapacityBreach | null
   baseline_p95_ms?: number | null
   elapsed_s?: number
   total_requests?: number

@@ -265,3 +265,65 @@ def test_relative_plateau_math():
     assert 0.04 >= 0.25 * expected
     # Measured +0.5% IS a plateau (under the 1.25% floor).
     assert 0.005 < 0.25 * expected
+
+
+# ── Phase 1: tiles + per-scenario SLOs ────────────────────────────────────────
+
+def test_tile_mode_ramps_whole_acus(tmp_path, monkeypatch):
+    """Tile mode must add COMPLETE reference tiles so every rung has the same
+    workload mix — the property that makes adjacent rungs comparable."""
+    from backend.capacity.scenarios import tile_sessions
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    tile = tile_sessions()
+    test = ctl.CapacityTest("remote_mock", [], _fast_cfg(max_users=len(tile) * 2),
+                            mix="tile")
+    asyncio.run(test.run())
+    r = test.result
+    assert r["mix"] == "tile" and r["comparable"] is True
+    assert r["tile_size"] == len(tile)
+    # sessions were added in whole tiles only
+    assert r["max_users"] % len(tile) == 0
+    assert test.user_scenario[:len(tile)] == tile      # rung 1 = exactly one ACU
+    assert r["verdict"] == "capped"
+    assert r["capacity_tiles"] == r["capacity_users"] // len(tile)
+
+
+def test_custom_mix_flagged_non_comparable(tmp_path, monkeypatch):
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("remote_mock", ["support_agent"], _fast_cfg())
+    asyncio.run(test.run())
+    assert test.result["mix"] == "custom"
+    assert test.result["comparable"] is False
+
+
+def test_per_profile_slo_breach_names_the_profile(tmp_path, monkeypatch):
+    """Only research_agent degrades past 1 tile; the rung must fail on THAT
+    profile's own baseline-relative SLO while others stay healthy, and the
+    breach must name it — 'tile N+1 failed the research-agent p95 SLO'."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    from backend.capacity.scenarios import tile_sessions
+    tile_n = len(tile_sessions())
+    test = ctl.CapacityTest("remote_mock", [], _fast_cfg(
+        max_users=tile_n * 4, step_interval_s=0.7, hold_s=1.5, slo_p95_x=3.0),
+        mix="tile")
+
+    real_call = test._caller.call
+
+    async def selective_degrade(scenario, step, extra_context_tokens=0):
+        research = scenario.get("name") == "Research agent"
+        over_one_tile = len(test.users) > tile_n
+        test._caller.mock_ms = 250 if (research and over_one_tile) else 25
+        test._caller.mock_sigma = 3
+        return await real_call(scenario, step,
+                               extra_context_tokens=extra_context_tokens)
+
+    monkeypatch.setattr(test._caller, "call", selective_degrade)
+    asyncio.run(test.run())
+    r = test.result
+    assert r["verdict"] == "slo"
+    assert r["breach"]["profile"] == "research_agent"
+    assert r["breach"]["metric"] == "p95_ms"
+    assert r["breach"]["value"] > r["breach"]["limit"]
+    assert r["capacity_tiles"] == 1                    # last rung where ALL SLOs held
+    assert len(test.users) == tile_n                   # scaled back to the good tile
+    assert "research_agent" in r["baselines"]          # per-profile baseline captured
