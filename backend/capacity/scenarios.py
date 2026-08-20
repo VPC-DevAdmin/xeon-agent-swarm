@@ -13,6 +13,31 @@ def benchmark_version() -> int:
     return int(_load_file().get("version", 1))
 
 
+def load_e2e_workflows() -> dict[str, dict]:
+    """Real workflows for the end-to-end runtime mode: {id: {name, query, think_ms}}."""
+    out = {}
+    for wid, w in (_load_file().get("e2e_workflows") or {}).items():
+        out[wid] = {"name": w.get("name", wid), "query": w.get("query", ""),
+                    "think_ms": int(w.get("think_ms", 3000))}
+    return out
+
+
+def e2e_tile_sessions() -> list[str]:
+    wfs = load_e2e_workflows()
+    raw = _load_file().get("e2e_tile") or {}
+    tile = {wid: int(n) for wid, n in raw.items() if wid in wfs and int(n) > 0}         or {wid: 1 for wid in wfs}
+    out: list[str] = []
+    for wid, n in tile.items():
+        out.extend([wid] * n)
+    return out
+
+
+def load_e2e_tile() -> dict[str, int]:
+    wfs = load_e2e_workflows()
+    raw = _load_file().get("e2e_tile") or {}
+    return {wid: int(n) for wid, n in raw.items() if wid in wfs and int(n) > 0}         or {wid: 1 for wid in wfs}
+
+
 # ── seeded synthetic corpus ────────────────────────────────────────────────────
 # Prompts are built from seeded, per-call-varied word sequences instead of one
 # repeated filler sentence. Repeated identical text let RadixAttention-style

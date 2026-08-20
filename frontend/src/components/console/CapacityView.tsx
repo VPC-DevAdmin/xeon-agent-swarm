@@ -6,12 +6,13 @@ import type {
   CapacitySample, CapacityStatus,
 } from '../../api/types'
 
-type Mode = 'local' | 'remote_mock' | 'remote_real'
+type Mode = 'local' | 'remote_mock' | 'remote_real' | 'e2e'
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: 'local', label: 'Local LLM', hint: 'Qwen3 on this server — measures this box\u2019s inference capacity' },
   { id: 'remote_mock', label: 'Remote (simulated)', hint: 'bell-curve latency, zero API calls' },
   { id: 'remote_real', label: 'Remote (cloud)', hint: 'real API endpoint — spends credits' },
+  { id: 'e2e', label: 'Agent runtime (E2E)', hint: 'complete workflows through the real orchestrator — planner, workers, validation. Lower scale; the truth test behind the synthetic traces' },
 ]
 
 const COMPLEXITY_COLOR: Record<string, string> = {
@@ -34,6 +35,8 @@ export function CapacityView() {
   const [scenarios, setScenarios] = useState<CapacityScenario[]>([])
   const [enabled, setEnabled] = useState<string[]>([])
   const [tile, setTile] = useState<Record<string, number>>({})
+  const [e2eWorkflows, setE2eWorkflows] = useState<{ id: string; name: string; query: string }[]>([])
+  const [e2eTile, setE2eTile] = useState<Record<string, number>>({})
   const [mix, setMix] = useState<'tile' | 'custom'>('tile')
   const [mode, setMode] = useState<Mode>('remote_mock')
   const [mockMs, setMockMs] = useState(2000)
@@ -51,6 +54,8 @@ export function CapacityView() {
       setScenarios(r.scenarios)
       setEnabled(r.scenarios.map((s) => s.id))
       setTile(r.tile ?? {})
+      setE2eWorkflows(r.e2e_workflows ?? [])
+      setE2eTile(r.e2e_tile ?? {})
     }).catch(() => {})
   }, [])
 
@@ -218,7 +223,36 @@ export function CapacityView() {
             1 tile (ACU) = {Object.entries(tile).map(([sid, n]) => `${n}× ${scenarios.find((s) => s.id === sid)?.name ?? sid}`).join(' + ')} — ramps add whole tiles
           </p>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+        {mode === 'e2e' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {e2eWorkflows.map((w) => {
+              const live = status?.per_scenario?.[w.id]
+              return (
+                <div key={w.id} className="rounded-lg border p-2.5 bg-[var(--elev)]"
+                  style={{ borderColor: 'rgba(124,135,245,.35)' }}>
+                  <div className="flex items-center gap-2">
+                    <span className="flex-none font-code text-[10px] px-1.5 py-0.5 rounded-full"
+                      style={{ background: 'rgba(124,135,245,.15)', color: 'var(--accent)' }}>
+                      ×{e2eTile[w.id] ?? 1}
+                    </span>
+                    <span className="text-[13px] font-medium flex-1 truncate">{w.name}</span>
+                    <span className="font-code text-[10px] text-[var(--faint)]">real run</span>
+                  </div>
+                  <p className="text-[11px] text-[var(--faint)] mt-1 line-clamp-2">{w.query}</p>
+                  {live && (
+                    <p className="font-code text-[10.5px] mt-1.5" style={{ color: 'var(--muted)' }}>
+                      {live.calls} workflow{live.calls === 1 ? '' : 's'}
+                      {live.p50_ms != null && <> · p50 {fmtMs(live.p50_ms)}</>}
+                      {live.trace && <> · {live.trace.llm_calls} LLM calls/run</>}
+                      {live.errors > 0 && <span style={{ color: 'var(--bad)' }}> · {live.errors} failed</span>}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <div className={mode === 'e2e' ? 'hidden' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2'}>
           {scenarios.map((s) => {
             const on = mix === 'tile' || enabled.includes(s.id)
             const open = expanded === s.id
@@ -554,6 +588,9 @@ function ResultCard({ result }: { result: CapacityResult }) {
         <Kv k="duration" v={`${Math.round(result.duration_s)}s`} />
         <Kv k="total requests" v={String(result.total_requests)} />
         <Kv k="total tokens out" v={result.total_tokens_out.toLocaleString()} />
+        {result.workflows_per_hour != null && (
+          <Kv k="workflows / hour" v={String(result.workflows_per_hour)} />
+        )}
       </div>
 
       <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--line-soft)' }}>
@@ -573,6 +610,12 @@ function ResultCard({ result }: { result: CapacityResult }) {
                 style={{ color: sc.errors ? 'var(--bad)' : 'var(--faint)' }}>
                 {sc.errors ? `${sc.errors} err` : 'clean'}
               </span>
+              {sc.trace && (
+                <span className="font-code text-[10.5px] text-[var(--faint)] whitespace-nowrap"
+                  title="measured per-workflow trace: LLM calls / worker steps / validations — compare against the synthetic profiles">
+                  {sc.trace.llm_calls} LLM · {sc.trace.steps} steps · {sc.trace.validations} val
+                </span>
+              )}
             </div>
           ))}
         </div>

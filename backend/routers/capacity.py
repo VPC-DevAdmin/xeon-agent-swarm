@@ -31,7 +31,7 @@ _last_result: dict | None = None
 
 
 class StartBody(BaseModel):
-    mode: str = Field(..., pattern="^(local|remote_mock|remote_real)$")
+    mode: str = Field(..., pattern="^(local|remote_mock|remote_real|e2e)$")
     # "tile": ramp complete reference tiles (comparable benchmark, default).
     # "custom": round-robin over `scenarios` (diagnosis; non-comparable).
     mix: str = Field("tile", pattern="^(tile|custom)$")
@@ -49,8 +49,10 @@ class StartBody(BaseModel):
 
 @router.get("/scenarios")
 async def get_scenarios() -> dict:
-    from backend.capacity.scenarios import load_tile
-    return {"scenarios": scenario_list(), "tile": load_tile(), "defaults": DEFAULTS}
+    from backend.capacity.scenarios import load_tile, load_e2e_workflows, load_e2e_tile
+    return {"scenarios": scenario_list(), "tile": load_tile(),
+            "e2e_workflows": [{"id": wid, **w} for wid, w in load_e2e_workflows().items()],
+            "e2e_tile": load_e2e_tile(), "defaults": DEFAULTS}
 
 
 @router.get("/engine")
@@ -84,6 +86,13 @@ async def start_test(body: StartBody) -> dict:
            "max_users": body.max_users, "step_interval_s": body.step_interval_s,
            "step_users": body.step_users, "seed": body.seed,
            "cache_mode": body.cache_mode, "warmup_s": body.warmup_s}
+    if body.mode == "e2e":
+        # Whole workflows are the unit: slower cadence, smaller scale, fewer
+        # samples needed to certify a rung.
+        cfg.setdefault("step_interval_s", body.step_interval_s)
+        cfg["step_interval_s"] = body.step_interval_s or 30.0
+        cfg["max_users"] = body.max_users or 12
+        cfg["min_samples"] = 2
     _current = CapacityTest(body.mode, body.scenarios, cfg, mix=body.mix)
     _task = asyncio.create_task(_run_and_keep(_current))
     logger.info("capacity test started: mode=%s scenarios=%s", body.mode,

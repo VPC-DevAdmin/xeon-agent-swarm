@@ -115,12 +115,12 @@ export function approveRun(runId: string, decision: 'approve' | 'reject') {
 
 // ── Capacity tester ───────────────────────────────────────────────────────────
 export const capacityApi = {
-  scenarios: () => req<{ scenarios: CapacityScenario[]; tile: Record<string, number>; defaults: Record<string, number> }>('/capacity/scenarios'),
+  scenarios: () => req<{ scenarios: CapacityScenario[]; tile: Record<string, number>; e2e_workflows: { id: string; name: string; query: string }[]; e2e_tile: Record<string, number>; defaults: Record<string, number> }>('/capacity/scenarios'),
   engine: () => req<CapacityEngine>('/capacity/engine'),
   startEngine: () => req<{ started: boolean; reason?: string }>('/capacity/engine/start', { method: 'POST' }),
   status: () => req<CapacityStatus>('/capacity/status'),
   start: (body: {
-    mode: 'local' | 'remote_mock' | 'remote_real'
+    mode: 'local' | 'remote_mock' | 'remote_real' | 'e2e'
     mix?: 'tile' | 'custom'
     scenarios?: string[]
     mock_ms?: number

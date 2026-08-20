@@ -1,0 +1,83 @@
+"""
+End-to-end agent-runtime execution for the capacity tester.
+
+One "call" here is one COMPLETE workflow through the real orchestrator:
+main.launch_run -> deepagents planner -> workers -> validation -> synthesis ->
+durable Run record. We await the run's own asyncio task (same process, same
+loop), then read the durable record for the outcome, token totals, and the
+request trace (LLM calls, steps, validations) — the trace is what lets the
+synthetic profiles be calibrated against reality.
+
+Determinism note: workers/tools behave exactly as the app is configured —
+against the mock router the whole workflow is deterministic and free; against
+the live router this is the truth test and each workflow spends real routing.
+"""
+from __future__ import annotations
+
+import asyncio
+import time
+
+
+class E2ERunner:
+    """submit() is injectable for tests; the default drives the real engine."""
+
+    def __init__(self, timeout_s: float = 300.0, submit=None):
+        self.timeout_s = float(timeout_s)
+        self._submit = submit or self._real_submit
+
+    async def run_workflow(self, wid: str, query: str) -> dict:
+        t0 = time.perf_counter()
+        try:
+            out = await asyncio.wait_for(self._submit(query), timeout=self.timeout_s)
+        except asyncio.TimeoutError:
+            return {"ok": False, "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+                    "tokens_in": 0, "tokens_out": 0,
+                    "error": f"workflow timeout after {self.timeout_s}s"}
+        except Exception as exc:  # noqa: BLE001 — a failed workflow is a data point
+            return {"ok": False, "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+                    "tokens_in": 0, "tokens_out": 0,
+                    "error": f"{type(exc).__name__}: {exc}"[:160]}
+        out["latency_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+        return out
+
+    async def _real_submit(self, query: str) -> dict:
+        # Lazy imports: main imports the capacity router at startup — importing
+        # main at module level here would be circular.
+        from backend import main as app_main
+        from backend.db.base import get_sessionmaker
+        from backend.repositories import runs as runs_repo
+
+        run_id = app_main.launch_run(query, validator_enabled=True,
+                                     trigger="api", plan_approval=False)
+        task = app_main._run_tasks.get(run_id)
+        if task is not None:
+            await asyncio.shield(asyncio.wait({task}))
+        # Read the durable outcome (poll briefly for the finalize write).
+        for _ in range(20):
+            sm = get_sessionmaker()
+            async with sm() as session:
+                run = await runs_repo.get_run(session, run_id)
+            if run is not None and run.status not in ("pending", "running",
+                                                       "awaiting_approval"):
+                m = run.metrics or {}
+                steps = [s for s in run.steps if s.step_key != "orchestrator"]
+                validations = sum(len(s.validations) for s in run.steps)
+                tokens_out = int(m.get("tokens_out") or 0)
+                total = int(m.get("total_tokens") or 0)
+                return {
+                    "ok": run.status == "completed",
+                    "tokens_in": max(0, total - tokens_out),
+                    "tokens_out": tokens_out,
+                    "run_id": run_id,
+                    "error": None if run.status == "completed" else f"status={run.status}",
+                    # trace: the real request shape, for calibrating synthetics
+                    "trace": {
+                        "llm_calls": int(m.get("call_count") or 0),
+                        "steps": len(steps),
+                        "validations": validations,
+                        "task_count": int(m.get("task_count") or 0),
+                    },
+                }
+            await asyncio.sleep(0.5)
+        return {"ok": False, "tokens_in": 0, "tokens_out": 0,
+                "error": "run record never reached a terminal state"}

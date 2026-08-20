@@ -363,3 +363,82 @@ def test_vary_keys_are_deterministic_per_seed():
     c = build_prompt(step, "x", 0, vary_key="42:0:2")
     assert a == b
     assert a[1]["content"][:120] != c[1]["content"][:120]   # no shared long prefix
+
+
+# ── Phase 2: end-to-end agent-runtime mode ────────────────────────────────────
+
+def _fake_submit(latency_s=0.05, ok=True, llm_calls=7):
+    async def submit(query):
+        await asyncio.sleep(latency_s)
+        return {"ok": ok, "tokens_in": 5200, "tokens_out": 1400,
+                "error": None if ok else "status=failed",
+                "trace": {"llm_calls": llm_calls, "steps": 3,
+                          "validations": 4, "task_count": 3}}
+    return submit
+
+
+def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
+    """e2e: one call = one complete workflow; per-workflow SLOs ride the same
+    rung machinery, and the result carries the measured request trace that the
+    synthetic profiles are calibrated against."""
+    from backend.capacity.e2e import E2ERunner
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _fast_cfg(max_users=6, hold_s=1.5), mix="tile")
+    test._e2e = E2ERunner(timeout_s=5, submit=_fake_submit())
+    asyncio.run(test.run())
+    r = test.result
+    assert r["mix"] == "tile" and r["tile_size"] == 3          # e2e tile = 3 workflows
+    assert set(r["per_scenario"]) == {"research_brief", "comparison", "digest"}
+    assert r["verdict"] == "capped" and r["capacity_tiles"] == 2
+    assert r["workflows_per_hour"] is not None and r["workflows_per_hour"] > 0
+    for row in r["per_scenario"].values():
+        assert row["calls"] > 0 and row["errors"] == 0
+        assert row["trace"]["llm_calls"] == 7                  # measured, not assumed
+        assert row["trace"]["validations"] == 4
+    assert r["repro"]["seed"] == 42
+
+
+def test_e2e_failures_and_timeouts_are_data_points(tmp_path, monkeypatch):
+    from backend.capacity.e2e import E2ERunner
+
+    async def flaky(query):
+        await asyncio.sleep(0.01)
+        raise RuntimeError("engine exploded")
+
+    runner = E2ERunner(timeout_s=0.2, submit=flaky)
+    rec = asyncio.run(runner.run_workflow("x", "q"))
+    assert rec["ok"] is False and "engine exploded" in rec["error"]
+
+    async def hangs(query):
+        await asyncio.sleep(5)
+    runner = E2ERunner(timeout_s=0.1, submit=hangs)
+    rec = asyncio.run(runner.run_workflow("x", "q"))
+    assert rec["ok"] is False and "timeout" in rec["error"]
+
+
+def test_e2e_slo_breach_names_the_workflow(tmp_path, monkeypatch):
+    """Only the digest workflow degrades past 1 tile — the breach must name it
+    and capacity must report the last all-green tile."""
+    from backend.capacity.e2e import E2ERunner
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _fast_cfg(
+        max_users=9, step_interval_s=0.8, hold_s=1.5, slo_p95_x=3.0,
+        min_samples=1), mix="tile")
+    # shrink workflow think time so the short test windows see samples
+    for wf in test.scenarios.values():
+        wf["think_ms"] = 100
+
+    async def selective(query):
+        digest = "digest" in query.lower() or "bullet" in query.lower()
+        slow = digest and len(test.users) > 3
+        await asyncio.sleep(0.5 if slow else 0.04)
+        return {"ok": True, "tokens_in": 5000, "tokens_out": 1300, "error": None,
+                "trace": {"llm_calls": 7, "steps": 3, "validations": 4, "task_count": 3}}
+
+    test._e2e = E2ERunner(timeout_s=5, submit=selective)
+    asyncio.run(test.run())
+    r = test.result
+    assert r["verdict"] == "slo"
+    assert r["breach"]["profile"] == "digest"
+    assert r["capacity_tiles"] == 1
+    assert len(test.users) == 3                                # scaled back to 1 tile

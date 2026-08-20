@@ -118,3 +118,27 @@ scenarios:
       - {label: "worker-3", prompt_tokens: 300, max_tokens: 300,
          carry_context: true, tool_calls: 1, tool_result_tokens: 300, tool_latency_ms: 400}
       - {label: "synthesize", prompt_tokens: 400, max_tokens: 450, carry_context: true}
+
+# ── End-to-end agent-runtime mode ─────────────────────────────────────────────
+# These are REAL workflows submitted through the orchestrator (planner, workers,
+# validation, synthesis) — the truth test behind the synthetic traces. Lower
+# scale by nature: one "call" = one complete workflow. Determinism comes from
+# the router the app is configured with (mock router => fully deterministic).
+e2e_tile:
+  research_brief: 1
+  comparison: 1
+  digest: 1
+
+e2e_workflows:
+  research_brief:
+    name: "Research brief (e2e)"
+    think_ms: 3000
+    query: "Research the current state of CPU-only LLM inference (vLLM, llama.cpp, SGLang), gather the key benchmark numbers, and write a one-page brief with a recommendation."
+  comparison:
+    name: "Comparison analysis (e2e)"
+    think_ms: 3000
+    query: "Compare INT8, INT4, and FP8 quantization for a 30B-parameter model: research the accuracy and memory trade-offs, build a comparison, and summarize which to deploy."
+  digest:
+    name: "Digest report (e2e)"
+    think_ms: 3000
+    query: "Compile a digest of recent developments in open-source AI serving stacks, verify the three most significant claims, and summarize in five bullet points."

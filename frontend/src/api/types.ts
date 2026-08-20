@@ -199,6 +199,7 @@ export interface CapacityScenarioStat {
   p95_ms?: number | null
   tokens_out?: number
   avg_tokens_in_flight?: number
+  trace?: { llm_calls: number; steps: number; validations: number; task_count: number }
 }
 
 export interface CapacityBreach {
@@ -233,6 +234,7 @@ export interface CapacityResult {
     bw_gbs?: number | null; kv_pct?: number | null
   }
   energy_wh?: number | null
+  workflows_per_hour?: number | null
   mem_mb_per_user?: number | null
   per_scenario: Record<string, CapacityScenarioStat>
   timeline: CapacitySample[]

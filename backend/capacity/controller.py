@@ -45,7 +45,10 @@ from collections import deque
 from pathlib import Path
 
 from backend.capacity.client import StepCaller
-from backend.capacity.scenarios import load_scenarios, load_tile, tile_sessions
+from backend.capacity.scenarios import (load_scenarios, load_tile, tile_sessions,
+                                         load_e2e_workflows, load_e2e_tile,
+                                         e2e_tile_sessions)
+from backend.capacity.e2e import E2ERunner
 from backend.capacity.telemetry import (SystemSampler, mem_slope_mb_per_user,
                                          sample_bandwidth_gbs, sample_kv_pct)
 from backend.capacity.client import LOCAL_BASE
@@ -80,6 +83,7 @@ DEFAULTS = dict(
     warmup_s=5.0,          # rung-1 warm-up discarded before baselines are measured
     seed=None,             # benchmark seed (auto-generated when unset; always recorded)
     cache_mode="warm",     # warm: shared system preamble | cold: nothing prefix-cacheable
+    e2e_timeout_s=300.0,   # per-workflow ceiling in end-to-end mode
     plateau_frac=0.25,     # gain < 25% of the expected linear gain, twice = knee
     error_rate_limit=0.10, # hard stop
 
@@ -152,7 +156,21 @@ class CapacityTest:
         # comparable benchmark. mix="custom": round-robin over the selected
         # profiles (diagnosis / customer-specific planning; NON-comparable).
         self.mix = mix if mix in ("tile", "custom") else "custom"
-        if self.mix == "tile":
+        if mode == "e2e":
+            # End-to-end runtime mode: the "profiles" are real workflows and one
+            # call = one complete run through the orchestrator.
+            all_scen = load_e2e_workflows()
+            if self.mix == "tile":
+                self.tile = load_e2e_tile()
+                self.tile_assignment = e2e_tile_sessions()
+                self.tile_size = len(self.tile_assignment)
+                self.scenario_ids = list(self.tile.keys())
+            else:
+                self.tile, self.tile_assignment, self.tile_size = None, [], 0
+                self.scenario_ids = ([s for s in scenario_ids if s in all_scen]
+                                     or list(all_scen))
+            self.scenarios = {sid: all_scen[sid] for sid in self.scenario_ids}
+        elif self.mix == "tile":
             self.tile = load_tile()
             self.tile_assignment = tile_sessions()
             self.tile_size = len(self.tile_assignment)
@@ -162,7 +180,8 @@ class CapacityTest:
             self.tile_assignment = []
             self.tile_size = 0
             self.scenario_ids = [s for s in scenario_ids if s in all_scen] or list(all_scen)
-        self.scenarios = {sid: all_scen[sid] for sid in self.scenario_ids}
+        if mode != "e2e":
+            self.scenarios = {sid: all_scen[sid] for sid in self.scenario_ids}
 
         self.phase = "starting"        # starting | ramping | holding | done | stopped | error
         self.verdict: str | None = None
@@ -187,9 +206,11 @@ class CapacityTest:
         self.seed = int(self.cfg["seed"])
         self._user_call_n: dict[int, int] = defaultdict(int)
         self._engine_info: dict | None = None
-        self._caller = StepCaller(mode, mock_ms=self.cfg["mock_ms"],
+        self._caller = StepCaller("remote_mock" if mode == "e2e" else mode,
+                                  mock_ms=self.cfg["mock_ms"],
                                   mock_sigma=self.cfg["mock_sigma"],
                                   cache_mode=str(self.cfg.get("cache_mode") or "warm"))
+        self._e2e = E2ERunner(timeout_s=float(self.cfg["e2e_timeout_s"]))             if mode == "e2e" else None
         self._sampler = SystemSampler()
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task] = []
@@ -251,6 +272,9 @@ class CapacityTest:
         growing-KV signature that separates agents from flat chat traffic."""
         scenario = self.scenarios[sid]
         think = float(scenario.get("think_ms", 1000)) / 1000.0
+        if self.mode == "e2e":
+            await self._e2e_loop(idx, sid, scenario, think)
+            return
         session_tokens = 0
         turn = 0
         while not self._stop.is_set():
@@ -263,6 +287,23 @@ class CapacityTest:
             if turn % int(scenario.get("session_turns", 1)) == 0:
                 session_tokens = 0      # session over — context window cleared
             await asyncio.sleep(think)
+
+    async def _e2e_loop(self, idx: int, wid: str, wf: dict, think: float):
+        """One e2e session: submit a real workflow, await completion, think, repeat."""
+        while not self._stop.is_set():
+            if (self.mode == "remote_real"
+                    and self.total_requests >= self.cfg["remote_budget"]):
+                self.stop()
+                return
+            self.total_requests += 1
+            rec = await self._e2e.run_workflow(wid, wf["query"])
+            rec.update(scenario=wid, step="workflow", user=idx, ts=time.time())
+            self.calls.append(rec)
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=think)
+                return
+            except asyncio.TimeoutError:
+                pass
 
     async def _record_call(self, scenario, step, sid, idx, extra_tokens, label):
         """Budget-checked, recorded single LLM call (incl. tool continuations)."""
@@ -537,7 +578,7 @@ class CapacityTest:
             # is the SGLang KV gauge (kv_pct).
             kv_tok = sum((c["tokens_in"] + c["tokens_out"]) * c["latency_ms"] / 1000.0
                          for c in ok) / dur_so_far
-            per_scenario[sid] = {
+            row = {
                 "name": self.scenarios[sid]["name"],
                 "users": self.user_scenario.count(sid),
                 "calls": len(cs),
@@ -547,6 +588,13 @@ class CapacityTest:
                 "tokens_out": sum(c["tokens_out"] for c in ok),
                 "avg_tokens_in_flight": round(kv_tok),
             }
+            traces = [c["trace"] for c in ok if c.get("trace")]
+            if traces:
+                row["trace"] = {
+                    k: round(statistics.mean(tr[k] for tr in traces), 1)
+                    for k in ("llm_calls", "steps", "validations", "task_count")
+                }
+            per_scenario[sid] = row
 
         # Downsample the timeline for the result payload (~120 points max).
         samples = list(self.samples)
@@ -583,6 +631,7 @@ class CapacityTest:
             "duration_s": round(dur, 1),
             "total_requests": self.total_requests,
             "total_tokens_out": sum(c["tokens_out"] for c in self.calls if c["ok"]),
+            "workflows_per_hour": round(hold["rpm"] * 60, 1) if self.mode == "e2e" else None,
             "steady": {**hold, "cpu_pct": avg("cpu_pct"), "mem_pct": avg("mem_pct"),
                         "power_w": avg("power_w"), "load1": avg("load1"),
                         "bw_gbs": avg("bw_gbs"), "kv_pct": avg("kv_pct")},
