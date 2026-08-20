@@ -21,9 +21,9 @@ Tunnel you already have**.
 Target state — one tunnel, three hostnames, everything under systemd:
 
 ```
-demos.enterpriseai.center     → :8088   hub (pick a demo)
-agents.enterpriseai.center    → :8010   Agent Orchestrator (UI+API+WS, one origin)
-router-origin.enterpriseai…   → :8900   tier router gateway (unchanged)
+livedemos.enterpriseai.center   → :8088   hub — the front door, pick a demo
+agents.enterpriseai.center      → :8010   Agent Orchestrator (UI+API+WS, one origin)
+router-origin.enterpriseai...   → :8900   tier router gateway (unchanged)
 ```
 
 ---
@@ -72,13 +72,13 @@ The tunnel is currently run by hand from a path inside the semantic-router repo.
 Move it to the standard location so `cloudflared service install` manages it:
 
 ```bash
-sudo mkdir -p /etc/cloudflared && sudo cp ~/work/repos/xeon-agent-swarm/deploy/cloudflared.yml /etc/cloudflared/config.yml && sudo cp ~/.cloudflared/f3f00468-5489-466d-b5e0-a7d65c855bfa.json /etc/cloudflared/ && sudo chmod 600 /etc/cloudflared/f3f00468-5489-466d-b5e0-a7d65c855bfa.json && cloudflared tunnel ingress validate --config /etc/cloudflared/config.yml
+sudo mkdir -p /etc/cloudflared && sudo cp ~/work/repos/xeon-agent-swarm/deploy/cloudflared.yml /etc/cloudflared/config.yml && sudo cp ~/.cloudflared/f3f00468-5489-466d-b5e0-a7d65c855bfa.json /etc/cloudflared/ && sudo chmod 600 /etc/cloudflared/f3f00468-5489-466d-b5e0-a7d65c855bfa.json && cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate
 ```
 
 Route the two new hostnames (the existing one is already routed):
 
 ```bash
-cloudflared tunnel route dns router-origin agents.enterpriseai.center && cloudflared tunnel route dns router-origin demos.enterpriseai.center
+cloudflared tunnel route dns router-origin agents.enterpriseai.center && cloudflared tunnel route dns router-origin livedemos.enterpriseai.center
 ```
 
 Stop the hand-started tunnel and install the service:
@@ -95,7 +95,7 @@ installing the service if you want to be current.)*
 This demo runs the **live router and real tools**, so it must not be open to the
 world. In **Zero Trust → Access → Applications → Add → Self-hosted**:
 
-- Application domain: `agents.enterpriseai.center` (repeat for `demos.`)
+- Application domain: `agents.enterpriseai.center` (repeat for `livedemos.`)
 - Policy: **Allow** → Include → *Emails* (or *Emails ending in* your domain)
 - Access authenticates at the edge, in front of the tunnel — the WebSocket is
   covered too.
@@ -111,7 +111,7 @@ world. In **Zero Trust → Access → Applications → Add → Self-hosted**:
 systemctl is-enabled xeon-agents xeon-hub cloudflared && curl -sf localhost:8010/health && curl -sfo /dev/null -w 'hub:%{http_code}\n' localhost:8088/ && echo "--- all green; now: sudo reboot ---"
 ```
 
-After rebooting, browse **https://demos.enterpriseai.center**, sign in through
+After rebooting, browse **https://livedemos.enterpriseai.center**, sign in through
 Access, open the Agent Orchestrator, and run a prompt — the plan, the live agent
 timeline, and the streamed answer all ride the tunnel over `wss://`.
 

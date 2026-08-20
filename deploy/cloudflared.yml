@@ -17,7 +17,7 @@ originRequest:
 
 ingress:
   # Front door — the hub page that lists the demos (scripts/hub_server.py).
-  - hostname: demos.enterpriseai.center
+  - hostname: livedemos.enterpriseai.center
     service: http://localhost:8088
 
   # This demo: Agent Orchestrator, single-origin (UI + REST + WebSocket on one port).
