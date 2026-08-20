@@ -1,0 +1,58 @@
+# Capacity-test agent scenarios — five FIXED workload blocks, each representing a
+# real agent use case at a different complexity. A "virtual user" is one of these
+# blocks looping continuously; the ramp adds users until the system saturates.
+#
+# Fixed and deterministic on purpose: the same block, the same prompt shapes, the
+# same token budgets every loop — so runs are comparable across modes and over time.
+#
+# Per step: prompt_tokens is the approximate INPUT size (padded deterministically),
+# max_tokens caps the OUTPUT. think_ms is the pause between loops (a user reading
+# the answer), so one user is a realistic duty cycle rather than a tight loop.
+
+scenarios:
+  quick_answer:
+    name: "Concierge Q&A"
+    blurb: "A single-shot assistant answering a short question — the lightest real agent."
+    complexity: light
+    think_ms: 1000
+    steps:
+      - {label: "answer", prompt_tokens: 150, max_tokens: 120}
+
+  summarizer:
+    name: "Document summarizer"
+    blurb: "Reads a long document and produces a tight summary — heavy prompt, light output."
+    complexity: light
+    think_ms: 1500
+    steps:
+      - {label: "summarize", prompt_tokens: 3000, max_tokens: 250}
+
+  code_assistant:
+    name: "Code generator"
+    blurb: "Writes a function from a spec, then reviews its own output — decode-heavy."
+    complexity: medium
+    think_ms: 1200
+    steps:
+      - {label: "generate", prompt_tokens: 400, max_tokens: 500}
+      - {label: "review", prompt_tokens: 700, max_tokens: 200}
+
+  research_brief:
+    name: "Research & brief"
+    blurb: "Gather facts, analyze them, write a brief — a three-step sequential pipeline."
+    complexity: medium
+    think_ms: 1500
+    steps:
+      - {label: "gather", prompt_tokens: 300, max_tokens: 350}
+      - {label: "analyze", prompt_tokens: 600, max_tokens: 300}
+      - {label: "write", prompt_tokens: 900, max_tokens: 400}
+
+  deep_agent:
+    name: "Deep multi-agent pipeline"
+    blurb: "Plan, three specialist workers, synthesis — the full orchestration pattern."
+    complexity: heavy
+    think_ms: 2000
+    steps:
+      - {label: "plan", prompt_tokens: 500, max_tokens: 250}
+      - {label: "worker-1", prompt_tokens: 400, max_tokens: 300}
+      - {label: "worker-2", prompt_tokens: 400, max_tokens: 300}
+      - {label: "worker-3", prompt_tokens: 400, max_tokens: 300}
+      - {label: "synthesize", prompt_tokens: 1200, max_tokens: 450}

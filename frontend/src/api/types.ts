@@ -146,3 +146,82 @@ export interface ToolsResponse {
   categories: string[]
   tools: Tool[]
 }
+
+// ── Capacity tester ───────────────────────────────────────────────────────────
+
+export interface CapacityScenario {
+  id: string
+  name: string
+  blurb: string
+  complexity: 'light' | 'medium' | 'heavy'
+  calls_per_loop: number
+  tokens_out_per_loop: number
+}
+
+export interface CapacitySample {
+  ts: number
+  cpu_pct?: number | null
+  mem_gb?: number | null
+  mem_pct?: number | null
+  load1?: number | null
+  power_w?: number | null
+  users: number
+  tps: number
+  rpm: number
+  p50_ms?: number | null
+  p95_ms?: number | null
+  err_rate: number
+}
+
+export interface CapacityScenarioStat {
+  name: string
+  users: number
+  calls: number
+  errors: number
+  p50_ms?: number | null
+  p95_ms?: number | null
+  tokens_out?: number
+}
+
+export interface CapacityResult {
+  mode: string
+  verdict: string | null
+  max_users: number
+  duration_s: number
+  total_requests: number
+  total_tokens_out: number
+  steady: {
+    tps: number; rpm: number; p50_ms?: number | null; p95_ms?: number | null
+    err_rate: number; cpu_pct?: number | null; mem_pct?: number | null
+    power_w?: number | null; load1?: number | null
+  }
+  energy_wh?: number | null
+  per_scenario: Record<string, CapacityScenarioStat>
+  timeline: CapacitySample[]
+  error?: string | null
+}
+
+export interface CapacityStatus {
+  active: boolean
+  phase: string
+  verdict?: string | null
+  mode?: string
+  users?: number
+  elapsed_s?: number
+  total_requests?: number
+  latest?: Partial<CapacitySample>
+  per_scenario?: Record<string, CapacityScenarioStat>
+  timeline?: CapacitySample[]
+  error?: string | null
+  result?: CapacityResult | null
+}
+
+export interface CapacityEngine {
+  base_url: string
+  model: string
+  setup_state: 'idle' | 'starting' | 'ready' | 'failed'
+  setup_log: string[]
+  serving: boolean
+  models: string[]
+  remote_real: { configured: boolean; model: string | null }
+}

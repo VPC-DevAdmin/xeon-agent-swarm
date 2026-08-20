@@ -167,12 +167,14 @@ from backend.routers.runs import router as runs_router
 from backend.routers.connectors import router as connectors_router
 from backend.routers.tools import router as tools_router
 from backend.routers.toolbox import router as toolbox_router
+from backend.routers.capacity import router as capacity_router
 
 app.include_router(jobs_router)
 app.include_router(runs_router)
 app.include_router(connectors_router)
 app.include_router(tools_router)
 app.include_router(toolbox_router)
+app.include_router(capacity_router)
 
 
 # ── WebSocket connection manager ─────────────────────────────────────────────
@@ -553,7 +555,7 @@ _DIST = Path(os.getenv("FRONTEND_DIST", "frontend/dist"))
 _API_PREFIXES = (
     "run", "runs", "jobs", "connectors", "toolbox", "tools", "ws",
     "health", "metrics", "docs", "redoc", "openapi.json", "audio",
-    "agents", ".well-known",
+    "agents", ".well-known", "capacity",
 )
 
 if _DIST.is_dir():

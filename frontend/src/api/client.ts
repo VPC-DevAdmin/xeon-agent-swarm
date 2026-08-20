@@ -1,4 +1,7 @@
 import type {
+  CapacityEngine,
+  CapacityScenario,
+  CapacityStatus,
   Connector,
   ConnectorCreate,
   Job,
@@ -108,4 +111,21 @@ export function approveRun(runId: string, decision: 'approve' | 'reject') {
     `/run/${runId}/approve`,
     { method: 'POST', body: JSON.stringify({ decision }) },
   )
+}
+
+// ── Capacity tester ───────────────────────────────────────────────────────────
+export const capacityApi = {
+  scenarios: () => req<{ scenarios: CapacityScenario[]; defaults: Record<string, number> }>('/capacity/scenarios'),
+  engine: () => req<CapacityEngine>('/capacity/engine'),
+  startEngine: () => req<{ started: boolean; reason?: string }>('/capacity/engine/start', { method: 'POST' }),
+  status: () => req<CapacityStatus>('/capacity/status'),
+  start: (body: {
+    mode: 'local' | 'remote_mock' | 'remote_real'
+    scenarios?: string[]
+    mock_ms?: number
+    mock_sigma?: number
+    max_users?: number
+    confirm_real?: boolean
+  }) => req<{ started: boolean }>('/capacity/start', { method: 'POST', body: JSON.stringify(body) }),
+  stop: () => req<{ stopping: boolean }>('/capacity/stop', { method: 'POST' }),
 }
