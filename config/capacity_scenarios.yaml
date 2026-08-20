@@ -10,9 +10,12 @@
 #
 # Step fields:
 #   carry_context: true   prompt includes everything accumulated this turn
-#   tool_calls: N         N tool round-trips: wait tool_latency_ms (agent holds
-#                         its context), inject tool_result_tokens, call again —
-#                         every tool call is an extra LLM continuation
+#   tool_calls: N         N tool round-trips: the virtual session waits out
+#                         tool_latency_ms, injects tool_result_tokens into
+#                         context, and calls again — every tool call is an extra
+#                         LLM continuation. (Whether the engine retains KV/prefix
+#                         state across the wait is engine policy; the measured
+#                         KV gauge is the source of truth, not this simulation.)
 # Scenario fields:
 #   session_turns: K      context compounds across K loops (a user session or
 #                         ticket conversation), then resets; context_cap bounds it

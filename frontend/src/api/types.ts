@@ -198,7 +198,7 @@ export interface CapacityScenarioStat {
   p50_ms?: number | null
   p95_ms?: number | null
   tokens_out?: number
-  avg_kv_tokens?: number
+  avg_tokens_in_flight?: number
 }
 
 export interface CapacityResult {

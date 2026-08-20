@@ -110,7 +110,10 @@ async def run_scenario_loop(call, scenario: dict, sid: str, idx: int,
                              f"{step.get('label', 'step')}+tool{i + 1}")
             if rec is None:
                 return -1
-            context = min(cap, context + int(rec.get("tokens_out") or 0))
+            # The tool result is now part of the conversation: later carry
+            # steps and the session must see it, not just this continuation.
+            context = min(cap, context + int(step.get("tool_result_tokens", 400))
+                          + int(rec.get("tokens_out") or 0))
     return context
 
 
@@ -383,9 +386,11 @@ class CapacityTest:
             cs = [c for c in self.calls if c["scenario"] == sid]
             ok = [c for c in cs if c["ok"]]
             dur_so_far = max(1e-6, (self.ended_at or time.time()) - self.started_at)
-            # Average tokens RESIDENT for this agent type: token-seconds per second.
-            # A call holding (in+out) tokens for its latency contributes that much
-            # KV-cache pressure — the per-scenario memory footprint that matters.
+            # ESTIMATE: average tokens concurrently in flight for this profile
+            # (token-seconds per second over request lifetimes). This approximates
+            # KV pressure during active requests only — whether the engine retains
+            # KV/prefix state between requests is engine policy; the measured value
+            # is the SGLang KV gauge (kv_pct).
             kv_tok = sum((c["tokens_in"] + c["tokens_out"]) * c["latency_ms"] / 1000.0
                          for c in ok) / dur_so_far
             per_scenario[sid] = {
@@ -396,7 +401,7 @@ class CapacityTest:
                 "p50_ms": _pct([c["latency_ms"] for c in ok], 50),
                 "p95_ms": _pct([c["latency_ms"] for c in ok], 95),
                 "tokens_out": sum(c["tokens_out"] for c in ok),
-                "avg_kv_tokens": round(kv_tok),
+                "avg_tokens_in_flight": round(kv_tok),
             }
 
         # Downsample the timeline for the result payload (~120 points max).

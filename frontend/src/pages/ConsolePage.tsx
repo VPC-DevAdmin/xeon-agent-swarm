@@ -96,7 +96,7 @@ export function ConsolePage() {
     : view === 'capacity' ? 'Capacity test'
     : thread ? thread.prompt : 'New prompt'
   const meta = view === 'telemetry' ? 'live picture'
-    : view === 'capacity' ? 'system speed test'
+    : view === 'capacity' ? 'inference capacity — synthetic agent traces'
     : thread ? `${thread.tasks.length ? `${thread.tasks.length} tasks · ` : ''}${thread.phase.replace('_', ' ')}` : ''
 
   return (

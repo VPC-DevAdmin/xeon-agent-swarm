@@ -114,7 +114,7 @@ def test_full_ramp_reaches_cap_and_reports(tmp_path, monkeypatch):
     # memory-telemetry fields are always present (None where unmeasurable)
     assert "bw_gbs" in r["steady"] and "kv_pct" in r["steady"]
     assert "mem_mb_per_user" in r
-    assert all("avg_kv_tokens" in s for s in r["per_scenario"].values())
+    assert all("avg_tokens_in_flight" in s for s in r["per_scenario"].values())
     assert list(tmp_path.glob("capacity-*.json"))      # persisted
 
 
@@ -169,6 +169,12 @@ def test_loop_compounds_context_and_tools():
     assert extras[1] > extras[0]                # tool result injected
     assert extras[2] > extras[1]                # second tool compounds further
     assert extras[3] > 0 and extras[4] > extras[3]  # carry_context keeps growing
+    # Regression (reviewer finding): injected tool results must persist into the
+    # TURN context, not just the immediate continuation. gather emits 3 calls of
+    # 280 tokens out (0.8 x 350) and injects 2 x 600 tool tokens => analyze sees
+    # exactly 3*280 + 2*600 = 2040 carried tokens.
+    assert extras[3] == 3 * 280 + 2 * 600
+    assert extras[4] == extras[3] + 240         # + analyze's 0.8 x 300 output
     assert carry > 0                            # session carries context out
 
 

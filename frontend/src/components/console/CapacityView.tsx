@@ -9,7 +9,7 @@ import type {
 type Mode = 'local' | 'remote_mock' | 'remote_real'
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
-  { id: 'local', label: 'Local LLM', hint: 'Qwen3 on this server — the real capacity test' },
+  { id: 'local', label: 'Local LLM', hint: 'Qwen3 on this server — measures this box\u2019s inference capacity' },
   { id: 'remote_mock', label: 'Remote (simulated)', hint: 'bell-curve latency, zero API calls' },
   { id: 'remote_real', label: 'Remote (cloud)', hint: 'real API endpoint — spends credits' },
 ]
@@ -19,7 +19,11 @@ const COMPLEXITY_COLOR: Record<string, string> = {
 }
 
 /**
- * CapacityView — the built-in system speed test.
+ * CapacityView — the built-in INFERENCE-capacity speed test: synthetic agent
+ * traces (real token shapes, tool waits, compounding context) sent directly to
+ * the engine. It measures serving capacity for agent-shaped load — it does not
+ * run the orchestrator itself (an end-to-end agent-runtime mode is the planned
+ * complement).
  *
  * Pick a target (local engine / simulated remote / real cloud), pick which of
  * the five fixed agent scenarios to mix, hit Start: virtual users are added
@@ -37,6 +41,7 @@ export function CapacityView() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [armReal, setArmReal] = useState(false)   // cloud mode needs an explicit second click
 
   useEffect(() => {
     capacityApi.scenarios().then((r) => {
@@ -65,6 +70,10 @@ export function CapacityView() {
   const result: CapacityResult | null = status?.result ?? null
 
   async function start() {
+    // Cloud mode spends real credits: require a deliberate second click that
+    // shows the model and the hard request budget before anything is sent.
+    if (mode === 'remote_real' && !armReal) { setArmReal(true); return }
+    setArmReal(false)
     setBusy(true); setError(null)
     try {
       await capacityApi.start({
@@ -95,7 +104,7 @@ export function CapacityView() {
             style={{ background: 'var(--ink)', borderColor: 'var(--line)' }}>
             {MODES.map((m) => (
               <button key={m.id} disabled={active}
-                onClick={() => setMode(m.id)}
+                onClick={() => { setMode(m.id); setArmReal(false) }}
                 className={clsx('px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium transition-colors disabled:opacity-60',
                   mode === m.id ? 'bg-[var(--elev)] text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]')}>
                 {m.label}
@@ -140,8 +149,8 @@ export function CapacityView() {
               disabled={busy || enabled.length === 0 || (mode === 'local' && !engine?.serving)
                 || (mode === 'remote_real' && !engine?.remote_real.configured)}
               className="w-full py-3 rounded-xl font-display font-semibold text-[15px] transition-opacity disabled:opacity-35"
-              style={{ background: 'var(--accent)', color: '#0b0f18' }}>
-              Start test
+              style={{ background: armReal ? 'var(--bad)' : 'var(--accent)', color: armReal ? '#fff' : '#0b0f18' }}>
+              {armReal ? 'Confirm cloud spend' : 'Start test'}
             </button>
           ) : (
             <button onClick={stop} disabled={busy}
@@ -150,8 +159,11 @@ export function CapacityView() {
               Stop
             </button>
           )}
-          <p className="font-code text-[10.5px] text-[var(--faint)] text-center">
-            {active ? `${status?.phase} · ${Math.round(status?.elapsed_s ?? 0)}s` : 'ramps users until saturation'}
+          <p className="font-code text-[10.5px] text-center"
+            style={{ color: armReal ? 'var(--bad)' : 'var(--faint)' }}>
+            {active ? `${status?.phase} · ${Math.round(status?.elapsed_s ?? 0)}s`
+              : armReal ? `real API credits: ${engine?.remote_real.model ?? 'cloud model'} · hard cap 500 requests`
+              : 'ramps sessions until the SLO breaks'}
           </p>
         </div>
       </div>
@@ -160,7 +172,7 @@ export function CapacityView() {
 
       {/* scenario blocks */}
       <div className="console-panel p-3.5 mb-4">
-        <div className="eyebrow mb-2">Agent scenarios in the mix — each virtual user runs one block on repeat</div>
+        <div className="eyebrow mb-2">Workload profiles in the mix — each virtual session replays one agent trace on repeat</div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           {scenarios.map((s) => {
             const on = enabled.includes(s.id)
@@ -337,7 +349,7 @@ function LivePanel({ status }: { status: CapacityStatus }) {
         <span className={clsx('w-2 h-2 rounded-full', status.active && 'anim-dot-pulse')}
           style={{ background: status.active ? 'var(--accent)' : 'var(--faint)' }} />
         <span className="eyebrow">
-          {status.active ? `${status.phase} — ${status.users} virtual agents` : 'last run timeline'}
+          {status.active ? `${status.phase} — ${status.users} virtual sessions` : 'last run timeline'}
         </span>
         <span className="ml-auto font-code text-[11px] text-[var(--faint)]">
           {status.total_requests ?? 0} requests
@@ -345,7 +357,7 @@ function LivePanel({ status }: { status: CapacityStatus }) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Dial label="agents" value={String(status.users ?? 0)} accent />
+        <Dial label="sessions" value={String(status.users ?? 0)} accent />
         <Dial label="tokens/s" value={fmtNum(latest.tps)} />
         <Dial label="req/min" value={fmtNum(latest.rpm)} />
         <Dial label="p95" value={fmtMs(latest.p95_ms)} />
@@ -435,12 +447,12 @@ function ResultCard({ result }: { result: CapacityResult }) {
   const s = result.steady
   return (
     <div className="console-panel p-5" style={{ borderColor: 'rgba(124,135,245,.4)' }}>
-      <div className="eyebrow mb-1">Capacity result — {result.mode.replace('_', ' ')}</div>
+      <div className="eyebrow mb-1">Inference capacity — {result.mode.replace('_', ' ')} · synthetic agent traces</div>
       <div className="flex items-baseline gap-3 flex-wrap">
         <span className="font-display font-bold text-[40px] tracking-[-0.03em]" style={{ color: 'var(--accent)' }}>
           {result.capacity_users ?? result.max_users}
         </span>
-        <span className="text-[15px] text-[var(--text)]">concurrent agents within SLO</span>
+        <span className="text-[15px] text-[var(--text)]">concurrent agent sessions within SLO</span>
         <span className="text-[12.5px] text-[var(--muted)]">
           {VERDICT_TEXT[result.verdict ?? ''] ?? result.verdict}
         </span>
@@ -479,9 +491,9 @@ function ResultCard({ result }: { result: CapacityResult }) {
               <span className="font-code text-[11px] text-[var(--muted)] w-14">{sc.users} usr</span>
               <span className="font-code text-[11px] text-[var(--muted)] w-20">{sc.calls} calls</span>
               <span className="font-code text-[11px] text-[var(--muted)] w-24">p50 {fmtMs(sc.p50_ms)}</span>
-              <span className="font-code text-[11px] text-[var(--muted)] w-28"
-                title="average KV-cache tokens this agent type keeps resident">
-                {sc.avg_kv_tokens != null ? `${sc.avg_kv_tokens.toLocaleString()} kv tok` : ''}
+              <span className="font-code text-[11px] text-[var(--muted)] w-32"
+                title="ESTIMATED average tokens concurrently in flight (token-seconds per second over request lifetimes) — the engine's KV gauge is the measured value">
+                {sc.avg_tokens_in_flight != null ? `~${sc.avg_tokens_in_flight.toLocaleString()} tok in flight` : ''}
               </span>
               <span className="font-code text-[11px] w-16"
                 style={{ color: sc.errors ? 'var(--bad)' : 'var(--faint)' }}>
