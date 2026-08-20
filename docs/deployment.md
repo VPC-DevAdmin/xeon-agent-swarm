@@ -73,29 +73,28 @@ sudo cp deploy/xeon-agents.service deploy/xeon-hub.service /etc/systemd/system/ 
 `deploy/xeon-agents.service` as a template, swap `WorkingDirectory`, `ExecStart`,
 and drop the `FRONTEND_DIST` line.
 
-## 3. Move the tunnel config and install it as a service
+## 3. The tunnel is a standalone system service (no repo owns it)
 
-The tunnel is currently run by hand from a path inside the semantic-router repo.
-Move it to the standard location so `cloudflared service install` manages it:
+**Done — and deliberately decoupled from every repo.** The `router-origin`
+tunnel runs as the `cloudflared` systemd service and its single source of
+truth is `/etc/cloudflared/config.yml` on dellr470. There is no copy in
+this repo (a former `deploy/cloudflared.yml` was removed after it drifted
+from the live file); projects that need a public hostname document the one
+ingress rule to add, nothing more.
 
-```bash
-sudo mkdir -p /etc/cloudflared && sudo cp ~/work/repos/xeon-agent-swarm/deploy/cloudflared.yml /etc/cloudflared/config.yml && sudo cp ~/.cloudflared/f3f00468-5489-466d-b5e0-a7d65c855bfa.json /etc/cloudflared/ && sudo chmod 600 /etc/cloudflared/f3f00468-5489-466d-b5e0-a7d65c855bfa.json && cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate
-```
-
-Route the two new hostnames (the existing one is already routed):
-
-```bash
-cloudflared tunnel route dns router-origin agents.enterpriseai.center && cloudflared tunnel route dns router-origin livedemos.enterpriseai.center && cloudflared tunnel route dns router-origin capacity.enterpriseai.center
-```
-
-Stop the hand-started tunnel and install the service:
+To add or change a hostname, edit the live file directly:
 
 ```bash
-pkill -f 'cloudflared tunnel --config' ; sudo cloudflared service install && sudo systemctl enable --now cloudflared && sleep 5 && cloudflared tunnel info router-origin
+sudo $EDITOR /etc/cloudflared/config.yml   # keep the catch-all rule last
+cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate
+sudo systemctl restart cloudflared         # brief blip for all hostnames
+cloudflared tunnel route dns router-origin <new-hostname>   # once per hostname
 ```
 
-*(Optional: `cloudflared` is on 2026.3.0, current is 2026.8.2 — upgrade before
-installing the service if you want to be current.)*
+The config has purely local git history (`sudo git -C /etc/cloudflared log`)
+so changes stay auditable without tying the file to any project repo.
+Credentials live beside it (`/etc/cloudflared/*.json`, mode 600) and are
+never committed anywhere.
 
 ## 4. Gate access — ONE application, one sign-in
 
