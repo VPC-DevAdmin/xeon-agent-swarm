@@ -56,6 +56,10 @@ from backend.capacity import repro as repro_mod
 
 RESULTS_DIR = Path("data/capacity")
 
+# DB persistence of finished results (benchmark history). Module flag so unit
+# tests can run without a schema; the JSON file fallback always happens.
+PERSIST_TO_DB = True
+
 
 def _scen_version() -> int:
     from backend.capacity.scenarios import benchmark_version
@@ -238,6 +242,8 @@ class CapacityTest:
             if self.phase not in ("error", "stopped"):
                 self.phase = "done"
             self._finalize()
+            if PERSIST_TO_DB and self.result:
+                await self._persist_db()
 
     def stop(self):
         self.phase = "stopped"
@@ -675,6 +681,19 @@ class CapacityTest:
                 json.dumps(self.result, indent=1))
         except OSError:
             pass  # results still available in memory
+
+    async def _persist_db(self):
+        """Best-effort: history must never fail a finished test."""
+        try:
+            from backend.db.base import get_sessionmaker
+            from backend.repositories import capacity_runs as caps_repo
+            sm = get_sessionmaker()
+            async with sm() as session:
+                row = await caps_repo.save(session, self.result)
+                await session.commit()
+            self.result["history_id"] = row.id
+        except Exception:  # noqa: BLE001
+            pass
 
     # ── live status for the UI ───────────────────────────────────────────────
     def status(self) -> dict:

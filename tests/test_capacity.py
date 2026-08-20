@@ -442,3 +442,90 @@ def test_e2e_slo_breach_names_the_workflow(tmp_path, monkeypatch):
     assert r["breach"]["profile"] == "digest"
     assert r["capacity_tiles"] == 1
     assert len(test.users) == 3                                # scaled back to 1 tile
+
+
+# ── Phase 4: DB history + control protections ────────────────────────────────
+
+def test_result_persisted_to_db_history(tmp_path, monkeypatch):
+    """A finished test lands in the capacity_runs table with a queryable
+    summary and the full result blob — benchmark history that survives
+    restarts."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(ctl, "PERSIST_TO_DB", True)
+    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/cap.db")
+    from backend.db import base
+    asyncio.run(base.dispose_engine())
+    asyncio.run(base.create_schema())
+
+    test = ctl.CapacityTest("remote_mock", ["support_agent"], _fast_cfg())
+    asyncio.run(test.run())
+    assert test.result.get("history_id")
+
+    from backend.repositories import capacity_runs as caps_repo
+
+    async def check():
+        sm = base.get_sessionmaker()
+        async with sm() as s:
+            rows = await caps_repo.list_runs(s)
+            assert len(rows) == 1
+            summ = caps_repo.summary(rows[0])
+            assert summ["mode"] == "remote_mock" and summ["verdict"] == "capped"
+            assert summ["seed"] == 42
+            assert summ["scenario_fingerprint"]
+            full = await caps_repo.get(s, rows[0].id)
+            assert full.result["capacity_users"] == 3
+            # label + delete round-trip
+            await caps_repo.set_label(s, rows[0].id, "baseline run")
+            assert (await caps_repo.get(s, rows[0].id)).label == "baseline run"
+            assert await caps_repo.delete(s, rows[0].id) is True
+            assert await caps_repo.list_runs(s) == []
+            await s.commit()
+    asyncio.run(check())
+    asyncio.run(base.dispose_engine())
+
+
+def test_db_persist_failure_never_breaks_a_test(tmp_path, monkeypatch):
+    """History is best-effort: no schema, no crash — the result still stands."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(ctl, "PERSIST_TO_DB", True)
+    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/missing/nope.db")
+    from backend.db import base
+    asyncio.run(base.dispose_engine())
+    test = ctl.CapacityTest("remote_mock", ["support_agent"], _fast_cfg())
+    asyncio.run(test.run())
+    assert test.result is not None and "history_id" not in test.result
+    asyncio.run(base.dispose_engine())
+
+
+def test_engine_start_cooldown(monkeypatch):
+    from backend.routers import capacity as cap_router
+
+    calls = []
+
+    async def fake_start():
+        calls.append(1)
+        return {"started": True}
+
+    monkeypatch.setattr(cap_router.engine_mgr, "start", fake_start)
+    monkeypatch.setattr(cap_router, "_last_engine_start", 0.0)
+
+    out1 = asyncio.run(cap_router.start_engine(None))
+    out2 = asyncio.run(cap_router.start_engine(None))
+    assert out1["started"] is True
+    assert out2["started"] is False and "cooldown" in out2["reason"]
+    assert len(calls) == 1                                  # second never reached docker
+
+
+def test_control_token_gate(monkeypatch):
+    import pytest as _pytest
+    from fastapi import HTTPException
+    from backend.routers.capacity import _check_control_token
+
+    monkeypatch.delenv("CAPACITY_CONTROL_TOKEN", raising=False)
+    _check_control_token(None)                              # unset => open
+    monkeypatch.setenv("CAPACITY_CONTROL_TOKEN", "s3cret")
+    _check_control_token("s3cret")                          # right token passes
+    with _pytest.raises(HTTPException):
+        _check_control_token(None)
+    with _pytest.raises(HTTPException):
+        _check_control_token("wrong")

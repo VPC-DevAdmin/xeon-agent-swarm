@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import clsx from 'clsx'
 import { agentDefsApi, capacityApi } from '../../api/client'
+import { CapacityHistory } from './CapacityHistory'
 import type {
   AgentDefinition,
   CapacityEngine, CapacityResult, CapacityScenario,
@@ -40,6 +41,7 @@ export function CapacityView() {
   const [e2eTile, setE2eTile] = useState<Record<string, number>>({})
   const [defs, setDefs] = useState<AgentDefinition[]>([])
   const [defsInMix, setDefsInMix] = useState<string[]>([])
+  const [viewing, setViewing] = useState<CapacityResult | null>(null)
   const [mix, setMix] = useState<'tile' | 'custom'>('tile')
   const [mode, setMode] = useState<Mode>('remote_mock')
   const [mockMs, setMockMs] = useState(2000)
@@ -342,8 +344,19 @@ export function CapacityView() {
         <LivePanel status={status} />
       )}
 
-      {/* final result */}
-      {!active && result && <ResultCard result={result} />}
+      {/* final result (live) or a history result being viewed */}
+      {viewing ? (
+        <div>
+          <button onClick={() => setViewing(null)}
+            className="mb-2 text-[11.5px] font-code text-[var(--muted)] hover:text-[var(--text)]">
+            ← back to latest
+          </button>
+          <ResultCard result={viewing} />
+        </div>
+      ) : (!active && result && <ResultCard result={result} />)}
+
+      {/* DB-persisted benchmark history */}
+      <CapacityHistory activePhase={status?.phase ?? 'idle'} onView={setViewing} />
     </div>
   )
 }

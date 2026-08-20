@@ -1,20 +1,13 @@
+"""Shared test guards.
+
+Capacity unit tests must never write benchmark history into a developer's real
+orchestrator.db — DB persistence is off by default in tests; the dedicated
+persistence test re-enables it against a throwaway database.
 """
-Shared pytest fixtures and configuration.
-Sets up environment variables so backend modules can be imported without
-real services running.
-"""
-import os
 import pytest
 
-# Point all endpoints at localhost so imports don't fail
-os.environ.setdefault("ORCHESTRATOR_ENDPOINT", "http://localhost:8080/v1")
-os.environ.setdefault("ORCHESTRATOR_MODEL", "test-model")
-os.environ.setdefault("WORKER_CPU_ENDPOINT", "http://localhost:8081/v1")
-os.environ.setdefault("WORKER_CPU_MODEL", "test-worker-model")
-os.environ.setdefault("WORKER_GPU_ENDPOINT", "")
-os.environ.setdefault("SINGLE_MODEL_ENDPOINT", "http://localhost:8083/v1")
-os.environ.setdefault("SINGLE_MODEL", "test-single-model")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6479")
-os.environ.setdefault("CONFIG_DIR", str(
-    os.path.join(os.path.dirname(__file__), "..", "config")
-))
+
+@pytest.fixture(autouse=True)
+def _no_capacity_db_persist(monkeypatch):
+    from backend.capacity import controller as ctl
+    monkeypatch.setattr(ctl, "PERSIST_TO_DB", False)

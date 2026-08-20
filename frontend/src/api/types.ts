@@ -321,3 +321,23 @@ export interface AgentDefinitionBody {
   schedule_cron?: string | null
   clear_schedule?: boolean
 }
+
+export interface CapacityHistoryRow {
+  id: string
+  mode: string
+  mix: string
+  comparable?: boolean | null
+  verdict?: string | null
+  capacity_users?: number | null
+  capacity_tiles?: number | null
+  workflows_per_hour?: number | null
+  steady_tps?: number | null
+  p95_ms?: number | null
+  duration_s?: number | null
+  seed?: number | null
+  label?: string | null
+  scenario_fingerprint?: string | null
+  git_commit?: string | null
+  cache_mode?: string | null
+  started_at?: string | null
+}

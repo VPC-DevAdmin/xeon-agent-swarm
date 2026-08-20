@@ -13,8 +13,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.db.base import get_session
 from pydantic import BaseModel, Field
 
 from backend.capacity import engine as engine_mgr
@@ -28,6 +34,19 @@ router = APIRouter(prefix="/capacity", tags=["capacity"])
 _current: CapacityTest | None = None
 _task: asyncio.Task | None = None
 _last_result: dict | None = None
+_last_engine_start: float = 0.0
+_ENGINE_COOLDOWN_S = 30.0
+
+
+def _check_control_token(x_capacity_token: str | None = Header(None)) -> None:
+    """Optional hardening for exposed deployments: when CAPACITY_CONTROL_TOKEN
+    is set, the control endpoints (start test / start engine) require the
+    X-Capacity-Token header. Unset (the default) => no extra gate; Cloudflare
+    Access remains the outer wall. NOTE: the UI does not send this header —
+    setting the token makes control API-only by design."""
+    expected = os.getenv("CAPACITY_CONTROL_TOKEN", "").strip()
+    if expected and x_capacity_token != expected:
+        raise HTTPException(401, "X-Capacity-Token required")
 
 
 class StartBody(BaseModel):
@@ -64,12 +83,23 @@ async def get_engine() -> dict:
 
 
 @router.post("/engine/start")
-async def start_engine() -> dict:
-    return await engine_mgr.start()
+async def start_engine(_: None = Depends(_check_control_token)) -> dict:
+    """Cooldown-protected: engine bring-up launches docker / downloads models —
+    repeated clicks or scripted spam must not stack attempts."""
+    global _last_engine_start
+    now = time.monotonic()
+    if now - _last_engine_start < _ENGINE_COOLDOWN_S:
+        return {"started": False,
+                "reason": f"cooldown — retry in {int(_ENGINE_COOLDOWN_S - (now - _last_engine_start))}s"}
+    out = await engine_mgr.start()
+    if out.get("started"):
+        _last_engine_start = now
+    return out
 
 
 @router.post("/start")
-async def start_test(body: StartBody) -> dict:
+async def start_test(body: StartBody,
+                     _: None = Depends(_check_control_token)) -> dict:
     global _current, _task
     if _current is not None and _current.status()["active"]:
         raise HTTPException(409, "a capacity test is already running")
@@ -145,3 +175,56 @@ async def get_status() -> dict:
     if _current is None:
         return {"active": False, "phase": "idle", "result": _last_result}
     return _current.status()
+
+
+# ── benchmark history (DB-persisted; survives restarts) ──────────────────────
+
+@router.get("/history")
+async def history(limit: int = 50, session: AsyncSession = Depends(get_session)) -> list[dict]:
+    from backend.repositories import capacity_runs as caps_repo
+    rows = await caps_repo.list_runs(session, limit=min(limit, 200))
+    return [caps_repo.summary(r) for r in rows]
+
+
+@router.get("/history/{run_id}")
+async def history_get(run_id: str, session: AsyncSession = Depends(get_session)) -> dict:
+    from backend.repositories import capacity_runs as caps_repo
+    row = await caps_repo.get(session, run_id)
+    if row is None:
+        raise HTTPException(404, "capacity run not found")
+    return {**caps_repo.summary(row), "result": row.result}
+
+
+@router.patch("/history/{run_id}")
+async def history_label(run_id: str, body: dict,
+                        session: AsyncSession = Depends(get_session)) -> dict:
+    from backend.repositories import capacity_runs as caps_repo
+    row = await caps_repo.set_label(session, run_id,
+                                    (body or {}).get("label") or None)
+    if row is None:
+        raise HTTPException(404, "capacity run not found")
+    await session.commit()
+    return caps_repo.summary(row)
+
+
+@router.delete("/history/{run_id}")
+async def history_delete(run_id: str,
+                         session: AsyncSession = Depends(get_session)) -> dict:
+    from backend.repositories import capacity_runs as caps_repo
+    if not await caps_repo.delete(session, run_id):
+        raise HTTPException(404, "capacity run not found")
+    await session.commit()
+    return {"deleted": run_id}
+
+
+@router.get("/history/{run_id}/export")
+async def history_export(run_id: str, session: AsyncSession = Depends(get_session)):
+    """The full result blob as a download — repro block and all."""
+    from backend.repositories import capacity_runs as caps_repo
+    row = await caps_repo.get(session, run_id)
+    if row is None:
+        raise HTTPException(404, "capacity run not found")
+    stamp = row.started_at.strftime("%Y%m%d-%H%M%S") if row.started_at else row.id[:8]
+    return JSONResponse(row.result, headers={
+        "Content-Disposition":
+            f'attachment; filename="capacity-{stamp}-{row.mode}-{row.mix}.json"'})

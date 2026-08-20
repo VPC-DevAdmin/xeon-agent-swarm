@@ -337,6 +337,33 @@ class AgentDefinition(Base):
     )
 
 
+class CapacityRun(Base):
+    """A persisted capacity-test result — benchmark history that survives
+    restarts, supports compare/export, and anchors 'the number' to a row with
+    its full repro block instead of a JSON file on one box."""
+
+    __tablename__ = "capacity_runs"
+
+    id: Mapped[str] = _pk()
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)     # local|remote_mock|remote_real|e2e
+    mix: Mapped[str] = mapped_column(String(8), nullable=False)       # tile|custom
+    verdict: Mapped[str | None] = mapped_column(String(16))
+    capacity_users: Mapped[int | None] = mapped_column(Integer)
+    capacity_tiles: Mapped[int | None] = mapped_column(Integer)
+    duration_s: Mapped[float | None] = mapped_column(Double)
+    seed: Mapped[int | None] = mapped_column(Integer)
+    label: Mapped[str | None] = mapped_column(String(120))            # operator note
+    result: Mapped[dict] = mapped_column(JSONB, nullable=False)       # the full result blob
+
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _now_col()
+
+    __table_args__ = (
+        Index("idx_capacity_runs_started", "started_at"),
+    )
+
+
 class Connector(Base):
     __tablename__ = "connectors"
 

@@ -1,5 +1,7 @@
 import type {
   AgentDefinition,
+  CapacityHistoryRow,
+  CapacityResult,
   AgentDefinitionBody,
   CapacityEngine,
   CapacityScenario,
@@ -134,6 +136,12 @@ export const capacityApi = {
     confirm_real?: boolean
   }) => req<{ started: boolean }>('/capacity/start', { method: 'POST', body: JSON.stringify(body) }),
   stop: () => req<{ stopping: boolean }>('/capacity/stop', { method: 'POST' }),
+  history: (limit = 50) => req<CapacityHistoryRow[]>(`/capacity/history?limit=${limit}`),
+  historyGet: (id: string) => req<CapacityHistoryRow & { result: CapacityResult }>(`/capacity/history/${id}`),
+  historyLabel: (id: string, label: string | null) =>
+    req<CapacityHistoryRow>(`/capacity/history/${id}`, { method: 'PATCH', body: JSON.stringify({ label }) }),
+  historyDelete: (id: string) => req<{ deleted: string }>(`/capacity/history/${id}`, { method: 'DELETE' }),
+  exportUrl: (id: string) => `${API_BASE}/capacity/history/${id}/export`,
 }
 
 // ── Agent definitions ─────────────────────────────────────────────────────────
