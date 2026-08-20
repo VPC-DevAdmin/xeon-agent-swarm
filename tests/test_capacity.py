@@ -368,7 +368,7 @@ def test_vary_keys_are_deterministic_per_seed():
 # ── Phase 2: end-to-end agent-runtime mode ────────────────────────────────────
 
 def _fake_submit(latency_s=0.05, ok=True, llm_calls=7):
-    async def submit(query):
+    async def submit(query, opts=None):
         await asyncio.sleep(latency_s)
         return {"ok": ok, "tokens_in": 5200, "tokens_out": 1400,
                 "error": None if ok else "status=failed",
@@ -401,7 +401,7 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
 def test_e2e_failures_and_timeouts_are_data_points(tmp_path, monkeypatch):
     from backend.capacity.e2e import E2ERunner
 
-    async def flaky(query):
+    async def flaky(query, opts=None):
         await asyncio.sleep(0.01)
         raise RuntimeError("engine exploded")
 
@@ -409,7 +409,7 @@ def test_e2e_failures_and_timeouts_are_data_points(tmp_path, monkeypatch):
     rec = asyncio.run(runner.run_workflow("x", "q"))
     assert rec["ok"] is False and "engine exploded" in rec["error"]
 
-    async def hangs(query):
+    async def hangs(query, opts=None):
         await asyncio.sleep(5)
     runner = E2ERunner(timeout_s=0.1, submit=hangs)
     rec = asyncio.run(runner.run_workflow("x", "q"))
@@ -428,7 +428,7 @@ def test_e2e_slo_breach_names_the_workflow(tmp_path, monkeypatch):
     for wf in test.scenarios.values():
         wf["think_ms"] = 100
 
-    async def selective(query):
+    async def selective(query, opts=None):
         digest = "digest" in query.lower() or "bullet" in query.lower()
         slow = digest and len(test.users) > 3
         await asyncio.sleep(0.5 if slow else 0.04)

@@ -148,7 +148,7 @@ def _pct(values: list[float], p: float) -> float | None:
 
 class CapacityTest:
     def __init__(self, mode: str, scenario_ids: list[str], cfg: dict,
-                 mix: str = "custom"):
+                 mix: str = "custom", extra_workflows: dict | None = None):
         self.mode = mode
         self.cfg = {**DEFAULTS, **{k: v for k, v in cfg.items() if v is not None}}
         all_scen = load_scenarios()
@@ -159,7 +159,11 @@ class CapacityTest:
         if mode == "e2e":
             # End-to-end runtime mode: the "profiles" are real workflows and one
             # call = one complete run through the orchestrator.
-            all_scen = load_e2e_workflows()
+            all_scen = dict(load_e2e_workflows())
+            # Agent definitions assigned to the benchmark become e2e workflows
+            # with their own policy (tools/validator/budgets) — the reviewer's
+            # "assign definitions to the benchmark or a planning mix".
+            all_scen.update(extra_workflows or {})
             if self.mix == "tile":
                 self.tile = load_e2e_tile()
                 self.tile_assignment = e2e_tile_sessions()
@@ -296,7 +300,11 @@ class CapacityTest:
                 self.stop()
                 return
             self.total_requests += 1
-            rec = await self._e2e.run_workflow(wid, wf["query"])
+            rec = await self._e2e.run_workflow(wid, wf["query"], {
+                "enabled_tools": wf.get("enabled_tools"),
+                "validator_enabled": wf.get("validator_enabled", True),
+                "budgets": wf.get("budgets"),
+            })
             rec.update(scenario=wid, step="workflow", user=idx, ts=time.time())
             self.calls.append(rec)
             try:

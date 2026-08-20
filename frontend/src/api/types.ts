@@ -284,3 +284,40 @@ export interface CapacityEngine {
   models: string[]
   remote_real: { configured: boolean; model: string | null }
 }
+
+// ── Agent definitions (persistent configured agents) ─────────────────────────
+
+export interface AgentDefinition {
+  id: string
+  name: string
+  icon: string
+  purpose?: string | null
+  instructions: string
+  enabled_tools: string[]
+  plan_approval: boolean
+  validator_enabled: boolean
+  budgets?: Record<string, number> | null
+  session_policy?: Record<string, number> | null
+  slo?: { p95_ms?: number } | null
+  schedule_cron?: string | null
+  schedule_tz: string
+  job_id?: string | null
+  version: number
+  status: 'active' | 'archived'
+  history: { version: number; ts: string }[]
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface AgentDefinitionBody {
+  name: string
+  icon?: string
+  purpose?: string
+  instructions: string
+  enabled_tools?: string[]
+  plan_approval?: boolean
+  validator_enabled?: boolean
+  budgets?: Record<string, number> | null
+  schedule_cron?: string | null
+  clear_schedule?: boolean
+}

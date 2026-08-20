@@ -168,6 +168,7 @@ from backend.routers.connectors import router as connectors_router
 from backend.routers.tools import router as tools_router
 from backend.routers.toolbox import router as toolbox_router
 from backend.routers.capacity import router as capacity_router
+from backend.routers.agent_definitions import router as agent_defs_router
 
 app.include_router(jobs_router)
 app.include_router(runs_router)
@@ -175,6 +176,7 @@ app.include_router(connectors_router)
 app.include_router(tools_router)
 app.include_router(toolbox_router)
 app.include_router(capacity_router)
+app.include_router(agent_defs_router)
 
 
 # ── WebSocket connection manager ─────────────────────────────────────────────
@@ -245,6 +247,7 @@ async def run_deepagents(
     trigger: str = "manual",
     plan_approval: bool | None = None,
     enabled_tools: list[str] | None = None,
+    budget: dict | None = None,
 ):
     """deepagents (ADL) engine: a single deep agent decomposes + delegates + synthesizes,
     streamed through the event adapter onto the same WS + DB surfaces as the old swarm.
@@ -273,7 +276,7 @@ async def run_deepagents(
     try:
         from backend.agents.core import build_agent
         from backend.inference.model import ModelFactory
-        from backend.observability.event_adapter import run_with_adapter
+        from backend.observability.event_adapter import run_with_adapter, _budget_from_env
         from backend.observability.validation_judge import (
             make_judge, make_redispatch, make_synthesis_grader, make_partial_synthesizer)
         from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -308,6 +311,13 @@ async def run_deepagents(
                 judge=judge, redispatch=redispatch,
                 synthesis_grader=synthesis_grader,
                 partial_synthesizer=partial_synthesizer, approval=approval,
+                # Definition budgets override env defaults key-by-key; a partial
+                # budget must not silently unlimit the other dimensions.
+                budget=({**_budget_from_env(),
+                         **{k: int(v) for k, v in budget.items()
+                            if k in ("max_subagents", "max_tool_hops",
+                                     "max_total_tokens") and v is not None}}
+                        if budget else None),
             )
 
         latency_ms = (time.perf_counter() - t0) * 1000
@@ -334,6 +344,7 @@ def launch_run(
     trigger: str = "manual",
     plan_approval: bool | None = None,
     enabled_tools: list[str] | None = None,
+    budget: dict | None = None,
 ) -> str:
     """Create a run_id and kick off the ADL deepagents engine in the background.
 
@@ -353,6 +364,7 @@ def launch_run(
         trigger=trigger,
         plan_approval=plan_approval,
         enabled_tools=enabled_tools,
+        budget=budget,
     ))
     _run_tasks[run_id] = task
     task.add_done_callback(lambda _t, rid=run_id: _run_tasks.pop(rid, None))
@@ -555,7 +567,7 @@ _DIST = Path(os.getenv("FRONTEND_DIST", "frontend/dist"))
 _API_PREFIXES = (
     "run", "runs", "jobs", "connectors", "toolbox", "tools", "ws",
     "health", "metrics", "docs", "redoc", "openapi.json", "audio",
-    "agents", ".well-known", "capacity",
+    "agents", ".well-known", "capacity", "agent-definitions",
 )
 
 if _DIST.is_dir():

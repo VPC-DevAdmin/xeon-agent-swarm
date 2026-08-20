@@ -112,8 +112,11 @@ async def create_schema() -> None:
 
 
 async def dispose_engine() -> None:
-    """Close all pooled connections (call on app shutdown)."""
-    global _engine
+    """Close all pooled connections (call on app shutdown). Also drops the
+    cached sessionmaker — it is bound to the disposed engine, and keeping it
+    would silently pin the OLD DATABASE_URL (bit a test fixture first)."""
+    global _engine, _sessionmaker
     if _engine is not None:
         await _engine.dispose()
         _engine = None
+    _sessionmaker = None

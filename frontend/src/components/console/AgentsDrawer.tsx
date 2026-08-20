@@ -5,6 +5,7 @@ import type { Job, RunSummary } from '../../api/types'
 import { parseServerDate, planToTasks, tierColor } from '../../lib/thread'
 import { timeAgo } from '../ui'
 import { SCHEDULE_PRESETS } from './Composer'
+import { AgentDefinitions } from './AgentDefinitions'
 
 interface Props {
   open: boolean
@@ -56,6 +57,8 @@ export function AgentsDrawer({ open, runs, jobs, focusId, onClose, onFocus, onCh
         </div>
 
         <div className="flex-1 overflow-y-auto p-2.5 flex flex-col gap-2">
+          <AgentDefinitions onRunStarted={(id) => { onFocus(id); onChanged() }} />
+
           {active.length > 0 && <div className="eyebrow px-1.5 pt-1">Running now</div>}
           {active.map((r) => (
             <div key={r.id}

@@ -41,6 +41,7 @@ class StartBody(BaseModel):
     max_users: int | None = Field(None, ge=1, le=512)
     step_interval_s: float | None = Field(None, ge=3, le=120)
     step_users: int | None = Field(None, ge=1, le=8)
+    agent_definitions: list[str] = Field(default_factory=list)  # e2e custom mix
     seed: int | None = Field(None, ge=0)             # reproducible corpus + report
     cache_mode: str = Field("warm", pattern="^(warm|cold)$")
     warmup_s: float | None = Field(None, ge=0, le=120)
@@ -93,7 +94,30 @@ async def start_test(body: StartBody) -> dict:
         cfg["step_interval_s"] = body.step_interval_s or 30.0
         cfg["max_users"] = body.max_users or 12
         cfg["min_samples"] = 2
-    _current = CapacityTest(body.mode, body.scenarios, cfg, mix=body.mix)
+    extra_workflows: dict = {}
+    if body.mode == "e2e" and body.agent_definitions:
+        from backend.db.base import get_sessionmaker
+        from backend.repositories import agent_defs as defs_repo
+        sm = get_sessionmaker()
+        async with sm() as session:
+            for def_id in body.agent_definitions[:12]:
+                d = await defs_repo.get(session, def_id)
+                if d and d.status == "active":
+                    extra_workflows[f"def:{d.id[:8]}"] = {
+                        "name": f"{d.icon} {d.name} (v{d.version})",
+                        "query": d.instructions,
+                        "think_ms": 3000,
+                        "enabled_tools": list(d.enabled_tools or []),
+                        "validator_enabled": d.validator_enabled,
+                        "budgets": d.budgets,
+                    }
+        if extra_workflows and body.mix == "tile":
+            raise HTTPException(400, "agent definitions run in the custom mix — "
+                                      "the reference tile stays locked for comparability")
+        if extra_workflows:
+            body.scenarios = list(body.scenarios) + list(extra_workflows)
+    _current = CapacityTest(body.mode, body.scenarios, cfg, mix=body.mix,
+                            extra_workflows=extra_workflows)
     _task = asyncio.create_task(_run_and_keep(_current))
     logger.info("capacity test started: mode=%s scenarios=%s", body.mode,
                 _current.scenario_ids)

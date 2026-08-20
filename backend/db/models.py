@@ -293,6 +293,50 @@ class Validation(Base):
 
 # ── Connectors ────────────────────────────────────────────────────────────────
 
+class AgentDefinition(Base):
+    """A persistent, configured agent — the product object behind 'create an
+    agent', distinct from a Run (one execution) and a worker (runtime
+    specialist subagent).
+
+    Captures everything needed to run it repeatedly and identically: the
+    standing instructions, tool grants, approval/validation gates, budgets,
+    session policy, optional schedule (kept in sync with a linked Job), and an
+    SLO target used when the definition is benchmarked. Updates bump `version`
+    and snapshot the prior state into `history` (last 10 kept); clones start a
+    fresh lineage.
+    """
+
+    __tablename__ = "agent_definitions"
+
+    id: Mapped[str] = _pk()
+    name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    icon: Mapped[str] = mapped_column(String(16), nullable=False, default="🤖")
+    purpose: Mapped[str | None] = mapped_column(Text)
+    instructions: Mapped[str] = mapped_column(Text, nullable=False)
+
+    enabled_tools: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    plan_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    validator_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    budgets: Mapped[dict | None] = mapped_column(JSONB)     # max_subagents/tool_hops/total_tokens
+    session_policy: Mapped[dict | None] = mapped_column(JSONB)  # {turns, context_cap}
+    slo: Mapped[dict | None] = mapped_column(JSONB)         # {p95_ms} — benchmark target
+
+    schedule_cron: Mapped[str | None] = mapped_column(String(64))
+    schedule_tz: Mapped[str] = mapped_column(String(48), nullable=False, default="UTC")
+    job_id: Mapped[str | None] = mapped_column(String(40))  # linked Job when scheduled
+
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    history: Mapped[list | None] = mapped_column(JSONB)     # [{version, ts, snapshot}]
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+
+    created_at: Mapped[datetime] = _now_col()
+    updated_at: Mapped[datetime] = _now_col(onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("status IN ('active','archived')", name="ck_agentdef_status"),
+    )
+
+
 class Connector(Base):
     __tablename__ = "connectors"
 

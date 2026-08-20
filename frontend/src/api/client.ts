@@ -1,4 +1,6 @@
 import type {
+  AgentDefinition,
+  AgentDefinitionBody,
   CapacityEngine,
   CapacityScenario,
   CapacityStatus,
@@ -123,6 +125,7 @@ export const capacityApi = {
     mode: 'local' | 'remote_mock' | 'remote_real' | 'e2e'
     mix?: 'tile' | 'custom'
     scenarios?: string[]
+    agent_definitions?: string[]
     mock_ms?: number
     mock_sigma?: number
     max_users?: number
@@ -131,4 +134,19 @@ export const capacityApi = {
     confirm_real?: boolean
   }) => req<{ started: boolean }>('/capacity/start', { method: 'POST', body: JSON.stringify(body) }),
   stop: () => req<{ stopping: boolean }>('/capacity/stop', { method: 'POST' }),
+}
+
+// ── Agent definitions ─────────────────────────────────────────────────────────
+export const agentDefsApi = {
+  list: () => req<AgentDefinition[]>('/agent-definitions'),
+  create: (body: AgentDefinitionBody) =>
+    req<AgentDefinition>('/agent-definitions', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: Partial<AgentDefinitionBody>) =>
+    req<AgentDefinition>(`/agent-definitions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  clone: (id: string) => req<AgentDefinition>(`/agent-definitions/${id}/clone`, { method: 'POST' }),
+  archive: (id: string) => req<AgentDefinition>(`/agent-definitions/${id}/archive`, { method: 'POST' }),
+  runOnce: (id: string, input?: string) =>
+    req<{ run_id: string }>(`/agent-definitions/${id}/run`, {
+      method: 'POST', body: JSON.stringify({ input: input || null }),
+    }),
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import clsx from 'clsx'
-import { capacityApi } from '../../api/client'
+import { agentDefsApi, capacityApi } from '../../api/client'
 import type {
+  AgentDefinition,
   CapacityEngine, CapacityResult, CapacityScenario,
   CapacitySample, CapacityStatus,
 } from '../../api/types'
@@ -37,6 +38,8 @@ export function CapacityView() {
   const [tile, setTile] = useState<Record<string, number>>({})
   const [e2eWorkflows, setE2eWorkflows] = useState<{ id: string; name: string; query: string }[]>([])
   const [e2eTile, setE2eTile] = useState<Record<string, number>>({})
+  const [defs, setDefs] = useState<AgentDefinition[]>([])
+  const [defsInMix, setDefsInMix] = useState<string[]>([])
   const [mix, setMix] = useState<'tile' | 'custom'>('tile')
   const [mode, setMode] = useState<Mode>('remote_mock')
   const [mockMs, setMockMs] = useState(2000)
@@ -57,6 +60,7 @@ export function CapacityView() {
       setE2eWorkflows(r.e2e_workflows ?? [])
       setE2eTile(r.e2e_tile ?? {})
     }).catch(() => {})
+    agentDefsApi.list().then(setDefs).catch(() => {})
   }, [])
 
   const pollEngine = useCallback(() => {
@@ -89,6 +93,7 @@ export function CapacityView() {
         mode,
         mix,
         scenarios: mix === 'custom' ? enabled : undefined,
+        agent_definitions: mode === 'e2e' && mix === 'custom' ? defsInMix : undefined,
         mock_ms: mode === 'remote_mock' ? mockMs : undefined,
         mock_sigma: mode === 'remote_mock' ? mockSigma : undefined,
         cache_mode: cacheMode,
@@ -222,6 +227,26 @@ export function CapacityView() {
           <p className="font-code text-[10.5px] mb-2" style={{ color: 'var(--faint)' }}>
             1 tile (ACU) = {Object.entries(tile).map(([sid, n]) => `${n}× ${scenarios.find((s) => s.id === sid)?.name ?? sid}`).join(' + ')} — ramps add whole tiles
           </p>
+        )}
+        {mode === 'e2e' && mix === 'custom' && defs.length > 0 && (
+          <div className="mb-2">
+            <div className="eyebrow mb-1.5">Your agent definitions — assign to this planning mix</div>
+            <div className="flex gap-1.5 flex-wrap">
+              {defs.map((d) => {
+                const on = defsInMix.includes(d.id)
+                return (
+                  <button key={d.id} disabled={active}
+                    onClick={() => setDefsInMix((p) => on ? p.filter((x) => x !== d.id) : [...p, d.id])}
+                    className={clsx('px-2.5 py-1 rounded-full border text-[11.5px] transition-colors',
+                      on ? 'text-[var(--text)]' : 'text-[var(--faint)]')}
+                    style={{ borderColor: on ? 'rgba(124,135,245,.5)' : 'var(--line)',
+                             background: on ? 'var(--elev)' : 'transparent' }}>
+                    {d.icon} {d.name} v{d.version}{on ? ' ✓' : ''}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         )}
         {mode === 'e2e' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">

@@ -25,10 +25,11 @@ class E2ERunner:
         self.timeout_s = float(timeout_s)
         self._submit = submit or self._real_submit
 
-    async def run_workflow(self, wid: str, query: str) -> dict:
+    async def run_workflow(self, wid: str, query: str, opts: dict | None = None) -> dict:
         t0 = time.perf_counter()
         try:
-            out = await asyncio.wait_for(self._submit(query), timeout=self.timeout_s)
+            out = await asyncio.wait_for(self._submit(query, opts or {}),
+                                         timeout=self.timeout_s)
         except asyncio.TimeoutError:
             return {"ok": False, "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
                     "tokens_in": 0, "tokens_out": 0,
@@ -40,15 +41,20 @@ class E2ERunner:
         out["latency_ms"] = round((time.perf_counter() - t0) * 1000, 1)
         return out
 
-    async def _real_submit(self, query: str) -> dict:
+    async def _real_submit(self, query: str, opts: dict | None = None) -> dict:
+        opts = opts or {}
         # Lazy imports: main imports the capacity router at startup — importing
         # main at module level here would be circular.
         from backend import main as app_main
         from backend.db.base import get_sessionmaker
         from backend.repositories import runs as runs_repo
 
-        run_id = app_main.launch_run(query, validator_enabled=True,
-                                     trigger="api", plan_approval=False)
+        run_id = app_main.launch_run(
+            query,
+            validator_enabled=bool(opts.get("validator_enabled", True)),
+            trigger="api", plan_approval=False,  # benchmarks never pause for HITL
+            enabled_tools=list(opts.get("enabled_tools") or []),
+            budget=opts.get("budgets") or None)
         task = app_main._run_tasks.get(run_id)
         if task is not None:
             await asyncio.shield(asyncio.wait({task}))
