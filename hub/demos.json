@@ -6,17 +6,24 @@
       "id": "agents",
       "name": "Agent Orchestrator",
       "blurb": "Decomposes a prompt into a plan you approve, runs a team of specialist agents across routed model tiers, validates every output, and composes the answer.",
-      "tags": ["multi-agent", "tier routing", "tool calling"],
-      "url": "https://agents.CHANGE-ME.com",
+      "tags": [
+        "multi-agent",
+        "tier routing",
+        "tool calling"
+      ],
+      "url": "https://agents.enterpriseai.center",
       "health": "/health",
       "accent": "#7c87f5"
     },
     {
       "id": "router",
       "name": "Semantic Router",
-      "blurb": "Classifies each query by difficulty and routes it to the cheapest sufficient model tier — on-box for easy work, escalating off-box only when needed.",
-      "tags": ["semantic routing", "tiering"],
-      "url": "https://router.CHANGE-ME.com",
+      "blurb": "Classifies each query by difficulty and routes it to the cheapest sufficient model tier \u2014 on-box for easy work, escalating off-box only when needed.",
+      "tags": [
+        "semantic routing",
+        "tiering"
+      ],
+      "url": "https://router-origin.enterpriseai.center",
       "health": "/health",
       "accent": "#54d2a6"
     }

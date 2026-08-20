@@ -6,7 +6,7 @@ Serves hub/ (a landing page that lists the demos running on this box and links t
 each one) on a local port. A Cloudflare Tunnel ingress rule points the root
 hostname at it; the demos themselves are separate ingress rules / hostnames.
 
-    python3 scripts/hub_server.py            # port 8080 (HUB_PORT)
+    python3 scripts/hub_server.py            # port 8088 (HUB_PORT)
 
 Stdlib only — no venv needed, so it can run as its own tiny systemd unit that has
 no dependency on either demo's environment.
@@ -23,7 +23,7 @@ import socketserver
 from pathlib import Path
 
 HUB_DIR = Path(os.getenv("HUB_DIR", Path(__file__).resolve().parent.parent / "hub"))
-PORT = int(os.getenv("HUB_PORT", "8080"))
+PORT = int(os.getenv("HUB_PORT", "8088"))
 HOST = os.getenv("HUB_HOST", "127.0.0.1")  # the tunnel connects locally
 
 

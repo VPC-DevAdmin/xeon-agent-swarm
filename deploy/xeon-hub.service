@@ -1,0 +1,23 @@
+# Demo hub — the landing page that lists the demos on this box.
+# Install: sudo cp deploy/xeon-hub.service /etc/systemd/system/
+#
+# Stdlib only (no venv), so it stays up even if a demo's environment is broken.
+# Port 8088 chosen to avoid 8080, which the semantic-search service uses.
+
+[Unit]
+Description=Demo hub landing page
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=devadmin
+WorkingDirectory=/home/devadmin/work/repos/xeon-agent-swarm
+Environment=HUB_PORT=8088
+Environment=HUB_HOST=127.0.0.1
+ExecStart=/usr/bin/python3 scripts/hub_server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,27 @@
+# Agent Orchestrator — single-origin UI + REST + WebSocket on one port.
+# Install: sudo cp deploy/xeon-agents.service /etc/systemd/system/
+#
+# The SPA must be built before this starts (npm --prefix frontend run build);
+# the service only serves frontend/dist. Rebuild after every git pull.
+
+[Unit]
+Description=Agent Orchestrator (single-origin UI+API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=devadmin
+WorkingDirectory=/home/devadmin/work/repos/xeon-agent-swarm
+# Gateway creds + ADL settings (ROUTER_BASE, MASTER_ENCRYPTION_KEY, tiers, …)
+EnvironmentFile=/home/devadmin/work/repos/xeon-agent-swarm/.env.adl
+Environment=CONFIG_DIR=config
+Environment=FRONTEND_DIST=frontend/dist
+ExecStart=/home/devadmin/work/repos/xeon-agent-swarm/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8010
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
