@@ -56,6 +56,10 @@ cd ~/work/repos/xeon-agent-swarm && git pull && npm --prefix frontend run build
 
 > Rebuild after every `git pull` — the service only serves `frontend/dist`.
 
+> **On the box, systemd owns ports 8010/8088 — do not run `make demo` / `make
+> demo-live` there.** They are laptop dev targets; on the server they collide with
+> the services. Restart with `sudo systemctl restart xeon-agents` instead.
+
 ## 2. Services (survive reboot)
 
 ```bash
@@ -120,6 +124,8 @@ timeline, and the streamed answer all ride the tunnel over `wss://`.
 | Symptom | Check |
 |---|---|
 | 502 from the edge | `systemctl status xeon-agents` — app down, tunnel fine |
+| `/health` works but `/` 404s | A **stale pre-single-origin process owns the port**. Check `systemctl show xeon-agents -p NRestarts` — a high count plus `address already in use` in the journal confirms it. Fix: `sudo systemctl stop xeon-agents && sudo fuser -k 8010/tcp && sudo systemctl start xeon-agents` |
+| Service restart-loops | `sudo journalctl -u xeon-agents -n 20` — usually `[Errno 98] address already in use` from a hand-started `make demo` backend |
 | Tunnel offline | `systemctl status cloudflared`; `cloudflared tunnel info router-origin` |
 | `route dns` fails with a TLS/cert error | DNS hijack is back — re-check step 0 |
 | UI loads, runs never start | WebSocket blocked — confirm `https` (so `wss`) and Access session |
