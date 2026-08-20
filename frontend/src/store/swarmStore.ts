@@ -8,8 +8,9 @@ import type {
   DocumentResult,
   RunMetrics,
 } from '../types/swarm'
+import { API_BASE } from '../lib/origin'
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+
 
 export interface TaskMeta {
   description: string

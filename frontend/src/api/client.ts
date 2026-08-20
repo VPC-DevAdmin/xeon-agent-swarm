@@ -7,8 +7,9 @@ import type {
   RunSummary,
   ToolsResponse,
 } from './types'
+import { API_BASE } from '../lib/origin'
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {

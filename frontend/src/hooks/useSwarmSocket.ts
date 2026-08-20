@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react'
 import { useSwarmStore } from '../store/swarmStore'
 import type { SwarmEvent } from '../types/swarm'
 import { fromCloudEvent, isCloudEvent } from '../protocol/cloudevents'
+import { WS_BASE } from '../lib/origin'
 
-const WS_BASE = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000'
+
 
 export function useSwarmSocket(runId: string | null) {
   const dispatch = useSwarmStore((s) => s.dispatch)

@@ -25,7 +25,7 @@ BIN := $(VENV)/bin
 STACK_ENV = BIN=$(BIN) BACKEND_PORT=$(BACKEND_PORT) FRONTEND_PORT=$(FRONTEND_PORT) MOCK_PORT=$(MOCK_PORT)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup demo demo-live test reset-db stop clean
+.PHONY: help setup demo demo-live serve test reset-db stop clean
 
 help:
 	@echo ""
@@ -34,6 +34,7 @@ help:
 	@echo "  make setup      install Python + frontend dependencies (run once)"
 	@echo "  make demo       run the full stack with the MOCK router (safe, offline)"
 	@echo "  make demo-live  run the full stack against the REAL router ($(ROUTER_BASE))"
+	@echo "  make serve      PRODUCTION: build the SPA + serve UI/API/WS on ONE port"
 	@echo "  make test       run the backend test suite"
 	@echo "  make reset-db   delete the app database (recreated on next start)"
 	@echo "  make stop       kill anything left listening on the demo ports"
@@ -61,6 +62,14 @@ demo:
 
 demo-live:
 	@$(STACK_ENV) ROUTER_BASE=$(ROUTER_BASE) bash scripts/dev_stack.sh live
+
+# Production single-origin mode: the backend serves the built SPA, so the UI, REST,
+# and WebSocket share one origin/port — what a Cloudflare Tunnel points at. Binds to
+# localhost by default (the tunnel connects locally); override with SERVE_HOST=0.0.0.0.
+SERVE_HOST ?= 127.0.0.1
+serve:
+	npm --prefix frontend run build
+	$(BIN)/python -m uvicorn backend.main:app --host $(SERVE_HOST) --port $(BACKEND_PORT)
 
 test:
 	$(BIN)/python -m pytest tests/ -q

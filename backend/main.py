@@ -514,3 +514,43 @@ async def serve_audio(filename: str):
 async def metrics():
     """Prometheus metrics endpoint."""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+# ── Single-origin SPA serving ─────────────────────────────────────────────────
+# When the frontend has been built (frontend/dist), serve it from THIS app so the
+# UI, REST, and WebSocket all share one origin. That is what makes hosting simple:
+# a Cloudflare Tunnel / subdomain needs no rebuild, there is no CORS, and the page's
+# scheme decides ws:// vs wss:// automatically (see frontend/src/lib/origin.ts).
+#
+# Registered last so every API route above takes precedence; API prefixes are
+# explicitly excluded from the catch-all so an unknown API path still 404s as JSON
+# instead of silently returning index.html.
+_DIST = Path(os.getenv("FRONTEND_DIST", "frontend/dist"))
+
+_API_PREFIXES = (
+    "run", "runs", "jobs", "connectors", "toolbox", "tools", "ws",
+    "health", "metrics", "docs", "redoc", "openapi.json", "audio",
+)
+
+if _DIST.is_dir():
+    from fastapi.staticfiles import StaticFiles
+
+    _assets = _DIST / "assets"
+    if _assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa(full_path: str):
+        """Serve a built static file when it exists, else index.html (SPA routing)."""
+        first = full_path.split("/", 1)[0]
+        if first in _API_PREFIXES:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not Found")
+        candidate = _DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_DIST / "index.html")
+
+    logger.info("Serving built SPA from %s (single-origin mode)", _DIST)
+else:
+    logger.info("No built frontend at %s — API-only mode (run `npm run build`)", _DIST)
