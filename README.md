@@ -32,7 +32,7 @@ sibling services it calls over the network:
 | **Governance** | Per-run budgets (`max_subagents`/`max_tool_hops`/`max_total_tokens`, clean partial-synthesis stop) and HITL plan approval (`POST /run/{id}/approve`) |
 | **Live monitoring** | Stream-driven `Step`/`StepAttempt`/`Validation` rows + WebSocket CloudEvents 1.0 |
 | **Scheduled runs** | Cron-scheduled Jobs (APScheduler), overlap policies, durable history |
-| **Capacity tester** | A built-in system speed test (Capacity tab): five fixed agent scenarios ramp virtual users against the local SGLang engine, a simulated remote (bell-curve latency), or a real cloud endpoint until the box saturates — live CPU/memory/power telemetry and a speed-test-style result (`/capacity/*`) |
+| **Capacity tester** | A built-in system speed test (Capacity tab): five fixed agent scenarios — real agent loops with tool round-trips, compounding context, and multi-turn sessions (a stateless chatbot baseline as the contrast) — ramp virtual users against the local SGLang engine, a simulated remote (bell-curve latency), or a real cloud endpoint until the box saturates on CPU, RAM, or KV cache. Live CPU/memory/memory-bandwidth/KV/power telemetry, per-agent-type KV footprint, and a speed-test-style result (`/capacity/*`) |
 | **Orchestration** | Durable Jobs → Runs → Steps → Attempts in a SQLite file; full REST + UI |
 
 ## Standards

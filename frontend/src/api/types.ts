@@ -149,13 +149,28 @@ export interface ToolsResponse {
 
 // ── Capacity tester ───────────────────────────────────────────────────────────
 
+export interface CapacityScenarioStep {
+  label: string
+  prompt_tokens: number
+  max_tokens: number
+  carry_context: boolean
+  tool_calls: number
+  tool_result_tokens: number
+}
+
 export interface CapacityScenario {
   id: string
   name: string
   blurb: string
   complexity: 'light' | 'medium' | 'heavy'
   calls_per_loop: number
+  tool_calls_per_loop: number
   tokens_out_per_loop: number
+  tokens_in_per_loop: number
+  think_ms: number
+  session_turns: number
+  context_cap: number
+  steps: CapacityScenarioStep[]
 }
 
 export interface CapacitySample {
@@ -165,6 +180,8 @@ export interface CapacitySample {
   mem_pct?: number | null
   load1?: number | null
   power_w?: number | null
+  bw_gbs?: number | null
+  kv_pct?: number | null
   users: number
   tps: number
   rpm: number
@@ -181,6 +198,7 @@ export interface CapacityScenarioStat {
   p50_ms?: number | null
   p95_ms?: number | null
   tokens_out?: number
+  avg_kv_tokens?: number
 }
 
 export interface CapacityResult {
@@ -194,8 +212,10 @@ export interface CapacityResult {
     tps: number; rpm: number; p50_ms?: number | null; p95_ms?: number | null
     err_rate: number; cpu_pct?: number | null; mem_pct?: number | null
     power_w?: number | null; load1?: number | null
+    bw_gbs?: number | null; kv_pct?: number | null
   }
   energy_wh?: number | null
+  mem_mb_per_user?: number | null
   per_scenario: Record<string, CapacityScenarioStat>
   timeline: CapacitySample[]
   error?: string | null

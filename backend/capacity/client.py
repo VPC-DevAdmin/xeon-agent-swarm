@@ -48,18 +48,21 @@ class StepCaller:
         if self._http is not None:
             await self._http.aclose()
 
-    async def call(self, scenario: dict, step: dict) -> dict:
+    async def call(self, scenario: dict, step: dict,
+                   extra_context_tokens: int = 0) -> dict:
         t0 = time.perf_counter()
         try:
             if self.mode == "remote_mock":
                 # Bell curve around the set point; clamp so the tail never goes
-                # negative or silly-short.
+                # negative or silly-short. (Latency stays context-independent by
+                # design — the compounding context shows up in the token/KV
+                # telemetry; local/real modes slow down naturally.)
                 delay = max(0.05, random.gauss(self.mock_ms, self.mock_sigma) / 1000.0)
                 await asyncio.sleep(delay)
                 return {
                     "ok": True,
                     "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
-                    "tokens_in": int(step.get("prompt_tokens", 0)),
+                    "tokens_in": int(step.get("prompt_tokens", 0)) + int(extra_context_tokens),
                     "tokens_out": int(step.get("max_tokens", 0) * 0.8),
                 }
             base, model, headers = self._target()
@@ -68,7 +71,8 @@ class StepCaller:
                 headers=headers,
                 json={
                     "model": model,
-                    "messages": build_prompt(step, scenario.get("name", "?")),
+                    "messages": build_prompt(step, scenario.get("name", "?"),
+                                             extra_context_tokens),
                     "max_tokens": int(step.get("max_tokens", 200)),
                     "temperature": 0,
                 },

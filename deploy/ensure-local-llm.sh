@@ -2,6 +2,8 @@
 # Idempotent bring-up for the local capacity-test LLM: Qwen3-30B-A3B FP8 on
 # SGLang/Xeon. Mirrors the known-good run_09 config (launch-qwen3-intel-fp8.sh).
 #
+# --enable-metrics is added on top of the known-good run_09 flags so the
+# capacity tab can read KV-cache utilization from SGLang's /metrics.
 # Called by the backend's POST /capacity/engine/start; every echo line streams
 # into the UI, so narrate each phase. Exit 0 only when /v1/models answers.
 #
@@ -91,6 +93,7 @@ if ! docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
           --max-total-tokens 16384 \
           --mem-fraction-static 0.85 \
           --disable-overlap-schedule \
+          --enable-metrics \
           --trust-remote-code \
           --host 0.0.0.0 --port "${PORT}" \
       || { say "ERROR: docker run failed"; exit 1; }

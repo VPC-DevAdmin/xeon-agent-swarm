@@ -8,6 +8,10 @@ steady state, and reports a speed-test-style result.
 
 Saturation verdicts (first one to fire wins):
   cpu       local mode: CPU sustained >= cpu_target for 2 consecutive intervals
+  memory    local mode: system memory sustained >= mem_target — RAM can gate
+            before cores do on big-model boxes
+  kv        local mode: the engine's KV-cache pool sustained >= kv_target
+            (scraped from SGLang /metrics; the truest "model memory full")
   plateau   throughput gained < 5% across 2 consecutive user-adds (any mode)
   errors    error rate over an interval exceeded 10%
   capped    max_users reached (held and measured there)
@@ -20,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import statistics
 import time
 from collections import deque
@@ -27,7 +32,9 @@ from pathlib import Path
 
 from backend.capacity.client import StepCaller
 from backend.capacity.scenarios import load_scenarios
-from backend.capacity.telemetry import SystemSampler
+from backend.capacity.telemetry import (SystemSampler, mem_slope_mb_per_user,
+                                         sample_bandwidth_gbs, sample_kv_pct)
+from backend.capacity.client import LOCAL_BASE
 
 RESULTS_DIR = Path("data/capacity")
 
@@ -39,6 +46,8 @@ DEFAULTS = dict(
     max_users=64,
     max_duration_s=420.0,
     cpu_target=90.0,       # local-mode saturation line
+    mem_target=92.0,       # local-mode RAM saturation line (%)
+    kv_target=90.0,        # local-mode KV-pool saturation line (%)
     plateau_gain=0.05,     # <5% throughput gain across a step = no headroom
     error_rate_limit=0.10,
     sample_interval_s=2.0,
@@ -46,6 +55,47 @@ DEFAULTS = dict(
     mock_sigma=300.0,
     remote_budget=500,     # hard request cap for remote_real
 )
+
+
+async def run_scenario_loop(call, scenario: dict, sid: str, idx: int,
+                            session_tokens: int, stop=None) -> int:
+    """Execute ONE turn of an agent scenario; returns the context tokens the
+    session carries into the next turn (or -1 if stopped mid-loop).
+
+    call(scenario, step, sid, idx, extra_tokens, label) -> rec|None performs one
+    recorded LLM request. Semantics per step:
+      - base prompt + (carried context when carry_context) + session history
+      - each tool round-trip: wait tool_latency_ms (the agent HOLDS its context
+        while the external tool runs), inject tool_result_tokens, call again
+    """
+    cap = int(scenario.get("context_cap", 6000))
+    context = min(int(session_tokens), cap)
+    for step in scenario.get("steps", []):
+        carried = context if step.get("carry_context") else min(int(session_tokens), cap)
+        rec = await call(scenario, step, sid, idx, min(carried, cap),
+                         step.get("label", "step"))
+        if rec is None:
+            return -1
+        context = min(cap, context + int(rec.get("tokens_out") or 0))
+        for i in range(int(step.get("tool_calls", 0))):
+            lat = max(0.02, random.gauss(float(step.get("tool_latency_ms", 300)),
+                                         float(step.get("tool_latency_ms", 300)) * 0.25) / 1000.0)
+            if stop is not None:
+                try:
+                    await asyncio.wait_for(stop.wait(), timeout=lat)
+                    return -1           # stopped while "waiting on the tool"
+                except asyncio.TimeoutError:
+                    pass
+            else:
+                await asyncio.sleep(lat)
+            carried = min(cap, carried + int(step.get("tool_result_tokens", 400))
+                          + int(rec.get("tokens_out") or 0))
+            rec = await call(scenario, step, sid, idx, carried,
+                             f"{step.get('label', 'step')}+tool{i + 1}")
+            if rec is None:
+                return -1
+            context = min(cap, context + int(rec.get("tokens_out") or 0))
+    return context
 
 
 def _pct(values: list[float], p: float) -> float | None:
@@ -113,28 +163,61 @@ class CapacityTest:
         self.users.append(asyncio.create_task(self._user_loop(idx, sid)))
 
     async def _user_loop(self, idx: int, sid: str):
+        """One virtual user: an agent SESSION, not a chatbot pinger.
+
+        Context compounds within a turn (carry_context steps read everything
+        produced so far, tool results get injected mid-step) and ACROSS turns
+        for session_turns loops before the session resets — the growing-prefill,
+        growing-KV signature that separates agents from flat chat traffic."""
         scenario = self.scenarios[sid]
         think = float(scenario.get("think_ms", 1000)) / 1000.0
+        session_tokens = 0
+        turn = 0
         while not self._stop.is_set():
-            for step in scenario["steps"]:
-                if self._stop.is_set():
-                    return
-                if (self.mode == "remote_real"
-                        and self.total_requests >= self.cfg["remote_budget"]):
-                    self.stop()  # hard budget: never spray a cloud API
-                    return
-                self.total_requests += 1
-                rec = await self._caller.call(scenario, step)
-                rec.update(scenario=sid, step=step.get("label"), user=idx, ts=time.time())
-                self.calls.append(rec)
+            session_tokens = await run_scenario_loop(
+                self._record_call, scenario, sid, idx, session_tokens,
+                stop=self._stop)
+            if session_tokens < 0:      # stopped mid-loop
+                return
+            turn += 1
+            if turn % int(scenario.get("session_turns", 1)) == 0:
+                session_tokens = 0      # session over — context window cleared
             await asyncio.sleep(think)
+
+    async def _record_call(self, scenario, step, sid, idx, extra_tokens, label):
+        """Budget-checked, recorded single LLM call (incl. tool continuations)."""
+        if self._stop.is_set():
+            return None
+        if (self.mode == "remote_real"
+                and self.total_requests >= self.cfg["remote_budget"]):
+            self.stop()  # hard budget: never spray a cloud API
+            return None
+        self.total_requests += 1
+        rec = await self._caller.call(scenario, step, extra_context_tokens=extra_tokens)
+        rec.update(scenario=sid, step=label, user=idx, ts=time.time())
+        self.calls.append(rec)
+        return rec
 
     # ── telemetry ────────────────────────────────────────────────────────────
     async def _sample_loop(self):
+        # Bandwidth/KV are local-mode readings; stop attempting after repeated
+        # misses so we never spawn perf / scrape a dead endpoint in a tight loop.
+        bw_misses = 0
+        kv_misses = 0
         while not self._stop.is_set():
             s = self._sampler.sample()
             s["users"] = len(self.users)
             s.update(self._window_stats(self.cfg["sample_interval_s"] * 5))
+            s["bw_gbs"] = None
+            s["kv_pct"] = None
+            if self.mode == "local":
+                if bw_misses < 3:
+                    s["bw_gbs"] = await sample_bandwidth_gbs(
+                        max(0.5, self.cfg["sample_interval_s"] - 1.0))
+                    bw_misses = 0 if s["bw_gbs"] is not None else bw_misses + 1
+                if kv_misses < 3:
+                    s["kv_pct"] = await sample_kv_pct(LOCAL_BASE)
+                    kv_misses = 0 if s["kv_pct"] is not None else kv_misses + 1
             self.samples.append(s)
             await asyncio.sleep(self.cfg["sample_interval_s"])
 
@@ -160,6 +243,8 @@ class CapacityTest:
         interval = float(self.cfg["step_interval_s"])
         prev_tps: float | None = None
         cpu_hot = 0
+        mem_hot = 0
+        kv_hot = 0
         flat = 0
 
         while not self._stop.is_set():
@@ -170,14 +255,24 @@ class CapacityTest:
                 pass
 
             stats = self._window_stats(interval)
-            cpus = [s["cpu_pct"] for s in self.samples
-                    if s["cpu_pct"] is not None and s["ts"] >= time.time() - interval]
-            avg_cpu = statistics.mean(cpus) if cpus else None
+            cut = time.time() - interval
+            def _avg(key):
+                vals = [s[key] for s in self.samples
+                        if s.get(key) is not None and s["ts"] >= cut]
+                return statistics.mean(vals) if vals else None
+            avg_cpu, avg_mem, avg_kv = _avg("cpu_pct"), _avg("mem_pct"), _avg("kv_pct")
             elapsed = time.time() - self.started_at
 
+            local = self.mode == "local"
             cpu_hot = cpu_hot + 1 if (
-                self.mode == "local" and avg_cpu is not None
+                local and avg_cpu is not None
                 and avg_cpu >= self.cfg["cpu_target"]) else 0
+            mem_hot = mem_hot + 1 if (
+                local and avg_mem is not None
+                and avg_mem >= self.cfg["mem_target"]) else 0
+            kv_hot = kv_hot + 1 if (
+                local and avg_kv is not None
+                and avg_kv >= self.cfg["kv_target"]) else 0
             if prev_tps is not None and prev_tps > 0:
                 gain = (stats["tps"] - prev_tps) / prev_tps
                 flat = flat + 1 if gain < self.cfg["plateau_gain"] else 0
@@ -185,6 +280,10 @@ class CapacityTest:
 
             if cpu_hot >= 2:
                 self.verdict = "cpu"
+            elif mem_hot >= 2:
+                self.verdict = "memory"
+            elif kv_hot >= 2:
+                self.verdict = "kv"
             elif flat >= 2 and len(self.users) > int(self.cfg["start_users"]):
                 self.verdict = "plateau"
             elif stats["err_rate"] > self.cfg["error_rate_limit"]:
@@ -224,6 +323,12 @@ class CapacityTest:
         for sid in self.scenario_ids:
             cs = [c for c in self.calls if c["scenario"] == sid]
             ok = [c for c in cs if c["ok"]]
+            dur_so_far = max(1e-6, (self.ended_at or time.time()) - self.started_at)
+            # Average tokens RESIDENT for this agent type: token-seconds per second.
+            # A call holding (in+out) tokens for its latency contributes that much
+            # KV-cache pressure — the per-scenario memory footprint that matters.
+            kv_tok = sum((c["tokens_in"] + c["tokens_out"]) * c["latency_ms"] / 1000.0
+                         for c in ok) / dur_so_far
             per_scenario[sid] = {
                 "name": self.scenarios[sid]["name"],
                 "users": self.user_scenario.count(sid),
@@ -232,6 +337,7 @@ class CapacityTest:
                 "p50_ms": _pct([c["latency_ms"] for c in ok], 50),
                 "p95_ms": _pct([c["latency_ms"] for c in ok], 95),
                 "tokens_out": sum(c["tokens_out"] for c in ok),
+                "avg_kv_tokens": round(kv_tok),
             }
 
         # Downsample the timeline for the result payload (~120 points max).
@@ -254,7 +360,9 @@ class CapacityTest:
             "total_requests": self.total_requests,
             "total_tokens_out": sum(c["tokens_out"] for c in self.calls if c["ok"]),
             "steady": {**hold, "cpu_pct": avg("cpu_pct"), "mem_pct": avg("mem_pct"),
-                        "power_w": avg("power_w"), "load1": avg("load1")},
+                        "power_w": avg("power_w"), "load1": avg("load1"),
+                        "bw_gbs": avg("bw_gbs"), "kv_pct": avg("kv_pct")},
+            "mem_mb_per_user": mem_slope_mb_per_user(samples),
             "energy_wh": energy_wh,
             "per_scenario": per_scenario,
             "timeline": timeline,

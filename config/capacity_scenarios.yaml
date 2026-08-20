@@ -1,58 +1,84 @@
-# Capacity-test agent scenarios — five FIXED workload blocks, each representing a
-# real agent use case at a different complexity. A "virtual user" is one of these
-# blocks looping continuously; the ramp adds users until the system saturates.
+# Capacity-test agent scenarios — five FIXED workload blocks at different
+# complexities. A "virtual user" is one of these blocks looping continuously;
+# the ramp adds users until the system saturates.
 #
-# Fixed and deterministic on purpose: the same block, the same prompt shapes, the
-# same token budgets every loop — so runs are comparable across modes and over time.
+# These are AGENT loops, not chatbot pings. Three behaviors distinguish them
+# (and are what makes memory saturate before CPU):
+#   carry_context: true   the step's prompt includes everything accumulated so
+#                         far this turn (prior step outputs, tool results) —
+#                         compounding prefill + resident KV
+#   tool_calls: N         the step makes N tool round-trips: after the initial
+#                         call, each tool result (tool_result_tokens) is
+#                         injected into context and the model is called again
+#                         (a continuation) — more calls AND bigger prompts.
+#                         tool_latency_ms simulates the external tool's time
+#                         (the agent holds its context while it waits)
+#   session_turns: K      context compounds ACROSS loops for K turns (a user
+#                         session), then resets — the saw-tooth context-growth
+#                         pattern of real agent sessions. context_cap bounds it.
 #
-# Per step: prompt_tokens is the approximate INPUT size (padded deterministically),
-# max_tokens caps the OUTPUT. think_ms is the pause between loops (a user reading
-# the answer), so one user is a realistic duty cycle rather than a tight loop.
+# quick_answer is deliberately the exception: a plain stateless chatbot ping,
+# kept as the baseline so the contrast with real agent loops is visible.
 
 scenarios:
   quick_answer:
-    name: "Concierge Q&A"
-    blurb: "A single-shot assistant answering a short question — the lightest real agent."
+    name: "Chatbot baseline"
+    blurb: "A stateless single-shot Q&A — what a plain user hitting a chat endpoint looks like. The contrast case."
     complexity: light
     think_ms: 1000
+    session_turns: 1
     steps:
       - {label: "answer", prompt_tokens: 150, max_tokens: 120}
 
   summarizer:
     name: "Document summarizer"
-    blurb: "Reads a long document and produces a tight summary — heavy prompt, light output."
+    blurb: "Retrieves a long document via a tool, injects it into context, and produces a tight summary — data-inclusion prefill."
     complexity: light
     think_ms: 1500
+    session_turns: 1
     steps:
-      - {label: "summarize", prompt_tokens: 3000, max_tokens: 250}
+      - {label: "retrieve+summarize", prompt_tokens: 300, max_tokens: 250,
+         tool_calls: 1, tool_result_tokens: 2500, tool_latency_ms: 400}
 
   code_assistant:
-    name: "Code generator"
-    blurb: "Writes a function from a spec, then reviews its own output — decode-heavy."
+    name: "Code agent"
+    blurb: "Writes code, runs it through a sandbox tool, then reviews with the code AND the run output in context. Session spans 2 turns."
     complexity: medium
     think_ms: 1200
+    session_turns: 2
+    context_cap: 4000
     steps:
       - {label: "generate", prompt_tokens: 400, max_tokens: 500}
-      - {label: "review", prompt_tokens: 700, max_tokens: 200}
+      - {label: "test+review", prompt_tokens: 200, max_tokens: 200,
+         carry_context: true, tool_calls: 1, tool_result_tokens: 150,
+         tool_latency_ms: 600}
 
   research_brief:
-    name: "Research & brief"
-    blurb: "Gather facts, analyze them, write a brief — a three-step sequential pipeline."
+    name: "Research agent"
+    blurb: "Two web searches injected into context, analysis over the findings, then a brief written over everything gathered — compounding context each step."
     complexity: medium
     think_ms: 1500
+    session_turns: 2
+    context_cap: 6000
     steps:
-      - {label: "gather", prompt_tokens: 300, max_tokens: 350}
-      - {label: "analyze", prompt_tokens: 600, max_tokens: 300}
-      - {label: "write", prompt_tokens: 900, max_tokens: 400}
+      - {label: "gather", prompt_tokens: 300, max_tokens: 350,
+         tool_calls: 2, tool_result_tokens: 400, tool_latency_ms: 500}
+      - {label: "analyze", prompt_tokens: 300, max_tokens: 300, carry_context: true}
+      - {label: "write", prompt_tokens: 250, max_tokens: 400, carry_context: true}
 
   deep_agent:
     name: "Deep multi-agent pipeline"
-    blurb: "Plan, three specialist workers, synthesis — the full orchestration pattern."
+    blurb: "Plan, three tool-using workers, synthesis over all results — the full orchestration pattern, session compounding over 3 turns."
     complexity: heavy
     think_ms: 2000
+    session_turns: 3
+    context_cap: 6000
     steps:
       - {label: "plan", prompt_tokens: 500, max_tokens: 250}
-      - {label: "worker-1", prompt_tokens: 400, max_tokens: 300}
-      - {label: "worker-2", prompt_tokens: 400, max_tokens: 300}
-      - {label: "worker-3", prompt_tokens: 400, max_tokens: 300}
-      - {label: "synthesize", prompt_tokens: 1200, max_tokens: 450}
+      - {label: "worker-1", prompt_tokens: 300, max_tokens: 300,
+         carry_context: true, tool_calls: 1, tool_result_tokens: 300, tool_latency_ms: 400}
+      - {label: "worker-2", prompt_tokens: 300, max_tokens: 300,
+         carry_context: true, tool_calls: 1, tool_result_tokens: 300, tool_latency_ms: 400}
+      - {label: "worker-3", prompt_tokens: 300, max_tokens: 300,
+         carry_context: true, tool_calls: 1, tool_result_tokens: 300, tool_latency_ms: 400}
+      - {label: "synthesize", prompt_tokens: 400, max_tokens: 450, carry_context: true}

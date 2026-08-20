@@ -19,7 +19,11 @@ def test_five_scenarios_with_expected_shapes():
     assert len(items) == 5
     by_id = {s["id"]: s for s in items}
     assert by_id["quick_answer"]["calls_per_loop"] == 1
-    assert by_id["deep_agent"]["calls_per_loop"] == 5
+    assert by_id["quick_answer"]["tool_calls_per_loop"] == 0     # the chatbot contrast
+    # 5 steps + 3 tool continuations — every tool round-trip is an extra LLM call
+    assert by_id["deep_agent"]["calls_per_loop"] == 8
+    assert by_id["deep_agent"]["tool_calls_per_loop"] == 3
+    assert by_id["deep_agent"]["session_turns"] == 3
     assert all(s["tokens_out_per_loop"] > 0 for s in items)
 
 
@@ -94,6 +98,10 @@ def test_full_ramp_reaches_cap_and_reports(tmp_path, monkeypatch):
     assert r["total_requests"] > 0
     assert len(r["per_scenario"]) == 5
     assert r["steady"]["p50_ms"] is not None
+    # memory-telemetry fields are always present (None where unmeasurable)
+    assert "bw_gbs" in r["steady"] and "kv_pct" in r["steady"]
+    assert "mem_mb_per_user" in r
+    assert all("avg_kv_tokens" in s for s in r["per_scenario"].values())
     assert list(tmp_path.glob("capacity-*.json"))      # persisted
 
 
@@ -119,3 +127,73 @@ def test_status_shape_while_idleish(tmp_path, monkeypatch):
     s = test.status()
     assert s["phase"] == "starting" and s["users"] == 0
     assert "per_scenario" in s and "deep_agent" in s["per_scenario"]
+
+
+# ── agentic loop semantics: compounding context, tools, sessions ─────────────
+
+def test_loop_compounds_context_and_tools():
+    """research_brief: prompts must GROW across the loop (agent, not chatbot):
+    gather -> 2 tool continuations with injected results -> analyze/write carry
+    everything accumulated so far."""
+    from backend.capacity.controller import run_scenario_loop
+    from backend.capacity.scenarios import load_scenarios
+
+    scen = load_scenarios()["research_brief"]
+    seen: list[tuple[str, int]] = []
+
+    async def fake_call(scenario, step, sid, idx, extra_tokens, label):
+        seen.append((label, extra_tokens))
+        return {"ok": True, "latency_ms": 1.0,
+                "tokens_in": step["prompt_tokens"] + extra_tokens,
+                "tokens_out": int(step["max_tokens"] * 0.8)}
+
+    carry = asyncio.run(run_scenario_loop(fake_call, scen, "research_brief", 0, 0))
+
+    labels = [l for l, _ in seen]
+    assert labels == ["gather", "gather+tool1", "gather+tool2", "analyze", "write"]
+    extras = [e for _, e in seen]
+    assert extras[0] == 0                       # first call: no context yet
+    assert extras[1] > extras[0]                # tool result injected
+    assert extras[2] > extras[1]                # second tool compounds further
+    assert extras[3] > 0 and extras[4] > extras[3]  # carry_context keeps growing
+    assert carry > 0                            # session carries context out
+
+
+def test_session_compounds_across_turns_then_resets():
+    """deep_agent (session_turns=3): turn 2 must start with turn 1's context;
+    context is capped by context_cap."""
+    from backend.capacity.controller import run_scenario_loop
+    from backend.capacity.scenarios import load_scenarios
+
+    scen = load_scenarios()["deep_agent"]
+
+    async def fake_call(scenario, step, sid, idx, extra_tokens, label):
+        return {"ok": True, "latency_ms": 1.0,
+                "tokens_in": step["prompt_tokens"] + extra_tokens,
+                "tokens_out": int(step["max_tokens"] * 0.8)}
+
+    async def go():
+        t1 = await run_scenario_loop(fake_call, scen, "deep_agent", 0, 0)
+        t2 = await run_scenario_loop(fake_call, scen, "deep_agent", 0, t1)
+        return t1, t2
+
+    t1, t2 = asyncio.run(go())
+    assert t1 > 0
+    assert t2 >= t1                              # session compounding
+    assert t2 <= scen["context_cap"]             # bounded by the context window
+
+
+def test_chatbot_baseline_stays_flat():
+    """quick_answer is the deliberate contrast: no tools, no carry, no session."""
+    from backend.capacity.controller import run_scenario_loop
+    from backend.capacity.scenarios import load_scenarios
+
+    scen = load_scenarios()["quick_answer"]
+    seen = []
+
+    async def fake_call(scenario, step, sid, idx, extra_tokens, label):
+        seen.append((label, extra_tokens))
+        return {"ok": True, "latency_ms": 1.0, "tokens_in": 150, "tokens_out": 96}
+
+    asyncio.run(run_scenario_loop(fake_call, scen, "quick_answer", 0, 0))
+    assert seen == [("answer", 0)]

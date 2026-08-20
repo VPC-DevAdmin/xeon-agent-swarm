@@ -34,6 +34,7 @@ export function CapacityView() {
   const [mockSigma, setMockSigma] = useState(300)
   const [engine, setEngine] = useState<CapacityEngine | null>(null)
   const [status, setStatus] = useState<CapacityStatus | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -163,20 +164,39 @@ export function CapacityView() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           {scenarios.map((s) => {
             const on = enabled.includes(s.id)
+            const open = expanded === s.id
             const live = status?.per_scenario?.[s.id]
             return (
-              <button key={s.id} disabled={active}
-                onClick={() => setEnabled((prev) => on ? prev.filter((x) => x !== s.id) : [...prev, s.id])}
-                className={clsx('text-left rounded-lg border p-2.5 transition-colors disabled:cursor-default',
-                  on ? 'bg-[var(--elev)]' : 'opacity-45')}
-                style={{ borderColor: on ? 'rgba(124,135,245,.35)' : 'var(--line)' }}>
+              <div key={s.id}
+                className={clsx('rounded-lg border p-2.5 transition-colors',
+                  on ? 'bg-[var(--elev)]' : 'opacity-45',
+                  open && 'md:col-span-2 lg:col-span-3 !opacity-100')}
+                style={{ borderColor: open ? 'rgba(124,135,245,.5)' : on ? 'rgba(124,135,245,.35)' : 'var(--line)' }}>
                 <div className="flex items-center gap-2">
+                  {/* enable toggle */}
+                  <button disabled={active} title={on ? 'Remove from the mix' : 'Add to the mix'}
+                    onClick={() => setEnabled((prev) => on ? prev.filter((x) => x !== s.id) : [...prev, s.id])}
+                    className="flex-none w-4 h-4 grid place-items-center rounded border disabled:cursor-default"
+                    style={{ borderColor: on ? 'var(--accent)' : 'var(--line)',
+                             background: on ? 'var(--accent)' : 'transparent' }}>
+                    {on && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0b0f18" strokeWidth="3.5"><path d="M20 6 9 17l-5-5" /></svg>}
+                  </button>
                   <span className="w-1.5 h-1.5 rounded-full flex-none"
                     style={{ background: COMPLEXITY_COLOR[s.complexity] }} />
                   <span className="text-[13px] font-medium flex-1 truncate">{s.name}</span>
-                  <span className="font-code text-[10px] text-[var(--faint)]">
-                    {s.calls_per_loop} call{s.calls_per_loop === 1 ? '' : 's'}/loop
+                  <span className="font-code text-[10px] text-[var(--faint)] whitespace-nowrap">
+                    {s.calls_per_loop} LLM{s.tool_calls_per_loop > 0 ? ` · ${s.tool_calls_per_loop}⚒` : ''}
+                    {s.session_turns > 1 ? ` · ×${s.session_turns}` : ''}
                   </span>
+                  {/* loop expander */}
+                  <button title={open ? 'Hide the loop' : 'See what this agent does each loop'}
+                    onClick={() => setExpanded(open ? null : s.id)}
+                    className="flex-none w-5 h-5 grid place-items-center rounded text-[var(--faint)] hover:text-[var(--text)] hover:bg-[var(--elev2)]">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                      style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
                 </div>
                 <p className="text-[11px] text-[var(--faint)] mt-1 line-clamp-2">{s.blurb}</p>
                 {active && live && (
@@ -186,7 +206,8 @@ export function CapacityView() {
                     {live.errors > 0 && <span style={{ color: 'var(--bad)' }}> · {live.errors} err</span>}
                   </p>
                 )}
-              </button>
+                {open && <ScenarioLoop s={s} />}
+              </div>
             )
           })}
         </div>
@@ -199,6 +220,67 @@ export function CapacityView() {
 
       {/* final result */}
       {!active && result && <ResultCard result={result} />}
+    </div>
+  )
+}
+
+/* ── scenario loop detail ────────────────────────────────────────────────────── */
+
+function ScenarioLoop({ s }: { s: CapacityScenario }) {
+  return (
+    <div className="mt-2.5 pt-2.5 border-t anim-task-in" style={{ borderColor: 'var(--line-soft)' }}>
+      <div className="eyebrow mb-1.5">
+        The loop — one virtual user repeats this until the test ends
+      </div>
+      <div className="flex flex-col gap-1">
+        {s.steps.map((st, i) => (
+          <div key={i} className="flex items-center gap-2.5 text-[12px] flex-wrap">
+            <span className="flex-none min-w-[18px] h-[18px] rounded-full grid place-items-center font-code text-[9.5px]"
+              style={{ background: 'rgba(124,135,245,.15)', color: 'var(--accent)' }}>
+              {i + 1}
+            </span>
+            <span className="font-code text-[11.5px] text-[var(--text)] w-32 truncate">{st.label}</span>
+            <span className="flex items-center gap-1 flex-1 min-w-[100px]">
+              <span className="h-[5px] rounded-sm" title={`~${st.prompt_tokens} base tokens in (prefill)`}
+                style={{ width: `${Math.max(3, Math.min(50, st.prompt_tokens / 55))}%`, background: 'var(--t1)' }} />
+              <span className="h-[5px] rounded-sm" title={`up to ${st.max_tokens} tokens out (decode)`}
+                style={{ width: `${Math.max(3, Math.min(50, st.max_tokens / 55))}%`, background: 'var(--t4)' }} />
+            </span>
+            <span className="font-code text-[10.5px] text-[var(--muted)] whitespace-nowrap">
+              ~{st.prompt_tokens} in → ≤{st.max_tokens} out
+            </span>
+            {st.carry_context && (
+              <span className="font-code text-[9.5px] px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                title="This step's prompt includes everything produced so far — compounding context"
+                style={{ background: 'rgba(94,200,229,.12)', color: 'var(--t1)' }}>
+                ⮡ carries context
+              </span>
+            )}
+            {st.tool_calls > 0 && (
+              <span className="font-code text-[9.5px] px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                title={`${st.tool_calls} tool round-trip(s): agent waits on the tool, ~${st.tool_result_tokens} result tokens injected into context, model called again`}
+                style={{ background: 'rgba(232,155,92,.12)', color: 'var(--t4)' }}>
+                ⚒ {st.tool_calls} tool call{st.tool_calls === 1 ? '' : 's'} · +{st.tool_result_tokens} tok each
+              </span>
+            )}
+          </div>
+        ))}
+        <div className="flex items-center gap-2.5 text-[11px] text-[var(--faint)] mt-0.5">
+          <span className="flex-none w-[18px] text-center">↻</span>
+          <span>
+            think {(s.think_ms / 1000).toFixed(1)}s, then repeat
+            {s.session_turns > 1
+              ? <> — <b style={{ color: 'var(--muted)' }}>session compounds over {s.session_turns} turns</b> (context carries into the next loop, capped at {s.context_cap.toLocaleString()} tok) before resetting</>
+              : ' — stateless: every loop starts fresh'}
+            {' '}· {s.calls_per_loop} LLM calls{s.tool_calls_per_loop > 0 ? ` + ${s.tool_calls_per_loop} tool waits` : ''} per loop
+          </span>
+        </div>
+        <div className="flex items-center gap-3 mt-1 font-code text-[10px] text-[var(--faint)]">
+          <span className="flex items-center gap-1"><i className="w-2 h-[5px] rounded-sm inline-block" style={{ background: 'var(--t1)' }} /> prompt (prefill)</span>
+          <span className="flex items-center gap-1"><i className="w-2 h-[5px] rounded-sm inline-block" style={{ background: 'var(--t4)' }} /> output (decode)</span>
+          <span>· carried context and injected tool results grow the prompt beyond the base each turn</span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -262,25 +344,34 @@ function LivePanel({ status }: { status: CapacityStatus }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <Dial label="agents" value={String(status.users ?? 0)} accent />
         <Dial label="tokens/s" value={fmtNum(latest.tps)} />
         <Dial label="req/min" value={fmtNum(latest.rpm)} />
         <Dial label="p95" value={fmtMs(latest.p95_ms)} />
         <Dial label="CPU" value={latest.cpu_pct != null ? `${latest.cpu_pct}%` : '—'} />
-        <Dial label="power" value={latest.power_w != null ? `${latest.power_w} W` : '—'} />
+        <Dial label="memory" value={latest.mem_pct != null ? `${latest.mem_pct}%` : '—'} />
+        <Dial label="mem b/w" value={latest.bw_gbs != null ? `${latest.bw_gbs} GB/s` : '—'} />
+        <Dial label={latest.kv_pct != null ? 'KV cache' : 'power'}
+          value={latest.kv_pct != null ? `${latest.kv_pct}%`
+            : latest.power_w != null ? `${latest.power_w} W` : '—'} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Spark title="agents + CPU %" series={[
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Spark title="agents · CPU % · memory %" series={[
           { color: 'var(--accent)', pts: timeline.map((s) => s.users) },
           { color: 'var(--t5)', pts: timeline.map((s) => s.cpu_pct ?? null) },
+          { color: 'var(--t1)', pts: timeline.map((s) => s.mem_pct ?? null) },
         ]} maxHint={100} />
         <Spark title="throughput tok/s" series={[
           { color: 'var(--t2)', pts: timeline.map((s) => s.tps) },
         ]} />
         <Spark title="p95 latency ms" series={[
           { color: 'var(--t3)', pts: timeline.map((s) => s.p95_ms ?? null) },
+        ]} />
+        <Spark title="memory bandwidth GB/s · KV cache %" series={[
+          { color: 'var(--t4)', pts: timeline.map((s) => s.bw_gbs ?? null) },
+          { color: 'var(--t1)', pts: timeline.map((s) => s.kv_pct ?? null) },
         ]} />
       </div>
     </div>
@@ -330,6 +421,8 @@ function Spark({ title, series, maxHint }: {
 
 const VERDICT_TEXT: Record<string, string> = {
   cpu: 'CPU saturated — this is the box’s ceiling',
+  memory: 'system memory saturated — RAM gated before the cores did',
+  kv: 'engine KV cache saturated — model memory gated before CPU',
   plateau: 'throughput plateaued — no headroom past this point',
   errors: 'error rate exceeded the limit',
   capped: 'reached the configured user cap without saturating',
@@ -359,6 +452,9 @@ function ResultCard({ result }: { result: CapacityResult }) {
         <Kv k="error rate" v={`${((s.err_rate ?? 0) * 100).toFixed(1)}%`} />
         <Kv k="CPU at steady state" v={s.cpu_pct != null ? `${s.cpu_pct}%` : '—'} />
         <Kv k="memory" v={s.mem_pct != null ? `${s.mem_pct}%` : '—'} />
+        <Kv k="memory bandwidth" v={s.bw_gbs != null ? `${s.bw_gbs} GB/s` : '—'} />
+        <Kv k="KV cache" v={s.kv_pct != null ? `${s.kv_pct}%` : '—'} />
+        <Kv k="memory / added agent" v={result.mem_mb_per_user != null ? `${fmtNum(result.mem_mb_per_user)} MB` : '—'} />
         <Kv k="power" v={s.power_w != null ? `${s.power_w} W` : '—'} />
         <Kv k="energy used" v={result.energy_wh != null ? `${result.energy_wh} Wh` : '—'} />
         <Kv k="duration" v={`${Math.round(result.duration_s)}s`} />
@@ -375,6 +471,10 @@ function ResultCard({ result }: { result: CapacityResult }) {
               <span className="font-code text-[11px] text-[var(--muted)] w-14">{sc.users} usr</span>
               <span className="font-code text-[11px] text-[var(--muted)] w-20">{sc.calls} calls</span>
               <span className="font-code text-[11px] text-[var(--muted)] w-24">p50 {fmtMs(sc.p50_ms)}</span>
+              <span className="font-code text-[11px] text-[var(--muted)] w-28"
+                title="average KV-cache tokens this agent type keeps resident">
+                {sc.avg_kv_tokens != null ? `${sc.avg_kv_tokens.toLocaleString()} kv tok` : ''}
+              </span>
               <span className="font-code text-[11px] w-16"
                 style={{ color: sc.errors ? 'var(--bad)' : 'var(--faint)' }}>
                 {sc.errors ? `${sc.errors} err` : 'clean'}
