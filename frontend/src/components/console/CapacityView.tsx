@@ -420,6 +420,7 @@ function Spark({ title, series, maxHint }: {
 /* ── result card ─────────────────────────────────────────────────────────────── */
 
 const VERDICT_TEXT: Record<string, string> = {
+  slo: 'latency SLO breached beyond this level — capacity measured at the last level that held it',
   cpu: 'CPU saturated — this is the box’s ceiling',
   memory: 'system memory saturated — RAM gated before the cores did',
   kv: 'engine KV cache saturated — model memory gated before CPU',
@@ -437,13 +438,20 @@ function ResultCard({ result }: { result: CapacityResult }) {
       <div className="eyebrow mb-1">Capacity result — {result.mode.replace('_', ' ')}</div>
       <div className="flex items-baseline gap-3 flex-wrap">
         <span className="font-display font-bold text-[40px] tracking-[-0.03em]" style={{ color: 'var(--accent)' }}>
-          {result.max_users}
+          {result.capacity_users ?? result.max_users}
         </span>
-        <span className="text-[15px] text-[var(--text)]">concurrent agents sustained</span>
+        <span className="text-[15px] text-[var(--text)]">concurrent agents within SLO</span>
         <span className="text-[12.5px] text-[var(--muted)]">
           {VERDICT_TEXT[result.verdict ?? ''] ?? result.verdict}
         </span>
       </div>
+      <p className="font-code text-[11px] mt-1" style={{ color: 'var(--faint)' }}>
+        SLO: p95 ≤ {result.slo?.p95_ms != null ? `${result.slo.p95_ms}ms`
+          : `${result.slo?.p95_x ?? 3}× the healthy baseline${result.baseline_p95_ms != null ? ` (${Math.round(result.baseline_p95_ms)}ms → ${Math.round(result.baseline_p95_ms * (result.slo?.p95_x ?? 3))}ms)` : ''}`}
+        {' '}· errors ≤ {((result.slo?.err ?? 0.05) * 100).toFixed(0)}%
+        {result.max_users > (result.capacity_users ?? result.max_users) &&
+          ` · ramped to ${result.max_users}, scaled back to measure at ${result.capacity_users}`}
+      </p>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 mt-4 text-[12.5px]">
         <Kv k="throughput" v={`${fmtNum(s.tps)} tok/s`} />

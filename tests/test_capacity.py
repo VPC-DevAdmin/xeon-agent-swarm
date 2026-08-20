@@ -88,11 +88,12 @@ def test_unknown_mode_is_an_error_record_not_a_raise():
 # ── controller lifecycle (fast, all-mock) ─────────────────────────────────────
 
 def _fast_cfg(**over):
-    # plateau_gain=-1 disables the (noise-sensitive) plateau detector so the
-    # fast lifecycle test deterministically ends at the user cap.
+    # plateau_frac=0 disables the plateau detector so the fast lifecycle test
+    # deterministically ends at the user cap; the wide SLO never trips on the
+    # constant mock latency.
     cfg = dict(mock_ms=25, mock_sigma=4, step_interval_s=0.4, hold_s=2.5,
                sample_interval_s=0.1, max_users=3, start_users=1, step_users=1,
-               max_duration_s=30, plateau_gain=-1.0)
+               max_duration_s=30, plateau_frac=0)
     cfg.update(over)
     return cfg
 
@@ -105,6 +106,8 @@ def test_full_ramp_reaches_cap_and_reports(tmp_path, monkeypatch):
     assert r is not None
     assert r["verdict"] == "capped"
     assert r["max_users"] == 3
+    assert r["capacity_users"] == 3          # SLO held the whole way => capacity = held level
+    assert r["baseline_p95_ms"] is not None
     assert r["total_requests"] > 0
     assert len(r["per_scenario"]) == 6
     assert r["steady"]["p50_ms"] is not None
@@ -218,3 +221,41 @@ def test_support_session_compounds_like_a_ticket():
     assert labels[:3] == ["triage+lookup", "triage+lookup+tool1", "triage+lookup+tool2"]
     turn2_first_extra = seen[5][1]          # first call of the second turn
     assert turn2_first_extra >= t1 > 0      # the conversation carried over
+
+
+def test_slo_breach_scales_back_to_last_good_level(tmp_path, monkeypatch):
+    """The capacity-planning definition: when latency blows past the SLO at 4
+    users, the test must scale BACK to 3 and report capacity_users=3 — the level
+    a customer could actually run at — not the level that broke."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("remote_mock", ["support_agent"], _fast_cfg(
+        max_users=10, slo_p95_x=3.0, step_interval_s=0.6, hold_s=1.5))
+
+    real_call = test._caller.call
+
+    async def degrading_call(scenario, step, extra_context_tokens=0):
+        # Healthy at <=3 users; latency x10 once the 4th user exists.
+        test._caller.mock_ms = 30 if len(test.users) <= 3 else 300
+        test._caller.mock_sigma = 2
+        return await real_call(scenario, step,
+                               extra_context_tokens=extra_context_tokens)
+
+    monkeypatch.setattr(test._caller, "call", degrading_call)
+    asyncio.run(test.run())
+    r = test.result
+    assert r["verdict"] == "slo"
+    assert r["capacity_users"] == 3            # last good level, not the breach level
+    assert len(test.users) == 3                # scaled back down before the hold
+    assert r["baseline_p95_ms"] < 100          # baseline measured at healthy load
+
+
+def test_relative_plateau_math():
+    """A fixed 5%-gain threshold fires at N~20 from arithmetic alone; the
+    relative rule only fires when the gain is under plateau_frac of what
+    perfect linear scaling would have produced."""
+    # At 20 users adding 1: perfect scaling => +5%. Measured +4% is still 80% of
+    # linear — NOT a plateau under the relative rule (0.25 * 5% = 1.25% floor).
+    expected = 1 / 20
+    assert 0.04 >= 0.25 * expected
+    # Measured +0.5% IS a plateau (under the 1.25% floor).
+    assert 0.005 < 0.25 * expected

@@ -204,6 +204,9 @@ export interface CapacityScenarioStat {
 export interface CapacityResult {
   mode: string
   verdict: string | null
+  capacity_users: number
+  baseline_p95_ms?: number | null
+  slo?: { p95_x: number; p95_ms?: number | null; err: number }
   max_users: number
   duration_s: number
   total_requests: number
@@ -227,6 +230,8 @@ export interface CapacityStatus {
   verdict?: string | null
   mode?: string
   users?: number
+  capacity_users?: number | null
+  baseline_p95_ms?: number | null
   elapsed_s?: number
   total_requests?: number
   latest?: Partial<CapacitySample>

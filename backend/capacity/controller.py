@@ -6,14 +6,26 @@ the five fixed agent scenarios looping continuously. The ramp stops when the
 system shows CONSISTENT saturation, then holds at that level to measure a clean
 steady state, and reports a speed-test-style result.
 
-Saturation verdicts (first one to fire wins):
+CAPACITY DEFINITION (the number this test reports): the highest agent count at
+which the service level still held — p95 latency within slo_p95_x × the
+low-load baseline (or an absolute slo_p95_ms) AND error rate within slo_err.
+When the ramp breaches the SLO it SCALES BACK DOWN to the last good level and
+measures the steady state THERE: capacity is what you can sustain, not the
+level you died at. Resource verdicts explain the cause.
+
+Stop conditions (first one to fire wins):
+  slo       p95 exceeded the SLO (or errors did) for 2 consecutive intervals —
+            scale down to the last good level, hold, measure
   cpu       local mode: CPU sustained >= cpu_target for 2 consecutive intervals
   memory    local mode: system memory sustained >= mem_target — RAM can gate
             before cores do on big-model boxes
   kv        local mode: the engine's KV-cache pool sustained >= kv_target
             (scraped from SGLang /metrics; the truest "model memory full")
-  plateau   throughput gained < 5% across 2 consecutive user-adds (any mode)
-  errors    error rate over an interval exceeded 10%
+  plateau   throughput gain fell below plateau_frac × the EXPECTED linear gain
+            (step_users/users) for 2 consecutive adds — relative, so it means
+            diminishing returns at any scale (a fixed % threshold falsely fires
+            once 1/N drops under it)
+  errors    error rate over an interval exceeded error_rate_limit (hard stop)
   capped    max_users reached (held and measured there)
   timeout   max_duration elapsed
 
@@ -48,8 +60,12 @@ DEFAULTS = dict(
     cpu_target=90.0,       # local-mode saturation line
     mem_target=92.0,       # local-mode RAM saturation line (%)
     kv_target=90.0,        # local-mode KV-pool saturation line (%)
-    plateau_gain=0.05,     # <5% throughput gain across a step = no headroom
-    error_rate_limit=0.10,
+    slo_p95_x=3.0,         # SLO: p95 may grow to this multiple of the baseline
+    slo_p95_ms=None,       # absolute p95 SLO in ms (overrides the multiplier)
+    slo_err=0.05,          # SLO: max error rate while a level counts as "good"
+    plateau_frac=0.25,     # gain < 25% of the expected linear gain, twice = knee
+    error_rate_limit=0.10, # hard stop
+
     sample_interval_s=2.0,
     mock_ms=2000.0,
     mock_sigma=300.0,
@@ -116,6 +132,8 @@ class CapacityTest:
 
         self.phase = "starting"        # starting | ramping | holding | done | stopped | error
         self.verdict: str | None = None
+        self.baseline_p95: float | None = None   # low-load p95, the SLO reference
+        self.capacity_users: int | None = None   # last level where the SLO held
         self.started_at = time.time()
         self.ended_at: float | None = None
         self.error: str | None = None
@@ -161,6 +179,14 @@ class CapacityTest:
         sid = self.scenario_ids[idx % len(self.scenario_ids)]
         self.user_scenario.append(sid)
         self.users.append(asyncio.create_task(self._user_loop(idx, sid)))
+
+    def _remove_users(self, n: int):
+        """Scale back down (SLO breach): capacity is measured at a level that
+        WORKS, so the breached level's users are cancelled before the hold."""
+        for _ in range(min(n, len(self.users) - 1)):
+            task = self.users.pop()
+            self.user_scenario.pop()
+            task.cancel()
 
     async def _user_loop(self, idx: int, sid: str):
         """One virtual user: an agent SESSION, not a chatbot pinger.
@@ -242,10 +268,12 @@ class CapacityTest:
         self.phase = "ramping"
         interval = float(self.cfg["step_interval_s"])
         prev_tps: float | None = None
+        prev_users = int(self.cfg["start_users"])
         cpu_hot = 0
         mem_hot = 0
         kv_hot = 0
         flat = 0
+        slo_bad = 0
 
         while not self._stop.is_set():
             try:
@@ -263,6 +291,23 @@ class CapacityTest:
             avg_cpu, avg_mem, avg_kv = _avg("cpu_pct"), _avg("mem_pct"), _avg("kv_pct")
             elapsed = time.time() - self.started_at
 
+            # SLO evaluation: the baseline is the first interval's p95 at the
+            # starting load — the reference for "how the service behaves when
+            # healthy". A level is GOOD when p95 and errors are within the SLO.
+            if self.baseline_p95 is None and stats["p95_ms"] is not None:
+                self.baseline_p95 = stats["p95_ms"]
+            slo_ms = (self.cfg["slo_p95_ms"]
+                      or (self.baseline_p95 * self.cfg["slo_p95_x"]
+                          if self.baseline_p95 else None))
+            good = ((slo_ms is None or stats["p95_ms"] is None
+                     or stats["p95_ms"] <= slo_ms)
+                    and stats["err_rate"] <= self.cfg["slo_err"])
+            if good:
+                self.capacity_users = len(self.users)
+                slo_bad = 0
+            else:
+                slo_bad = slo_bad + 1
+
             local = self.mode == "local"
             cpu_hot = cpu_hot + 1 if (
                 local and avg_cpu is not None
@@ -273,12 +318,22 @@ class CapacityTest:
             kv_hot = kv_hot + 1 if (
                 local and avg_kv is not None
                 and avg_kv >= self.cfg["kv_target"]) else 0
-            if prev_tps is not None and prev_tps > 0:
+            # Relative plateau: compare the measured gain against the gain
+            # PERFECT scaling would have produced for the users just added
+            # (step/users). A fixed % threshold would falsely fire once 1/N
+            # drops below it, reporting arithmetic instead of capacity.
+            frac = float(self.cfg["plateau_frac"] or 0)
+            if prev_tps is not None and prev_tps > 0 and frac > 0:
                 gain = (stats["tps"] - prev_tps) / prev_tps
-                flat = flat + 1 if gain < self.cfg["plateau_gain"] else 0
+                added = max(0, len(self.users) - prev_users)
+                expected = added / max(1, prev_users)
+                flat = flat + 1 if (added > 0 and gain < frac * expected) else 0
             prev_tps = stats["tps"]
+            prev_users = len(self.users)
 
-            if cpu_hot >= 2:
+            if slo_bad >= 2:
+                self.verdict = "slo"
+            elif cpu_hot >= 2:
                 self.verdict = "cpu"
             elif mem_hot >= 2:
                 self.verdict = "memory"
@@ -294,6 +349,10 @@ class CapacityTest:
                 self.verdict = "timeout"
 
             if self.verdict:
+                if (self.verdict == "slo" and self.capacity_users
+                        and self.capacity_users < len(self.users)):
+                    # Measure capacity at the last level that MET the SLO.
+                    self._remove_users(len(self.users) - self.capacity_users)
                 await self._hold()
                 return
 
@@ -355,6 +414,12 @@ class CapacityTest:
             "verdict": self.verdict or ("stopped" if self.phase == "stopped" else None),
             "phase": self.phase,
             "error": self.error,
+            # THE capacity number: the highest level at which the SLO held.
+            # Falls back to the held level when the SLO was never breached.
+            "capacity_users": self.capacity_users or len(self.users),
+            "baseline_p95_ms": self.baseline_p95,
+            "slo": {"p95_x": self.cfg["slo_p95_x"], "p95_ms": self.cfg["slo_p95_ms"],
+                     "err": self.cfg["slo_err"]},
             "max_users": len(self.users),
             "duration_s": round(dur, 1),
             "total_requests": self.total_requests,
@@ -401,6 +466,8 @@ class CapacityTest:
             "verdict": self.verdict,
             "mode": self.mode,
             "users": len(self.users),
+            "capacity_users": self.capacity_users,
+            "baseline_p95_ms": self.baseline_p95,
             "elapsed_s": round(time.time() - self.started_at, 1),
             "total_requests": self.total_requests,
             "latest": latest,
