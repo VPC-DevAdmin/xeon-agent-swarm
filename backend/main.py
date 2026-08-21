@@ -248,6 +248,10 @@ async def run_deepagents(
     plan_approval: bool | None = None,
     enabled_tools: list[str] | None = None,
     budget: dict | None = None,
+    router_base_url: str | None = None,
+    router_api_key: str | None = None,
+    router_model: str | None = None,
+    router_provider: str = "openai",
 ):
     """deepagents (ADL) engine: a single deep agent decomposes + delegates + synthesizes,
     streamed through the event adapter onto the same WS + DB surfaces as the old swarm.
@@ -264,7 +268,8 @@ async def run_deepagents(
     await db.create_run(
         run_id, query, job_id=job_id, trigger=trigger,
         config={"engine": "deepagents", "validator_enabled": validator_enabled,
-                "enabled_tools": enabled_tools or []},
+                "enabled_tools": enabled_tools or [],
+                "router_override": bool(router_base_url)},
     )
     if job_id:
         await db.set_job_last_run(job_id, run_id)
@@ -281,7 +286,8 @@ async def run_deepagents(
             make_judge, make_redispatch, make_synthesis_grader, make_partial_synthesizer)
         from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-        mf = ModelFactory()
+        mf = ModelFactory(base_url=router_base_url, api_key=router_api_key,
+                          model_override=router_model, provider=router_provider)
         judge = make_judge(mf) if validator_enabled else None
         redispatch = make_redispatch(mf) if validator_enabled else None
         synthesis_grader = make_synthesis_grader(mf) if validator_enabled else None
@@ -304,7 +310,7 @@ async def run_deepagents(
         # routing + validation rollup), budgets, and run_completed/run_metrics over WS.
         async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
             agent = build_agent(checkpointer, plan_approval=plan_approval,
-                                enabled_tools=enabled_tools)
+                                enabled_tools=enabled_tools, model_factory=mf)
             summary = await run_with_adapter(
                 agent, query, run_id,
                 broadcast=manager.broadcast,
@@ -345,6 +351,10 @@ def launch_run(
     plan_approval: bool | None = None,
     enabled_tools: list[str] | None = None,
     budget: dict | None = None,
+    router_base_url: str | None = None,
+    router_api_key: str | None = None,
+    router_model: str | None = None,
+    router_provider: str = "openai",
 ) -> str:
     """Create a run_id and kick off the ADL deepagents engine in the background.
 
@@ -365,6 +375,10 @@ def launch_run(
         plan_approval=plan_approval,
         enabled_tools=enabled_tools,
         budget=budget,
+        router_base_url=router_base_url,
+        router_api_key=router_api_key,
+        router_model=router_model,
+        router_provider=router_provider,
     ))
     _run_tasks[run_id] = task
     task.add_done_callback(lambda _t, rid=run_id: _run_tasks.pop(rid, None))

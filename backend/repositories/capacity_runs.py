@@ -40,10 +40,17 @@ def summary(row: CapacityRun) -> dict:
     r = row.result or {}
     return {
         "id": row.id, "mode": row.mode, "mix": row.mix,
+        "benchmark_target": r.get("benchmark_target"),
+        "inference_backend": r.get("inference_backend"),
         "comparable": r.get("comparable"),
         "verdict": row.verdict,
         "capacity_users": row.capacity_users, "capacity_tiles": row.capacity_tiles,
+        "capacity_certified": r.get("capacity_certified"),
         "workflows_per_hour": r.get("workflows_per_hour"),
+        "cloud_model_name": (r.get("cloud_model") or {}).get("name"),
+        "run_cost_usd": (r.get("cost") or {}).get("run_total_usd"),
+        "steady_cost_per_hour": (r.get("cost") or {}).get("steady_cost_per_hour"),
+        "circuit_breaker_usd": (r.get("cost") or {}).get("circuit_breaker_usd"),
         "steady_tps": (r.get("steady") or {}).get("tps"),
         "p95_ms": (r.get("steady") or {}).get("p95_ms"),
         "duration_s": row.duration_s, "seed": row.seed, "label": row.label,

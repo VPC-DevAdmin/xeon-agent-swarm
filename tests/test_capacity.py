@@ -529,3 +529,82 @@ def test_control_token_gate(monkeypatch):
         _check_control_token(None)
     with _pytest.raises(HTTPException):
         _check_control_token("wrong")
+
+
+def test_capacity_target_and_backend_are_independent_dimensions():
+    """The public API must not confuse the system under test with the place
+    model calls happen. Runtime targets map to the real e2e runner; inference
+    diagnostics retain the direct synthetic runners."""
+    import pytest as _pytest
+    from fastapi import HTTPException
+    from backend.routers.capacity import StartBody, _resolve_dimensions
+
+    assert _resolve_dimensions(StartBody(
+        benchmark_target="agent_host", inference_backend="remote_mock")) == (
+            "agent_host", "remote_mock", "e2e")
+    assert _resolve_dimensions(StartBody(
+        benchmark_target="integrated_node", inference_backend="local")) == (
+            "integrated_node", "local", "e2e")
+    assert _resolve_dimensions(StartBody(
+        benchmark_target="inference_engine", inference_backend="local")) == (
+            "inference_engine", "local", "local")
+    # Old saved clients remain valid, but impossible new combinations do not.
+    assert _resolve_dimensions(StartBody(mode="e2e")) == (
+        "agent_host", "remote_mock", "e2e")
+    with _pytest.raises(HTTPException):
+        _resolve_dimensions(StartBody(
+            benchmark_target="agent_host", inference_backend="local"))
+
+
+def test_result_names_the_measured_boundary(tmp_path, monkeypatch):
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest(
+        "remote_mock", ["support_agent"], _fast_cfg(),
+        benchmark_target="inference_engine", inference_backend="remote_mock")
+    asyncio.run(test.run())
+    assert test.result["benchmark_target"] == "inference_engine"
+    assert test.result["inference_backend"] == "remote_mock"
+    assert test.result["capacity_certified"] is True
+    assert test.result["completed_requests"] <= test.result["total_requests"]
+
+
+def test_cloud_catalog_and_custom_endpoint_never_expose_keys(monkeypatch):
+    from backend.capacity.models import catalog_for_api, public_endpoint, resolve_endpoint
+
+    monkeypatch.setenv("OPENAI_API_KEY", "server-secret")
+    catalog = catalog_for_api()
+    mini = next(m for m in catalog if m["id"] == "openai:gpt-5.4-mini")
+    assert mini["input_per_mtok"] == 0.75
+    assert mini["output_per_mtok"] == 4.5
+    assert mini["api_key_configured"] is True
+    endpoint = resolve_endpoint("openai:gpt-5.4-mini")
+    assert endpoint["api_key"] == "server-secret"
+    assert "api_key" not in public_endpoint(endpoint)
+
+    custom = resolve_endpoint(
+        "custom", api_key="custom-secret", custom_base_url="https://llm.example/v1/",
+        custom_model="acme-1", input_per_mtok=1.25, output_per_mtok=5.0)
+    assert custom["base_url"] == "https://llm.example/v1"
+    assert custom["input_per_mtok"] == 1.25
+    assert "api_key" not in public_endpoint(custom)
+
+
+def test_dollar_circuit_breaker_reserves_concurrent_spend():
+    endpoint = {
+        "id": "test", "provider": "custom", "name": "Test", "model": "test",
+        "base_url": "https://example.invalid/v1", "api_key": "secret",
+        "input_per_mtok": 1.0, "output_per_mtok": 1.0,
+    }
+    test = ctl.CapacityTest(
+        "remote_mock", ["support_agent"],
+        _fast_cfg(max_cost_usd=0.001, max_users=2), endpoint=endpoint)
+
+    async def reserve():
+        first = await test._reserve_spend(400, 400)
+        second = await test._reserve_spend(400, 400)
+        return first, second
+
+    first, second = asyncio.run(reserve())
+    assert first == 0.0008
+    assert second is None
+    assert test.verdict == "spend_guard"

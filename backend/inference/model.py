@@ -8,10 +8,10 @@ directly. The `model` field is a TIER SELECTOR, not a model name:
   - model="auto"             -> router classifies the query and picks the tier
   - model="tier1".."tier5"   -> pin that tier (tier1 cheapest, tier5 frontier)
 
-A real model id is rejected with 400. Model identity is owned by server config and
-never leaves the gateway, so this project holds no model names and a backend model
-swap needs no client change. The response `model` field and the x-vsr-selected-model
-header are both already tier ids.
+For ordinary application runs, model identity is owned by server config and never
+leaves the gateway. Capacity benchmarks are the deliberate exception: a per-run
+provider/model override pins every agent role to the cloud model selected by the
+operator so throughput and cost are attributable to one endpoint.
 
 Principle: this layer does not classify queries. Workers go out as "auto" and the
 router decides. We pin a tier only for structural roles (planner, synthesis) where
@@ -51,12 +51,27 @@ def to_wire_tier(tier: str) -> str:
 
 
 class ModelFactory:
-    """Produces chat models bound to the gateway. This project never names a model."""
+    """Produce gateway models or an isolated per-capacity-run provider override."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, base_url: str | None = None,
+                 api_key: str | None = None,
+                 model_override: str | None = None,
+                 provider: str = "openai") -> None:
+        """Build models against the configured router or a per-run override.
+
+        Capacity benchmarks use the override to keep the benchmark target and
+        inference backend independent: an Agent Host test can drive the real
+        orchestrator against a controlled remote router without changing the
+        application-wide router used by ordinary runs.
+        """
         base = os.environ.get("ROUTER_BASE", "http://localhost:8900")
-        self.base_url = os.environ.get("ROUTER_BASE_URL", f"{base}/v1")
-        self.api_key = os.environ.get("ROUTER_API_KEY", "unused")  # gateway ignores it
+        self.base_url = (base_url or os.environ.get("ROUTER_BASE_URL", f"{base}/v1"))
+        self.api_key = (api_key if api_key is not None
+                        else os.environ.get("ROUTER_API_KEY", "unused"))
+        self.provider = provider
+        # Integrated-node capacity deliberately bypasses tier selection so all
+        # planner and worker calls hit the single local SGLang model.
+        self.model_override = model_override
         self.max_completion_tokens = int(os.environ.get("ADL_MAX_COMPLETION_TOKENS", "2048"))
         # Workers get their own (typically lower) ceiling. A pinned planner needs
         # headroom to emit a full multi-subtask plan and the final synthesis, but a
@@ -87,7 +102,7 @@ class ModelFactory:
         return {}
 
     def _make(self, model: str, temperature: float | None,
-              max_completion_tokens: int | None = None) -> ChatOpenAI:
+              max_completion_tokens: int | None = None):
         # Temperature is OMITTED unless explicitly requested. The gateway owns model
         # identity, so a tier may resolve to a reasoning model (e.g. Claude/o-series
         # with extended thinking), and those reject temperature != 1 with a 400. The
@@ -97,6 +112,31 @@ class ModelFactory:
         kwargs: dict = {}
         if temperature is not None:
             kwargs["temperature"] = temperature
+        token_limit = max_completion_tokens or self.max_completion_tokens
+        if self.provider == "anthropic":
+            from langchain_anthropic import ChatAnthropic
+            return ChatAnthropic(
+                anthropic_api_key=self.api_key,
+                anthropic_api_url=self.base_url,
+                model=model,
+                max_tokens=token_limit,
+                default_request_timeout=self.request_timeout,
+                max_retries=self.max_retries,
+                disable_streaming=True,
+                **kwargs,
+            )
+        if self.provider == "google":
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            return ChatGoogleGenerativeAI(
+                google_api_key=self.api_key,
+                base_url=self.base_url,
+                model=model,
+                max_output_tokens=token_limit,
+                timeout=self.request_timeout,
+                max_retries=self.max_retries,
+                disable_streaming=True,
+                **kwargs,
+            )
         return ChatOpenAI(
             base_url=self.base_url,
             api_key=self.api_key,
@@ -106,16 +146,15 @@ class ModelFactory:
             disable_streaming=True,            # gateway rejects stream
             timeout=self.request_timeout,      # cold-CPU ceiling (salvaged)
             max_retries=self.max_retries,      # cold-engine warmup retries (salvaged)
-            model_kwargs={
-                "max_completion_tokens": max_completion_tokens or self.max_completion_tokens
-            },
+            max_completion_tokens=token_limit,
             **kwargs,
         )
 
     def auto(self, temperature: float | None = None) -> ChatOpenAI:
         """Worker default: let the router classify and choose the tier."""
-        return self._make("auto", temperature, self.worker_max_completion_tokens)
+        return self._make(self.model_override or "auto", temperature,
+                          self.worker_max_completion_tokens)
 
     def for_tier(self, tier: str, temperature: float | None = None) -> ChatOpenAI:
         """Pin a structural role to a tier, e.g. for_tier('T5') -> model='tier5'."""
-        return self._make(to_wire_tier(tier), temperature)
+        return self._make(self.model_override or to_wire_tier(tier), temperature)

@@ -1,13 +1,12 @@
-"""
-/capacity — the built-in capacity tester ("system speed test").
+"""/capacity — capacity tests with an explicit target and inference backend.
 
-Five fixed agent scenarios, three target modes (local SGLang engine, simulated
-remote with bell-curve latency, real cloud endpoint), a ramp that adds virtual
-users until the system saturates, and live telemetry for the UI.
+The target says which boundary is under test: the agent host/orchestrator, an
+integrated local agent node, or the inference engine alone.  The inference
+backend says where model calls go.  Keeping those dimensions separate prevents
+a synthetic remote latency test from being mistaken for agent-host capacity.
 
-One test at a time. remote_real requires explicit env configuration AND
-confirm=true, and rides a hard request budget — this endpoint must never be able
-to spray a cloud API by accident.
+One test at a time. Cloud runs require explicit confirmation and a dollar
+circuit breaker; the workload ramp itself has no session or duration ceiling.
 """
 from __future__ import annotations
 
@@ -24,7 +23,8 @@ from backend.db.base import get_session
 from pydantic import BaseModel, Field
 
 from backend.capacity import engine as engine_mgr
-from backend.capacity.client import remote_real_configured, REMOTE_MODEL
+from backend.capacity.client import LOCAL_BASE, LOCAL_MODEL
+from backend.capacity.models import catalog_for_api, resolve_endpoint
 from backend.capacity.controller import CapacityTest, DEFAULTS
 from backend.capacity.scenarios import scenario_list
 
@@ -50,14 +50,18 @@ def _check_control_token(x_capacity_token: str | None = Header(None)) -> None:
 
 
 class StartBody(BaseModel):
-    mode: str = Field(..., pattern="^(local|remote_mock|remote_real|e2e)$")
+    benchmark_target: str | None = Field(
+        None, pattern="^(agent_host|integrated_node|inference_engine)$")
+    inference_backend: str | None = Field(
+        None, pattern="^(local|remote_mock|remote_real)$")
+    # Compatibility for saved clients. New clients send the two fields above.
+    mode: str | None = Field(None, pattern="^(local|remote_mock|remote_real|e2e)$")
     # "tile": ramp complete reference tiles (comparable benchmark, default).
     # "custom": round-robin over `scenarios` (diagnosis; non-comparable).
     mix: str = Field("tile", pattern="^(tile|custom)$")
     scenarios: list[str] = Field(default_factory=list)  # custom mix only
     mock_ms: float | None = Field(None, ge=100, le=60_000)
     mock_sigma: float | None = Field(None, ge=0, le=20_000)
-    max_users: int | None = Field(None, ge=1, le=512)
     step_interval_s: float | None = Field(None, ge=3, le=120)
     step_users: int | None = Field(None, ge=1, le=8)
     agent_definitions: list[str] = Field(default_factory=list)  # e2e custom mix
@@ -65,6 +69,37 @@ class StartBody(BaseModel):
     cache_mode: str = Field("warm", pattern="^(warm|cold)$")
     warmup_s: float | None = Field(None, ge=0, le=120)
     confirm_real: bool = False  # must be true for remote_real
+    cloud_model: str | None = None
+    cloud_api_key: str | None = None
+    custom_base_url: str | None = None
+    custom_model: str | None = None
+    input_cost_per_mtok: float | None = Field(None, ge=0)
+    output_cost_per_mtok: float | None = Field(None, ge=0)
+    max_cost_usd: float | None = Field(None, gt=0, le=100_000)
+
+
+def _resolve_dimensions(body: StartBody) -> tuple[str, str, str]:
+    """Return (benchmark target, inference backend, internal runner mode)."""
+    if body.benchmark_target is None:
+        legacy = body.mode or "e2e"
+        target = "agent_host" if legacy == "e2e" else "inference_engine"
+        backend = "remote_mock" if legacy == "e2e" else legacy
+    else:
+        target = body.benchmark_target
+        backend = body.inference_backend or (
+            "local" if target == "integrated_node" else "remote_mock")
+
+    allowed = {
+        "agent_host": {"remote_mock", "remote_real"},
+        "integrated_node": {"local"},
+        "inference_engine": {"local", "remote_mock", "remote_real"},
+    }
+    if backend not in allowed[target]:
+        raise HTTPException(
+            400, f"{target} cannot use {backend}; valid backends: "
+                 f"{', '.join(sorted(allowed[target]))}")
+    mode = "e2e" if target in {"agent_host", "integrated_node"} else backend
+    return target, backend, mode
 
 
 @router.get("/scenarios")
@@ -77,9 +112,15 @@ async def get_scenarios() -> dict:
 
 @router.get("/engine")
 async def get_engine() -> dict:
-    return {**engine_mgr.status(), **(await engine_mgr.probe()),
-            "remote_real": {"configured": remote_real_configured(),
-                            "model": REMOTE_MODEL or None}}
+    return {**engine_mgr.status(), **(await engine_mgr.probe())}
+
+
+@router.get("/models")
+async def get_models() -> dict:
+    return {"models": catalog_for_api(), "custom": {
+        "id": "custom", "name": "Set up your own endpoint",
+        "provider": "custom", "protocol": "OpenAI Chat Completions compatible",
+    }}
 
 
 @router.post("/engine/start")
@@ -103,29 +144,65 @@ async def start_test(body: StartBody,
     global _current, _task
     if _current is not None and _current.status()["active"]:
         raise HTTPException(409, "a capacity test is already running")
-    if body.mode == "remote_real":
-        if not remote_real_configured():
-            raise HTTPException(400, "remote_real is not configured — set "
-                                      "CAPACITY_REMOTE_BASE_URL / _MODEL / _API_KEY")
+    target, inference_backend, mode = _resolve_dimensions(body)
+    endpoint: dict | None = None
+    if inference_backend == "remote_real":
+        try:
+            endpoint = resolve_endpoint(
+                body.cloud_model, api_key=body.cloud_api_key,
+                custom_base_url=body.custom_base_url, custom_model=body.custom_model,
+                input_per_mtok=body.input_cost_per_mtok,
+                output_per_mtok=body.output_cost_per_mtok,
+            )
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
         if not body.confirm_real:
-            raise HTTPException(400, "remote_real spends real API credits — "
+            raise HTTPException(400, "remote inference spends real API credits — "
                                       "pass confirm_real=true")
-    if body.mode == "local" and not (await engine_mgr.probe())["serving"]:
+        if body.max_cost_usd is None:
+            raise HTTPException(400, "cloud runs require max_cost_usd as a dollar circuit breaker")
+    if inference_backend == "local" and not (await engine_mgr.probe())["serving"]:
         raise HTTPException(409, "local engine is not serving — start it from the "
                                   "Capacity tab (or POST /capacity/engine/start)")
     cfg = {"mock_ms": body.mock_ms, "mock_sigma": body.mock_sigma,
-           "max_users": body.max_users, "step_interval_s": body.step_interval_s,
+           "step_interval_s": body.step_interval_s,
            "step_users": body.step_users, "seed": body.seed,
-           "cache_mode": body.cache_mode, "warmup_s": body.warmup_s}
-    if body.mode == "e2e":
-        # Whole workflows are the unit: slower cadence, smaller scale, fewer
-        # samples needed to certify a rung.
+           "cache_mode": body.cache_mode, "warmup_s": body.warmup_s,
+           "max_cost_usd": body.max_cost_usd}
+    e2e_router: dict | None = None
+    if mode == "e2e":
+        # Whole workflows are the unit: slower cadence and fewer samples are
+        # needed to certify a rung. The workload ramp has no artificial cap.
         cfg.setdefault("step_interval_s", body.step_interval_s)
-        cfg["step_interval_s"] = body.step_interval_s or 30.0
-        cfg["max_users"] = body.max_users or 12
+        cfg["step_interval_s"] = body.step_interval_s or (
+            10.0 if target == "agent_host" and inference_backend == "remote_mock"
+            else 30.0)
         cfg["min_samples"] = 2
+        if target == "agent_host" and inference_backend == "remote_mock":
+            e2e_router = {
+                "base_url": os.getenv(
+                    "CAPACITY_AGENT_HOST_MOCK_BASE_URL", "http://127.0.0.1:8901/v1"),
+                "api_key": os.getenv("CAPACITY_AGENT_HOST_MOCK_API_KEY", "mock"),
+                "model_label": "mock-tier-router",
+            }
+        elif target == "agent_host":
+            e2e_router = {
+                "base_url": endpoint["base_url"],
+                "api_key": endpoint["api_key"],
+                "model_override": endpoint["model"],
+                "model_label": endpoint["name"],
+                "provider": endpoint["provider"],
+            }
+        else:  # integrated_node: every role goes directly to local SGLang
+            e2e_router = {
+                "base_url": LOCAL_BASE,
+                "api_key": os.getenv("CAPACITY_INTEGRATED_ROUTER_API_KEY",
+                                      "unused"),
+                "model_override": LOCAL_MODEL,
+            }
     extra_workflows: dict = {}
-    if body.mode == "e2e" and body.agent_definitions:
+    scenario_ids = list(body.scenarios)
+    if mode == "e2e" and body.agent_definitions:
         from backend.db.base import get_sessionmaker
         from backend.repositories import agent_defs as defs_repo
         sm = get_sessionmaker()
@@ -145,13 +222,18 @@ async def start_test(body: StartBody,
             raise HTTPException(400, "agent definitions run in the custom mix — "
                                       "the reference tile stays locked for comparability")
         if extra_workflows:
-            body.scenarios = list(body.scenarios) + list(extra_workflows)
-    _current = CapacityTest(body.mode, body.scenarios, cfg, mix=body.mix,
-                            extra_workflows=extra_workflows)
+            scenario_ids.extend(extra_workflows)
+    _current = CapacityTest(mode, scenario_ids, cfg, mix=body.mix,
+                            extra_workflows=extra_workflows,
+                            benchmark_target=target,
+                            inference_backend=inference_backend,
+                            e2e_router=e2e_router,
+                            endpoint=endpoint)
     _task = asyncio.create_task(_run_and_keep(_current))
-    logger.info("capacity test started: mode=%s scenarios=%s", body.mode,
-                _current.scenario_ids)
-    return {"started": True, "mode": body.mode, "mix": _current.mix,
+    logger.info("capacity test started: target=%s backend=%s scenarios=%s",
+                target, inference_backend, _current.scenario_ids)
+    return {"started": True, "mode": mode, "benchmark_target": target,
+            "inference_backend": inference_backend, "mix": _current.mix,
             "scenarios": _current.scenario_ids}
 
 

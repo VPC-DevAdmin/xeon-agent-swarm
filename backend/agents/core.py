@@ -133,7 +133,8 @@ def build_interrupts(plan_approval: bool | None = None) -> dict:
 def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
                 tools_by_name: dict | None = None,
                 plan_approval: bool | None = None,
-                enabled_tools: list[str] | None = None):
+                enabled_tools: list[str] | None = None,
+                model_factory: ModelFactory | None = None):
     """Assemble the deep agent.
 
     mcp_tools:    LangChain tools granted to the MAIN agent (the planner). Usually a
@@ -145,7 +146,7 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
                   planner prompt (so decomposition can compose tool-using subtasks)
                   and the `tool_user` worker is granted exactly this set.
     """
-    mf = ModelFactory()
+    mf = model_factory or ModelFactory()
     planner_tier = os.environ.get("ADL_PLANNER_TIER", "T5")
     if tools_by_name is None:
         # Build the whole catalog (tools are lazy at call time); the enabled selection

@@ -21,9 +21,17 @@ import time
 class E2ERunner:
     """submit() is injectable for tests; the default drives the real engine."""
 
-    def __init__(self, timeout_s: float = 300.0, submit=None):
+    def __init__(self, timeout_s: float = 300.0, submit=None, *,
+                 router_base_url: str | None = None,
+                 router_api_key: str | None = None,
+                 router_model: str | None = None,
+                 router_provider: str = "openai"):
         self.timeout_s = float(timeout_s)
         self._submit = submit or self._real_submit
+        self.router_base_url = router_base_url
+        self.router_api_key = router_api_key
+        self.router_model = router_model
+        self.router_provider = router_provider
 
     async def run_workflow(self, wid: str, query: str, opts: dict | None = None) -> dict:
         t0 = time.perf_counter()
@@ -54,7 +62,11 @@ class E2ERunner:
             validator_enabled=bool(opts.get("validator_enabled", True)),
             trigger="api", plan_approval=False,  # benchmarks never pause for HITL
             enabled_tools=list(opts.get("enabled_tools") or []),
-            budget=opts.get("budgets") or None)
+            budget=opts.get("budgets") or None,
+            router_base_url=self.router_base_url,
+            router_api_key=self.router_api_key,
+            router_model=self.router_model,
+            router_provider=self.router_provider)
         task = app_main._run_tasks.get(run_id)
         if task is not None:
             await asyncio.shield(asyncio.wait({task}))

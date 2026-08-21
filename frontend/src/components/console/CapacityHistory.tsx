@@ -4,6 +4,20 @@ import { capacityApi } from '../../api/client'
 import type { CapacityHistoryRow, CapacityResult } from '../../api/types'
 import { parseServerDate } from '../../lib/thread'
 
+function dimensions(r: CapacityHistoryRow) {
+  return {
+    target: r.benchmark_target ?? (r.mode === 'e2e' ? 'agent_host' : 'inference_engine'),
+    backend: r.inference_backend ?? (r.mode === 'e2e' ? 'remote_mock' : r.mode),
+  }
+}
+
+function dimensionLabel(r: CapacityHistoryRow) {
+  const { target, backend } = dimensions(r)
+  const t = target === 'agent_host' ? 'agent host' : target === 'integrated_node' ? 'integrated' : 'inference'
+  const b = backend === 'remote_mock' ? 'mock' : backend === 'remote_real' ? 'cloud' : 'local'
+  return `${t} · ${b}`
+}
+
 /**
  * CapacityHistory — DB-persisted benchmark history: view any past result,
  * compare two runs side by side (with a non-comparability warning when the
@@ -55,12 +69,13 @@ export function CapacityHistory({ activePhase, onView }:
               </span>
               <span className="font-code text-[10px] px-1.5 py-0.5 rounded-full flex-none"
                 style={{ background: 'var(--elev2)', color: 'var(--muted)' }}>
-                {r.mode === 'e2e' ? 'e2e' : r.mode.replace('remote_', '')} · {r.mix}
+                {dimensionLabel(r)} · {r.mix}
               </span>
               {r.comparable === false && (
                 <span className="font-code text-[9px] flex-none" style={{ color: 'var(--warn)' }}>non-comp</span>
               )}
               <span className="flex-1 truncate text-[var(--text)]">
+                {(r.capacity_certified ?? true) && ['capped', 'timeout', 'budget', 'spend_guard'].includes(r.verdict ?? '') ? '≥' : ''}
                 {r.mix === 'tile' && r.capacity_tiles != null
                   ? `${r.capacity_tiles} tiles (${r.capacity_users})`
                   : `${r.capacity_users ?? '—'} sessions`}
@@ -70,6 +85,7 @@ export function CapacityHistory({ activePhase, onView }:
               <span className="font-code text-[10.5px] text-[var(--faint)] flex-none">
                 {r.workflows_per_hour != null ? `${r.workflows_per_hour}/h`
                   : r.steady_tps != null ? `${r.steady_tps} tok/s` : ''}
+                {r.steady_cost_per_hour != null ? ` · $${r.steady_cost_per_hour.toFixed(2)}/h` : ''}
               </span>
               <button onClick={() => capacityApi.historyGet(r.id).then((f) => onView(f.result))}
                 className="flex-none text-[10.5px] px-2 py-0.5 rounded border text-[var(--muted)] hover:text-[var(--text)]"
@@ -99,12 +115,17 @@ function CompareCard({ a, b }: {
   b: CapacityHistoryRow & { result: CapacityResult }
 }) {
   const sameWorkload = a.scenario_fingerprint === b.scenario_fingerprint
-    && a.mode === b.mode && a.mix === b.mix && a.cache_mode === b.cache_mode
+    && dimensions(a).target === dimensions(b).target
+    && dimensions(a).backend === dimensions(b).backend
+    && a.mix === b.mix && a.cache_mode === b.cache_mode
+    && a.result.cloud_model?.id === b.result.cloud_model?.id
   const rows: [string, (r: CapacityResult) => number | null | undefined, string][] = [
     ['capacity (sessions)', (r) => r.capacity_users, ''],
     ['capacity (tiles)', (r) => r.capacity_tiles, ''],
     ['throughput', (r) => r.steady?.tps, ' tok/s'],
     ['workflows/hour', (r) => r.workflows_per_hour, ''],
+    ['cloud cost/hour', (r) => r.cost?.steady_cost_per_hour, ' USD'],
+    ['run cloud cost', (r) => r.cost?.run_total_usd, ' USD'],
     ['p50', (r) => r.steady?.p50_ms, ' ms'],
     ['p95', (r) => r.steady?.p95_ms, ' ms'],
     ['CPU', (r) => r.steady?.cpu_pct, ' %'],
@@ -117,7 +138,10 @@ function CompareCard({ a, b }: {
       <div className="eyebrow mb-1.5">Compare</div>
       {!sameWorkload && (
         <p className="text-[11.5px] mb-2" style={{ color: 'var(--warn)' }}>
-          ⚠ different {a.mode !== b.mode ? 'mode' : a.mix !== b.mix ? 'mix'
+          ⚠ different {dimensions(a).target !== dimensions(b).target ? 'benchmark target'
+            : dimensions(a).backend !== dimensions(b).backend ? 'inference backend'
+            : a.result.cloud_model?.id !== b.result.cloud_model?.id ? 'cloud model'
+            : a.mix !== b.mix ? 'mix'
             : a.cache_mode !== b.cache_mode ? 'cache mode' : 'scenario version'} —
           these runs are not directly comparable
         </p>

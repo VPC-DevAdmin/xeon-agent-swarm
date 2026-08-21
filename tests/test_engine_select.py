@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 
 import backend.main as m
+from backend.inference.model import ModelFactory
 
 
 def _launch_under(monkeypatch, engine: str | None) -> dict:
@@ -51,3 +52,10 @@ def test_stale_swarm_value_still_runs_deepagents(monkeypatch):
     called = _launch_under(monkeypatch, "swarm")
     assert called["run_id"] == called["returned_run_id"]
     assert called["query"] == "compare X and Y"
+
+
+def test_model_factory_can_pin_every_role_to_one_local_model():
+    mf = ModelFactory(base_url="http://127.0.0.1:8000/v1",
+                      model_override="local-model")
+    assert mf.auto().model_name == "local-model"
+    assert mf.for_tier("T5").model_name == "local-model"

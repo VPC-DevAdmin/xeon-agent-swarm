@@ -4,17 +4,21 @@ import { agentDefsApi, capacityApi } from '../../api/client'
 import { CapacityHistory } from './CapacityHistory'
 import type {
   AgentDefinition,
-  CapacityEngine, CapacityResult, CapacityScenario,
+  CapacityBenchmarkTarget, CapacityInferenceBackend,
+  CapacityCloudModel, CapacityEngine, CapacityResult, CapacityScenario,
   CapacitySample, CapacityStatus,
 } from '../../api/types'
 
-type Mode = 'local' | 'remote_mock' | 'remote_real' | 'e2e'
+const TARGETS: { id: CapacityBenchmarkTarget; label: string; hint: string }[] = [
+  { id: 'agent_host', label: 'Agent host capacity', hint: 'Real agent workflows load this orchestration server; inference remains an external dependency.' },
+  { id: 'integrated_node', label: 'Integrated agent node', hint: 'Real agent workflows and local inference share this system, so the result measures the combined node.' },
+  { id: 'inference_engine', label: 'Inference diagnostic', hint: 'Synthetic agent-shaped requests isolate model-serving capacity; no real agents or orchestration are exercised.' },
+]
 
-const MODES: { id: Mode; label: string; hint: string }[] = [
-  { id: 'local', label: 'Local LLM', hint: 'Qwen3 on this server — measures this box\u2019s inference capacity' },
-  { id: 'remote_mock', label: 'Remote (simulated)', hint: 'bell-curve latency, zero API calls' },
-  { id: 'remote_real', label: 'Remote (cloud)', hint: 'real API endpoint — spends credits' },
-  { id: 'e2e', label: 'Agent runtime (E2E)', hint: 'complete workflows through the real orchestrator — planner, workers, validation. Lower scale; the truth test behind the synthetic traces' },
+const BACKENDS: { id: CapacityInferenceBackend; label: string; hint: string }[] = [
+  { id: 'remote_mock', label: 'Remote mock', hint: 'external mock router; zero cloud calls' },
+  { id: 'remote_real', label: 'Remote cloud', hint: 'live API/router; spends credits' },
+  { id: 'local', label: 'Local inference', hint: 'the on-box SGLang engine' },
 ]
 
 const COMPLEXITY_COLOR: Record<string, string> = {
@@ -22,16 +26,9 @@ const COMPLEXITY_COLOR: Record<string, string> = {
 }
 
 /**
- * CapacityView — the built-in INFERENCE-capacity speed test: synthetic agent
- * traces (real token shapes, tool waits, compounding context) sent directly to
- * the engine. It measures serving capacity for agent-shaped load — it does not
- * run the orchestrator itself (an end-to-end agent-runtime mode is the planned
- * complement).
- *
- * Pick a target (local engine / simulated remote / real cloud), pick which of
- * the five fixed agent scenarios to mix, hit Start: virtual users are added
- * until the box shows consistent saturation, then it holds, measures a clean
- * steady state, and reports the result like a bandwidth test.
+ * CapacityView separates the system boundary under test from the inference
+ * backend. Runtime targets execute complete agent workflows; the inference
+ * diagnostic sends synthetic agent-shaped traces directly to a model endpoint.
  */
 export function CapacityView() {
   const [scenarios, setScenarios] = useState<CapacityScenario[]>([])
@@ -43,7 +40,8 @@ export function CapacityView() {
   const [defsInMix, setDefsInMix] = useState<string[]>([])
   const [viewing, setViewing] = useState<CapacityResult | null>(null)
   const [mix, setMix] = useState<'tile' | 'custom'>('tile')
-  const [mode, setMode] = useState<Mode>('remote_mock')
+  const [target, setTarget] = useState<CapacityBenchmarkTarget>('agent_host')
+  const [backend, setBackend] = useState<CapacityInferenceBackend>('remote_mock')
   const [mockMs, setMockMs] = useState(2000)
   const [mockSigma, setMockSigma] = useState(300)
   const [engine, setEngine] = useState<CapacityEngine | null>(null)
@@ -53,6 +51,14 @@ export function CapacityView() {
   const [busy, setBusy] = useState(false)
   const [armReal, setArmReal] = useState(false)   // cloud mode needs an explicit second click
   const [cacheMode, setCacheMode] = useState<'warm' | 'cold'>('warm')
+  const [cloudModels, setCloudModels] = useState<CapacityCloudModel[]>([])
+  const [cloudModelId, setCloudModelId] = useState('openai:gpt-5.4-mini')
+  const [cloudApiKey, setCloudApiKey] = useState('')
+  const [maxCostUsd, setMaxCostUsd] = useState(25)
+  const [customBaseUrl, setCustomBaseUrl] = useState('')
+  const [customModel, setCustomModel] = useState('')
+  const [customInputCost, setCustomInputCost] = useState(0)
+  const [customOutputCost, setCustomOutputCost] = useState(0)
 
   useEffect(() => {
     capacityApi.scenarios().then((r) => {
@@ -63,6 +69,7 @@ export function CapacityView() {
       setE2eTile(r.e2e_tile ?? {})
     }).catch(() => {})
     agentDefsApi.list().then(setDefs).catch(() => {})
+    capacityApi.models().then((r) => setCloudModels(r.models)).catch(() => {})
   }, [])
 
   const pollEngine = useCallback(() => {
@@ -83,23 +90,47 @@ export function CapacityView() {
 
   const active = status?.active ?? false
   const result: CapacityResult | null = status?.result ?? null
+  const runtimeTarget = target !== 'inference_engine'
+  const availableBackends: CapacityInferenceBackend[] = target === 'agent_host'
+    ? ['remote_mock', 'remote_real']
+    : target === 'integrated_node' ? ['local'] : ['local', 'remote_mock', 'remote_real']
+  const selectedCloudModel = cloudModels.find((m) => m.id === cloudModelId)
+  const customCloud = cloudModelId === 'custom'
+  const cloudReady = customCloud
+    ? Boolean(customBaseUrl.trim() && customModel.trim() && maxCostUsd > 0)
+    : Boolean(selectedCloudModel && (cloudApiKey.trim() || selectedCloudModel.api_key_configured) && maxCostUsd > 0)
+
+  function chooseTarget(next: CapacityBenchmarkTarget) {
+    setTarget(next)
+    if (next === 'integrated_node') setBackend('local')
+    else if (next === 'agent_host' && backend === 'local') setBackend('remote_mock')
+    setArmReal(false)
+  }
 
   async function start() {
     // Cloud mode spends real credits: require a deliberate second click that
     // shows the model and the hard request budget before anything is sent.
-    if (mode === 'remote_real' && !armReal) { setArmReal(true); return }
+    if (backend === 'remote_real' && !armReal) { setArmReal(true); return }
     setArmReal(false)
     setBusy(true); setError(null)
     try {
       await capacityApi.start({
-        mode,
+        benchmark_target: target,
+        inference_backend: backend,
         mix,
         scenarios: mix === 'custom' ? enabled : undefined,
-        agent_definitions: mode === 'e2e' && mix === 'custom' ? defsInMix : undefined,
-        mock_ms: mode === 'remote_mock' ? mockMs : undefined,
-        mock_sigma: mode === 'remote_mock' ? mockSigma : undefined,
+        agent_definitions: runtimeTarget && mix === 'custom' ? defsInMix : undefined,
+        mock_ms: target === 'inference_engine' && backend === 'remote_mock' ? mockMs : undefined,
+        mock_sigma: target === 'inference_engine' && backend === 'remote_mock' ? mockSigma : undefined,
         cache_mode: cacheMode,
-        confirm_real: mode === 'remote_real' ? true : undefined,
+        confirm_real: backend === 'remote_real' ? true : undefined,
+        cloud_model: backend === 'remote_real' ? cloudModelId : undefined,
+        cloud_api_key: backend === 'remote_real' && cloudApiKey ? cloudApiKey : undefined,
+        custom_base_url: backend === 'remote_real' && customCloud ? customBaseUrl : undefined,
+        custom_model: backend === 'remote_real' && customCloud ? customModel : undefined,
+        input_cost_per_mtok: backend === 'remote_real' && customCloud ? customInputCost : undefined,
+        output_cost_per_mtok: backend === 'remote_real' && customCloud ? customOutputCost : undefined,
+        max_cost_usd: backend === 'remote_real' ? maxCostUsd : undefined,
       })
       const s = await capacityApi.status(); setStatus(s)
     } catch (e) { setError(e instanceof Error ? e.message : 'start failed') }
@@ -114,23 +145,38 @@ export function CapacityView() {
 
   return (
     <div className="max-w-[820px] mx-auto pb-10">
-      {/* mode + engine row */}
+      {/* benchmark boundary + inference backend */}
       <div className="flex flex-wrap items-stretch gap-3 mb-4">
         <div className="console-panel flex-1 min-w-[340px] p-3.5">
-          <div className="eyebrow mb-2">Target</div>
-          <div className="flex gap-1 p-[3px] rounded-[10px] border w-fit"
+          <div className="eyebrow mb-2">What are we measuring?</div>
+          <div className="flex flex-wrap gap-1 p-[3px] rounded-[10px] border w-fit"
             style={{ background: 'var(--ink)', borderColor: 'var(--line)' }}>
-            {MODES.map((m) => (
-              <button key={m.id} disabled={active}
-                onClick={() => { setMode(m.id); setArmReal(false) }}
+            {TARGETS.map((t) => (
+              <button key={t.id} disabled={active}
+                onClick={() => chooseTarget(t.id)}
                 className={clsx('px-3 py-1.5 rounded-[7px] text-[12.5px] font-medium transition-colors disabled:opacity-60',
-                  mode === m.id ? 'bg-[var(--elev)] text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]')}>
-                {m.label}
+                  target === t.id ? 'bg-[var(--elev)] text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]')}>
+                {t.label}
               </button>
             ))}
           </div>
-          <p className="text-[11.5px] text-[var(--faint)] mt-2">{MODES.find((m) => m.id === mode)?.hint}</p>
-          {mode !== 'remote_mock' && (
+          <p className="text-[11.5px] text-[var(--faint)] mt-2">{TARGETS.find((t) => t.id === target)?.hint}</p>
+
+          <div className="eyebrow mt-3 mb-1.5">Inference backend</div>
+          <div className="flex flex-wrap gap-1.5">
+            {BACKENDS.filter((b) => availableBackends.includes(b.id)).map((b) => (
+              <button key={b.id} disabled={active}
+                onClick={() => { setBackend(b.id); setArmReal(false) }} title={b.hint}
+                className={clsx('px-2.5 py-1 rounded-full border text-[11.5px] transition-colors',
+                  backend === b.id ? 'text-[var(--text)]' : 'text-[var(--faint)]')}
+                style={{ borderColor: backend === b.id ? 'rgba(124,135,245,.5)' : 'var(--line)',
+                         background: backend === b.id ? 'var(--elev)' : 'transparent' }}>
+                {b.label}
+              </button>
+            ))}
+          </div>
+
+          {target === 'inference_engine' && backend !== 'remote_mock' && (
             <div className="flex items-center gap-1.5 mt-2">
               <span className="font-code text-[10px] text-[var(--faint)] uppercase">cache</span>
               {(['warm', 'cold'] as const).map((cm) => (
@@ -148,7 +194,7 @@ export function CapacityView() {
             </div>
           )}
 
-          {mode === 'remote_mock' && (
+          {target === 'inference_engine' && backend === 'remote_mock' && (
             <div className="flex gap-4 mt-2.5 text-[12px] text-[var(--muted)]">
               <label className="flex items-center gap-2">set point
                 <input type="number" value={mockMs} min={100} max={60000} disabled={active}
@@ -165,15 +211,19 @@ export function CapacityView() {
             </div>
           )}
 
-          {mode === 'local' && engine && (
+          {backend === 'local' && engine && (
             <LocalEngineChip engine={engine} onStart={() => capacityApi.startEngine().then(pollEngine)} />
           )}
-          {mode === 'remote_real' && engine && (
-            <p className="text-[12px] mt-2.5" style={{ color: engine.remote_real.configured ? 'var(--muted)' : 'var(--warn)' }}>
-              {engine.remote_real.configured
-                ? <>endpoint configured · model <b className="font-code">{engine.remote_real.model}</b> · hard budget 500 requests</>
-                : 'not configured — set CAPACITY_REMOTE_BASE_URL / _MODEL / _API_KEY on the server'}
-            </p>
+          {backend === 'remote_real' && (
+            <CloudModelSetup models={cloudModels} modelId={cloudModelId}
+              onModelId={(id) => { setCloudModelId(id); setArmReal(false) }}
+              apiKey={cloudApiKey} onApiKey={setCloudApiKey}
+              maxCost={maxCostUsd} onMaxCost={setMaxCostUsd}
+              customBaseUrl={customBaseUrl} onCustomBaseUrl={setCustomBaseUrl}
+              customModel={customModel} onCustomModel={setCustomModel}
+              customInputCost={customInputCost} onCustomInputCost={setCustomInputCost}
+              customOutputCost={customOutputCost} onCustomOutputCost={setCustomOutputCost}
+              disabled={active} />
           )}
         </div>
 
@@ -181,8 +231,8 @@ export function CapacityView() {
         <div className="console-panel w-[210px] p-3.5 flex flex-col items-center justify-center gap-2">
           {!active ? (
             <button onClick={start}
-              disabled={busy || enabled.length === 0 || (mode === 'local' && !engine?.serving)
-                || (mode === 'remote_real' && !engine?.remote_real.configured)}
+              disabled={busy || (!runtimeTarget && enabled.length === 0) || (backend === 'local' && !engine?.serving)
+                || (backend === 'remote_real' && !cloudReady)}
               className="w-full py-3 rounded-xl font-display font-semibold text-[15px] transition-opacity disabled:opacity-35"
               style={{ background: armReal ? 'var(--bad)' : 'var(--accent)', color: armReal ? '#fff' : '#0b0f18' }}>
               {armReal ? 'Confirm cloud spend' : 'Start test'}
@@ -197,8 +247,8 @@ export function CapacityView() {
           <p className="font-code text-[10.5px] text-center"
             style={{ color: armReal ? 'var(--bad)' : 'var(--faint)' }}>
             {active ? `${status?.phase} · ${Math.round(status?.elapsed_s ?? 0)}s`
-              : armReal ? `real API credits: ${engine?.remote_real.model ?? 'cloud model'} · hard cap 500 requests`
-              : 'ramps sessions until the SLO breaks'}
+              : armReal ? `confirm ${selectedCloudModel?.name ?? (customModel || 'custom model')} · circuit breaker $${maxCostUsd.toFixed(2)}`
+              : 'failure-driven ramp · no session or duration cap · cloud spend is dollar-guarded'}
           </p>
         </div>
       </div>
@@ -208,7 +258,7 @@ export function CapacityView() {
       {/* scenario blocks */}
       <div className="console-panel p-3.5 mb-4">
         <div className="flex items-center gap-3 mb-2 flex-wrap">
-          <span className="eyebrow">Workload mix — each virtual session replays one agent trace on repeat</span>
+          <span className="eyebrow">Workload mix — each virtual session repeats one {runtimeTarget ? 'real agent workflow' : 'synthetic agent trace'}</span>
           <div className="ml-auto flex gap-0.5 p-[2px] rounded-lg border"
             style={{ background: 'var(--ink)', borderColor: 'var(--line)' }}>
             <button disabled={active} onClick={() => setMix('tile')}
@@ -227,10 +277,12 @@ export function CapacityView() {
         </div>
         {mix === 'tile' && (
           <p className="font-code text-[10.5px] mb-2" style={{ color: 'var(--faint)' }}>
-            1 tile (ACU) = {Object.entries(tile).map(([sid, n]) => `${n}× ${scenarios.find((s) => s.id === sid)?.name ?? sid}`).join(' + ')} — ramps add whole tiles
+            1 tile (ACU) = {runtimeTarget
+              ? Object.entries(e2eTile).map(([sid, n]) => `${n}× ${e2eWorkflows.find((w) => w.id === sid)?.name ?? sid}`).join(' + ')
+              : Object.entries(tile).map(([sid, n]) => `${n}× ${scenarios.find((s) => s.id === sid)?.name ?? sid}`).join(' + ')} — ramps add whole tiles
           </p>
         )}
-        {mode === 'e2e' && mix === 'custom' && defs.length > 0 && (
+        {runtimeTarget && mix === 'custom' && defs.length > 0 && (
           <div className="mb-2">
             <div className="eyebrow mb-1.5">Your agent definitions — assign to this planning mix</div>
             <div className="flex gap-1.5 flex-wrap">
@@ -250,7 +302,7 @@ export function CapacityView() {
             </div>
           </div>
         )}
-        {mode === 'e2e' && (
+        {runtimeTarget && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {e2eWorkflows.map((w) => {
               const live = status?.per_scenario?.[w.id]
@@ -279,7 +331,7 @@ export function CapacityView() {
             })}
           </div>
         )}
-        <div className={mode === 'e2e' ? 'hidden' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2'}>
+        <div className={runtimeTarget ? 'hidden' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2'}>
           {scenarios.map((s) => {
             const on = mix === 'tile' || enabled.includes(s.id)
             const open = expanded === s.id
@@ -422,6 +474,96 @@ function ScenarioLoop({ s }: { s: CapacityScenario }) {
   )
 }
 
+/* ── cloud model + spend circuit breaker ───────────────────────────────────── */
+
+function CloudModelSetup({ models, modelId, onModelId, apiKey, onApiKey,
+  maxCost, onMaxCost, customBaseUrl, onCustomBaseUrl, customModel, onCustomModel,
+  customInputCost, onCustomInputCost, customOutputCost, onCustomOutputCost, disabled,
+}: {
+  models: CapacityCloudModel[]; modelId: string; onModelId: (v: string) => void
+  apiKey: string; onApiKey: (v: string) => void
+  maxCost: number; onMaxCost: (v: number) => void
+  customBaseUrl: string; onCustomBaseUrl: (v: string) => void
+  customModel: string; onCustomModel: (v: string) => void
+  customInputCost: number; onCustomInputCost: (v: number) => void
+  customOutputCost: number; onCustomOutputCost: (v: number) => void
+  disabled: boolean
+}) {
+  const selected = models.find((m) => m.id === modelId)
+  const custom = modelId === 'custom'
+  const providers = ['openai', 'anthropic', 'google'] as const
+  const inputClass = 'bg-[var(--ink)] border rounded px-2 py-1.5 font-code text-[11px] disabled:opacity-60'
+  return (
+    <div className="mt-3 p-3 rounded-xl border" style={{ borderColor: 'var(--line)', background: 'var(--ink)' }}>
+      <div className="eyebrow mb-1.5">Cloud model and token price</div>
+      <select value={modelId} disabled={disabled} onChange={(e) => onModelId(e.target.value)}
+        className={`${inputClass} w-full`} style={{ borderColor: 'var(--line)' }}>
+        {providers.map((provider) => (
+          <optgroup key={provider} label={provider[0].toUpperCase() + provider.slice(1)}>
+            {models.filter((m) => m.provider === provider).map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} — ${m.input_per_mtok}/$${m.output_per_mtok} per 1M in/out
+              </option>
+            ))}
+          </optgroup>
+        ))}
+        <option value="custom">Set up your own endpoint…</option>
+      </select>
+
+      {custom ? (
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <label className="col-span-2 text-[10.5px] text-[var(--muted)]">Endpoint address
+            <input value={customBaseUrl} disabled={disabled} placeholder="https://host.example/v1"
+              onChange={(e) => onCustomBaseUrl(e.target.value)} className={`${inputClass} w-full mt-0.5`}
+              style={{ borderColor: 'var(--line)' }} />
+          </label>
+          <label className="col-span-2 text-[10.5px] text-[var(--muted)]">Model ID
+            <input value={customModel} disabled={disabled} placeholder="model-name"
+              onChange={(e) => onCustomModel(e.target.value)} className={`${inputClass} w-full mt-0.5`}
+              style={{ borderColor: 'var(--line)' }} />
+          </label>
+          <PriceInput label="input $ / 1M" value={customInputCost} onChange={onCustomInputCost} disabled={disabled} />
+          <PriceInput label="output $ / 1M" value={customOutputCost} onChange={onCustomOutputCost} disabled={disabled} />
+          <p className="col-span-2 text-[10px] text-[var(--faint)]">Custom endpoints must support OpenAI Chat Completions. Prices are supplied by you.</p>
+        </div>
+      ) : selected && (
+        <p className="font-code text-[10.5px] mt-1.5 text-[var(--faint)]">
+          {selected.model} · ${selected.input_per_mtok.toFixed(2)} input / ${selected.output_per_mtok.toFixed(2)} output per 1M tokens
+          {selected.pricing_note ? ` · ${selected.pricing_note}` : ''}
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-2 mt-2">
+        <label className="text-[10.5px] text-[var(--muted)]">API key
+          <input type="password" value={apiKey} disabled={disabled}
+            placeholder={selected?.api_key_configured ? 'server key configured' : custom ? 'optional' : 'required'}
+            onChange={(e) => onApiKey(e.target.value)} autoComplete="off"
+            className={`${inputClass} w-full mt-0.5`} style={{ borderColor: 'var(--line)' }} />
+        </label>
+        <label className="text-[10.5px] text-[var(--muted)]">Dollar circuit breaker
+          <div className="relative mt-0.5"><span className="absolute left-2 top-1.5 font-code text-[11px] text-[var(--faint)]">$</span>
+            <input type="number" value={maxCost} min={0.01} max={100000} step={1} disabled={disabled}
+              onChange={(e) => onMaxCost(Number(e.target.value))}
+              className={`${inputClass} w-full pl-5`} style={{ borderColor: 'var(--line)' }} />
+          </div>
+        </label>
+      </div>
+      <p className="text-[10px] mt-1.5 text-[var(--faint)]">The key is used for this run only and is never stored. The workload has no session or time ceiling; projected and cumulative cost are measured at every rung.</p>
+    </div>
+  )
+}
+
+function PriceInput({ label, value, onChange, disabled }: {
+  label: string; value: number; onChange: (v: number) => void; disabled: boolean
+}) {
+  return <label className="text-[10.5px] text-[var(--muted)]">{label}
+    <input type="number" value={value} min={0} step={0.01} disabled={disabled}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="w-full mt-0.5 bg-[var(--ink)] border rounded px-2 py-1.5 font-code text-[11px]"
+      style={{ borderColor: 'var(--line)' }} />
+  </label>
+}
+
 /* ── local engine chip ───────────────────────────────────────────────────────── */
 
 function LocalEngineChip({ engine, onStart }: { engine: CapacityEngine; onStart: () => void }) {
@@ -468,6 +610,9 @@ function LocalEngineChip({ engine, onStart }: { engine: CapacityEngine; onStart:
 function LivePanel({ status }: { status: CapacityStatus }) {
   const latest = status.latest ?? {}
   const timeline = status.timeline ?? []
+  const target = status.benchmark_target ?? (status.mode === 'e2e' ? 'agent_host' : 'inference_engine')
+  const backend = status.inference_backend ?? (status.mode === 'e2e' ? 'remote_mock' : status.mode)
+  const resourceMetricsMeaningful = target !== 'inference_engine' || backend === 'local'
   return (
     <div className="console-panel p-4 mb-4">
       <div className="flex items-center gap-2 mb-3">
@@ -489,19 +634,26 @@ function LivePanel({ status }: { status: CapacityStatus }) {
         <Dial label="tokens/s" value={fmtNum(latest.tps)} />
         <Dial label="req/min" value={fmtNum(latest.rpm)} />
         <Dial label="p95" value={fmtMs(latest.p95_ms)} />
-        <Dial label="CPU" value={latest.cpu_pct != null ? `${latest.cpu_pct}%` : '—'} />
-        <Dial label="memory" value={latest.mem_pct != null ? `${latest.mem_pct}%` : '—'} />
-        <Dial label="mem b/w" value={latest.bw_gbs != null ? `${latest.bw_gbs} GB/s` : '—'} />
-        <Dial label={latest.kv_pct != null ? 'KV cache' : 'power'}
+        {status.max_cost_usd != null && <Dial label="cloud spend / guard"
+          value={`$${(status.committed_cost_usd ?? status.cost_usd ?? 0).toFixed(3)} / $${status.max_cost_usd.toFixed(2)}`} />}
+        {status.max_cost_usd != null && <Dial label="projected cost / hour"
+          value={`$${(latest.cost_per_hour ?? 0).toFixed(2)}`} />}
+        {target !== 'inference_engine' && <Dial label="workflows in flight" value={fmtNum(latest.in_flight)} />}
+        {resourceMetricsMeaningful && <Dial label="CPU" value={latest.cpu_pct != null ? `${latest.cpu_pct}%` : '—'} />}
+        {resourceMetricsMeaningful && <Dial label="memory" value={latest.mem_pct != null ? `${latest.mem_pct}%` : '—'} />}
+        {backend === 'local' && <Dial label="mem b/w" value={latest.bw_gbs != null ? `${latest.bw_gbs} GB/s` : '—'} />}
+        {resourceMetricsMeaningful && <Dial label={latest.kv_pct != null ? 'KV cache' : 'power'}
           value={latest.kv_pct != null ? `${latest.kv_pct}%`
-            : latest.power_w != null ? `${latest.power_w} W` : '—'} />
+            : latest.power_w != null ? `${latest.power_w} W` : '—'} />}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Spark title="agents · CPU % · memory %" series={[
+        <Spark title={resourceMetricsMeaningful ? 'agents · CPU % · memory %' : 'synthetic sessions'} series={[
           { color: 'var(--accent)', pts: timeline.map((s) => s.users) },
-          { color: 'var(--t5)', pts: timeline.map((s) => s.cpu_pct ?? null) },
-          { color: 'var(--t1)', pts: timeline.map((s) => s.mem_pct ?? null) },
+          ...(resourceMetricsMeaningful ? [
+            { color: 'var(--t5)', pts: timeline.map((s) => s.cpu_pct ?? null) },
+            { color: 'var(--t1)', pts: timeline.map((s) => s.mem_pct ?? null) },
+          ] : []),
         ]} maxHint={100} />
         <Spark title="throughput tok/s" series={[
           { color: 'var(--t2)', pts: timeline.map((s) => s.tps) },
@@ -509,10 +661,10 @@ function LivePanel({ status }: { status: CapacityStatus }) {
         <Spark title="p95 latency ms" series={[
           { color: 'var(--t3)', pts: timeline.map((s) => s.p95_ms ?? null) },
         ]} />
-        <Spark title="memory bandwidth GB/s · KV cache %" series={[
+        {backend === 'local' && <Spark title="memory bandwidth GB/s · KV cache %" series={[
           { color: 'var(--t4)', pts: timeline.map((s) => s.bw_gbs ?? null) },
           { color: 'var(--t1)', pts: timeline.map((s) => s.kv_pct ?? null) },
-        ]} />
+        ]} />}
       </div>
     </div>
   )
@@ -566,28 +718,48 @@ const VERDICT_TEXT: Record<string, string> = {
   kv: 'engine KV cache saturated — model memory gated before CPU',
   plateau: 'throughput plateaued — no headroom past this point',
   errors: 'error rate exceeded the limit',
-  capped: 'reached the configured user cap without saturating',
-  timeout: 'time limit reached',
+  capped: 'safety ceiling reached without saturation — this is a lower bound, not the system limit',
+  timeout: 'time safety limit reached without saturation — this is a lower bound when the SLO was certified',
+  budget: 'live-API spend guard reached — this is a lower bound, not a capacity boundary',
+  spend_guard: 'dollar circuit breaker reached — the run stopped before a system limit, so this is not a capacity result',
   stopped: 'stopped manually',
 }
 
 function ResultCard({ result }: { result: CapacityResult }) {
   const s = result.steady
+  const target = result.benchmark_target ?? (result.mode === 'e2e' ? 'agent_host' : 'inference_engine')
+  const backend = result.inference_backend ?? (result.mode === 'e2e' ? 'remote_mock' : result.mode)
+  const targetLabel = target === 'agent_host' ? 'Agent host capacity'
+    : target === 'integrated_node' ? 'Integrated agent node capacity' : 'Inference engine diagnostic'
+  const backendLabel = backend === 'remote_mock' ? 'remote mock'
+    : backend === 'remote_real' ? 'remote cloud' : 'local inference'
+  const isRuntime = target !== 'inference_engine'
+  const capacityCertified = result.capacity_certified ?? true
+  const safetyStop = ['capped', 'timeout', 'budget', 'spend_guard'].includes(result.verdict ?? '')
+  const lowerBound = Boolean(capacityCertified && safetyStop)
+  const capacityLabel = capacityCertified
+    ? (result.mix === 'tile' && result.capacity_tiles != null
+        ? `tile${result.capacity_tiles === 1 ? '' : 's'} (${result.capacity_users} ${isRuntime ? 'agent workflow' : 'synthetic'} sessions) within SLO`
+        : 'concurrent agent sessions within SLO')
+    : `${result.capacity_users ?? result.peak_users ?? result.max_users} sessions reached; no rung was SLO-certified`
+  const verdictText = !capacityCertified && safetyStop
+    ? 'safety stop occurred before a healthy rung could be certified — result is inconclusive'
+    : (VERDICT_TEXT[result.verdict ?? ''] ?? result.verdict)
+  const resourceMetricsMeaningful = target !== 'inference_engine' || backend === 'local'
   return (
     <div className="console-panel p-5" style={{ borderColor: 'rgba(124,135,245,.4)' }}>
-      <div className="eyebrow mb-1">Inference capacity — {result.mode.replace('_', ' ')} · synthetic agent traces</div>
+      <div className="eyebrow mb-1">{targetLabel} · inference: {backendLabel}{result.cloud_model ? ` · ${result.cloud_model.name}` : ''} · {isRuntime ? 'real agent workflows' : 'synthetic agent traces'}</div>
       <div className="flex items-baseline gap-3 flex-wrap">
         <span className="font-display font-bold text-[40px] tracking-[-0.03em]" style={{ color: 'var(--accent)' }}>
+          {lowerBound && '≥'}
           {result.mix === 'tile' && result.capacity_tiles != null
-            ? result.capacity_tiles : (result.capacity_users ?? result.max_users)}
+            ? result.capacity_tiles : (result.capacity_users ?? result.peak_users ?? result.max_users)}
         </span>
         <span className="text-[15px] text-[var(--text)]">
-          {result.mix === 'tile' && result.capacity_tiles != null
-            ? `tile${result.capacity_tiles === 1 ? '' : 's'} (${result.capacity_users} agent sessions) within SLO`
-            : 'concurrent agent sessions within SLO'}
+          {capacityLabel}
         </span>
         <span className="text-[12.5px] text-[var(--muted)]">
-          {VERDICT_TEXT[result.verdict ?? ''] ?? result.verdict}
+          {verdictText}
         </span>
       </div>
       {result.breach && (
@@ -605,10 +777,10 @@ function ResultCard({ result }: { result: CapacityResult }) {
       )}
       <p className="font-code text-[11px] mt-1" style={{ color: 'var(--faint)' }}>
         SLO: p95 ≤ {result.slo?.p95_ms != null ? `${result.slo.p95_ms}ms`
-          : `${result.slo?.p95_x ?? 3}× the healthy baseline${result.baseline_p95_ms != null ? ` (${Math.round(result.baseline_p95_ms)}ms → ${Math.round(result.baseline_p95_ms * (result.slo?.p95_x ?? 3))}ms)` : ''}`}
+          : `${result.slo?.p95_x ?? 3}× each profile’s healthy baseline`}
         {' '}· errors ≤ {((result.slo?.err ?? 0.05) * 100).toFixed(0)}%
-        {result.max_users > (result.capacity_users ?? result.max_users) &&
-          ` · ramped to ${result.max_users}, scaled back to measure at ${result.capacity_users}`}
+        {(result.peak_users ?? result.max_users) > (result.capacity_users ?? result.peak_users ?? result.max_users) &&
+          ` · ramped to ${result.peak_users ?? result.max_users}, scaled back to measure at ${result.capacity_users}`}
       </p>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 mt-4 text-[12.5px]">
@@ -616,23 +788,61 @@ function ResultCard({ result }: { result: CapacityResult }) {
         <Kv k="requests" v={`${fmtNum(s.rpm)}/min`} />
         <Kv k="latency p50 / p95" v={`${fmtMs(s.p50_ms)} / ${fmtMs(s.p95_ms)}`} />
         <Kv k="error rate" v={`${((s.err_rate ?? 0) * 100).toFixed(1)}%`} />
-        <Kv k="CPU at steady state" v={s.cpu_pct != null ? `${s.cpu_pct}%` : '—'} />
-        <Kv k="memory" v={s.mem_pct != null ? `${s.mem_pct}%` : '—'} />
-        <Kv k="memory bandwidth" v={s.bw_gbs != null ? `${s.bw_gbs} GB/s` : '—'} />
-        <Kv k="KV cache" v={s.kv_pct != null ? `${s.kv_pct}%` : '—'} />
-        <Kv k="memory / added agent" v={result.mem_mb_per_user != null ? `${fmtNum(result.mem_mb_per_user)} MB` : '—'} />
-        <Kv k="power" v={s.power_w != null ? `${s.power_w} W` : '—'} />
-        <Kv k="energy used" v={result.energy_wh != null ? `${result.energy_wh} Wh` : '—'} />
+        {resourceMetricsMeaningful && <Kv k="CPU at steady state" v={s.cpu_pct != null ? `${s.cpu_pct}%` : '—'} />}
+        {resourceMetricsMeaningful && <Kv k="memory" v={s.mem_pct != null ? `${s.mem_pct}%` : '—'} />}
+        {backend === 'local' && <Kv k="memory bandwidth" v={s.bw_gbs != null ? `${s.bw_gbs} GB/s` : '—'} />}
+        {backend === 'local' && <Kv k="KV cache" v={s.kv_pct != null ? `${s.kv_pct}%` : '—'} />}
+        {resourceMetricsMeaningful && <Kv k="memory / added agent" v={result.mem_mb_per_user != null ? `${fmtNum(result.mem_mb_per_user)} MB` : '—'} />}
+        {resourceMetricsMeaningful && <Kv k="power" v={s.power_w != null ? `${s.power_w} W` : '—'} />}
+        {resourceMetricsMeaningful && <Kv k="energy used" v={result.energy_wh != null ? `${result.energy_wh} Wh` : '—'} />}
         <Kv k="duration" v={`${Math.round(result.duration_s)}s`} />
-        <Kv k="total requests" v={String(result.total_requests)} />
+        <Kv k="requests started" v={String(result.total_requests)} />
+        {result.completed_requests != null && <Kv k="requests completed" v={String(result.completed_requests)} />}
+        {(result.unfinished_requests ?? 0) > 0 && <Kv k="unfinished at stop" v={String(result.unfinished_requests)} />}
+        {isRuntime && <Kv k="peak workflows in flight" v={String(result.max_in_flight ?? 0)} />}
         <Kv k="total tokens out" v={result.total_tokens_out.toLocaleString()} />
+        {result.total_tokens_in != null && <Kv k="total tokens in" v={result.total_tokens_in.toLocaleString()} />}
         {result.workflows_per_hour != null && (
           <Kv k="workflows / hour" v={String(result.workflows_per_hour)} />
         )}
+        {result.cost && <Kv k="cloud cost this run" v={`$${result.cost.run_total_usd.toFixed(4)} observed${(result.cost.in_flight_reserved_usd ?? 0) > 0 ? ` + $${result.cost.in_flight_reserved_usd?.toFixed(4)} in-flight estimate` : ''} / $${result.cost.circuit_breaker_usd.toFixed(2)} guard`} />}
+        {result.cost && <Kv k="steady-state cost / hour" v={`$${result.cost.steady_cost_per_hour.toFixed(2)}`} />}
+        {result.cost?.steady_cost_per_workflow != null && <Kv k="cost / workflow" v={`$${result.cost.steady_cost_per_workflow.toFixed(4)}`} />}
+        {!isRuntime && result.cost?.steady_cost_per_1k_requests != null && <Kv k="cost / 1K requests" v={`$${result.cost.steady_cost_per_1k_requests.toFixed(2)}`} />}
       </div>
 
+      {result.capacity_levels && result.capacity_levels.length > 0 && result.cost && (
+        <div className="mt-4 pt-3 border-t overflow-x-auto" style={{ borderColor: 'var(--line-soft)' }}>
+          <div className="eyebrow mb-2">Cost by capacity level</div>
+          <table className="w-full text-[11px] font-code">
+            <thead className="text-[var(--faint)]"><tr className="text-left">
+              <th className="pb-1 pr-3">level</th><th className="pb-1 pr-3">state</th>
+              <th className="pb-1 pr-3">p95</th><th className="pb-1 pr-3">rate</th>
+              <th className="pb-1 pr-3">$/hour</th><th className="pb-1 pr-3">rung cost</th>
+              <th className="pb-1">run total</th>
+            </tr></thead>
+            <tbody>
+              {result.capacity_levels.map((level, i) => (
+                <tr key={`${level.phase}-${level.users}-${i}`}
+                  className={level.phase === 'steady' ? 'text-[var(--text)]' : 'text-[var(--muted)]'}
+                  style={{ borderTop: '1px solid var(--line-soft)' }}>
+                  <td className="py-1.5 pr-3">{level.phase === 'steady' ? 'steady · ' : ''}{level.tiles != null ? `${level.tiles} tile / ` : ''}{level.users} usr</td>
+                  <td className="py-1.5 pr-3">{level.slo_state}</td>
+                  <td className="py-1.5 pr-3">{fmtMs(level.p95_ms)}</td>
+                  <td className="py-1.5 pr-3">{fmtNum(level.rpm)}/min</td>
+                  <td className="py-1.5 pr-3">${level.projected_cost_per_hour.toFixed(2)}</td>
+                  <td className="py-1.5 pr-3">${level.incremental_cost_usd.toFixed(4)}</td>
+                  <td className="py-1.5">${level.cumulative_cost_usd.toFixed(4)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[10px] mt-1.5 text-[var(--faint)]">Token-list-price estimate only; provider caching, batch discounts, tools, storage, and taxes are not included.</p>
+        </div>
+      )}
+
       <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--line-soft)' }}>
-        <div className="eyebrow mb-2">Per agent type</div>
+        <div className="eyebrow mb-2">Per {isRuntime ? 'workflow' : 'agent trace type'}</div>
         <div className="flex flex-col gap-1">
           {Object.entries(result.per_scenario).map(([sid, sc]) => (
             <div key={sid} className="flex items-center gap-3 text-[12px]">
@@ -662,7 +872,7 @@ function ResultCard({ result }: { result: CapacityResult }) {
       {result.repro && (
         <p className="font-code text-[10px] mt-3 pt-2 border-t leading-relaxed"
           style={{ color: 'var(--faint)', borderColor: 'var(--line-soft)' }}>
-          repro: seed {result.repro.seed} · {result.repro.cache_mode} cache · scenarios v{result.repro.benchmark_version}
+          repro: seed {result.repro.seed}{result.repro.cache_mode ? ` · ${result.repro.cache_mode} cache` : ''} · scenarios v{result.repro.benchmark_version}
           {result.repro.scenario_fingerprint && ` (${result.repro.scenario_fingerprint})`}
           {result.repro.git_commit && ` · commit ${result.repro.git_commit}`}
           {result.repro.model && ` · ${result.repro.model}`}

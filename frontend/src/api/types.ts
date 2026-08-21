@@ -149,6 +149,39 @@ export interface ToolsResponse {
 
 // ── Capacity tester ───────────────────────────────────────────────────────────
 
+export type CapacityBenchmarkTarget = 'agent_host' | 'integrated_node' | 'inference_engine'
+export type CapacityInferenceBackend = 'local' | 'remote_mock' | 'remote_real'
+
+export interface CapacityCloudModel {
+  id: string
+  provider: 'openai' | 'anthropic' | 'google' | 'custom'
+  name: string
+  model: string
+  base_url: string
+  input_per_mtok: number
+  output_per_mtok: number
+  pricing_as_of: string
+  pricing_url?: string | null
+  pricing_note?: string | null
+  api_key_configured?: boolean
+}
+
+export interface CapacityLevel {
+  phase: 'ramp' | 'steady'
+  users: number
+  tiles?: number | null
+  slo_state: 'good' | 'bad' | 'inconclusive'
+  p95_ms?: number | null
+  err_rate: number
+  tps: number
+  rpm: number
+  tokens_in: number
+  tokens_out: number
+  incremental_cost_usd: number
+  cumulative_cost_usd: number
+  projected_cost_per_hour: number
+}
+
 export interface CapacityScenarioStep {
   label: string
   prompt_tokens: number
@@ -183,11 +216,14 @@ export interface CapacitySample {
   bw_gbs?: number | null
   kv_pct?: number | null
   users: number
+  in_flight?: number
   tps: number
   rpm: number
   p50_ms?: number | null
   p95_ms?: number | null
   err_rate: number
+  cost_usd?: number
+  cost_per_hour?: number
 }
 
 export interface CapacityScenarioStat {
@@ -212,8 +248,11 @@ export interface CapacityBreach {
 
 export interface CapacityResult {
   mode: string
+  benchmark_target?: CapacityBenchmarkTarget
+  inference_backend?: CapacityInferenceBackend
   verdict: string | null
   capacity_users: number
+  capacity_certified?: boolean
   capacity_tiles?: number | null
   mix?: string
   comparable?: boolean
@@ -223,10 +262,15 @@ export interface CapacityResult {
   baselines?: Record<string, number>
   baseline_p95_ms?: number | null
   slo?: { p95_x: number; p95_ms?: number | null; err: number }
-  max_users: number
+  peak_users?: number
+  max_users: number // legacy alias for old exports
   duration_s: number
   total_requests: number
+  completed_requests?: number
+  unfinished_requests?: number
+  max_in_flight?: number
   total_tokens_out: number
+  total_tokens_in?: number
   steady: {
     tps: number; rpm: number; p50_ms?: number | null; p95_ms?: number | null
     err_rate: number; cpu_pct?: number | null; mem_pct?: number | null
@@ -238,10 +282,22 @@ export interface CapacityResult {
   mem_mb_per_user?: number | null
   per_scenario: Record<string, CapacityScenarioStat>
   timeline: CapacitySample[]
+  cloud_model?: CapacityCloudModel | null
+  pricing?: {
+    currency: 'USD'; input_per_mtok: number; output_per_mtok: number
+    pricing_as_of?: string | null; pricing_url?: string | null; note?: string | null
+  } | null
+  cost?: {
+    run_total_usd: number; circuit_breaker_usd: number
+    in_flight_reserved_usd?: number; committed_estimate_usd?: number
+    remaining_usd: number; steady_cost_per_hour: number
+    steady_cost_per_workflow?: number | null; steady_cost_per_1k_requests?: number | null
+  } | null
+  capacity_levels?: CapacityLevel[]
   error?: string | null
   repro?: {
     seed: number
-    cache_mode: string
+    cache_mode: string | null
     warmup_s?: number | null
     benchmark_version: number
     scenario_fingerprint?: string | null
@@ -251,6 +307,8 @@ export interface CapacityResult {
     host?: { platform?: string; cpu_count?: number; mem_total_gb?: number | null; numa_nodes?: number | null }
     mix?: string
     tile?: Record<string, number> | null
+    benchmark_target?: CapacityBenchmarkTarget
+    inference_backend?: CapacityInferenceBackend
   } | null
 }
 
@@ -259,8 +317,11 @@ export interface CapacityStatus {
   phase: string
   verdict?: string | null
   mode?: string
+  benchmark_target?: CapacityBenchmarkTarget
+  inference_backend?: CapacityInferenceBackend
   users?: number
   capacity_users?: number | null
+  capacity_certified?: boolean | null
   capacity_tiles?: number | null
   mix?: string
   tile_size?: number | null
@@ -268,6 +329,10 @@ export interface CapacityStatus {
   baseline_p95_ms?: number | null
   elapsed_s?: number
   total_requests?: number
+  cost_usd?: number | null
+  committed_cost_usd?: number | null
+  max_cost_usd?: number | null
+  cloud_model?: CapacityCloudModel | null
   latest?: Partial<CapacitySample>
   per_scenario?: Record<string, CapacityScenarioStat>
   timeline?: CapacitySample[]
@@ -282,7 +347,6 @@ export interface CapacityEngine {
   setup_log: string[]
   serving: boolean
   models: string[]
-  remote_real: { configured: boolean; model: string | null }
 }
 
 // ── Agent definitions (persistent configured agents) ─────────────────────────
@@ -325,12 +389,19 @@ export interface AgentDefinitionBody {
 export interface CapacityHistoryRow {
   id: string
   mode: string
+  benchmark_target?: CapacityBenchmarkTarget | null
+  inference_backend?: CapacityInferenceBackend | null
   mix: string
   comparable?: boolean | null
   verdict?: string | null
   capacity_users?: number | null
+  capacity_certified?: boolean | null
   capacity_tiles?: number | null
   workflows_per_hour?: number | null
+  cloud_model_name?: string | null
+  run_cost_usd?: number | null
+  steady_cost_per_hour?: number | null
+  circuit_breaker_usd?: number | null
   steady_tps?: number | null
   p95_ms?: number | null
   duration_s?: number | null

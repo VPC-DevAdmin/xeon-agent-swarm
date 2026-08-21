@@ -26,8 +26,7 @@ Stop conditions (first one to fire wins):
             diminishing returns at any scale (a fixed % threshold falsely fires
             once 1/N drops under it)
   errors    error rate over an interval exceeded error_rate_limit (hard stop)
-  capped    max_users reached (held and measured there)
-  timeout   max_duration elapsed
+  spend_guard  selected dollar circuit breaker reached (not capacity)
 
 One test at a time, per process. Results are kept in memory and written to
 data/capacity/ as JSON for history.
@@ -52,6 +51,7 @@ from backend.capacity.e2e import E2ERunner
 from backend.capacity.telemetry import (SystemSampler, mem_slope_mb_per_user,
                                          sample_bandwidth_gbs, sample_kv_pct)
 from backend.capacity.client import LOCAL_BASE
+from backend.capacity.models import public_endpoint
 from backend.capacity import repro as repro_mod
 
 RESULTS_DIR = Path("data/capacity")
@@ -75,8 +75,8 @@ DEFAULTS = dict(
     step_users=1,          # users added per interval
     step_interval_s=12.0,  # ramp cadence
     hold_s=20.0,           # steady-state measure window after saturation
-    max_users=64,
-    max_duration_s=420.0,
+    max_users=None,        # optional test-only compatibility guard; API leaves unset
+    max_duration_s=None,   # optional test-only compatibility guard; API leaves unset
     cpu_target=90.0,       # local-mode saturation line
     mem_target=92.0,       # local-mode RAM saturation line (%)
     kv_target=90.0,        # local-mode KV-pool saturation line (%)
@@ -94,7 +94,7 @@ DEFAULTS = dict(
     sample_interval_s=2.0,
     mock_ms=2000.0,
     mock_sigma=300.0,
-    remote_budget=500,     # hard request cap for remote_real
+    max_cost_usd=None,     # mandatory dollar circuit breaker for cloud runs
 )
 
 
@@ -152,8 +152,16 @@ def _pct(values: list[float], p: float) -> float | None:
 
 class CapacityTest:
     def __init__(self, mode: str, scenario_ids: list[str], cfg: dict,
-                 mix: str = "custom", extra_workflows: dict | None = None):
+                 mix: str = "custom", extra_workflows: dict | None = None,
+                 *, benchmark_target: str | None = None,
+                 inference_backend: str | None = None,
+                 e2e_router: dict | None = None,
+                 endpoint: dict | None = None):
         self.mode = mode
+        self.benchmark_target = benchmark_target or (
+            "agent_host" if mode == "e2e" else "inference_engine")
+        self.inference_backend = inference_backend or (
+            "remote_mock" if mode == "e2e" else mode)
         self.cfg = {**DEFAULTS, **{k: v for k, v in cfg.items() if v is not None}}
         all_scen = load_scenarios()
         # mix="tile": ramp one complete reference tile (ACU) per rung — the
@@ -201,12 +209,21 @@ class CapacityTest:
         self.started_at = time.time()
         self.ended_at: float | None = None
         self.error: str | None = None
+        self.endpoint = endpoint
 
         self.users: list[asyncio.Task] = []
         self.user_scenario: list[str] = []
+        self.peak_users = 0
         self.calls: deque[dict] = deque(maxlen=100_000)   # every completed call
         self.samples: deque[dict] = deque(maxlen=1200)    # system telemetry
         self.total_requests = 0
+        self.completed_requests = 0
+        self.total_tokens_in = 0
+        self.total_tokens_out = 0
+        self.cost_usd = 0.0
+        self._reserved_cost_usd = 0.0
+        self._spend_lock = asyncio.Lock()
+        self.capacity_levels: list[dict] = []
         self.result: dict | None = None
 
         if self.cfg.get("seed") is None:
@@ -217,8 +234,18 @@ class CapacityTest:
         self._caller = StepCaller("remote_mock" if mode == "e2e" else mode,
                                   mock_ms=self.cfg["mock_ms"],
                                   mock_sigma=self.cfg["mock_sigma"],
-                                  cache_mode=str(self.cfg.get("cache_mode") or "warm"))
-        self._e2e = E2ERunner(timeout_s=float(self.cfg["e2e_timeout_s"]))             if mode == "e2e" else None
+                                  cache_mode=str(self.cfg.get("cache_mode") or "warm"),
+                                  endpoint=endpoint)
+        e2e_router = e2e_router or {}
+        self._backend_model = (e2e_router.get("model_label")
+                               or e2e_router.get("model_override"))
+        self._e2e = E2ERunner(
+            timeout_s=float(self.cfg["e2e_timeout_s"]),
+            router_base_url=e2e_router.get("base_url"),
+            router_api_key=e2e_router.get("api_key"),
+            router_model=e2e_router.get("model_override"),
+            router_provider=e2e_router.get("provider", "openai"),
+        ) if mode == "e2e" else None
         self._sampler = SystemSampler()
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task] = []
@@ -226,7 +253,7 @@ class CapacityTest:
     # ── lifecycle ────────────────────────────────────────────────────────────
     async def run(self):
         try:
-            if self.mode == "local":
+            if self.inference_backend == "local":
                 self._engine_info = await repro_mod.engine_info(LOCAL_BASE)
             self._tasks.append(asyncio.create_task(self._sample_loop()))
             await self._ramp()
@@ -256,10 +283,12 @@ class CapacityTest:
             sid = self.scenario_ids[idx % len(self.scenario_ids)]
         self.user_scenario.append(sid)
         self.users.append(asyncio.create_task(self._user_loop(idx, sid)))
+        self.peak_users = max(self.peak_users, len(self.users))
 
     def _add_tile(self) -> bool:
-        """Add one complete reference tile; False if it would exceed max_users."""
-        if len(self.users) + self.tile_size > int(self.cfg["max_users"]):
+        """Add one complete reference tile (an optional test guard may refuse it)."""
+        cap = self.cfg.get("max_users")
+        if cap is not None and len(self.users) + self.tile_size > int(cap):
             return False
         for sid in self.tile_assignment:
             self._add_user(sid)
@@ -272,6 +301,39 @@ class CapacityTest:
             task = self.users.pop()
             self.user_scenario.pop()
             task.cancel()
+
+    def _price(self, tokens_in: int, tokens_out: int) -> float:
+        if not self.endpoint:
+            return 0.0
+        return ((tokens_in * float(self.endpoint["input_per_mtok"]))
+                + (tokens_out * float(self.endpoint["output_per_mtok"]))) / 1_000_000
+
+    async def _reserve_spend(self, tokens_in: int, tokens_out: int) -> float | None:
+        """Reserve estimated request cost so concurrent work respects the breaker."""
+        estimate = self._price(tokens_in, tokens_out)
+        limit = self.cfg.get("max_cost_usd")
+        if not limit:
+            return 0.0
+        async with self._spend_lock:
+            if self.cost_usd + self._reserved_cost_usd + estimate > float(limit):
+                self.verdict = "spend_guard"
+                self._stop.set()
+                return None
+            self._reserved_cost_usd += estimate
+        return estimate
+
+    async def _settle_spend(self, reserved: float, rec: dict) -> None:
+        tokens_in = int(rec.get("tokens_in") or 0)
+        tokens_out = int(rec.get("tokens_out") or 0)
+        async with self._spend_lock:
+            self._reserved_cost_usd = max(0.0, self._reserved_cost_usd - reserved)
+            self.total_tokens_in += tokens_in
+            self.total_tokens_out += tokens_out
+            self.cost_usd += self._price(tokens_in, tokens_out)
+            limit = self.cfg.get("max_cost_usd")
+            if limit and self.cost_usd >= float(limit):
+                self.verdict = "spend_guard"
+                self._stop.set()
 
     async def _user_loop(self, idx: int, sid: str):
         """One virtual user: an agent SESSION, not a chatbot pinger.
@@ -301,9 +363,13 @@ class CapacityTest:
     async def _e2e_loop(self, idx: int, wid: str, wf: dict, think: float):
         """One e2e session: submit a real workflow, await completion, think, repeat."""
         while not self._stop.is_set():
-            if (self.mode == "remote_real"
-                    and self.total_requests >= self.cfg["remote_budget"]):
-                self.stop()
+            # Reserve a conservative workflow envelope before launch. Actual
+            # usage replaces it on completion; this constrains concurrent spend.
+            token_envelope = int((wf.get("budgets") or {}).get("max_total_tokens")
+                                 or 50_000)
+            reserved = await self._reserve_spend(
+                int(token_envelope * 0.8), int(token_envelope * 0.2))
+            if reserved is None:
                 return
             self.total_requests += 1
             rec = await self._e2e.run_workflow(wid, wf["query"], {
@@ -313,6 +379,8 @@ class CapacityTest:
             })
             rec.update(scenario=wid, step="workflow", user=idx, ts=time.time())
             self.calls.append(rec)
+            self.completed_requests += 1
+            await self._settle_spend(reserved, rec)
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=think)
                 return
@@ -323,9 +391,10 @@ class CapacityTest:
         """Budget-checked, recorded single LLM call (incl. tool continuations)."""
         if self._stop.is_set():
             return None
-        if (self.mode == "remote_real"
-                and self.total_requests >= self.cfg["remote_budget"]):
-            self.stop()  # hard budget: never spray a cloud API
+        reserved = await self._reserve_spend(
+            int(step.get("prompt_tokens", 0)) + int(extra_tokens),
+            int(step.get("max_tokens", 200)))
+        if reserved is None:
             return None
         self.total_requests += 1
         self._user_call_n[idx] += 1
@@ -334,6 +403,8 @@ class CapacityTest:
                                       vary_key=vary_key)
         rec.update(scenario=sid, step=label, user=idx, ts=time.time())
         self.calls.append(rec)
+        self.completed_requests += 1
+        await self._settle_spend(reserved, rec)
         return rec
 
     # ── telemetry ────────────────────────────────────────────────────────────
@@ -346,9 +417,12 @@ class CapacityTest:
             s = self._sampler.sample()
             s["users"] = len(self.users)
             s.update(self._window_stats(self.cfg["sample_interval_s"] * 5))
+            # Includes work waiting on router, database, or execution resources;
+            # this is the observable backlog for an async orchestration host.
+            s["in_flight"] = max(0, self.total_requests - self.completed_requests)
             s["bw_gbs"] = None
             s["kv_pct"] = None
-            if self.mode == "local":
+            if self.inference_backend == "local":
                 if bw_misses < 3:
                     s["bw_gbs"] = await sample_bandwidth_gbs(
                         max(0.5, self.cfg["sample_interval_s"] - 1.0))
@@ -410,13 +484,42 @@ class CapacityTest:
         ok = [c for c in recent if c["ok"]]
         lat = [c["latency_ms"] for c in ok]
         toks = sum(c["tokens_out"] for c in ok)
+        tokens_in = sum(c.get("tokens_in", 0) for c in ok)
+        tokens_out = sum(c.get("tokens_out", 0) for c in ok)
+        cost = self._price(tokens_in, tokens_out)
         return {
             "tps": round(toks / window_s, 1),
             "rpm": round(len(ok) * 60.0 / window_s, 1),
             "p50_ms": _pct(lat, 50),
             "p95_ms": _pct(lat, 95),
             "err_rate": round(1 - len(ok) / len(recent), 3) if recent else 0.0,
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
+            "cost_usd": round(cost, 6),
+            "cost_per_hour": round(cost * 3600 / window_s, 4),
         }
+
+    def _record_level(self, phase: str, stats: dict, slo_state: str) -> None:
+        row = {
+            "phase": phase,
+            "users": len(self.users),
+            "tiles": (len(self.users) // self.tile_size if self.tile_size else None),
+            "slo_state": slo_state,
+            "p95_ms": stats.get("p95_ms"),
+            "err_rate": stats.get("err_rate"),
+            "tps": stats.get("tps"),
+            "rpm": stats.get("rpm"),
+            "tokens_in": stats.get("tokens_in", 0),
+            "tokens_out": stats.get("tokens_out", 0),
+            "incremental_cost_usd": stats.get("cost_usd", 0.0),
+            "cumulative_cost_usd": round(self.cost_usd, 6),
+            "projected_cost_per_hour": stats.get("cost_per_hour", 0.0),
+        }
+        if (self.capacity_levels and self.capacity_levels[-1]["phase"] == phase
+                and self.capacity_levels[-1]["users"] == len(self.users)):
+            self.capacity_levels[-1] = row
+        else:
+            self.capacity_levels.append(row)
 
     # ── the ramp ─────────────────────────────────────────────────────────────
     async def _ramp(self):
@@ -503,16 +606,20 @@ class CapacityTest:
                 slo_bad = slo_bad + 1
                 self.breach = breach
             # inconclusive: neither certify nor condemn — hold judgment
+            self._record_level("ramp", stats, rung_state)
 
-            local = self.mode == "local"
+            # CPU/RAM are meaningful for real agent workflows and direct local
+            # inference. Synthetic remote traces do not exercise either host.
+            host_is_target = (self.benchmark_target != "inference_engine"
+                              or self.inference_backend == "local")
             cpu_hot = cpu_hot + 1 if (
-                local and avg_cpu is not None
+                host_is_target and avg_cpu is not None
                 and avg_cpu >= self.cfg["cpu_target"]) else 0
             mem_hot = mem_hot + 1 if (
-                local and avg_mem is not None
+                host_is_target and avg_mem is not None
                 and avg_mem >= self.cfg["mem_target"]) else 0
             kv_hot = kv_hot + 1 if (
-                local and avg_kv is not None
+                self.inference_backend == "local" and avg_kv is not None
                 and avg_kv >= self.cfg["kv_target"]) else 0
             # Relative plateau: compare the measured gain against the gain
             # PERFECT scaling would have produced for the users just added
@@ -539,9 +646,11 @@ class CapacityTest:
                 self.verdict = "plateau"
             elif stats["err_rate"] > self.cfg["error_rate_limit"]:
                 self.verdict = "errors"
-            elif len(self.users) >= int(self.cfg["max_users"]):
+            elif (self.cfg.get("max_users") is not None
+                  and len(self.users) >= int(self.cfg["max_users"])):
                 self.verdict = "capped"
-            elif elapsed > float(self.cfg["max_duration_s"]):
+            elif (self.cfg.get("max_duration_s") is not None
+                  and elapsed > float(self.cfg["max_duration_s"])):
                 self.verdict = "timeout"
 
             if self.verdict:
@@ -559,7 +668,8 @@ class CapacityTest:
                     return
             else:
                 for _ in range(int(self.cfg["step_users"])):
-                    if len(self.users) < int(self.cfg["max_users"]):
+                    if (self.cfg.get("max_users") is None
+                            or len(self.users) < int(self.cfg["max_users"])):
                         self._add_user()
 
     async def _hold(self):
@@ -569,6 +679,10 @@ class CapacityTest:
             await asyncio.wait_for(self._stop.wait(), timeout=float(self.cfg["hold_s"]))
         except asyncio.TimeoutError:
             pass
+        if self.verdict != "spend_guard":
+            steady = self._window_stats(float(self.cfg["hold_s"]))
+            state, _ = self._evaluate_rung(float(self.cfg["hold_s"]))
+            self._record_level("steady", steady, state)
 
     # ── result ───────────────────────────────────────────────────────────────
     def _finalize(self):
@@ -620,14 +734,18 @@ class CapacityTest:
         dur = (self.ended_at or time.time()) - self.started_at
         energy_wh = round(statistics.mean(powers) * dur / 3600, 2) if powers else None
 
+        completed_requests = self.completed_requests
         self.result = {
             "mode": self.mode,
+            "benchmark_target": self.benchmark_target,
+            "inference_backend": self.inference_backend,
             "verdict": self.verdict or ("stopped" if self.phase == "stopped" else None),
             "phase": self.phase,
             "error": self.error,
             # THE capacity number: the highest level at which the SLO held.
             # Falls back to the held level when the SLO was never breached.
             "capacity_users": self.capacity_users or len(self.users),
+            "capacity_certified": self.capacity_users is not None,
             "capacity_tiles": (self.capacity_tiles
                                 if self.capacity_tiles is not None
                                 else ((self.capacity_users or len(self.users))
@@ -641,11 +759,18 @@ class CapacityTest:
             "baselines": {k: round(v, 1) for k, v in self.baselines.items()},
             "slo": {"p95_x": self.cfg["slo_p95_x"], "p95_ms": self.cfg["slo_p95_ms"],
                      "err": self.cfg["slo_err"], "min_samples": self.cfg["min_samples"]},
-            "max_users": len(self.users),
+            "peak_users": self.peak_users,
+            "max_users": self.peak_users,  # compatibility for older exports
             "duration_s": round(dur, 1),
             "total_requests": self.total_requests,
-            "total_tokens_out": sum(c["tokens_out"] for c in self.calls if c["ok"]),
-            "workflows_per_hour": round(hold["rpm"] * 60, 1) if self.mode == "e2e" else None,
+            "completed_requests": completed_requests,
+            "unfinished_requests": max(0, self.total_requests - completed_requests),
+            "max_in_flight": max((int(s.get("in_flight") or 0) for s in samples),
+                                 default=0),
+            "total_tokens_in": self.total_tokens_in,
+            "total_tokens_out": self.total_tokens_out,
+            "workflows_per_hour": (round(hold["rpm"] * 60, 1)
+                                     if self.mode == "e2e" else None),
             "steady": {**hold, "cpu_pct": avg("cpu_pct"), "mem_pct": avg("mem_pct"),
                         "power_w": avg("power_w"), "load1": avg("load1"),
                         "bw_gbs": avg("bw_gbs"), "kv_pct": avg("kv_pct")},
@@ -653,25 +778,54 @@ class CapacityTest:
             "energy_wh": energy_wh,
             "per_scenario": per_scenario,
             "timeline": timeline,
+            "cloud_model": public_endpoint(self.endpoint),
+            "pricing": ({"currency": "USD",
+                         "input_per_mtok": self.endpoint["input_per_mtok"],
+                         "output_per_mtok": self.endpoint["output_per_mtok"],
+                         "pricing_as_of": self.endpoint.get("pricing_as_of"),
+                         "pricing_url": self.endpoint.get("pricing_url"),
+                         "note": self.endpoint.get("pricing_note")}
+                        if self.endpoint else None),
+            "cost": ({"run_total_usd": round(self.cost_usd, 6),
+                      "in_flight_reserved_usd": round(self._reserved_cost_usd, 6),
+                      "committed_estimate_usd": round(
+                          self.cost_usd + self._reserved_cost_usd, 6),
+                      "circuit_breaker_usd": self.cfg.get("max_cost_usd"),
+                      "remaining_usd": round(max(0.0, float(self.cfg["max_cost_usd"])
+                                                 - self.cost_usd
+                                                 - self._reserved_cost_usd), 6),
+                      "steady_cost_per_hour": hold.get("cost_per_hour", 0.0),
+                      "steady_cost_per_workflow": (round(
+                          hold.get("cost_per_hour", 0.0) / (hold["rpm"] * 60), 6)
+                          if self.mode == "e2e" and hold["rpm"] else None),
+                      "steady_cost_per_1k_requests": (round(
+                          hold.get("cost_per_hour", 0.0) / (hold["rpm"] * 60) * 1000, 4)
+                          if hold["rpm"] else None)} if self.endpoint else None),
+            "capacity_levels": self.capacity_levels,
             "config": {k: self.cfg[k] for k in
-                       ("step_interval_s", "max_users", "cpu_target", "hold_s",
+                       ("step_interval_s", "cpu_target", "hold_s", "max_cost_usd",
                         "mock_ms", "mock_sigma")},
             "started_at": self.started_at,
             "ended_at": self.ended_at,
             "repro": {
                 "seed": self.seed,
-                "cache_mode": self._caller.cache_mode,
+                "cache_mode": (None if self.mode == "e2e"
+                               else self._caller.cache_mode),
                 "warmup_s": self.cfg.get("warmup_s"),
                 "benchmark_version": _scen_version(),
                 "scenario_fingerprint": repro_mod.scenario_fingerprint(),
                 "git_commit": repro_mod.git_commit(),
                 "model": (self._engine_info or {}).get("served_model_name")
-                          if self.mode == "local" else
-                          (None if self.mode == "remote_mock" else _remote_model()),
+                          if self.inference_backend == "local" else
+                          (self._backend_model or ((self.endpoint or {}).get("model") or (None
+                           if self.inference_backend == "remote_mock"
+                           else _remote_model()))),
                 "engine": self._engine_info,
                 "host": repro_mod.host_info(),
                 "mix": self.mix,
                 "tile": self.tile,
+                "benchmark_target": self.benchmark_target,
+                "inference_backend": self.inference_backend,
             },
         }
         try:
@@ -715,6 +869,8 @@ class CapacityTest:
             "phase": self.phase,
             "verdict": self.verdict,
             "mode": self.mode,
+            "benchmark_target": self.benchmark_target,
+            "inference_backend": self.inference_backend,
             "users": len(self.users),
             "capacity_users": self.capacity_users,
             "capacity_tiles": self.capacity_tiles,
@@ -724,6 +880,11 @@ class CapacityTest:
             "baseline_p95_ms": self.baseline_p95,
             "elapsed_s": round(time.time() - self.started_at, 1),
             "total_requests": self.total_requests,
+            "cost_usd": round(self.cost_usd, 6) if self.endpoint else None,
+            "committed_cost_usd": (round(self.cost_usd + self._reserved_cost_usd, 6)
+                                    if self.endpoint else None),
+            "max_cost_usd": self.cfg.get("max_cost_usd"),
+            "cloud_model": public_endpoint(self.endpoint),
             "latest": latest,
             "per_scenario": per_scenario,
             "timeline": samples,
