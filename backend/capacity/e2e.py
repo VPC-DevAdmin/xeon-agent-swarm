@@ -87,7 +87,9 @@ class E2ERunner:
                     "tokens_in": max(0, total - tokens_out),
                     "tokens_out": tokens_out,
                     "run_id": run_id,
-                    "error": None if run.status == "completed" else f"status={run.status}",
+                    "error": (None if run.status == "completed"
+                              else (f"status={run.status}"
+                                    + (f" — {run.error}" if run.error else ""))[:300]),
                     # trace: the real request shape, for calibrating synthetics
                     "trace": {
                         "llm_calls": int(m.get("call_count") or 0),

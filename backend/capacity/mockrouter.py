@@ -1,0 +1,81 @@
+"""
+Pre-flight + auto-start for the bundled mock tier router (scripts/mock_router.py).
+
+Agent-host capacity tests with the remote_mock backend drive real orchestrator
+workflows against the mock router on :8901. On a laptop `make demo` already runs
+it; on the demo box nothing does — so the capacity API probes the endpoint and,
+when it is a loopback address, spawns the bundled script itself. A non-loopback
+URL is never auto-started (it is someone else's service): the caller gets a
+clear error instead.
+
+The child is a plain subprocess owned by this process: it dies with the backend
+and is reused across runs. Nothing else manages it — this is a benchmark
+convenience, not a production service.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import subprocess
+import sys
+from pathlib import Path
+from urllib.parse import urlparse
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "mock_router.py"
+_proc: subprocess.Popen | None = None
+
+
+async def _serving(base_url: str) -> bool:
+    probe = base_url.rstrip("/").removesuffix("/v1") + "/healthz"
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            r = await client.get(probe)
+        return r.status_code == 200
+    except Exception:  # noqa: BLE001 — any failure means "not serving"
+        return False
+
+
+def _is_loopback(base_url: str) -> bool:
+    host = (urlparse(base_url).hostname or "").lower()
+    return host in ("127.0.0.1", "localhost", "::1")
+
+
+async def ensure_mock_router(base_url: str) -> None:
+    """Make sure the mock router answers at base_url, spawning it if local.
+
+    Raises RuntimeError with an operator-actionable message when it cannot.
+    """
+    global _proc
+    if await _serving(base_url):
+        return
+    if not _is_loopback(base_url):
+        raise RuntimeError(
+            f"mock router is not serving at {base_url} — start it there or "
+            "point CAPACITY_AGENT_HOST_MOCK_BASE_URL at a running instance")
+    if _proc is not None and _proc.poll() is not None:
+        _proc = None                      # previous child exited; forget it
+    if _proc is None:
+        port = urlparse(base_url).port or 8901
+        env = {**os.environ, "MOCK_ROUTER_PORT": str(port)}
+        logger.info("starting bundled mock router on :%s (%s)", port, _SCRIPT)
+        _proc = subprocess.Popen(
+            [sys.executable, str(_SCRIPT)], env=env,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    for _ in range(20):                   # ~10s for uvicorn to bind
+        await asyncio.sleep(0.5)
+        if await _serving(base_url):
+            return
+        if _proc.poll() is not None:
+            code = _proc.poll()
+            _proc = None
+            raise RuntimeError(
+                f"bundled mock router exited immediately (code {code}) — "
+                f"try `python {_SCRIPT}` by hand to see why")
+    raise RuntimeError(
+        f"mock router did not become ready at {base_url} within 10s")

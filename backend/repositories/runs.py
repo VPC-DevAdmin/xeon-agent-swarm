@@ -103,6 +103,7 @@ async def finalize_run(
     document_result: dict | None = None,
     metrics: dict | None = None,
     status: str = "completed",
+    error: str | None = None,
 ) -> None:
     run = await session.get(Run, run_id)
     if run is None:
@@ -111,6 +112,8 @@ async def finalize_run(
         run.document_result = document_result
     if metrics is not None:
         run.metrics = metrics
+    if error is not None:
+        run.error = error
     run.status = status
     run.completed_at = _utcnow()
     await session.flush()

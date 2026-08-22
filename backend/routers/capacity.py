@@ -179,9 +179,18 @@ async def start_test(body: StartBody,
             else 30.0)
         cfg["min_samples"] = 2
         if target == "agent_host" and inference_backend == "remote_mock":
+            mock_base = os.getenv(
+                "CAPACITY_AGENT_HOST_MOCK_BASE_URL", "http://127.0.0.1:8901/v1")
+            # Pre-flight like the local-engine path: real workflows against a
+            # dead endpoint would 100%-error the run with nothing to learn.
+            # A loopback mock is ours to run, so start the bundled one.
+            from backend.capacity.mockrouter import ensure_mock_router
+            try:
+                await ensure_mock_router(mock_base)
+            except RuntimeError as exc:
+                raise HTTPException(409, str(exc)) from exc
             e2e_router = {
-                "base_url": os.getenv(
-                    "CAPACITY_AGENT_HOST_MOCK_BASE_URL", "http://127.0.0.1:8901/v1"),
+                "base_url": mock_base,
                 "api_key": os.getenv("CAPACITY_AGENT_HOST_MOCK_API_KEY", "mock"),
                 "model_label": "mock-tier-router",
             }

@@ -716,6 +716,11 @@ class CapacityTest:
                 "tokens_out": sum(c["tokens_out"] for c in ok),
                 "avg_tokens_in_flight": round(kv_tok),
             }
+            # Failure reason, not just a count — the most recent recorded error
+            # is what turns an "errors" verdict from a mystery into a diagnosis.
+            errs = [c["error"] for c in cs if not c["ok"] and c.get("error")]
+            if errs:
+                row["last_error"] = errs[-1]
             traces = [c["trace"] for c in ok if c.get("trace")]
             if traces:
                 row["trace"] = {
@@ -863,6 +868,9 @@ class CapacityTest:
                 "errors": len(cs) - len(ok),
                 "p50_ms": _pct([c["latency_ms"] for c in ok[-200:]], 50),
             }
+            errs = [c["error"] for c in cs if not c["ok"] and c.get("error")]
+            if errs:
+                per_scenario[sid]["last_error"] = errs[-1]
         samples = list(self.samples)[-150:]
         return {
             "active": self.phase in ("starting", "ramping", "holding"),

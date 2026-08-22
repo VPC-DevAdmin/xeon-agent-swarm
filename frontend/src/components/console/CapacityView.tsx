@@ -326,6 +326,12 @@ export function CapacityView() {
                       {live.errors > 0 && <span style={{ color: 'var(--bad)' }}> · {live.errors} failed</span>}
                     </p>
                   )}
+                  {live?.last_error && (
+                    <p className="font-code text-[10px] mt-1 break-all line-clamp-2"
+                      style={{ color: 'var(--bad)' }} title={live.last_error}>
+                      {live.last_error}
+                    </p>
+                  )}
                 </div>
               )
             })}
@@ -382,6 +388,12 @@ export function CapacityView() {
                     {live.users} user{live.users === 1 ? '' : 's'} · {live.calls} calls
                     {live.p50_ms != null && <> · p50 {fmtMs(live.p50_ms)}</>}
                     {live.errors > 0 && <span style={{ color: 'var(--bad)' }}> · {live.errors} err</span>}
+                  </p>
+                )}
+                {active && live?.last_error && (
+                  <p className="font-code text-[10px] mt-1 break-all line-clamp-2"
+                    style={{ color: 'var(--bad)' }} title={live.last_error}>
+                    {live.last_error}
                   </p>
                 )}
                 {open && <ScenarioLoop s={s} />}
@@ -845,7 +857,8 @@ function ResultCard({ result }: { result: CapacityResult }) {
         <div className="eyebrow mb-2">Per {isRuntime ? 'workflow' : 'agent trace type'}</div>
         <div className="flex flex-col gap-1">
           {Object.entries(result.per_scenario).map(([sid, sc]) => (
-            <div key={sid} className="flex items-center gap-3 text-[12px]">
+            <div key={sid} className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-3 text-[12px]">
               <span className="w-[38%] truncate text-[var(--text)]">{sc.name}</span>
               <span className="font-code text-[11px] text-[var(--muted)] w-14">{sc.users} usr</span>
               <span className="font-code text-[11px] text-[var(--muted)] w-20">{sc.calls} calls</span>
@@ -864,6 +877,13 @@ function ResultCard({ result }: { result: CapacityResult }) {
                   {sc.trace.llm_calls} LLM · {sc.trace.steps} steps · {sc.trace.validations} val
                 </span>
               )}
+            </div>
+            {sc.last_error && (
+              <p className="font-code text-[10px] break-all line-clamp-2 pl-1"
+                style={{ color: 'var(--bad)' }} title={sc.last_error}>
+                ↳ {sc.last_error}
+              </p>
+            )}
             </div>
           ))}
         </div>

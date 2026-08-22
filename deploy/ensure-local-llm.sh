@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
 # Idempotent bring-up for the local capacity-test LLM: Qwen3-30B-A3B FP8 on
-# SGLang/Xeon. Mirrors the known-good run_09 config (launch-qwen3-intel-fp8.sh).
-#
-# --enable-metrics is added on top of the known-good run_09 flags so the
-# capacity tab can read KV-cache utilization from SGLang's /metrics.
+# SGLang/Xeon. Based on the known-good run_09 config (launch-qwen3-intel-fp8.sh)
+# with deliberate divergences for REAL AGENT workloads — this repo owns these
+# flags, not the router demo's script:
+#   --context-length 32768    run_09 used 8192, but the orchestrator's FIRST
+#                             planner call is already ~6.5k prompt tokens + a
+#                             2048 completion ceiling => instant 400 at 8192.
+#                             Qwen3-30B-A3B natively supports 32k.
+#   --max-total-tokens 131072 the shared KV token pool (~13 GB bf16 KV). 16384
+#                             was sized for short synthetic prompts; compounding
+#                             agent contexts need room for several full windows.
+#   --tool-call-parser qwen25 without it SGLang returns tool calls as raw
+#                             <tool_call> text (tool_calls: null) and deepagents
+#                             cannot delegate. Instruct-2507 is the non-thinking
+#                             variant, so no reasoning parser is needed.
+# --enable-metrics is added so the capacity tab can read KV-cache utilization
+# from SGLang's /metrics.
 # Called by the backend's POST /capacity/engine/start; every echo line streams
 # into the UI, so narrate each phase. Exit 0 only when /v1/models answers.
 #
@@ -30,10 +42,33 @@ VENV_BIN="${VENV_BIN:-$(cd "$(dirname "$0")/.." && pwd)/.venv/bin}"
 
 say() { echo "[ensure-llm] $*"; }
 
-# 0. Already serving?
+# Flags that define this config generation — bump when launch flags change so a
+# running container with stale flags is recreated instead of trusted.
+REQUIRED_FLAGS=("--context-length 32768" "--tool-call-parser qwen25")
+
+flags_current() {  # running container was launched with the flags we require?
+  local cmd
+  cmd="$(docker inspect -f '{{join .Config.Cmd " "}}' "${CONTAINER_NAME}" 2>/dev/null)" || return 1
+  local f
+  for f in "${REQUIRED_FLAGS[@]}"; do
+    case "${cmd}" in *"${f}"*) ;; *) return 1 ;; esac
+  done
+  return 0
+}
+
+# 0. Already serving with current flags?
 if curl -sf "http://127.0.0.1:${PORT}/v1/models" >/dev/null 2>&1; then
-  say "engine already serving on :${PORT} — nothing to do"
-  exit 0
+  if ! docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
+    # Serving, but not our container — externally managed; leave it alone.
+    say "engine serving on :${PORT} outside ${CONTAINER_NAME} — not touching it"
+    exit 0
+  fi
+  if flags_current; then
+    say "engine already serving on :${PORT} with current flags — nothing to do"
+    exit 0
+  fi
+  say "engine serving but launch flags are STALE — recreating ${CONTAINER_NAME}"
+  docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 fi
 
 command -v docker >/dev/null 2>&1 || { say "ERROR: docker not installed"; exit 1; }
@@ -70,7 +105,7 @@ if ! docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
     say "image ${IMAGE_LOCAL} present"
   fi
 
-  # 4. Launch — flags mirror the known-good run_09 config exactly.
+  # 4. Launch — run_09 base flags plus the agent-workload divergences above.
   say "launching ${CONTAINER_NAME} (${IMAGE}) on :${PORT}"
   docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
   docker run -d --rm \
@@ -88,9 +123,10 @@ if ! docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
           --quantization fp8 \
           --attention-backend intel_amx \
           --max-running-requests 64 \
-          --context-length 8192 \
+          --context-length 32768 \
           --chunked-prefill-size 4096 \
-          --max-total-tokens 16384 \
+          --max-total-tokens 131072 \
+          --tool-call-parser qwen25 \
           --mem-fraction-static 0.85 \
           --disable-overlap-schedule \
           --enable-metrics \

@@ -30,6 +30,7 @@ emitting validator_* events and a Validation row. L1/L2 judging is Stage 3/5.
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 
@@ -180,7 +181,8 @@ class EventAdapter:
         await self._emit(event, {"task_id": _ORCH_STEP, "verdict_kind": gr["verdict"],
                                  "critique": gr.get("critique", "")})
 
-    async def finalize(self, status: str = "completed") -> dict:
+    async def finalize(self, status: str = "completed",
+                       error: str | None = None) -> dict:
         # Partial-synthesis fallback: if the graph was abandoned (budget stop) before the
         # main agent composed an answer, build one from the collected subtask results so
         # the run delivers something instead of an empty answer. Tokens roll into the
@@ -218,7 +220,7 @@ class EventAdapter:
         await self.db.finalize_run(
             self.run_id,
             document_result={"final_answer": self.final_answer or ""},
-            metrics=metrics, status=status,
+            metrics=metrics, status=status, error=error,
         )
         await self._emit(EventType.run_completed,
                          {"final_answer": self.final_answer or "",
@@ -558,6 +560,7 @@ async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
               "tags": [f"tier_req:{adapter.planner_tier}"],
               "recursion_limit": recursion_limit}
     status = "completed"
+    run_error: str | None = None
     t0 = time.time()
     stream_input: object = {"messages": query}
     try:
@@ -605,8 +608,10 @@ async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
                             {"error": str(be), "budget_exceeded": adapter.budget_exceeded})
     except Exception as exc:  # noqa: BLE001 — surface as a failed run, don't crash caller
         status = "failed"
-        await adapter._emit(EventType.error, {"error": f"{type(exc).__name__}: {exc}"})
-    summary = await adapter.finalize(status=status)
+        run_error = f"{type(exc).__name__}: {exc}"
+        logging.getLogger(__name__).exception("run %s failed in graph stream", run_id)
+        await adapter._emit(EventType.error, {"error": run_error})
+    summary = await adapter.finalize(status=status, error=run_error)
     summary["status"] = status
     summary["elapsed_s"] = round(time.time() - t0, 1)
     return summary

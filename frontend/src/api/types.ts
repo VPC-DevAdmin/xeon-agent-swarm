@@ -236,6 +236,7 @@ export interface CapacityScenarioStat {
   tokens_out?: number
   avg_tokens_in_flight?: number
   trace?: { llm_calls: number; steps: number; validations: number; task_count: number }
+  last_error?: string | null
 }
 
 export interface CapacityBreach {
