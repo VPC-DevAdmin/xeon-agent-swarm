@@ -45,7 +45,7 @@ logging.basicConfig(
 for noisy in ("httpx", "httpcore", "openai._base_client"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -104,7 +104,20 @@ async def lifespan(app: FastAPI):
             logging.getLogger(__name__).warning(
                 "Scheduler failed to start (continuing): %s", exc
             )
+    # Multi-process orchestrator (opt-in via ADL_WORKERS=N): the control
+    # process spawns N run-executor processes and dispatches runs to them —
+    # the GIL caps a single asyncio process at ~one core (measured: agent-host
+    # capacity certified 6-9 workflows with the host at 2% CPU).
+    from backend import workerpool as wp
+    if wp.pool_enabled():
+        try:
+            await wp.start_pool()
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "executor pool failed to start (running in-process): %s", exc)
     yield
+    if wp.pool_enabled():
+        await wp.stop_pool()
     if scheduler_started:
         from backend.scheduling.scheduler import shutdown_scheduler
         shutdown_scheduler()
@@ -209,6 +222,15 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+async def broadcast_event(run_id: str, event: SwarmEvent):
+    """Broadcast to local WS clients and, on an executor process, relay the
+    event to the control process (where the browsers are connected)."""
+    await manager.broadcast(run_id, event)
+    from backend import workerpool as wp
+    if wp.is_worker():
+        await wp.forward_event(run_id, event.model_dump(mode="json"))
 
 
 # Pending HITL plan-approval decisions, keyed by run_id. POST /run/{id}/approve
@@ -330,7 +352,7 @@ async def run_deepagents(
                                 toolless=toolless)
             summary = await run_with_adapter(
                 agent, query, run_id,
-                broadcast=manager.broadcast,
+                broadcast=broadcast_event,
                 judge=judge, redispatch=redispatch,
                 synthesis_grader=synthesis_grader,
                 partial_synthesizer=partial_synthesizer, approval=approval,
@@ -361,7 +383,7 @@ async def run_deepagents(
         # caught inside run_with_adapter and reported as a failed run there).
         logger.exception("deepagents run %s failed to start", run_id)
         await db.set_run_status(run_id, "failed", error=str(exc))
-        await manager.broadcast(run_id, SwarmEvent(
+        await broadcast_event(run_id, SwarmEvent(
             event=EventType.error, run_id=run_id, payload={"error": str(exc)}))
     finally:
         active_runs.dec()
@@ -393,6 +415,47 @@ def launch_run(
     if engine != "deepagents":
         logger.warning("ADL_ENGINE=%r is no longer supported (swarm engine removed at "
                        "cutover); running the deepagents engine.", engine)
+
+    # Multi-process dispatch: on a control process with an executor pool the
+    # run executes in a child process (GIL relief); the shared WAL SQLite is
+    # the record and the executor relays WS events back here. Pool empty/dead
+    # -> fall through to in-process execution rather than refuse the run.
+    from backend import workerpool as wp
+    if wp.pool_enabled():
+        url = wp.next_worker()
+        if url is not None:
+            wp.assign(run_id, url)
+            payload = {
+                "run_id": run_id, "query": query,
+                "validator_enabled": validator_enabled, "job_id": job_id,
+                "trigger": trigger, "plan_approval": plan_approval,
+                "enabled_tools": enabled_tools, "budget": budget,
+                "router_base_url": router_base_url,
+                "router_api_key": router_api_key,
+                "router_model": router_model,
+                "router_provider": router_provider,
+                "toolless": toolless,
+            }
+
+            async def _dispatch():
+                try:
+                    await wp.dispatch_run(url, payload)
+                except Exception as exc:
+                    logger.exception("dispatch of run %s to %s failed", run_id, url)
+                    # The executor never created the Run row — create the
+                    # failure record here so the run is visible, not vanished.
+                    try:
+                        await db.create_run(run_id, query, job_id=job_id,
+                                            trigger=trigger,
+                                            config={"engine": "deepagents"})
+                        await db.set_run_status(run_id, "failed",
+                                                error=f"dispatch failed: {exc}")
+                    except Exception:
+                        pass
+
+            asyncio.create_task(_dispatch())
+            return run_id
+
     task = asyncio.create_task(run_deepagents(
         run_id, query,
         validator_enabled=validator_enabled,
@@ -513,10 +576,41 @@ async def get_run(run_id: str):
     return {"run_id": run_id, "status": "not_found"}
 
 
+# ── Multi-process internal surface ────────────────────────────────────────────
+# Executor side: accept a dispatched run. Control side: accept relayed events.
+# Both are token-guarded — the control process is publicly reachable through
+# the tunnel, and executors only ever bind 127.0.0.1.
+
+@app.post("/internal/run")
+async def internal_run(request: Request):
+    from backend import workerpool as wp
+    if not wp.check_token(request.headers.get("X-Internal-Token")):
+        raise HTTPException(403, "internal endpoint")
+    body = await request.json()
+    run_id = body.pop("run_id")
+    task = asyncio.create_task(run_deepagents(run_id, body.pop("query"), **body))
+    _run_tasks[run_id] = task
+    task.add_done_callback(lambda _t, rid=run_id: _run_tasks.pop(rid, None))
+    return {"accepted": run_id}
+
+
+@app.post("/internal/events")
+async def internal_events(request: Request):
+    from backend import workerpool as wp
+    if not wp.check_token(request.headers.get("X-Internal-Token")):
+        raise HTTPException(403, "internal endpoint")
+    body = await request.json()
+    await manager.broadcast(body["run_id"], SwarmEvent(**body["event"]))
+    return {"relayed": True}
+
+
 @app.post("/run/{run_id}/kill")
 async def kill_run(run_id: str):
     """Cancel a running deepagents run. The run's asyncio.Task is cancelled (the
     deepagents graph stream is abandoned) and the run is marked aborted."""
+    from backend import workerpool as wp
+    if wp.pool_enabled() and wp.owner(run_id):
+        return await wp.proxy_post(wp.owner(run_id), f"/run/{run_id}/kill")
     task = _run_tasks.get(run_id)
     if task and not task.done():
         task.cancel()
@@ -535,6 +629,10 @@ async def approve_run(run_id: str, body: dict):
     before the run registers its awaiter, so a responsive client can arrive first.
     When the future is present we resolve it; otherwise we stash the decision for the
     awaiter to pick up when it arms (see _await_approval), avoiding a 404-then-hang."""
+    from backend import workerpool as wp
+    if wp.pool_enabled() and wp.owner(run_id):
+        # The awaiting future lives in the executor running the graph.
+        return await wp.proxy_post(wp.owner(run_id), f"/run/{run_id}/approve", body)
     decision = (body or {}).get("decision", "approve")
     fut = _pending_approvals.get(run_id)
     if fut is not None and not fut.done():
@@ -608,7 +706,7 @@ _DIST = Path(os.getenv("FRONTEND_DIST", "frontend/dist"))
 _API_PREFIXES = (
     "run", "runs", "jobs", "connectors", "toolbox", "tools", "ws",
     "health", "metrics", "docs", "redoc", "openapi.json", "audio",
-    "agents", ".well-known", "capacity", "agent-definitions",
+    "agents", ".well-known", "capacity", "agent-definitions", "internal",
 )
 
 if _DIST.is_dir():

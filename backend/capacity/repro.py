@@ -51,6 +51,9 @@ def host_info() -> dict:
         "cpu_count": os.cpu_count(),
         "mem_total_gb": mem_gb,
         "numa_nodes": len(glob.glob("/sys/devices/system/node/node[0-9]*")) or None,
+        # Orchestrator topology changes agent-host capacity as much as the
+        # hardware does: 0 = single-process (GIL-capped at ~one core).
+        "orchestrator_workers": int(os.getenv("ADL_WORKERS", "0") or 0),
     }
 
 

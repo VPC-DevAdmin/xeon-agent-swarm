@@ -73,8 +73,10 @@ class E2ERunner:
         task = app_main._run_tasks.get(run_id)
         if task is not None:
             await asyncio.shield(asyncio.wait({task}))
-        # Read the durable outcome (poll briefly for the finalize write).
-        for _ in range(20):
+        # Read the durable outcome. With an executor pool the run's task lives
+        # in another process, so this polls the shared DB until the run reaches
+        # a terminal state — run_workflow's wait_for bounds the total time.
+        while True:
             sm = get_sessionmaker()
             async with sm() as session:
                 run = await runs_repo.get_run(session, run_id)
@@ -113,5 +115,3 @@ class E2ERunner:
                     },
                 }
             await asyncio.sleep(0.5)
-        return {"ok": False, "tokens_in": 0, "tokens_out": 0,
-                "error": "run record never reached a terminal state"}

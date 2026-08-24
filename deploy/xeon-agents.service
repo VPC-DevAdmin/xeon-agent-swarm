@@ -17,9 +17,14 @@ WorkingDirectory=/home/devadmin/work/repos/xeon-agent-swarm
 EnvironmentFile=/home/devadmin/work/repos/xeon-agent-swarm/.env.adl
 Environment=CONFIG_DIR=config
 Environment=FRONTEND_DIST=frontend/dist
+# Multi-process orchestrator: 8 run-executor child processes (127.0.0.1:8011+).
+# systemd kills the whole cgroup on stop, so executors never outlive the
+# control process.
+Environment=ADL_WORKERS=8
 ExecStart=/home/devadmin/work/repos/xeon-agent-swarm/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8010
 Restart=always
 RestartSec=5
+KillMode=control-group
 StandardOutput=journal
 StandardError=journal
 
