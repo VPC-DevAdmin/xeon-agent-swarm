@@ -33,15 +33,17 @@ class E2ERunner:
         self.router_model = router_model
         self.router_provider = router_provider
 
-    async def run_workflow(self, wid: str, query: str, opts: dict | None = None) -> dict:
+    async def run_workflow(self, wid: str, query: str, opts: dict | None = None,
+                           timeout_s: float | None = None) -> dict:
         t0 = time.perf_counter()
+        limit = float(timeout_s) if timeout_s is not None else self.timeout_s
         try:
             out = await asyncio.wait_for(self._submit(query, opts or {}),
-                                         timeout=self.timeout_s)
+                                         timeout=limit)
         except asyncio.TimeoutError:
             return {"ok": False, "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
                     "tokens_in": 0, "tokens_out": 0,
-                    "error": f"workflow timeout after {self.timeout_s}s"}
+                    "error": f"workflow timeout after {limit}s"}
         except Exception as exc:  # noqa: BLE001 — a failed workflow is a data point
             return {"ok": False, "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
                     "tokens_in": 0, "tokens_out": 0,
@@ -82,14 +84,25 @@ class E2ERunner:
                 validations = sum(len(s.validations) for s in run.steps)
                 tokens_out = int(m.get("tokens_out") or 0)
                 total = int(m.get("total_tokens") or 0)
+                # A budget stop means the fixed-size work unit did NOT complete
+                # — partial synthesis salvages an answer for the user, but for
+                # the benchmark it is a failure, exactly like a timeout.
+                budget_hit = m.get("budget_exceeded")
+                ok = run.status == "completed" and not budget_hit
+                if budget_hit:
+                    err = (f"budget exceeded: {budget_hit.get('kind')} "
+                           f"{budget_hit.get('used')} > {budget_hit.get('limit')}")
+                elif run.status == "completed":
+                    err = None
+                else:
+                    err = (f"status={run.status}"
+                           + (f" — {run.error}" if run.error else ""))[:300]
                 return {
-                    "ok": run.status == "completed",
+                    "ok": ok,
                     "tokens_in": max(0, total - tokens_out),
                     "tokens_out": tokens_out,
                     "run_id": run_id,
-                    "error": (None if run.status == "completed"
-                              else (f"status={run.status}"
-                                    + (f" — {run.error}" if run.error else ""))[:300]),
+                    "error": err,
                     # trace: the real request shape, for calibrating synthetics
                     "trace": {
                         "llm_calls": int(m.get("call_count") or 0),

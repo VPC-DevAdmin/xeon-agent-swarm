@@ -753,7 +753,7 @@ function ResultCard({ result }: { result: CapacityResult }) {
     ? (result.mix === 'tile' && result.capacity_tiles != null
         ? `tile${result.capacity_tiles === 1 ? '' : 's'} (${result.capacity_users} ${isRuntime ? 'agent workflow' : 'synthetic'} sessions) within SLO`
         : 'concurrent agent sessions within SLO')
-    : `${result.capacity_users ?? result.peak_users ?? result.max_users} sessions reached; no rung was SLO-certified`
+    : `capacity unknown — peaked at ${result.peak_users ?? result.max_users} sessions; no rung was SLO-certified`
   const verdictText = !capacityCertified && safetyStop
     ? 'safety stop occurred before a healthy rung could be certified — result is inconclusive'
     : (VERDICT_TEXT[result.verdict ?? ''] ?? result.verdict)
@@ -764,8 +764,9 @@ function ResultCard({ result }: { result: CapacityResult }) {
       <div className="flex items-baseline gap-3 flex-wrap">
         <span className="font-display font-bold text-[40px] tracking-[-0.03em]" style={{ color: 'var(--accent)' }}>
           {lowerBound && '≥'}
-          {result.mix === 'tile' && result.capacity_tiles != null
-            ? result.capacity_tiles : (result.capacity_users ?? result.peak_users ?? result.max_users)}
+          {!capacityCertified ? '—'
+            : result.mix === 'tile' && result.capacity_tiles != null
+              ? result.capacity_tiles : result.capacity_users}
         </span>
         <span className="text-[15px] text-[var(--text)]">
           {capacityLabel}

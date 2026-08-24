@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 2
+version: 3
 
 scenarios:
   support_agent:
@@ -129,16 +129,59 @@ e2e_tile:
   comparison: 1
   digest: 1
 
+# End-to-end workflows are FIXED-SIZE, SELF-CONTAINED work units. All source
+# material rides inside the prompt — no web research, no external tools — so a
+# workflow's size cannot depend on tool availability or the model's appetite,
+# and results are attributable to the inference + orchestration under test.
+# Budgets are part of the workload definition (and the scenario fingerprint):
+# a workflow that hits its budget did NOT complete the unit and counts as a
+# failure, exactly like a timeout.
 e2e_workflows:
   research_brief:
     name: "Research brief (e2e)"
     think_ms: 3000
-    query: "Research the current state of CPU-only LLM inference (vLLM, llama.cpp, SGLang), gather the key benchmark numbers, and write a one-page brief with a recommendation."
+    budgets: {max_subagents: 2, max_tool_hops: 2}
+    query: >-
+      Using ONLY the field notes below (do not research further), write a
+      one-page brief on CPU-only LLM inference with a clear recommendation.
+      Field notes: (1) llama.cpp with 4-bit GGUF quantization reached 12
+      tokens/sec for a 30B model on a 64-core Xeon, with prompt processing at
+      95 tokens/sec; memory use was 21 GB. (2) SGLang's CPU backend with AMX
+      and FP8 weights reached 19 tokens/sec decode and 210 tokens/sec prefill
+      on the same class of machine at 26 GB resident, but requires AVX-512/AMX
+      capable PyTorch builds. (3) vLLM's CPU mode is maintained primarily for
+      development parity; published numbers show roughly half of SGLang's CPU
+      throughput on identical hardware. (4) All three engines saturate memory
+      bandwidth before compute at batch sizes above 8. Deliverable: a brief
+      with sections for findings, trade-offs, and one recommendation.
   comparison:
     name: "Comparison analysis (e2e)"
     think_ms: 3000
-    query: "Compare INT8, INT4, and FP8 quantization for a 30B-parameter model: research the accuracy and memory trade-offs, build a comparison, and summarize which to deploy."
+    budgets: {max_subagents: 2, max_tool_hops: 2}
+    query: >-
+      Using ONLY the measurements below (do not research further), compare
+      INT8, INT4, and FP8 quantization for a 30B-parameter model and recommend
+      one for deployment. Measurements: INT8 — 30 GB weights, 0.3% average
+      accuracy loss on evaluation suites, broad kernel support. INT4 — 16 GB
+      weights, 1.8% accuracy loss that concentrates in math and code tasks,
+      fastest decode on memory-bound hosts. FP8 — 31 GB weights, 0.1% accuracy
+      loss, requires recent hardware support (AMX/FP8 kernels), prefill
+      throughput 15% higher than INT8 in vendor tests. Deliverable: a
+      comparison table, a paragraph on the trade-offs, and one deployment
+      recommendation with its main risk.
   digest:
     name: "Digest report (e2e)"
     think_ms: 3000
-    query: "Compile a digest of recent developments in open-source AI serving stacks, verify the three most significant claims, and summarize in five bullet points."
+    budgets: {max_subagents: 2, max_tool_hops: 2}
+    query: >-
+      Using ONLY the four items below (do not research further), compile a
+      digest in exactly five bullet points, ordered by operational impact.
+      Items: (1) An open-source serving stack added disaggregated prefill,
+      letting prefill and decode scale on separate node pools. (2) A major
+      inference engine released speculative-decoding support that reports
+      1.9x decode speedup on 70B models with a 1B draft model. (3) A widely
+      used gateway added semantic caching with embedding-similarity hits,
+      claiming 30% token savings on support workloads. (4) Two engines
+      standardized on an OpenAI-compatible batch API for offline jobs.
+      Deliverable: five bullets, each naming the item it summarizes and one
+      sentence on who is affected.

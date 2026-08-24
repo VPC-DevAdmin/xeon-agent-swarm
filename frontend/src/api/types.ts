@@ -252,7 +252,7 @@ export interface CapacityResult {
   benchmark_target?: CapacityBenchmarkTarget
   inference_backend?: CapacityInferenceBackend
   verdict: string | null
-  capacity_users: number
+  capacity_users: number | null   // null = no rung certified — capacity unknown
   capacity_certified?: boolean
   capacity_tiles?: number | null
   mix?: string
@@ -300,6 +300,9 @@ export interface CapacityResult {
     seed: number
     cache_mode: string | null
     warmup_s?: number | null
+    eval_window_s?: number | null
+    hold_window_s?: number | null
+    e2e_timeout_s?: number | null
     benchmark_version: number
     scenario_fingerprint?: string | null
     git_commit?: string | null

@@ -106,7 +106,10 @@ def test_full_ramp_reaches_cap_and_reports(tmp_path, monkeypatch):
     assert r is not None
     assert r["verdict"] == "capped"
     assert r["max_users"] == 3
-    assert r["capacity_users"] == 3          # SLO held the whole way => capacity = held level
+    # The fast windows never accumulate min_samples per profile, so no rung
+    # certifies — and capacity is honestly UNKNOWN, never the peak reached.
+    assert r["capacity_users"] is None and r["capacity_certified"] is False
+    assert r["peak_users"] == 3
     assert r["baseline_p95_ms"] is not None
     assert r["total_requests"] > 0
     assert len(r["per_scenario"]) == 6
@@ -340,7 +343,8 @@ def test_result_carries_repro_block(tmp_path, monkeypatch):
     rep = test.result["repro"]
     assert rep["seed"] == 1234
     assert rep["cache_mode"] == "cold"
-    assert rep["benchmark_version"] == 2
+    from backend.capacity.scenarios import benchmark_version
+    assert rep["benchmark_version"] == benchmark_version()
     assert isinstance(rep["scenario_fingerprint"], str) and len(rep["scenario_fingerprint"]) == 12
     assert rep["host"]["cpu_count"] >= 1
     assert rep["mix"] == "custom"
@@ -384,6 +388,10 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
     from backend.capacity.e2e import E2ERunner
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
     test = ctl.CapacityTest("e2e", [], _fast_cfg(max_users=6, hold_s=1.5), mix="tile")
+    # Rungs must CERTIFY before the ramp advances, so the test workload must
+    # produce samples densely enough for the short test windows to judge.
+    for wf in test.scenarios.values():
+        wf["think_ms"] = 100
     test._e2e = E2ERunner(timeout_s=5, submit=_fake_submit())
     asyncio.run(test.run())
     r = test.result

@@ -206,6 +206,7 @@ class CapacityTest:
         self.capacity_users: int | None = None       # last session count where every SLO held
         self.capacity_tiles: int | None = None       # same, in tiles (tile mix)
         self.breach: dict | None = None              # which profile broke which limit
+        self._eval_window_s: float | None = None     # e2e SLO window, derived at rung 1
         self.started_at = time.time()
         self.ended_at: float | None = None
         self.error: str | None = None
@@ -376,7 +377,7 @@ class CapacityTest:
                 "enabled_tools": wf.get("enabled_tools"),
                 "validator_enabled": wf.get("validator_enabled", True),
                 "budgets": wf.get("budgets"),
-            })
+            }, timeout_s=self._profile_timeout_s(wid))
             rec.update(scenario=wid, step="workflow", user=idx, ts=time.time())
             self.calls.append(rec)
             self.completed_requests += 1
@@ -443,6 +444,18 @@ class CapacityTest:
             "p95_ms": _pct([c["latency_ms"] for c in ok], 95),
             "err_rate": round(1 - len(ok) / len(recent), 3) if recent else 0.0,
         }
+
+    def _profile_timeout_s(self, sid: str) -> float:
+        """Per-workflow ceiling, coherent with the SLO: the SLO binds first and
+        the timeout is a backstop above it. Before a baseline exists the
+        configured ceiling applies; after, 1.5x the profile's own SLO allowance
+        — derived from the measured baseline, so a fixed config value can never
+        sit BELOW the allowance and mask SLO breaches as timeouts (the
+        incoherence observed live: 900s cap vs a 1224s allowance)."""
+        limit = self._slo_limit(sid)
+        if limit:
+            return limit * 1.5 / 1000.0
+        return float(self.cfg["e2e_timeout_s"])
 
     def _slo_limit(self, sid: str) -> float | None:
         """A profile's p95 limit: multiplier x its own baseline, tightened by the
@@ -596,6 +609,16 @@ class CapacityTest:
                                              else (round(statistics.median(
                                                  self.baselines.values()), 1)
                                                    if self.baselines else None))
+                    if self.mode == "e2e":
+                        # Declared rule, recorded in the repro block: the SLO
+                        # evaluation window must be able to contain complete
+                        # workflows, or no rung can ever certify. Derived from
+                        # measured rung-1 durations, not tuned per run.
+                        rung1_ok = [c["latency_ms"] / 1000.0
+                                    for c in self.calls if c["ok"]]
+                        self._eval_window_s = max(
+                            3 * interval,
+                            2.0 * statistics.median(rung1_ok) if rung1_ok else 0)
                 else:
                     # The rung-1 hold must still honor the wall-clock ceiling —
                     # otherwise a dead backend parks the run here silently.
@@ -608,8 +631,26 @@ class CapacityTest:
 
             # Evaluate over a wider window than the ramp cadence: slow-cadence
             # profiles (long think times, tool waits) need room to produce
-            # min_samples, or every rung reads as inconclusive.
-            rung_state, breach = self._evaluate_rung(3 * interval)
+            # min_samples, or every rung reads as inconclusive. In e2e mode the
+            # window is derived from measured rung-1 workflow durations.
+            eval_window = (self._eval_window_s
+                           if self.mode == "e2e" and self._eval_window_s
+                           else 3 * interval)
+            rung_state, breach = self._evaluate_rung(eval_window)
+            if (self.mode == "e2e" and rung_state == "inconclusive"
+                    and time.time() - self._rung_t0 > 3 * eval_window):
+                # The rung dwelled three full windows and some profile still
+                # could not produce min_samples — it has effectively stopped
+                # delivering work. That is a failure of the rung, not an
+                # unknown: name the starved profile and condemn the rung.
+                starved = next(
+                    (sid for sid in self.scenario_ids
+                     if self._scenario_window(sid, eval_window)["n"]
+                     < int(self.cfg["min_samples"])), self.scenario_ids[0])
+                rung_state = "bad"
+                breach = {"profile": starved, "metric": "no_samples",
+                          "value": 0.0,
+                          "limit": float(self.cfg["min_samples"])}
             if rung_state == "good":
                 self.capacity_users = len(self.users)
                 if self.mix == "tile":
@@ -657,8 +698,25 @@ class CapacityTest:
                 self.verdict = "kv"
             elif flat >= 2 and len(self.users) > int(self.cfg["start_users"]):
                 self.verdict = "plateau"
-            elif stats["err_rate"] > self.cfg["error_rate_limit"]:
+            elif (stats["err_rate"] > self.cfg["error_rate_limit"]
+                  and rung_state != "bad"):
+                # Mass-failure hard stop — but when the rung is already bad
+                # with a NAMED per-profile breach, the SLO path is the more
+                # informative verdict (it names the profile and scales back to
+                # certified capacity), so let it resolve instead.
                 self.verdict = "errors"
+                if self.breach is None:
+                    # Name the mechanism, not just the count: the profile with
+                    # the worst error share in the current window.
+                    worst, worst_rate = None, 0.0
+                    for sid in self.scenario_ids:
+                        s = self._scenario_window(sid, eval_window)
+                        if s["n"] and s["err_rate"] >= worst_rate:
+                            worst, worst_rate = sid, s["err_rate"]
+                    if worst:
+                        self.breach = {"profile": worst, "metric": "error_rate",
+                                       "value": round(worst_rate, 3),
+                                       "limit": float(self.cfg["error_rate_limit"])}
             elif (self.cfg.get("max_users") is not None
                   and len(self.users) >= int(self.cfg["max_users"])):
                 self.verdict = "capped"
@@ -674,20 +732,15 @@ class CapacityTest:
                 await self._hold()
                 return
 
-            if self.mode == "e2e" and rung_state == "inconclusive":
-                # Real workflows outlast the rung cadence: adding users before
-                # this rung has completed a single workflow just piles up
-                # in-flight work no window can ever certify (observed live: the
-                # ramp reached 21 users with zero completions, then every
-                # workflow timed out at once). Hold the rung until it has
-                # produced at least min_samples finished workflows — evidence
-                # it functions — then let the ramp proceed even if the strict
-                # SLO window stayed inconclusive. Errors count as finished:
-                # they are data, and the error/SLO verdicts above handle them.
-                done_this_rung = sum(1 for c in self.calls
-                                     if c["ts"] >= self._rung_t0)
-                if done_this_rung < int(self.cfg["min_samples"]):
-                    continue
+            if self.mode == "e2e" and rung_state != "good":
+                # Steady-state-per-rung (VMmark shape): a rung must CERTIFY —
+                # every profile meeting its SLO over a full evaluation window —
+                # before the ramp may advance. Inconclusive rungs dwell (the
+                # starvation bound above condemns them if samples never come);
+                # bad rungs accumulate toward the SLO verdict without adding
+                # load. Advancing on anything less reports pacing, not capacity
+                # (observed live: 21 users reached with zero completions).
+                continue
 
             if self.mix == "tile":
                 if not self._add_tile():
@@ -702,21 +755,28 @@ class CapacityTest:
             self._rung_t0 = time.time()
 
     async def _hold(self):
-        """Hold at the saturation level and measure a clean steady state."""
+        """Hold at the saturation level and measure a clean steady state. In
+        e2e mode the hold must span the derived evaluation window so the
+        steady-state figures contain complete workflows."""
         self.phase = "holding"
+        hold_s = float(self.cfg["hold_s"])
+        if self.mode == "e2e" and self._eval_window_s:
+            hold_s = max(hold_s, self._eval_window_s)
         try:
-            await asyncio.wait_for(self._stop.wait(), timeout=float(self.cfg["hold_s"]))
+            await asyncio.wait_for(self._stop.wait(), timeout=hold_s)
         except asyncio.TimeoutError:
             pass
+        self._hold_window_s = hold_s
         if self.verdict != "spend_guard":
-            steady = self._window_stats(float(self.cfg["hold_s"]))
-            state, _ = self._evaluate_rung(float(self.cfg["hold_s"]))
+            steady = self._window_stats(hold_s)
+            state, _ = self._evaluate_rung(hold_s)
             self._record_level("steady", steady, state)
 
     # ── result ───────────────────────────────────────────────────────────────
     def _finalize(self):
-        hold = self._window_stats(float(self.cfg["hold_s"]))
-        cut = time.time() - float(self.cfg["hold_s"])
+        hold_w = getattr(self, "_hold_window_s", None) or float(self.cfg["hold_s"])
+        hold = self._window_stats(hold_w)
+        cut = time.time() - hold_w
         hold_samples = [s for s in self.samples if s["ts"] >= cut]
 
         def avg(key):
@@ -778,12 +838,16 @@ class CapacityTest:
             "error": self.error,
             # THE capacity number: the highest level at which the SLO held.
             # Falls back to the held level when the SLO was never breached.
-            "capacity_users": self.capacity_users or len(self.users),
+            # Capacity comes ONLY from certified rungs. When no rung ever met
+            # its SLO the honest answer is "unknown" — the peak level reached
+            # is reported separately and is NOT capacity.
+            "capacity_users": self.capacity_users,
             "capacity_certified": self.capacity_users is not None,
             "capacity_tiles": (self.capacity_tiles
                                 if self.capacity_tiles is not None
-                                else ((self.capacity_users or len(self.users))
-                                      // self.tile_size if self.tile_size else None)),
+                                else (self.capacity_users // self.tile_size
+                                      if self.capacity_users and self.tile_size
+                                      else None)),
             "mix": self.mix,
             "comparable": self.mix == "tile",
             "tile": self.tile,
@@ -803,14 +867,13 @@ class CapacityTest:
                                  default=0),
             "total_tokens_in": self.total_tokens_in,
             "total_tokens_out": self.total_tokens_out,
-            # Steady-window rate when it caught completions; otherwise the
-            # whole-run rate — workflows slower than the hold window would
-            # otherwise read as 0 workflows/hour on a working system.
-            "workflows_per_hour": (
-                (round(hold["rpm"] * 60, 1) if hold["rpm"] > 0
-                 else round(sum(1 for c in self.calls if c["ok"]) / max(dur, 1e-6)
-                            * 3600, 1))
-                if self.mode == "e2e" else None),
+            # Steady-state rate from the certified hold window only. Without a
+            # certified capacity there is no honest rate to headline — a
+            # whole-run blend of ramp phases and errors is not a rate.
+            "workflows_per_hour": (round(hold["rpm"] * 60, 1)
+                                     if self.mode == "e2e"
+                                     and self.capacity_users is not None
+                                     else None),
             "steady": {**hold, "cpu_pct": avg("cpu_pct"), "mem_pct": avg("mem_pct"),
                         "power_w": avg("power_w"), "load1": avg("load1"),
                         "bw_gbs": avg("bw_gbs"), "kv_pct": avg("kv_pct")},
@@ -852,6 +915,14 @@ class CapacityTest:
                 "cache_mode": (None if self.mode == "e2e"
                                else self._caller.cache_mode),
                 "warmup_s": self.cfg.get("warmup_s"),
+                # e2e measurement geometry — derived by declared rule, recorded
+                # so a run's certification conditions are reconstructible.
+                "eval_window_s": (round(self._eval_window_s, 1)
+                                   if self._eval_window_s else None),
+                "hold_window_s": (round(getattr(self, "_hold_window_s", 0), 1)
+                                   or None),
+                "e2e_timeout_s": (float(self.cfg["e2e_timeout_s"])
+                                   if self.mode == "e2e" else None),
                 "benchmark_version": _scen_version(),
                 "scenario_fingerprint": repro_mod.scenario_fingerprint(),
                 "git_commit": repro_mod.git_commit(),

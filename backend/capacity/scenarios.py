@@ -14,11 +14,16 @@ def benchmark_version() -> int:
 
 
 def load_e2e_workflows() -> dict[str, dict]:
-    """Real workflows for the end-to-end runtime mode: {id: {name, query, think_ms}}."""
+    """Real workflows for the end-to-end runtime mode.
+
+    {id: {name, query, think_ms, budgets}} — budgets are part of the workload
+    definition: they fix the size of the work unit, and a run that hits them
+    counts as a failed workflow (the unit did not complete)."""
     out = {}
     for wid, w in (_load_file().get("e2e_workflows") or {}).items():
         out[wid] = {"name": w.get("name", wid), "query": w.get("query", ""),
-                    "think_ms": int(w.get("think_ms", 3000))}
+                    "think_ms": int(w.get("think_ms", 3000)),
+                    "budgets": dict(w.get("budgets") or {}) or None}
     return out
 
 
