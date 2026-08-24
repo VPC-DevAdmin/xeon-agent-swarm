@@ -546,6 +546,7 @@ class CapacityTest:
         prev_tps: float | None = None
         prev_users = int(self.cfg["start_users"])
         self._baselines_ready = False
+        self._rung_t0 = time.time()   # when the current rung's load level began
         cpu_hot = 0
         mem_hot = 0
         kv_hot = 0
@@ -582,7 +583,12 @@ class CapacityTest:
                         self.baselines.setdefault(sid, s["p95_ms"])
                     else:
                         missing.append(sid)
-                if not missing or elapsed_rung1 > 4 * interval:
+                # e2e workflows can outlast several intervals, so the rung-1
+                # bound must cover at least one full workflow (or its timeout);
+                # 4 intervals is only enough for fast synthetic traces.
+                baseline_bound = (float(self.cfg["e2e_timeout_s"]) + interval
+                                  if self.mode == "e2e" else 4 * interval)
+                if not missing or elapsed_rung1 > baseline_bound:
                     self._baselines_ready = True
                     if self.baseline_p95 is None:
                         self.baseline_p95 = (stats["p95_ms"]
@@ -591,6 +597,13 @@ class CapacityTest:
                                                  self.baselines.values()), 1)
                                                    if self.baselines else None))
                 else:
+                    # The rung-1 hold must still honor the wall-clock ceiling —
+                    # otherwise a dead backend parks the run here silently.
+                    if (self.cfg.get("max_duration_s") is not None
+                            and elapsed > float(self.cfg["max_duration_s"])):
+                        self.verdict = "timeout"
+                        await self._hold()
+                        return
                     continue  # keep measuring rung 1; do not ramp yet
 
             # Evaluate over a wider window than the ramp cadence: slow-cadence
@@ -661,6 +674,21 @@ class CapacityTest:
                 await self._hold()
                 return
 
+            if self.mode == "e2e" and rung_state == "inconclusive":
+                # Real workflows outlast the rung cadence: adding users before
+                # this rung has completed a single workflow just piles up
+                # in-flight work no window can ever certify (observed live: the
+                # ramp reached 21 users with zero completions, then every
+                # workflow timed out at once). Hold the rung until it has
+                # produced at least min_samples finished workflows — evidence
+                # it functions — then let the ramp proceed even if the strict
+                # SLO window stayed inconclusive. Errors count as finished:
+                # they are data, and the error/SLO verdicts above handle them.
+                done_this_rung = sum(1 for c in self.calls
+                                     if c["ts"] >= self._rung_t0)
+                if done_this_rung < int(self.cfg["min_samples"]):
+                    continue
+
             if self.mix == "tile":
                 if not self._add_tile():
                     self.verdict = "capped"
@@ -671,6 +699,7 @@ class CapacityTest:
                     if (self.cfg.get("max_users") is None
                             or len(self.users) < int(self.cfg["max_users"])):
                         self._add_user()
+            self._rung_t0 = time.time()
 
     async def _hold(self):
         """Hold at the saturation level and measure a clean steady state."""
@@ -774,8 +803,14 @@ class CapacityTest:
                                  default=0),
             "total_tokens_in": self.total_tokens_in,
             "total_tokens_out": self.total_tokens_out,
-            "workflows_per_hour": (round(hold["rpm"] * 60, 1)
-                                     if self.mode == "e2e" else None),
+            # Steady-window rate when it caught completions; otherwise the
+            # whole-run rate — workflows slower than the hold window would
+            # otherwise read as 0 workflows/hour on a working system.
+            "workflows_per_hour": (
+                (round(hold["rpm"] * 60, 1) if hold["rpm"] > 0
+                 else round(sum(1 for c in self.calls if c["ok"]) / max(dur, 1e-6)
+                            * 3600, 1))
+                if self.mode == "e2e" else None),
             "steady": {**hold, "cpu_pct": avg("cpu_pct"), "mem_pct": avg("mem_pct"),
                         "power_w": avg("power_w"), "load1": avg("load1"),
                         "bw_gbs": avg("bw_gbs"), "kv_pct": avg("kv_pct")},

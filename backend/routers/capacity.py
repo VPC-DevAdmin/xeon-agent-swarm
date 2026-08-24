@@ -173,10 +173,19 @@ async def start_test(body: StartBody,
     if mode == "e2e":
         # Whole workflows are the unit: slower cadence and fewer samples are
         # needed to certify a rung. The workload ramp has no artificial cap.
-        cfg.setdefault("step_interval_s", body.step_interval_s)
-        cfg["step_interval_s"] = body.step_interval_s or (
-            10.0 if target == "agent_host" and inference_backend == "remote_mock"
-            else 30.0)
+        if target == "agent_host" and inference_backend == "remote_mock":
+            default_interval = 10.0          # mock workflows finish in seconds
+        elif target == "integrated_node":
+            # Real workflows on local CPU inference run minutes each; a 300s
+            # ceiling times out healthy runs and a 30s cadence outruns them.
+            default_interval = 60.0
+            cfg["e2e_timeout_s"] = 900.0
+            # The steady-state window must contain whole workflows (minutes on
+            # CPU), or the "steady" numbers sample the gaps between them.
+            cfg["hold_s"] = 300.0
+        else:
+            default_interval = 30.0          # cloud-backed agent host
+        cfg["step_interval_s"] = body.step_interval_s or default_interval
         cfg["min_samples"] = 2
         if target == "agent_host" and inference_backend == "remote_mock":
             mock_base = os.getenv(
