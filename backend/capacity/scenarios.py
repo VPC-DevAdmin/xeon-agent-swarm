@@ -23,7 +23,11 @@ def load_e2e_workflows() -> dict[str, dict]:
     for wid, w in (_load_file().get("e2e_workflows") or {}).items():
         out[wid] = {"name": w.get("name", wid), "query": w.get("query", ""),
                     "think_ms": int(w.get("think_ms", 3000)),
-                    "budgets": dict(w.get("budgets") or {}) or None}
+                    "budgets": dict(w.get("budgets") or {}) or None,
+                    # Self-contained units grant workers NO tools at all —
+                    # otherwise static role grants (research -> web_search)
+                    # invite tool loops the prompt forbids.
+                    "toolless": bool(w.get("toolless", False))}
     return out
 
 

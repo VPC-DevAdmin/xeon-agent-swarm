@@ -65,6 +65,7 @@ class E2ERunner:
             trigger="api", plan_approval=False,  # benchmarks never pause for HITL
             enabled_tools=list(opts.get("enabled_tools") or []),
             budget=opts.get("budgets") or None,
+            toolless=bool(opts.get("toolless", False)),
             router_base_url=self.router_base_url,
             router_api_key=self.router_api_key,
             router_model=self.router_model,

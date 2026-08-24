@@ -252,6 +252,7 @@ async def run_deepagents(
     router_api_key: str | None = None,
     router_model: str | None = None,
     router_provider: str = "openai",
+    toolless: bool = False,
 ):
     """deepagents (ADL) engine: a single deep agent decomposes + delegates + synthesizes,
     streamed through the event adapter onto the same WS + DB surfaces as the old swarm.
@@ -309,8 +310,13 @@ async def run_deepagents(
         # The adapter handles run_started, steps, validation, finalize (incl. the
         # routing + validation rollup), budgets, and run_completed/run_metrics over WS.
         async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
+            # toolless: self-contained benchmark workflows strip ALL worker tool
+            # grants (empty tools_by_name) AND deepagents' builtin scratchpad
+            # tools from workers, so no role can start a tool loop.
             agent = build_agent(checkpointer, plan_approval=plan_approval,
-                                enabled_tools=enabled_tools, model_factory=mf)
+                                enabled_tools=enabled_tools, model_factory=mf,
+                                tools_by_name={} if toolless else None,
+                                toolless=toolless)
             summary = await run_with_adapter(
                 agent, query, run_id,
                 broadcast=manager.broadcast,
@@ -355,6 +361,7 @@ def launch_run(
     router_api_key: str | None = None,
     router_model: str | None = None,
     router_provider: str = "openai",
+    toolless: bool = False,
 ) -> str:
     """Create a run_id and kick off the ADL deepagents engine in the background.
 
@@ -379,6 +386,7 @@ def launch_run(
         router_api_key=router_api_key,
         router_model=router_model,
         router_provider=router_provider,
+        toolless=toolless,
     ))
     _run_tasks[run_id] = task
     task.add_done_callback(lambda _t, rid=run_id: _run_tasks.pop(rid, None))

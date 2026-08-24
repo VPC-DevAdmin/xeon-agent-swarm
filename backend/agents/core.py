@@ -134,7 +134,8 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
                 tools_by_name: dict | None = None,
                 plan_approval: bool | None = None,
                 enabled_tools: list[str] | None = None,
-                model_factory: ModelFactory | None = None):
+                model_factory: ModelFactory | None = None,
+                toolless: bool = False):
     """Assemble the deep agent.
 
     mcp_tools:    LangChain tools granted to the MAIN agent (the planner). Usually a
@@ -173,7 +174,8 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
         model=mf.for_tier(planner_tier),                      # main agent: planner+synthesis
         tools=main_tools,
         system_prompt=system_prompt,
-        subagents=build_subagent_profiles(mf, tools_by_name, enabled_tools),  # workers on auto
+        subagents=build_subagent_profiles(mf, tools_by_name, enabled_tools,
+                                          strip_builtin_tools=toolless),  # workers on auto
         interrupt_on=build_interrupts(approval_on),             # HITL at main-agent level
         checkpointer=checkpointer,                              # REQUIRED for HITL + resume
     )

@@ -48,8 +48,18 @@ def _granted_tools(role_cfg: dict, tools_by_name: dict | None) -> list:
     return granted
 
 
+# deepagents' built-in scaffolding tools (todos + virtual filesystem). Benchmark
+# workflows strip these from WORKERS: a small local model can loop on scratchpad
+# writes instead of returning its answer, making the work unit variable-size.
+# Private-API dependency (_ToolExclusionMiddleware) — pinned to deepagents 0.6.x.
+_BUILTIN_TOOL_NAMES = frozenset(
+    {"write_todos", "ls", "read_file", "write_file", "edit_file",
+     "glob", "grep", "execute"})
+
+
 def build_subagent_profiles(mf, tools_by_name: dict | None = None,
-                            enabled_tools: list[str] | None = None) -> list[dict]:
+                            enabled_tools: list[str] | None = None,
+                            strip_builtin_tools: bool = False) -> list[dict]:
     """Build the deepagents `subagents=[...]` list from worker_roles.yaml.
 
     mf: a ModelFactory (backend.inference.model.ModelFactory). Workers run on
@@ -68,13 +78,18 @@ def build_subagent_profiles(mf, tools_by_name: dict | None = None,
             grant = {"tools": list(enabled_tools or [])}
         else:
             grant = cfg
-        profiles.append({
+        profile = {
             "name": name,
             "description": cfg.get("description", f"{key} specialist"),
             "system_prompt": cfg.get("system_prompt", "").strip(),
             "tools": _granted_tools(grant, tools_by_name),
             "model": worker_model,
-        })
+        }
+        if strip_builtin_tools:
+            from deepagents.middleware._tool_exclusion import _ToolExclusionMiddleware
+            profile["middleware"] = [
+                _ToolExclusionMiddleware(excluded=_BUILTIN_TOOL_NAMES)]
+        profiles.append(profile)
     return profiles
 
 
