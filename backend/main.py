@@ -295,8 +295,17 @@ async def run_deepagents(
         # Always available: only fires when a budget stop abandons the graph before the
         # main agent synthesized, so partial results still yield a final answer.
         partial_synthesizer = make_partial_synthesizer(mf)
-        checkpoint_db = (os.environ.get("ADL_CHECKPOINT_DB")
-                         or os.environ.get("CHECKPOINT_DB", "./data/adl_checkpoints.db"))
+        checkpoint_base = (os.environ.get("ADL_CHECKPOINT_DB")
+                           or os.environ.get("CHECKPOINT_DB", "./data/adl_checkpoints.db"))
+        # One checkpoint DB PER RUN: a single shared file serializes every
+        # concurrent workflow on one SQLite writer (measured: agent-host
+        # capacity certified at 9 sessions with the CPU at 2% — the writer
+        # lock, not the hardware, was the ceiling). The file is deleted after
+        # a clean finish; it only ever held live/resume state the UI never
+        # reads. On a crash it is left behind for postmortem.
+        ckpt_dir = os.path.join(os.path.dirname(checkpoint_base) or ".", "run_checkpoints")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        checkpoint_db = os.path.join(ckpt_dir, f"{run_id}.db")
 
         # HITL plan approval: per-run flag wins; None falls back to the ADL_PLAN_APPROVAL
         # env default for MANUAL runs only — a scheduled run must never pause (it would
@@ -310,6 +319,8 @@ async def run_deepagents(
         # The adapter handles run_started, steps, validation, finalize (incl. the
         # routing + validation rollup), budgets, and run_completed/run_metrics over WS.
         async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
+            # WAL within the run's own file: workers checkpoint concurrently.
+            await checkpointer.conn.execute("PRAGMA journal_mode=WAL")
             # toolless: self-contained benchmark workflows strip ALL worker tool
             # grants (empty tools_by_name) AND deepagents' builtin scratchpad
             # tools from workers, so no role can start a tool loop.
@@ -338,6 +349,14 @@ async def run_deepagents(
             run_id, output=summary.get("final_answer") or "",
             metrics=summary.get("routing", {}), status="completed",
         )
+        # Clean finish (completed OR failed-and-recorded): the per-run
+        # checkpoint file held only live/resume state — remove it and its
+        # WAL/SHM siblings. A crashed process skips this and leaves evidence.
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                os.unlink(checkpoint_db + suffix)
+            except OSError:
+                pass
     except Exception as exc:  # checkpointer/agent-build failures (run errors are
         # caught inside run_with_adapter and reported as a failed run there).
         logger.exception("deepagents run %s failed to start", run_id)

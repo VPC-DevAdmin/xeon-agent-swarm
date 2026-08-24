@@ -70,6 +70,20 @@ def get_engine() -> AsyncEngine:
                 url, echo=echo,
                 connect_args={"check_same_thread": False},
             )
+            # WAL: readers stop blocking the writer and commits get cheaper —
+            # the single-writer rollback journal was the measured ceiling on
+            # concurrent agent workflows (agent-host capacity certified at 9
+            # sessions with the CPU at 2%). busy_timeout absorbs the residual
+            # writer-vs-writer collisions instead of raising SQLITE_BUSY.
+            from sqlalchemy import event
+
+            @event.listens_for(_engine.sync_engine, "connect")
+            def _sqlite_pragmas(dbapi_conn, _record):
+                cur = dbapi_conn.cursor()
+                cur.execute("PRAGMA journal_mode=WAL")
+                cur.execute("PRAGMA synchronous=NORMAL")
+                cur.execute("PRAGMA busy_timeout=5000")
+                cur.close()
         else:
             _engine = create_async_engine(
                 url, echo=echo, pool_pre_ping=True,
