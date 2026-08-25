@@ -729,6 +729,7 @@ const VERDICT_TEXT: Record<string, string> = {
   memory: 'system memory saturated — RAM gated before the cores did',
   kv: 'engine KV cache saturated — model memory gated before CPU',
   plateau: 'throughput plateaued — no headroom past this point',  // legacy rows only; no longer a stop
+  unstable: 'latency kept climbing at fixed load — the system stopped absorbing added sessions',
   errors: 'error rate exceeded the limit',
   capped: 'safety ceiling reached without saturation — this is a lower bound, not the system limit',
   timeout: 'time safety limit reached without saturation — this is a lower bound when the SLO was certified',
@@ -811,6 +812,11 @@ function ResultCard({ result }: { result: CapacityResult }) {
         {result.knee_users != null && (
           <Kv k="efficiency knee" v={`${result.knee_users} sessions`}
             title="where marginal throughput fell below 25% of linear scaling — a diagnostic, not the capacity boundary" />
+        )}
+        {result.slo_capacity_users != null && (
+          <Kv k="within default latency budget"
+            v={`${result.slo_capacity_users} sessions${result.slo_capacity_tiles != null ? ` (${result.slo_capacity_tiles} tiles)` : ''}`}
+            title="overlay: the last level where every profile stayed within the default 3×-baseline latency budget — apply your own budget to the curve; the certified capacity is the stability boundary" />
         )}
         <Kv k="duration" v={`${Math.round(result.duration_s)}s`} />
         <Kv k="requests started" v={String(result.total_requests)} />

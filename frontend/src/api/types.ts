@@ -261,6 +261,8 @@ export interface CapacityResult {
   tile_size?: number | null
   breach?: CapacityBreach | null
   knee_users?: number | null   // efficiency knee (diagnostic; never a stop)
+  slo_capacity_users?: number | null  // overlay: last level within the default latency budget
+  slo_capacity_tiles?: number | null
   baselines?: Record<string, number>
   baseline_p95_ms?: number | null
   slo?: { p95_x: number; p95_ms?: number | null; err: number }

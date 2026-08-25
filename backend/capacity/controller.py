@@ -14,8 +14,13 @@ measures the steady state THERE: capacity is what you can sustain, not the
 level you died at. Resource verdicts explain the cause.
 
 Stop conditions (first one to fire wins):
-  slo       p95 exceeded the SLO (or errors did) for 2 consecutive intervals —
-            scale down to the last good level, hold, measure
+  unstable  latency kept climbing at FIXED load (window's 2nd half p95 over
+            the 1st by > stat_tolerance) for 2 consecutive evaluations — the
+            system stopped absorbing the load into a steady state. Scale down
+            to the last certified level, drain the breach backlog, hold,
+            measure. The buyer's-latency-budget view (slo_p95_x x baseline)
+            is reported alongside as slo_capacity_users — an overlay, never
+            the verdict.
   cpu       local mode: CPU sustained >= cpu_target for 2 consecutive intervals
   memory    local mode: system memory sustained >= mem_target — RAM can gate
             before cores do on big-model boxes
@@ -83,6 +88,7 @@ DEFAULTS = dict(
     slo_p95_x=3.0,         # SLO: a profile's p95 may grow to this multiple of ITS baseline
     slo_p95_ms=None,       # absolute p95 cap in ms (applies in addition to the multiplier)
     slo_err=0.05,          # SLO: max error rate per profile while a rung counts as "good"
+    stat_tolerance=0.25,   # stationarity: 2nd half-window p95 may exceed the 1st by ≤25%
     min_samples=3,         # completed calls per profile per interval to certify a rung
     warmup_s=5.0,          # rung-1 warm-up discarded before baselines are measured
     seed=None,             # benchmark seed (auto-generated when unset; always recorded)
@@ -207,6 +213,8 @@ class CapacityTest:
         self.capacity_tiles: int | None = None       # same, in tiles (tile mix)
         self.breach: dict | None = None              # which profile broke which limit
         self.knee_users: int | None = None           # efficiency knee (diagnostic, not a stop)
+        self.slo_capacity_users: int | None = None   # OVERLAY: last level within the default
+        self.slo_capacity_tiles: int | None = None   #   3x-baseline latency budget (not the verdict)
         self._eval_window_s: float | None = None     # e2e SLO window, derived at rung 1
         self.started_at = time.time()
         self.ended_at: float | None = None
@@ -448,15 +456,12 @@ class CapacityTest:
         }
 
     def _profile_timeout_s(self, sid: str) -> float:
-        """Per-workflow ceiling, coherent with the SLO: the SLO binds first and
-        the timeout is a backstop above it. Before a baseline exists the
-        configured ceiling applies; after, 1.5x the profile's own SLO allowance
-        — derived from the measured baseline, so a fixed config value can never
-        sit BELOW the allowance and mask SLO breaches as timeouts (the
-        incoherence observed live: 900s cap vs a 1224s allowance)."""
-        limit = self._slo_limit(sid)
-        if limit:
-            return limit * 1.5 / 1000.0
+        """Per-workflow ceiling: a GENEROUS ABSOLUTE bound, deliberately not
+        derived from the SLO. Stability is the verdict; a timeout tied to a
+        latency budget would manufacture the collapse instead of observing it.
+        The ceiling exists only so a hung workflow cannot park a session
+        forever — timeouts that do fire count as errors, and an error cascade
+        is the closed-loop analog of a wait explosion."""
         return float(self.cfg["e2e_timeout_s"])
 
     def _slo_limit(self, sid: str) -> float | None:
@@ -470,12 +475,21 @@ class CapacityTest:
         return rel or (float(abs_ms) if abs_ms else None)
 
     def _evaluate_rung(self, window_s: float) -> tuple[str, dict | None]:
-        """Certify the current rung against every profile's SLO.
+        """Certify the current rung on STABILITY, not a latency multiplier.
 
-        Returns (state, breach): state is 'good' (every profile has enough
-        samples and passes), 'bad' (a profile violated its limit — breach names
-        it), or 'inconclusive' (insufficient samples somewhere: neither certify
-        nor condemn)."""
+        Capacity is the load the system absorbs into a steady state. A closed-
+        loop rig cannot show a queue explosion (in-flight is capped at N), so
+        the intrinsic failure signals at fixed load are:
+          - latency non-stationarity: p95 in the window's 2nd half exceeds the
+            1st half by more than stat_tolerance — the system is still
+            accumulating delay at constant load;
+          - per-profile error rate over slo_err (timeouts are the closed-loop
+            analog of a wait explosion).
+        The old p95 <= slo_p95_x x baseline test is an OVERLAY (a buyer's
+        latency budget), reported as slo_capacity_users, never the verdict.
+
+        Returns (state, breach): 'good' (stationary + errors bounded, enough
+        samples), 'bad' (breach names the mechanism), or 'inconclusive'."""
         min_n = int(self.cfg["min_samples"])
         state = "good"
         for sid in self.scenario_ids:
@@ -484,13 +498,27 @@ class CapacityTest:
                 return "bad", {"profile": sid, "metric": "error_rate",
                                 "value": s["err_rate"],
                                 "limit": float(self.cfg["slo_err"])}
-            limit = self._slo_limit(sid)
-            if limit and s["p95_ms"] is not None and s["n"] >= min_n                     and s["p95_ms"] > limit:
-                return "bad", {"profile": sid, "metric": "p95_ms",
-                                "value": s["p95_ms"], "limit": round(limit, 1),
-                                "baseline_ms": self.baselines.get(sid)}
             if s["n"] < min_n:
                 state = "inconclusive"
+        # Aggregate stationarity across the window's halves. Aggregate, not
+        # per-profile: halving already halves the sample count, and slow
+        # workflows would starve a per-profile split into permanent
+        # inconclusiveness. Errors stay per-profile above.
+        now = time.time()
+        half = window_s / 2.0
+        h1 = [c["latency_ms"] for c in self.calls
+              if c["ok"] and now - window_s <= c["ts"] < now - half]
+        h2 = [c["latency_ms"] for c in self.calls
+              if c["ok"] and c["ts"] >= now - half]
+        need = max(min_n, 2)      # a single-sample p95 is noise, not a trend
+        if len(h1) < need or len(h2) < need:
+            return "inconclusive", None
+        p1, p2 = _pct(h1, 95), _pct(h2, 95)
+        tol = 1.0 + float(self.cfg["stat_tolerance"])
+        if p1 and p2 and p2 > p1 * tol:
+            return "bad", {"profile": "aggregate", "metric": "latency_unstable",
+                            "value": round(p2, 1), "limit": round(p1 * tol, 1),
+                            "baseline_ms": round(p1, 1)}
         return state, None
 
     def _window_stats(self, window_s: float) -> dict:
@@ -567,6 +595,7 @@ class CapacityTest:
         kv_hot = 0
         flat = 0
         slo_bad = 0
+        self._last_bad_count = 0.0
 
         while not self._stop.is_set():
             try:
@@ -639,7 +668,15 @@ class CapacityTest:
                            if self.mode == "e2e" and self._eval_window_s
                            else 3 * interval)
             rung_state, breach = self._evaluate_rung(eval_window)
-            if (self.mode == "e2e" and rung_state == "inconclusive"
+            # Certification happens only at TILE BOUNDARIES, where the mix is
+            # complete and rungs are comparable; sessions are introduced one at
+            # a time between boundaries (the declared tile rotation), so the
+            # ramp approaches the wall gently instead of detonating a whole
+            # tile of backlog on arrival.
+            at_boundary = (self.mix != "tile" or not self.tile_size
+                           or len(self.users) % self.tile_size == 0)
+            if ((self.mode == "e2e" or self.mix == "tile")
+                    and rung_state == "inconclusive"
                     and time.time() - self._rung_t0 > 3 * eval_window):
                 # The rung dwelled three full windows and some profile still
                 # could not produce min_samples — it has effectively stopped
@@ -654,12 +691,25 @@ class CapacityTest:
                           "value": 0.0,
                           "limit": float(self.cfg["min_samples"])}
             if rung_state == "good":
-                self.capacity_users = len(self.users)
-                if self.mix == "tile":
-                    self.capacity_tiles = len(self.users) // max(1, self.tile_size)
+                if at_boundary:
+                    self.capacity_users = len(self.users)
+                    if self.mix == "tile":
+                        self.capacity_tiles = len(self.users) // max(1, self.tile_size)
+                    self._update_slo_overlay(eval_window)
                 slo_bad = 0
+                # A transient bad that a later evaluation supersedes was a
+                # blip, not the boundary: breach describes what ENDED the run.
+                self.breach = None
             elif rung_state == "bad":
-                slo_bad = slo_bad + 1
+                # Consecutive evaluations share most of their window, so a
+                # one-off transient (e.g. a step to a new stable plateau) can
+                # read bad twice in a row. Count a bad toward the verdict only
+                # when a FULL window has passed since the last counted one —
+                # two independent windows of sustained failure, with the load
+                # held constant in between (the bad branch below never adds).
+                if time.time() - self._last_bad_count >= eval_window:
+                    slo_bad = slo_bad + 1
+                    self._last_bad_count = time.time()
                 self.breach = breach
             # inconclusive: neither certify nor condemn — hold judgment
             self._record_level("ramp", stats, rung_state)
@@ -698,7 +748,13 @@ class CapacityTest:
             prev_users = len(self.users)
 
             if slo_bad >= 2:
-                self.verdict = "slo"
+                # Name the mechanism the breach recorded: latency climbing at
+                # fixed load (or a starved profile) is instability; a
+                # per-profile error breach is an error boundary.
+                self.verdict = ("unstable"
+                                if (self.breach or {}).get("metric")
+                                in ("latency_unstable", "no_samples")
+                                else "errors")
             elif cpu_hot >= 2:
                 self.verdict = "cpu"
             elif mem_hot >= 2:
@@ -732,34 +788,70 @@ class CapacityTest:
                 self.verdict = "timeout"
 
             if self.verdict:
-                if (self.verdict == "slo" and self.capacity_users
+                if (self.verdict in ("unstable", "errors") and self.capacity_users
                         and self.capacity_users < len(self.users)):
-                    # Measure capacity at the last level that MET the SLO.
+                    # Measure capacity at the last CERTIFIED level, and let the
+                    # breach-level backlog drain before the steady window opens
+                    # — otherwise the hold measures the wreckage, not the level.
                     self._remove_users(len(self.users) - self.capacity_users)
+                    await self._drain()
                 await self._hold()
                 return
 
-            if self.mode == "e2e" and rung_state != "good":
-                # Steady-state-per-rung (VMmark shape): a rung must CERTIFY —
-                # every profile meeting its SLO over a full evaluation window —
-                # before the ramp may advance. Inconclusive rungs dwell (the
-                # starvation bound above condemns them if samples never come);
-                # bad rungs accumulate toward the SLO verdict without adding
-                # load. Advancing on anything less reports pacing, not capacity
-                # (observed live: 21 users reached with zero completions).
+            if rung_state == "bad":
+                continue                # never add load onto a failing level
+            if (at_boundary and rung_state != "good"
+                    and (self.mode == "e2e" or self.mix == "tile")):
+                # Steady-state-per-boundary (VMmark shape): a mix-complete
+                # level must certify before the ramp moves toward the next
+                # tile — otherwise a boundary can slip past unjudged and
+                # capacity/overlay never latch. Inconclusive levels dwell (the
+                # starvation bound above condemns them if samples never come).
+                # Between boundaries the single-session probing steps below
+                # advance on cadence — bounded overshoot of at most one tile.
                 continue
 
             if self.mix == "tile":
-                if not self._add_tile():
+                # One session per tick, following the tile rotation, so the
+                # boundary is approached gently; capacity is still certified
+                # and reported in whole comparable tiles.
+                cap = self.cfg.get("max_users")
+                if cap is not None and len(self.users) >= int(cap):
                     self.verdict = "capped"
                     await self._hold()
                     return
+                self._add_user(self.tile_assignment[len(self.users) % self.tile_size])
             else:
                 for _ in range(int(self.cfg["step_users"])):
                     if (self.cfg.get("max_users") is None
                             or len(self.users) < int(self.cfg["max_users"])):
                         self._add_user()
             self._rung_t0 = time.time()
+
+    def _update_slo_overlay(self, window_s: float) -> None:
+        """Buyer's-latency-budget OVERLAY (default 3x each profile's baseline):
+        recorded alongside the stability capacity, never the verdict. Only
+        advances when every profile has enough samples and is inside its
+        budget at this level."""
+        min_n = int(self.cfg["min_samples"])
+        for sid in self.scenario_ids:
+            s = self._scenario_window(sid, window_s)
+            limit = self._slo_limit(sid)
+            if not limit or s["n"] < min_n or s["p95_ms"] is None                     or s["p95_ms"] > limit:
+                return
+        self.slo_capacity_users = len(self.users)
+        if self.mix == "tile" and self.tile_size:
+            self.slo_capacity_tiles = len(self.users) // self.tile_size
+
+    async def _drain(self):
+        """After scaling back from a breached level, wait for the breach-level
+        backlog to finish (in-flight <= remaining sessions) so the steady
+        window measures the certified level, not the wreckage draining out.
+        Bounded by the per-workflow ceiling."""
+        limit = time.time() + float(self.cfg["e2e_timeout_s"])
+        while (time.time() < limit and not self._stop.is_set()
+               and self.total_requests - self.completed_requests > len(self.users)):
+            await asyncio.sleep(1.0)
 
     async def _hold(self):
         """Hold at the saturation level and measure a clean steady state. In
@@ -861,6 +953,8 @@ class CapacityTest:
             "tile_size": self.tile_size or None,
             "breach": self.breach,
             "knee_users": self.knee_users,
+            "slo_capacity_users": self.slo_capacity_users,
+            "slo_capacity_tiles": self.slo_capacity_tiles,
             "baseline_p95_ms": self.baseline_p95,
             "baselines": {k: round(v, 1) for k, v in self.baselines.items()},
             "slo": {"p95_x": self.cfg["slo_p95_x"], "p95_ms": self.cfg["slo_p95_ms"],
@@ -1000,6 +1094,7 @@ class CapacityTest:
             "tile_size": self.tile_size or None,
             "breach": self.breach,
             "knee_users": self.knee_users,
+            "slo_capacity_users": self.slo_capacity_users,
             "baseline_p95_ms": self.baseline_p95,
             "elapsed_s": round(time.time() - self.started_at, 1),
             "total_requests": self.total_requests,
