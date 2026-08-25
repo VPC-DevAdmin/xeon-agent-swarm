@@ -728,7 +728,7 @@ const VERDICT_TEXT: Record<string, string> = {
   cpu: 'CPU saturated — this is the box’s ceiling',
   memory: 'system memory saturated — RAM gated before the cores did',
   kv: 'engine KV cache saturated — model memory gated before CPU',
-  plateau: 'throughput plateaued — no headroom past this point',
+  plateau: 'throughput plateaued — no headroom past this point',  // legacy rows only; no longer a stop
   errors: 'error rate exceeded the limit',
   capped: 'safety ceiling reached without saturation — this is a lower bound, not the system limit',
   timeout: 'time safety limit reached without saturation — this is a lower bound when the SLO was certified',
@@ -808,6 +808,10 @@ function ResultCard({ result }: { result: CapacityResult }) {
         {resourceMetricsMeaningful && <Kv k="memory / added agent" v={result.mem_mb_per_user != null ? `${fmtNum(result.mem_mb_per_user)} MB` : '—'} />}
         {resourceMetricsMeaningful && <Kv k="power" v={s.power_w != null ? `${s.power_w} W` : '—'} />}
         {resourceMetricsMeaningful && <Kv k="energy used" v={result.energy_wh != null ? `${result.energy_wh} Wh` : '—'} />}
+        {result.knee_users != null && (
+          <Kv k="efficiency knee" v={`${result.knee_users} sessions`}
+            title="where marginal throughput fell below 25% of linear scaling — a diagnostic, not the capacity boundary" />
+        )}
         <Kv k="duration" v={`${Math.round(result.duration_s)}s`} />
         <Kv k="requests started" v={String(result.total_requests)} />
         {result.completed_requests != null && <Kv k="requests completed" v={String(result.completed_requests)} />}
@@ -906,9 +910,9 @@ function ResultCard({ result }: { result: CapacityResult }) {
   )
 }
 
-function Kv({ k, v }: { k: string; v: string }) {
+function Kv({ k, v, title }: { k: string; v: string; title?: string }) {
   return (
-    <div className="flex justify-between gap-2 min-w-0">
+    <div className="flex justify-between gap-2 min-w-0" title={title}>
       <span className="text-[var(--faint)] truncate">{k}</span>
       <span className="font-code text-[12px] text-[var(--text)] whitespace-nowrap">{v}</span>
     </div>

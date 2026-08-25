@@ -21,12 +21,12 @@ Stop conditions (first one to fire wins):
             before cores do on big-model boxes
   kv        local mode: the engine's KV-cache pool sustained >= kv_target
             (scraped from SGLang /metrics; the truest "model memory full")
-  plateau   throughput gain fell below plateau_frac × the EXPECTED linear gain
-            (step_users/users) for 2 consecutive adds — relative, so it means
-            diminishing returns at any scale (a fixed % threshold falsely fires
-            once 1/N drops under it)
   errors    error rate over an interval exceeded error_rate_limit (hard stop)
   spend_guard  selected dollar circuit breaker reached (not capacity)
+
+The throughput plateau (gain < plateau_frac × the expected linear gain, twice)
+is recorded as knee_users — a diminishing-returns DIAGNOSTIC — but never stops
+the ramp: capacity is the SLO/resource boundary, not the efficiency knee.
 
 One test at a time, per process. Results are kept in memory and written to
 data/capacity/ as JSON for history.
@@ -206,6 +206,7 @@ class CapacityTest:
         self.capacity_users: int | None = None       # last session count where every SLO held
         self.capacity_tiles: int | None = None       # same, in tiles (tile mix)
         self.breach: dict | None = None              # which profile broke which limit
+        self.knee_users: int | None = None           # efficiency knee (diagnostic, not a stop)
         self._eval_window_s: float | None = None     # e2e SLO window, derived at rung 1
         self.started_at = time.time()
         self.ended_at: float | None = None
@@ -676,16 +677,23 @@ class CapacityTest:
             kv_hot = kv_hot + 1 if (
                 self.inference_backend == "local" and avg_kv is not None
                 and avg_kv >= self.cfg["kv_target"]) else 0
-            # Relative plateau: compare the measured gain against the gain
-            # PERFECT scaling would have produced for the users just added
-            # (step/users). A fixed % threshold would falsely fire once 1/N
-            # drops below it, reporting arithmetic instead of capacity.
+            # Relative plateau — DIAGNOSTIC, not a stop. Capacity is defined by
+            # the SLO boundary (plus resource/error saturation); a throughput
+            # knee with SLOs green and the host idle just means marginal gain
+            # is falling, and stopping there reports the shape of the ramp,
+            # not the limit. The knee is recorded once (efficiency marker) and
+            # the ramp continues to a real boundary. The relative rule (gain
+            # vs PERFECT scaling for the users just added) avoids the fixed-%
+            # trap of firing on 1/N arithmetic alone.
             frac = float(self.cfg["plateau_frac"] or 0)
             if prev_tps is not None and prev_tps > 0 and frac > 0:
                 gain = (stats["tps"] - prev_tps) / prev_tps
                 added = max(0, len(self.users) - prev_users)
                 expected = added / max(1, prev_users)
                 flat = flat + 1 if (added > 0 and gain < frac * expected) else 0
+                if (flat >= 2 and self.knee_users is None
+                        and len(self.users) > int(self.cfg["start_users"])):
+                    self.knee_users = len(self.users)
             prev_tps = stats["tps"]
             prev_users = len(self.users)
 
@@ -697,8 +705,6 @@ class CapacityTest:
                 self.verdict = "memory"
             elif kv_hot >= 2:
                 self.verdict = "kv"
-            elif flat >= 2 and len(self.users) > int(self.cfg["start_users"]):
-                self.verdict = "plateau"
             elif (stats["err_rate"] > self.cfg["error_rate_limit"]
                   and rung_state != "bad"):
                 # Mass-failure hard stop — but when the rung is already bad
@@ -854,6 +860,7 @@ class CapacityTest:
             "tile": self.tile,
             "tile_size": self.tile_size or None,
             "breach": self.breach,
+            "knee_users": self.knee_users,
             "baseline_p95_ms": self.baseline_p95,
             "baselines": {k: round(v, 1) for k, v in self.baselines.items()},
             "slo": {"p95_x": self.cfg["slo_p95_x"], "p95_ms": self.cfg["slo_p95_ms"],
@@ -992,6 +999,7 @@ class CapacityTest:
             "mix": self.mix,
             "tile_size": self.tile_size or None,
             "breach": self.breach,
+            "knee_users": self.knee_users,
             "baseline_p95_ms": self.baseline_p95,
             "elapsed_s": round(time.time() - self.started_at, 1),
             "total_requests": self.total_requests,

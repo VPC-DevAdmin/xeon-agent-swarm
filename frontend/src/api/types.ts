@@ -260,6 +260,7 @@ export interface CapacityResult {
   tile?: Record<string, number> | null
   tile_size?: number | null
   breach?: CapacityBreach | null
+  knee_users?: number | null   // efficiency knee (diagnostic; never a stop)
   baselines?: Record<string, number>
   baseline_p95_ms?: number | null
   slo?: { p95_x: number; p95_ms?: number | null; err: number }
