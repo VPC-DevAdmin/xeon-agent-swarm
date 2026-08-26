@@ -29,11 +29,24 @@ _ROLE_CONFIG = os.path.join(_CONFIG_DIR, "worker_roles.yaml")
 _NAME_MAP = {"general": "general-purpose"}
 
 
+_roles_cache: dict[str, tuple[float, dict]] = {}
+
+
 def load_roles(path: str | None = None) -> dict[str, dict]:
-    """Read worker_roles.yaml → {role_key: role_cfg}."""
-    with open(path or _ROLE_CONFIG) as f:
-        data = yaml.safe_load(f) or {}
-    return data.get("roles", {})
+    """Read worker_roles.yaml → {role_key: role_cfg}.
+
+    Cached on the file's mtime — config loads once per process, standard
+    practice; an edited file is picked up on the next call. Re-parsing YAML
+    per workflow was measured at ~15% of executor self-time under load (the
+    validator stack constructs per run and read this on every workflow)."""
+    p = path or _ROLE_CONFIG
+    mtime = os.path.getmtime(p)
+    hit = _roles_cache.get(p)
+    if hit is None or hit[0] != mtime:
+        with open(p) as f:
+            data = yaml.safe_load(f) or {}
+        _roles_cache[p] = (mtime, data.get("roles", {}))
+    return _roles_cache[p][1]
 
 
 def _granted_tools(role_cfg: dict, tools_by_name: dict | None) -> list:

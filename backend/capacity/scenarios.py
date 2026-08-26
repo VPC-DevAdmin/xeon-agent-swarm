@@ -90,10 +90,18 @@ def synthetic_text(vary_key: str, n_chars: int) -> str:
     return " ".join(words)[:n_chars]
 
 
-@lru_cache(maxsize=1)
+_file_cache: tuple[float, dict] | None = None
+
+
 def _load_file() -> dict:
-    with open(_PATH) as f:
-        return yaml.safe_load(f) or {}
+    """mtime-cached: config parses once per process (standard practice); an
+    edited file is picked up on the next call."""
+    global _file_cache
+    mtime = os.path.getmtime(_PATH)
+    if _file_cache is None or _file_cache[0] != mtime:
+        with open(_PATH) as f:
+            _file_cache = (mtime, yaml.safe_load(f) or {})
+    return _file_cache[1]
 
 
 def load_tile() -> dict[str, int]:
