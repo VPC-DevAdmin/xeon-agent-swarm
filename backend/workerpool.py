@@ -171,15 +171,47 @@ async def dispatch_run(url: str, payload: dict) -> None:
     r.raise_for_status()
 
 
+_event_buf: list[dict] = []
+_event_flusher: asyncio.Task | None = None
+_EVENT_BUF_MAX = 10_000          # drop-oldest beyond this: relay is liveness
+_EVENT_FLUSH_S = 0.1
+
+
+async def _event_flush_loop():
+    while True:
+        await asyncio.sleep(_EVENT_FLUSH_S)
+        if not _event_buf:
+            continue
+        batch, _event_buf[:] = _event_buf[:], []
+        try:
+            await _http().post(f"{control_url()}/internal/events_batch",
+                               json={"events": batch},
+                               headers={"X-Internal-Token": internal_token()})
+        except Exception:
+            logger.debug("event relay batch of %d dropped", len(batch))
+
+
 async def forward_event(run_id: str, event_json: dict) -> None:
-    """Executor -> control: relay one WS event for the live UI. Best-effort —
-    the DB rows are the durable record; a dropped relay only costs liveness."""
+    """Executor -> control: buffer the WS event; a flusher POSTs batches every
+    100ms. Best-effort — the DB rows are the durable record; a dropped relay
+    only costs liveness. Per-event POSTs were ~2.5k req/s at 2,000 sessions."""
+    global _event_flusher
+    if _event_flusher is None or _event_flusher.done():
+        _event_flusher = asyncio.get_event_loop().create_task(_event_flush_loop())
+    if len(_event_buf) >= _EVENT_BUF_MAX:
+        del _event_buf[:len(_event_buf) // 2]
+    _event_buf.append({"run_id": run_id, "event": event_json})
+
+
+async def post_complete(payload: dict) -> None:
+    """Executor -> control: a dispatched run reached a terminal state. Carries
+    the full outcome so the benchmark never has to poll the database."""
     try:
-        await _http().post(f"{control_url()}/internal/events",
-                           json={"run_id": run_id, "event": event_json},
+        await _http().post(f"{control_url()}/internal/complete", json=payload,
                            headers={"X-Internal-Token": internal_token()})
     except Exception:
-        logger.debug("event relay to control failed for run %s", run_id)
+        logger.warning("completion callback failed for run %s",
+                       payload.get("run_id"))
 
 
 async def proxy_post(url: str, path: str, body: dict | None = None) -> dict:

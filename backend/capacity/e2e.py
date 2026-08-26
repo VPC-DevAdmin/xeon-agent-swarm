@@ -71,11 +71,16 @@ class E2ERunner:
             router_model=self.router_model,
             router_provider=self.router_provider)
         task = app_main._run_tasks.get(run_id)
-        if task is not None:
-            await asyncio.shield(asyncio.wait({task}))
-        # Read the durable outcome. With an executor pool the run's task lives
-        # in another process, so this polls the shared DB until the run reaches
-        # a terminal state — run_workflow's wait_for bounds the total time.
+        if task is None:
+            # Dispatched to an executor: await its completion callback — the
+            # outcome arrives with the terminal state, no DB polling. The outer
+            # wait_for bounds the wait.
+            return await app_main.wait_outcome(run_id)
+        await asyncio.shield(asyncio.wait({task}))
+        # In-process run: the task finished; writes ride the batched writer, so
+        # barrier before reading the durable outcome.
+        from backend.repositories import persistence
+        await persistence.barrier()
         while True:
             sm = get_sessionmaker()
             async with sm() as session:

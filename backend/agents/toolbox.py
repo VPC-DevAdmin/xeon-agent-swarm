@@ -179,21 +179,15 @@ def build_bench_tool() -> StructuredTool:
         import asyncio as _asyncio
         import zlib
         from backend.capacity.scenarios import synthetic_text
-        from backend.db.base import get_sessionmaker
-        from backend.db.models import AuditLog
+        from backend.repositories import persistence
 
         # Deterministic 50-150ms "backend latency" per key (crc32, not hash():
         # hash() is salted per process and would break reproducibility).
         delay = 0.05 + (zlib.crc32(key.encode()) % 100) / 1000.0
-        try:
-            sm = get_sessionmaker()
-            async with sm() as session:
-                session.add(AuditLog(action="bench.record",
-                                     detail={"key": key[:120]}))
-                await session.commit()
-            stored = "stored"
-        except Exception as exc:  # noqa: BLE001 — a failed write IS the signal
-            stored = f"store FAILED: {exc}"
+        # Durable write via the batched single-writer — per-call sessions were
+        # exactly the connection-per-op pattern that walled the ramp at 375.
+        await persistence.audit_bench(key)
+        stored = "stored"
         await _asyncio.sleep(delay)
         return (f"[bench_record] {stored} record '{key[:60]}'. Retrieved context: "
                 + synthetic_text(f"bench:{key}", 400))

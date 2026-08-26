@@ -1,17 +1,21 @@
 """
-Pipeline persistence facade.
+Pipeline persistence facade — a BATCHED single-writer per process.
 
-Thin wrappers that open a short-lived AsyncSession around each repository call,
-so the swarm pipeline (backend/main.py) can persist run state without managing
-sessions itself. Each function is self-contained and commits on success.
+Every write is enqueued (FIFO, so run -> step -> attempt ordering holds) and a
+background writer flushes up to _BATCH_MAX ops per transaction on ONE
+connection. This is what lets thousands of concurrent agent sessions share a
+database: per-op connection checkouts turned 4,500 ops/s into a pool storm
+(measured: 'QueuePool limit reached' tails ended the ramp at 375 sessions),
+while batching needs ~2 connections per process at any session count.
 
-All functions are best-effort: a persistence failure logs a warning but never
-aborts the run. The in-memory _run_results cache remains the source of truth
-for the live dashboard; the DB is the durable record that survives restarts and
-feeds the REST API.
+All writes are best-effort and fire-and-forget: a failure logs a warning but
+never aborts a run. `barrier()` awaits everything enqueued so far — call it
+before reading back state you just wrote (e.g. the executor's completion
+callback). Reads are unaffected; they may lag writes by <= the flush interval.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from backend.db.base import get_sessionmaker
@@ -20,31 +24,93 @@ from backend.repositories import runs as runs_repo
 
 logger = logging.getLogger(__name__)
 
+_BATCH_MAX = 200
+_FLUSH_S = 0.05
+_queue: asyncio.Queue | None = None
+_writer: asyncio.Task | None = None
 
-async def _run(coro_factory, label: str):
-    """Open a session, run the repo coroutine, commit. Swallow + log errors.
 
-    Transient write contention (SQLite 'database is locked', serialization
-    hiccups) is retried with backoff before giving up — a dropped step write
-    stalls the run it belonged to, which at 100+ concurrent agent sessions
-    turned lock races into workflow timeouts."""
-    import asyncio as _asyncio
-    for attempt, delay in enumerate((0.0, 0.1, 0.4, 1.0)):
-        if delay:
-            await _asyncio.sleep(delay)
+def _ensure_writer() -> asyncio.Queue:
+    global _queue, _writer
+    if _queue is None or _writer is None or _writer.done():
+        _queue = _queue or asyncio.Queue()
+        _writer = asyncio.get_event_loop().create_task(_writer_loop())
+        _writer.add_done_callback(
+            lambda t: (not t.cancelled() and t.exception()) and logger.error(
+                "persistence writer died: %r", t.exception()))
+    return _queue
+
+
+async def _writer_loop():
+    loop = asyncio.get_event_loop()
+    while True:
+        batch = [await _queue.get()]
+        deadline = loop.time() + _FLUSH_S
+        while len(batch) < _BATCH_MAX:
+            timeout = deadline - loop.time()
+            if timeout <= 0:
+                break
+            try:
+                batch.append(await asyncio.wait_for(_queue.get(), timeout))
+            except asyncio.TimeoutError:
+                break
+        await _flush(batch)
+
+
+async def _flush(batch):
+    ops = [(f, label) for f, label, _fut in batch if f is not None]
+    if ops:
         try:
             sm = get_sessionmaker()
             async with sm() as session:
-                result = await coro_factory(session)
+                for f, _label in ops:
+                    await f(session)
                 await session.commit()
-                return result
-        except Exception as exc:  # never let persistence break a run
-            transient = "locked" in str(exc).lower() or "deadlock" in str(exc).lower()
-            if transient and attempt < 3:
-                continue
-            logger.warning("persistence[%s] failed%s: %s", label,
-                           f" after {attempt + 1} attempts" if attempt else "", exc)
-            return None
+        except Exception:  # noqa: BLE001 — isolate the poison op, keep the rest
+            for f, label in ops:
+                for attempt, delay in enumerate((0.0, 0.1, 0.4)):
+                    if delay:
+                        await asyncio.sleep(delay)
+                    try:
+                        sm = get_sessionmaker()
+                        async with sm() as session:
+                            await f(session)
+                            await session.commit()
+                        break
+                    except Exception as exc:  # noqa: BLE001
+                        transient = ("locked" in str(exc).lower()
+                                     or "deadlock" in str(exc).lower())
+                        if transient and attempt < 2:
+                            continue
+                        logger.warning("persistence[%s] failed: %s", label, exc)
+                        break
+    for *_, fut in batch:
+        if fut is not None and not fut.done():
+            fut.set_result(None)
+
+
+async def barrier():
+    """Resolve once everything enqueued before this call has been flushed."""
+    q = _ensure_writer()
+    fut = asyncio.get_event_loop().create_future()
+    q.put_nowait((None, "barrier", fut))
+    await fut
+
+
+async def _run(coro_factory, label: str):
+    """Enqueue a write for the batched writer. Fire-and-forget (returns None)."""
+    _ensure_writer().put_nowait((coro_factory, label, None))
+    return None
+
+
+async def audit_bench(key: str):
+    """Benchmark tool record — one durable AuditLog row through the writer."""
+    from backend.db.models import AuditLog
+
+    async def _op(session):
+        session.add(AuditLog(action="bench.record", detail={"key": key[:120]}))
+
+    return await _run(_op, "bench.record")
 
 
 async def create_run(run_id, query, *, job_id=None, trigger="manual", config=None):

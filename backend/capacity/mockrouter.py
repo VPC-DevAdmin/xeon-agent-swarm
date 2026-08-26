@@ -61,10 +61,16 @@ async def ensure_mock_router(base_url: str) -> None:
         _proc = None                      # previous child exited; forget it
     if _proc is None:
         port = urlparse(base_url).port or 8901
-        env = {**os.environ, "MOCK_ROUTER_PORT": str(port)}
-        logger.info("starting bundled mock router on :%s (%s)", port, _SCRIPT)
+        workers = os.getenv("MOCK_ROUTER_WORKERS", "4")
+        logger.info("starting bundled mock router on :%s (%s workers)", port, workers)
+        # Multi-worker: the mock stands in for the LLM tier, and a single
+        # process saturates near ~1k req/s — well under what 2,000 agent
+        # sessions generate. It is stateless, so workers scale it linearly.
         _proc = subprocess.Popen(
-            [sys.executable, str(_SCRIPT)], env=env,
+            [sys.executable, "-m", "uvicorn", "scripts.mock_router:app",
+             "--host", "127.0.0.1", "--port", str(port),
+             "--workers", workers, "--log-level", "warning"],
+            cwd=str(_SCRIPT.parents[1]), env={**os.environ},
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     for _ in range(20):                   # ~10s for uvicorn to bind

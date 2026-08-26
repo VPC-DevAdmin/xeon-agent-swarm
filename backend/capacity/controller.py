@@ -490,10 +490,22 @@ class CapacityTest:
             self.samples.append(s)
             await asyncio.sleep(self.cfg["sample_interval_s"])
 
+    def _recent(self, cut: float) -> list[dict]:
+        """Calls newer than `cut`, walking the time-ordered deque from the
+        newest end and stopping at the boundary — O(window), not O(history).
+        At 100k retained calls, full scans per evaluation were the control
+        plane's next heat source."""
+        out: list[dict] = []
+        for c in reversed(self.calls):
+            if c["ts"] < cut:
+                break
+            out.append(c)
+        return out
+
     def _scenario_window(self, sid: str, window_s: float) -> dict:
         """Per-profile stats over the window: the unit of SLO evaluation."""
         cut = time.time() - window_s
-        recent = [c for c in self.calls if c["ts"] >= cut and c["scenario"] == sid]
+        recent = [c for c in self._recent(cut) if c["scenario"] == sid]
         ok = [c for c in recent if c["ok"]]
         return {
             "n": len(recent),
@@ -552,9 +564,10 @@ class CapacityTest:
         # inconclusiveness. Errors stay per-profile above.
         now = time.time()
         half = window_s / 2.0
-        h1 = [c["latency_ms"] for c in self.calls
-              if c["ok"] and now - window_s <= c["ts"] < now - half]
-        h2 = [c["latency_ms"] for c in self.calls
+        window = self._recent(now - window_s)
+        h1 = [c["latency_ms"] for c in window
+              if c["ok"] and c["ts"] < now - half]
+        h2 = [c["latency_ms"] for c in window
               if c["ok"] and c["ts"] >= now - half]
         need = max(min_n, 2)      # a single-sample p95 is noise, not a trend
         if len(h1) < need or len(h2) < need:
@@ -569,7 +582,7 @@ class CapacityTest:
 
     def _window_stats(self, window_s: float) -> dict:
         cut = time.time() - window_s
-        recent = [c for c in self.calls if c["ts"] >= cut]
+        recent = self._recent(cut)
         ok = [c for c in recent if c["ok"]]
         lat = [c["latency_ms"] for c in ok]
         toks = sum(c["tokens_out"] for c in ok)

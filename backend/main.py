@@ -80,6 +80,57 @@ _run_results: dict[str, RunResult] = {}
 # Live run tasks, keyed by run_id, so /run/{id}/kill can cancel a run.
 _run_tasks: dict[str, asyncio.Task] = {}
 
+# Dispatched-run completion callbacks (executor -> /internal/complete). The
+# waiter registers a future; an outcome arriving first is stashed so the race
+# is harmless. This replaces DB polling for run completion — at thousands of
+# concurrent sessions the 0.5s poll loop alone was ~4k reads/s.
+_run_outcomes: dict[str, asyncio.Future] = {}
+_early_outcomes: dict[str, dict] = {}
+
+
+async def wait_outcome(run_id: str) -> dict:
+    early = _early_outcomes.pop(run_id, None)
+    if early is not None:
+        return early
+    fut = asyncio.get_event_loop().create_future()
+    _run_outcomes[run_id] = fut
+    try:
+        return await fut
+    finally:
+        _run_outcomes.pop(run_id, None)
+
+
+async def read_run_outcome(run_id: str) -> dict:
+    """One direct read of a run's terminal outcome (call after a barrier)."""
+    from backend.db.base import get_sessionmaker
+    from backend.repositories import runs as runs_repo
+    sm = get_sessionmaker()
+    async with sm() as session:
+        run = await runs_repo.get_run(session, run_id)
+    if run is None or run.status in ("pending", "running", "awaiting_approval"):
+        return {"ok": False, "tokens_in": 0, "tokens_out": 0, "run_id": run_id,
+                "error": "run record not terminal at completion read"}
+    m = run.metrics or {}
+    steps = [s for s in run.steps if s.step_key != "orchestrator"]
+    validations = sum(len(s.validations) for s in run.steps)
+    tokens_out = int(m.get("tokens_out") or 0)
+    total = int(m.get("total_tokens") or 0)
+    budget_hit = m.get("budget_exceeded")
+    ok = run.status == "completed" and not budget_hit
+    if budget_hit:
+        err = (f"budget exceeded: {budget_hit.get('kind')} "
+               f"{budget_hit.get('used')} > {budget_hit.get('limit')}")
+    elif run.status == "completed":
+        err = None
+    else:
+        err = (f"status={run.status}"
+               + (f" — {run.error}" if run.error else ""))[:300]
+    return {"ok": ok, "tokens_in": max(0, total - tokens_out),
+            "tokens_out": tokens_out, "run_id": run_id, "error": err,
+            "trace": {"llm_calls": int(m.get("call_count") or 0),
+                      "steps": len(steps), "validations": validations,
+                      "task_count": int(m.get("task_count") or 0)}}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -121,6 +172,13 @@ async def lifespan(app: FastAPI):
     if scheduler_started:
         from backend.scheduling.scheduler import shutdown_scheduler
         shutdown_scheduler()
+    # Drain the batched persistence writer so queued rows land before the
+    # engine goes away.
+    try:
+        from backend.repositories import persistence as _persistence
+        await asyncio.wait_for(_persistence.barrier(), timeout=5)
+    except Exception:  # noqa: BLE001
+        pass
     await dispose_engine()
 
 
@@ -260,6 +318,39 @@ async def _await_approval(run_id: str):
         _pending_approvals.pop(run_id, None)
 
 
+# Benchmark agent cache: {config key: compiled deep agent}, plus one shared
+# per-process checkpoint saver (WAL SQLite; thread_id=run_id isolates runs).
+_bench_agents: dict = {}
+_bench_saver = None
+_bench_lock: asyncio.Lock | None = None
+
+
+async def _bench_agent(ckpt_dir: str, mf, *, plan_approval, enabled_tools, key):
+    global _bench_saver, _bench_lock
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    from backend.agents.core import build_agent
+    if _bench_lock is None:
+        _bench_lock = asyncio.Lock()
+    async with _bench_lock:                     # a startup burst must not race init
+        if _bench_saver is None:
+            path = os.path.join(ckpt_dir, f"exec_{os.getpid()}.db")
+            ctx = AsyncSqliteSaver.from_conn_string(path)
+            saver = await ctx.__aenter__()      # held for the process lifetime
+            await saver.conn.execute("PRAGMA busy_timeout=5000")
+            await saver.conn.execute("PRAGMA journal_mode=WAL")
+            _bench_saver = (ctx, saver)
+    if key not in _bench_agents:
+        bench_tools: dict = {}
+        if "bench_record" in (enabled_tools or []):
+            from backend.agents.toolbox import build_bench_tool
+            bench_tools = {"bench_record": build_bench_tool()}
+        _bench_agents[key] = build_agent(
+            _bench_saver[1], plan_approval=plan_approval,
+            enabled_tools=enabled_tools, model_factory=mf,
+            tools_by_name=bench_tools, toolless=True)
+    return _bench_agents[key]
+
+
 async def run_deepagents(
     run_id: str,
     query: str,
@@ -338,40 +429,39 @@ async def run_deepagents(
             plan_approval = env_flag and trigger == "manual"
         approval = (lambda: _await_approval(run_id)) if plan_approval else None
 
-        # The adapter handles run_started, steps, validation, finalize (incl. the
-        # routing + validation rollup), budgets, and run_completed/run_metrics over WS.
-        async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
-            # WAL within the run's own file: workers checkpoint concurrently.
-            await checkpointer.conn.execute("PRAGMA journal_mode=WAL")
-            # toolless: self-contained benchmark workflows strip ALL worker tool
-            # grants AND deepagents' builtin scratchpad tools, so no role can
-            # start a tool loop. The one exception is the benchmark's own
-            # record-keeping tool: when the workflow enables bench_record,
-            # every worker gets exactly that tool — a real, deterministic
-            # dispatch + durable write per call, which is the work an agent
-            # host actually does.
-            bench_tools: dict = {}
-            if toolless and "bench_record" in (enabled_tools or []):
-                from backend.agents.toolbox import build_bench_tool
-                bench_tools = {"bench_record": build_bench_tool()}
-            agent = build_agent(checkpointer, plan_approval=plan_approval,
-                                enabled_tools=enabled_tools, model_factory=mf,
-                                tools_by_name=bench_tools if toolless else None,
-                                toolless=toolless)
-            summary = await run_with_adapter(
-                agent, query, run_id,
-                broadcast=broadcast_event,
-                judge=judge, redispatch=redispatch,
-                synthesis_grader=synthesis_grader,
-                partial_synthesizer=partial_synthesizer, approval=approval,
-                # Definition budgets override env defaults key-by-key; a partial
-                # budget must not silently unlimit the other dimensions.
-                budget=({**_budget_from_env(),
-                         **{k: int(v) for k, v in budget.items()
-                            if k in ("max_subagents", "max_tool_hops",
-                                     "max_total_tokens") and v is not None}}
-                        if budget else None),
-            )
+        run_kwargs = dict(
+            broadcast=broadcast_event,
+            judge=judge, redispatch=redispatch,
+            synthesis_grader=synthesis_grader,
+            partial_synthesizer=partial_synthesizer, approval=approval,
+            # Definition budgets override env defaults key-by-key; a partial
+            # budget must not silently unlimit the other dimensions.
+            budget=({**_budget_from_env(),
+                     **{k: int(v) for k, v in budget.items()
+                        if k in ("max_subagents", "max_tool_hops",
+                                 "max_total_tokens") and v is not None}}
+                    if budget else None),
+        )
+        if toolless:
+            # Benchmark path: the deep agent is CACHED per configuration and
+            # per-executor (thread_id=run_id isolates state in a shared
+            # per-process checkpoint DB). Rebuilding it per run was measured
+            # CPU: ast/inspect tool-schema inference + langgraph assembly on
+            # ~30% of profiled stacks at 150 workflows/min.
+            agent = await _bench_agent(
+                ckpt_dir, mf, plan_approval=plan_approval,
+                enabled_tools=enabled_tools,
+                key=(tuple(sorted(enabled_tools or [])), plan_approval,
+                     router_base_url, router_model, router_provider))
+            summary = await run_with_adapter(agent, query, run_id, **run_kwargs)
+        else:
+            # Product path: per-run checkpoint DB (live/resume state), deleted
+            # after a clean finish; a crash leaves it for postmortem.
+            async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
+                await checkpointer.conn.execute("PRAGMA journal_mode=WAL")
+                agent = build_agent(checkpointer, plan_approval=plan_approval,
+                                    enabled_tools=enabled_tools, model_factory=mf)
+                summary = await run_with_adapter(agent, query, run_id, **run_kwargs)
 
         latency_ms = (time.perf_counter() - t0) * 1000
         run_latency_seconds.observe(latency_ms / 1000)
@@ -379,14 +469,12 @@ async def run_deepagents(
             run_id, output=summary.get("final_answer") or "",
             metrics=summary.get("routing", {}), status="completed",
         )
-        # Clean finish (completed OR failed-and-recorded): the per-run
-        # checkpoint file held only live/resume state — remove it and its
-        # WAL/SHM siblings. A crashed process skips this and leaves evidence.
-        for suffix in ("", "-wal", "-shm"):
-            try:
-                os.unlink(checkpoint_db + suffix)
-            except OSError:
-                pass
+        if not toolless:
+            for suffix in ("", "-wal", "-shm"):
+                try:
+                    os.unlink(checkpoint_db + suffix)
+                except OSError:
+                    pass
     except Exception as exc:  # checkpointer/agent-build failures (run errors are
         # caught inside run_with_adapter and reported as a failed run there).
         logger.exception("deepagents run %s failed to start", run_id)
@@ -394,6 +482,16 @@ async def run_deepagents(
         await broadcast_event(run_id, SwarmEvent(
             event=EventType.error, run_id=run_id, payload={"error": str(exc)}))
     finally:
+        # Dispatched run: hand the terminal outcome back to the control plane
+        # (after a write barrier, so the read sees the finalize). The benchmark
+        # awaits this callback instead of polling the database.
+        from backend import workerpool as wp
+        if wp.is_worker():
+            try:
+                await db.barrier()
+                await wp.post_complete(await read_run_outcome(run_id))
+            except Exception:  # noqa: BLE001 — callback loss falls back to reads
+                logger.warning("completion callback failed for run %s", run_id)
         active_runs.dec()
 
 
@@ -610,6 +708,42 @@ async def internal_events(request: Request):
     body = await request.json()
     await manager.broadcast(body["run_id"], SwarmEvent(**body["event"]))
     return {"relayed": True}
+
+
+@app.post("/internal/events_batch")
+async def internal_events_batch(request: Request):
+    """Batched executor -> control event relay: one POST per ~100ms per
+    executor instead of one per event (per-event relay is ~2.5k POSTs/s at
+    2,000 sessions)."""
+    from backend import workerpool as wp
+    if not wp.check_token(request.headers.get("X-Internal-Token")):
+        raise HTTPException(403, "internal endpoint")
+    body = await request.json()
+    for item in body.get("events") or []:
+        try:
+            await manager.broadcast(item["run_id"], SwarmEvent(**item["event"]))
+        except Exception:  # noqa: BLE001 — relay is liveness, not record
+            pass
+    return {"relayed": len(body.get("events") or [])}
+
+
+@app.post("/internal/complete")
+async def internal_complete(request: Request):
+    from backend import workerpool as wp
+    if not wp.check_token(request.headers.get("X-Internal-Token")):
+        raise HTTPException(403, "internal endpoint")
+    body = await request.json()
+    run_id = body.get("run_id")
+    fut = _run_outcomes.get(run_id)
+    if fut is not None and not fut.done():
+        fut.set_result(body)
+    else:
+        _early_outcomes[run_id] = body
+        # bound the stash: a waiter that never came (killed benchmark) must
+        # not leak outcomes forever
+        while len(_early_outcomes) > 10000:
+            _early_outcomes.pop(next(iter(_early_outcomes)))
+    return {"accepted": run_id}
 
 
 @app.post("/run/{run_id}/kill")
