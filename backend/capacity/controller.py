@@ -869,6 +869,11 @@ class CapacityTest:
                 self.verdict = "timeout"
 
             if self.verdict:
+                # breach describes the verdict's mechanism. A transient bad
+                # evaluation recorded just before an unrelated stop (capped,
+                # cpu, timeout, ...) must not linger as if it ended the run.
+                if self.verdict not in ("unstable", "errors", "interference"):
+                    self.breach = None
                 if (self.verdict in ("unstable", "errors") and self.capacity_users
                         and self.capacity_users < len(self.users)):
                     # Measure capacity at the last CERTIFIED level, and let the
