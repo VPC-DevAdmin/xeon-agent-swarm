@@ -75,7 +75,7 @@ export function CapacityHistory({ activePhase, onView }:
                 <span className="font-code text-[9px] flex-none" style={{ color: 'var(--warn)' }}>non-comp</span>
               )}
               <span className="flex-1 truncate text-[var(--text)]">
-                {(r.capacity_certified ?? true) && ['capped', 'timeout', 'budget', 'spend_guard'].includes(r.verdict ?? '') ? '≥' : ''}
+                {(r.capacity_certified ?? true) && ['capped', 'timeout', 'budget', 'spend_guard', 'interference'].includes(r.verdict ?? '') ? '≥' : ''}
                 {r.mix === 'tile' && r.capacity_tiles != null
                   ? `${r.capacity_tiles} tiles (${r.capacity_users})`
                   : `${r.capacity_users ?? '—'} sessions`}

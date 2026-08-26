@@ -730,6 +730,7 @@ const VERDICT_TEXT: Record<string, string> = {
   kv: 'engine KV cache saturated — model memory gated before CPU',
   plateau: 'throughput plateaued — no headroom past this point',  // legacy rows only; no longer a stop
   unstable: 'latency kept climbing at fixed load — the system stopped absorbing added sessions',
+  interference: 'host CPU was saturated by processes OUTSIDE this benchmark — not a capacity boundary; quiesce the box and rerun',
   errors: 'error rate exceeded the limit',
   capped: 'safety ceiling reached without saturation — this is a lower bound, not the system limit',
   timeout: 'time safety limit reached without saturation — this is a lower bound when the SLO was certified',
@@ -748,7 +749,7 @@ function ResultCard({ result }: { result: CapacityResult }) {
     : backend === 'remote_real' ? 'remote cloud' : 'local inference'
   const isRuntime = target !== 'inference_engine'
   const capacityCertified = result.capacity_certified ?? true
-  const safetyStop = ['capped', 'timeout', 'budget', 'spend_guard'].includes(result.verdict ?? '')
+  const safetyStop = ['capped', 'timeout', 'budget', 'spend_guard', 'interference'].includes(result.verdict ?? '')
   const lowerBound = Boolean(capacityCertified && safetyStop)
   const capacityLabel = capacityCertified
     ? (result.mix === 'tile' && result.capacity_tiles != null

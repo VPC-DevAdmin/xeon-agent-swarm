@@ -656,6 +656,10 @@ class CapacityTest:
                         if s.get(key) is not None and s["ts"] >= cut]
                 return statistics.mean(vals) if vals else None
             avg_cpu, avg_mem, avg_kv = _avg("cpu_pct"), _avg("mem_pct"), _avg("kv_pct")
+            bg_vals = [s["cpu_by"]["other"] for s in self.samples
+                       if s.get("cpu_by") and "other" in s["cpu_by"]
+                       and s["ts"] >= cut]
+            avg_bg = statistics.mean(bg_vals) if bg_vals else None
             elapsed = time.time() - self.started_at
 
             # Per-profile baselines are measured at rung 1 (the healthy
@@ -801,7 +805,20 @@ class CapacityTest:
                                 in ("latency_unstable", "no_samples")
                                 else "errors")
             elif cpu_hot >= 2:
-                self.verdict = "cpu"
+                # Attribution-aware: when the host crosses the CPU line but
+                # the MAJORITY of the burn is processes outside the benchmark,
+                # reporting 'cpu' would sell interference as capacity
+                # (observed live: verdict cpu at 24 sessions with executors at
+                # 1.2% and 'other' at 90.5%). Call it what it is.
+                if (avg_bg is not None and avg_cpu
+                        and avg_bg >= 0.5 * avg_cpu):
+                    self.verdict = "interference"
+                    self.breach = {"profile": "host",
+                                   "metric": "background_cpu",
+                                   "value": round(avg_bg, 1),
+                                   "limit": round(0.5 * avg_cpu, 1)}
+                else:
+                    self.verdict = "cpu"
             elif mem_hot >= 2:
                 self.verdict = "memory"
             elif kv_hot >= 2:
