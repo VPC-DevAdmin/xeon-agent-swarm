@@ -24,9 +24,12 @@ def load_e2e_workflows() -> dict[str, dict]:
         out[wid] = {"name": w.get("name", wid), "query": w.get("query", ""),
                     "think_ms": int(w.get("think_ms", 3000)),
                     "budgets": dict(w.get("budgets") or {}) or None,
-                    # Self-contained units grant workers NO tools at all —
+                    # Self-contained units strip catalog/builtin tool grants —
                     # otherwise static role grants (research -> web_search)
-                    # invite tool loops the prompt forbids.
+                    # invite tool loops the prompt forbids. `tools:` lists the
+                    # benchmark's own deterministic tools (bench_record: one
+                    # real dispatch + durable write per worker).
+                    "enabled_tools": list(w.get("tools") or []),
                     "toolless": bool(w.get("toolless", False))}
     return out
 

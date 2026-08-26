@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 3
+version: 4
 
 scenarios:
   support_agent:
@@ -140,8 +140,9 @@ e2e_workflows:
   research_brief:
     name: "Research brief (e2e)"
     think_ms: 3000
-    toolless: true                       # self-contained: workers get NO tools
-    budgets: {max_subagents: 4, max_tool_hops: 2}  # planner told 'two subtasks' but complies ~90%; guardrail covers its 2-4 spread. Toolless workers see no tools; any hop is a malfunction
+    toolless: true                       # no catalog/builtin tools; bench_record only
+    tools: [bench_record]                # 1 real record-keeping call per worker
+    budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
     query: >-
       Using ONLY the field notes below (do not research further), write a
       one-page brief on CPU-only LLM inference with a clear recommendation.
@@ -158,8 +159,9 @@ e2e_workflows:
   comparison:
     name: "Comparison analysis (e2e)"
     think_ms: 3000
-    toolless: true                       # self-contained: workers get NO tools
-    budgets: {max_subagents: 4, max_tool_hops: 2}  # planner told 'two subtasks' but complies ~90%; guardrail covers its 2-4 spread. Toolless workers see no tools; any hop is a malfunction
+    toolless: true                       # no catalog/builtin tools; bench_record only
+    tools: [bench_record]                # 1 real record-keeping call per worker
+    budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
     query: >-
       Using ONLY the measurements below (do not research further), compare
       INT8, INT4, and FP8 quantization for a 30B-parameter model and recommend
@@ -174,8 +176,9 @@ e2e_workflows:
   digest:
     name: "Digest report (e2e)"
     think_ms: 3000
-    toolless: true                       # self-contained: workers get NO tools
-    budgets: {max_subagents: 4, max_tool_hops: 2}  # planner told 'two subtasks' but complies ~90%; guardrail covers its 2-4 spread. Toolless workers see no tools; any hop is a malfunction
+    toolless: true                       # no catalog/builtin tools; bench_record only
+    tools: [bench_record]                # 1 real record-keeping call per worker
+    budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
     query: >-
       Using ONLY the four items below (do not research further), compile a
       digest in exactly five bullet points, ordered by operational impact.

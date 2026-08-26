@@ -538,6 +538,15 @@ async def chat_completions(request: Request):
         return _completion(tier=tier, category="writing", seed=seed,
                            messages=messages, content=_synthesis_text(obj))
 
+    # (d0) benchmark record-keeping exercise: a worker granted bench_record
+    # makes exactly ONE real tool call (dispatch + durable write + payload
+    # back into context) before answering — deterministic tool load for
+    # agent-host capacity runs.
+    if "bench_record" in tools and not _tool_results_present(messages):
+        tc = _tool_call("bench_record", {"key": (obj or "record")[:40]})
+        return _completion(tier=tier, category="general", seed=seed,
+                           messages=messages, tool_calls=[tc])
+
     # (d) worker subagent: detect role from the system prompt, return canned content
     # that passes validate_l0. Workers never emit tool calls.
     role = next((r for r, marker in _ROLE_MARKERS if marker in system), "general-purpose")

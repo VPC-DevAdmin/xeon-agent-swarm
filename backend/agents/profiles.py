@@ -82,7 +82,12 @@ def build_subagent_profiles(mf, tools_by_name: dict | None = None,
             "name": name,
             "description": cfg.get("description", f"{key} specialist"),
             "system_prompt": cfg.get("system_prompt", "").strip(),
-            "tools": _granted_tools(grant, tools_by_name),
+            # Benchmark mode (builtins stripped): whatever tools the run built
+            # ARE the workload — grant them to every role, bypassing the
+            # static worker_roles.yaml grants. Normal runs use role grants.
+            "tools": (list(tools_by_name.values())
+                      if strip_builtin_tools and tools_by_name
+                      else _granted_tools(grant, tools_by_name)),
             "model": worker_model,
         }
         if strip_builtin_tools:

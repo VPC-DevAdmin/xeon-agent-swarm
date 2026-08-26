@@ -344,11 +344,19 @@ async def run_deepagents(
             # WAL within the run's own file: workers checkpoint concurrently.
             await checkpointer.conn.execute("PRAGMA journal_mode=WAL")
             # toolless: self-contained benchmark workflows strip ALL worker tool
-            # grants (empty tools_by_name) AND deepagents' builtin scratchpad
-            # tools from workers, so no role can start a tool loop.
+            # grants AND deepagents' builtin scratchpad tools, so no role can
+            # start a tool loop. The one exception is the benchmark's own
+            # record-keeping tool: when the workflow enables bench_record,
+            # every worker gets exactly that tool — a real, deterministic
+            # dispatch + durable write per call, which is the work an agent
+            # host actually does.
+            bench_tools: dict = {}
+            if toolless and "bench_record" in (enabled_tools or []):
+                from backend.agents.toolbox import build_bench_tool
+                bench_tools = {"bench_record": build_bench_tool()}
             agent = build_agent(checkpointer, plan_approval=plan_approval,
                                 enabled_tools=enabled_tools, model_factory=mf,
-                                tools_by_name={} if toolless else None,
+                                tools_by_name=bench_tools if toolless else None,
                                 toolless=toolless)
             summary = await run_with_adapter(
                 agent, query, run_id,

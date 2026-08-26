@@ -161,3 +161,46 @@ def toolbox_catalog() -> dict[str, dict]:
               "capabilities": s.get("capabilities", []), "backing": s.get("backing")}
         for tid, s in tool_catalog.catalog().items()
     }
+
+
+# ── benchmark tool ────────────────────────────────────────────────────────────
+# A REAL record-keeping round-trip for capacity runs: one durable AuditLog
+# INSERT plus a deterministic think-time and a seeded-corpus payload back into
+# the agent's context. This is what an agent HOST actually does per tool call —
+# dispatch, latency, a record written, data injected — with zero external
+# dependence, so the work unit stays fixed-size and reproducible.
+
+class _BenchRecordArgs(BaseModel):
+    key: str = Field(description="record key to store and retrieve")
+
+
+def build_bench_tool() -> StructuredTool:
+    async def _call(key: str) -> str:
+        import asyncio as _asyncio
+        import zlib
+        from backend.capacity.scenarios import synthetic_text
+        from backend.db.base import get_sessionmaker
+        from backend.db.models import AuditLog
+
+        # Deterministic 50-150ms "backend latency" per key (crc32, not hash():
+        # hash() is salted per process and would break reproducibility).
+        delay = 0.05 + (zlib.crc32(key.encode()) % 100) / 1000.0
+        try:
+            sm = get_sessionmaker()
+            async with sm() as session:
+                session.add(AuditLog(action="bench.record",
+                                     detail={"key": key[:120]}))
+                await session.commit()
+            stored = "stored"
+        except Exception as exc:  # noqa: BLE001 — a failed write IS the signal
+            stored = f"store FAILED: {exc}"
+        await _asyncio.sleep(delay)
+        return (f"[bench_record] {stored} record '{key[:60]}'. Retrieved context: "
+                + synthetic_text(f"bench:{key}", 400))
+
+    return StructuredTool.from_function(
+        coroutine=_call, name="bench_record",
+        description="Store a record durably and retrieve its related context "
+                    "(benchmark record-keeping tool).",
+        args_schema=_BenchRecordArgs,
+    )

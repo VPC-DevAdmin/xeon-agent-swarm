@@ -22,16 +22,29 @@ logger = logging.getLogger(__name__)
 
 
 async def _run(coro_factory, label: str):
-    """Open a session, run the repo coroutine, commit. Swallow + log errors."""
-    try:
-        sm = get_sessionmaker()
-        async with sm() as session:
-            result = await coro_factory(session)
-            await session.commit()
-            return result
-    except Exception as exc:  # never let persistence break a run
-        logger.warning("persistence[%s] failed: %s", label, exc)
-        return None
+    """Open a session, run the repo coroutine, commit. Swallow + log errors.
+
+    Transient write contention (SQLite 'database is locked', serialization
+    hiccups) is retried with backoff before giving up — a dropped step write
+    stalls the run it belonged to, which at 100+ concurrent agent sessions
+    turned lock races into workflow timeouts."""
+    import asyncio as _asyncio
+    for attempt, delay in enumerate((0.0, 0.1, 0.4, 1.0)):
+        if delay:
+            await _asyncio.sleep(delay)
+        try:
+            sm = get_sessionmaker()
+            async with sm() as session:
+                result = await coro_factory(session)
+                await session.commit()
+                return result
+        except Exception as exc:  # never let persistence break a run
+            transient = "locked" in str(exc).lower() or "deadlock" in str(exc).lower()
+            if transient and attempt < 3:
+                continue
+            logger.warning("persistence[%s] failed%s: %s", label,
+                           f" after {attempt + 1} attempts" if attempt else "", exc)
+            return None
 
 
 async def create_run(run_id, query, *, job_id=None, trigger="manual", config=None):
