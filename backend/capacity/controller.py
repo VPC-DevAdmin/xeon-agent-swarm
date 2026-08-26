@@ -383,7 +383,14 @@ class CapacityTest:
             await asyncio.sleep(think)
 
     async def _e2e_loop(self, idx: int, wid: str, wf: dict, think: float):
-        """One e2e session: submit a real workflow, await completion, think, repeat."""
+        """One e2e session: submit a real workflow, await completion, think, repeat.
+
+        Think time carries SEEDED +/-25% jitter (mean unchanged, deterministic
+        per session from the run seed): AIMD batches otherwise create cohorts
+        of phase-locked timers — observed live at ~870 sessions as in-flight
+        oscillating 63<->771 while the latency body pulsed with the wave. A
+        pulsing workload cannot certify stationarity; decohered timers can."""
+        rng = random.Random((self.seed or 0) ^ (idx * 2654435761))
         while not self._stop.is_set():
             # Reserve a conservative workflow envelope before launch. Actual
             # usage replaces it on completion; this constrains concurrent spend.
@@ -405,7 +412,8 @@ class CapacityTest:
             self.completed_requests += 1
             await self._settle_spend(reserved, rec)
             try:
-                await asyncio.wait_for(self._stop.wait(), timeout=think)
+                await asyncio.wait_for(self._stop.wait(),
+                                       timeout=think * (0.75 + 0.5 * rng.random()))
                 return
             except asyncio.TimeoutError:
                 pass

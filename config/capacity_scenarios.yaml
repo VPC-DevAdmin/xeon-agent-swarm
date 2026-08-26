@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 4
+version: 5
 
 scenarios:
   support_agent:
@@ -135,7 +135,9 @@ e2e_tile:
 # and results are attributable to the inference + orchestration under test.
 # Budgets are part of the workload definition (and the scenario fingerprint):
 # a workflow that hits its budget did NOT complete the unit and counts as a
-# failure, exactly like a timeout.
+# failure, exactly like a timeout. think_ms is the MEAN think time: each
+# session applies seeded +/-25% jitter so ramp batches cannot phase-lock into
+# workload pulses (part of the workload definition; deterministic per seed).
 e2e_workflows:
   research_brief:
     name: "Research brief (e2e)"
