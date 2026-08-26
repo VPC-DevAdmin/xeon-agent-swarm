@@ -907,16 +907,22 @@ class CapacityTest:
                     return
                 if (at_boundary and rung_state == "good"
                         and self._headroom(stats)):
-                    # Proportional cap: a fixed 8-tile batch is a bold doubling
-                    # at 27 sessions and a crawl at 273 — allow up to 25% of
-                    # the current level per step (min 8 tiles).
-                    max_tiles = max(8, (len(self.users) // max(1, self.tile_size)) // 4)
+                    # Proportional cap: up to 50% of the current level per
+                    # step (min 8 tiles) — with the wall far away, small
+                    # batches only waste wall-clock. Adds are STAGGERED across
+                    # ~5s so a batch doesn't launch a thundering herd whose
+                    # spike the stationarity check then measures.
+                    max_tiles = max(8, (len(self.users) // max(1, self.tile_size)) // 2)
                     n = min(self._accel_tiles, max_tiles) * self.tile_size
+                    pause = min(0.25, 5.0 / max(1, n))
                     for _ in range(n):
                         if cap is not None and len(self.users) >= int(cap):
                             break
                         self._add_user(
                             self.tile_assignment[len(self.users) % self.tile_size])
+                        if self._stop.is_set():
+                            break
+                        await asyncio.sleep(pause)
                     self._accel_tiles = min(max_tiles, self._accel_tiles * 2)
                 else:
                     # probing step — accel only decays on BAD evaluations, not

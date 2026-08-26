@@ -47,6 +47,19 @@ async def create_run(
     return run
 
 
+async def fail_orphans(session: AsyncSession, error: str) -> int:
+    """Whole-workflow-retry policy: on orchestrator startup, any run still in a
+    live state belonged to a dead process — mark it failed so nothing dangles
+    as 'running' forever. Scheduled jobs simply fire again next cycle."""
+    from sqlalchemy import update
+    res = await session.execute(
+        update(Run)
+        .where(Run.status.in_(("pending", "running", "awaiting_approval")))
+        .values(status="failed", error=error)
+    )
+    return res.rowcount or 0
+
+
 async def set_run_status(
     session: AsyncSession,
     run_id: str,

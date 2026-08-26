@@ -155,6 +155,27 @@ async def lifespan(app: FastAPI):
             logging.getLogger(__name__).warning(
                 "Scheduler failed to start (continuing): %s", exc
             )
+    # Startup reconciliation (control process only): whole-workflow-retry
+    # policy — runs stranded in a live state by a dead process are failed
+    # loudly, never left dangling as 'running'.
+    from backend import workerpool as _wp
+    if not _wp.is_worker():
+        try:
+            from backend.db.base import get_sessionmaker as _gsm
+            from backend.repositories import runs as _runs_repo
+            sm = _gsm()
+            async with sm() as session:
+                n = await _runs_repo.fail_orphans(
+                    session, "orchestrator restarted — whole-workflow retry "
+                             "policy (no durable mid-run checkpoints)")
+                await session.commit()
+            if n:
+                logging.getLogger(__name__).info(
+                    "startup reconciliation: %d orphaned run(s) marked failed", n)
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger(__name__).warning(
+                "startup run reconciliation failed: %s", exc)
+
     # Multi-process orchestrator (opt-in via ADL_WORKERS=N): the control
     # process spawns N run-executor processes and dispatches runs to them —
     # the GIL caps a single asyncio process at ~one core (measured: agent-host
@@ -321,31 +342,19 @@ async def _await_approval(run_id: str):
 # Benchmark agent cache: {config key: compiled deep agent}, plus one shared
 # per-process checkpoint saver (WAL SQLite; thread_id=run_id isolates runs).
 _bench_agents: dict = {}
-_bench_saver = None
-_bench_lock: asyncio.Lock | None = None
 
 
 async def _bench_agent(ckpt_dir: str, mf, *, plan_approval, enabled_tools, key):
-    global _bench_saver, _bench_lock
-    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    """Benchmark agents run with NO checkpointer — whole-workflow-retry policy
+    (see run_deepagents). Compiled once per configuration per executor."""
     from backend.agents.core import build_agent
-    if _bench_lock is None:
-        _bench_lock = asyncio.Lock()
-    async with _bench_lock:                     # a startup burst must not race init
-        if _bench_saver is None:
-            path = os.path.join(ckpt_dir, f"exec_{os.getpid()}.db")
-            ctx = AsyncSqliteSaver.from_conn_string(path)
-            saver = await ctx.__aenter__()      # held for the process lifetime
-            await saver.conn.execute("PRAGMA busy_timeout=5000")
-            await saver.conn.execute("PRAGMA journal_mode=WAL")
-            _bench_saver = (ctx, saver)
     if key not in _bench_agents:
         bench_tools: dict = {}
         if "bench_record" in (enabled_tools or []):
             from backend.agents.toolbox import build_bench_tool
             bench_tools = {"bench_record": build_bench_tool()}
         _bench_agents[key] = build_agent(
-            _bench_saver[1], plan_approval=plan_approval,
+            None, plan_approval=False,
             enabled_tools=enabled_tools, model_factory=mf,
             tools_by_name=bench_tools, toolless=True)
     return _bench_agents[key]
@@ -454,14 +463,32 @@ async def run_deepagents(
                 key=(tuple(sorted(enabled_tools or [])), plan_approval,
                      router_base_url, router_model, router_provider))
             summary = await run_with_adapter(agent, query, run_id, **run_kwargs)
-        else:
-            # Product path: per-run checkpoint DB (live/resume state), deleted
-            # after a clean finish; a crash leaves it for postmortem.
+        elif os.environ.get("CHECKPOINT_DURABLE", "").lower() in ("1", "true", "yes"):
+            # Opt-in durable-execution mode (per-run checkpoint DB, deleted on
+            # a clean finish). Off by default: these workflows are short,
+            # event-logged units — see the whole-workflow-retry policy below.
             async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
                 await checkpointer.conn.execute("PRAGMA journal_mode=WAL")
                 agent = build_agent(checkpointer, plan_approval=plan_approval,
                                     enabled_tools=enabled_tools, model_factory=mf)
                 summary = await run_with_adapter(agent, query, run_id, **run_kwargs)
+        else:
+            # POLICY: whole-workflow retry + durable event log. Short agent
+            # workflows are atomic units — the Step/Attempt/Validation rows in
+            # the app DB are the industry-standard append-only decision log,
+            # and per-step full-state snapshots powered a resume feature that
+            # does not exist (measured cost: the largest non-yielding chunks
+            # in every executor's event loop). HITL interrupts still work: the
+            # approval future was always in-process, so an in-memory
+            # checkpointer preserves identical semantics. On a crash, startup
+            # reconciliation marks orphaned runs failed (see lifespan).
+            checkpointer = None
+            if plan_approval:
+                from langgraph.checkpoint.memory import InMemorySaver
+                checkpointer = InMemorySaver()
+            agent = build_agent(checkpointer, plan_approval=plan_approval,
+                                enabled_tools=enabled_tools, model_factory=mf)
+            summary = await run_with_adapter(agent, query, run_id, **run_kwargs)
 
         latency_ms = (time.perf_counter() - t0) * 1000
         run_latency_seconds.observe(latency_ms / 1000)
@@ -469,7 +496,9 @@ async def run_deepagents(
             run_id, output=summary.get("final_answer") or "",
             metrics=summary.get("routing", {}), status="completed",
         )
-        if not toolless:
+        if (not toolless
+                and os.environ.get("CHECKPOINT_DURABLE", "").lower()
+                in ("1", "true", "yes")):
             for suffix in ("", "-wal", "-shm"):
                 try:
                     os.unlink(checkpoint_db + suffix)
