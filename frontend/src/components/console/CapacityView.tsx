@@ -797,6 +797,25 @@ function ResultCard({ result }: { result: CapacityResult }) {
           ` · ramped to ${result.peak_users ?? result.max_users}, scaled back to measure at ${result.capacity_users}`}
       </p>
 
+      {result.cpu_breakdown && Object.keys(result.cpu_breakdown).length > 0 && (
+        <div className="mt-4">
+          <div className="eyebrow mb-1.5"
+            title="steady-state CPU by component, measured per process from /proc — same basis as the host CPU% (100% = the whole box)">
+            Where the CPU went
+          </div>
+          <div className="flex h-3 rounded overflow-hidden border" style={{ borderColor: 'var(--line-soft)' }}>
+            {Object.entries(result.cpu_breakdown).map(([k, v], i) => (
+              <div key={k} title={`${k}: ${v}%`}
+                style={{ width: `${Math.max(0.5, v)}%`,
+                         background: `hsl(${(i * 67 + 230) % 360} 60% 55%)` }} />
+            ))}
+          </div>
+          <p className="font-code text-[10.5px] mt-1 text-[var(--muted)]">
+            {Object.entries(result.cpu_breakdown).map(([k, v]) => `${k} ${v}%`).join(' · ')}
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 mt-4 text-[12.5px]">
         <Kv k="throughput" v={`${fmtNum(s.tps)} tok/s`} />
         <Kv k="requests" v={`${fmtNum(s.rpm)}/min`} />

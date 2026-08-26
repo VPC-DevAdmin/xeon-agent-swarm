@@ -191,3 +191,72 @@ async def sample_kv_pct(base_url: str) -> float | None:
         return parse_sglang_token_usage(r.text)
     except Exception:  # noqa: BLE001
         return None
+
+
+# ── per-component CPU attribution ────────────────────────────────────────────
+# "Where does the CPU go?" — host cpu_pct says the box is busy; this says WHO:
+# the control plane, the executor pool, the mock router, the inference engine,
+# or everything else on the machine. Percentages share the host cpu_pct basis
+# (100% = the whole box), so the components stack under the host line.
+
+def _proc_jiffies(pid: int) -> int | None:
+    """utime+stime for one pid (fields 14/15 of /proc/<pid>/stat)."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            parts = f.read().rsplit(")", 1)[1].split()  # comm may contain spaces
+        return int(parts[11]) + int(parts[12])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def find_pids(cmdline_substr: str) -> list[int]:
+    """Best-effort pid scan by /proc cmdline substring (e.g. the engine)."""
+    out = []
+    for d in glob.glob("/proc/[0-9]*"):
+        try:
+            with open(f"{d}/cmdline", "rb") as f:
+                if cmdline_substr.encode() in f.read():
+                    out.append(int(d.rsplit("/", 1)[1]))
+        except (OSError, ValueError):
+            continue
+    return out
+
+
+class ProcessCpuSampler:
+    """Delta-based CPU% for named pid groups, on the whole-host basis.
+
+    groups: {name: [pids]} — re-supplied each sample so late-started
+    components (engine, mock router) join when they appear. First sample
+    returns None (no delta yet), like the host CPU reading.
+    """
+
+    def __init__(self):
+        self._prev: dict[int, int] = {}
+        self._prev_total: int | None = None
+
+    def sample(self, groups: dict[str, list[int]]) -> dict[str, float] | None:
+        try:
+            with open("/proc/stat") as f:
+                stat = parse_proc_stat(f.read())
+        except OSError:
+            return None
+        if stat is None:
+            return None
+        total = stat[1]
+        cur: dict[int, int] = {}
+        for pids in groups.values():
+            for pid in pids:
+                j = _proc_jiffies(pid)
+                if j is not None:
+                    cur[pid] = j
+        out: dict[str, float] | None = None
+        if self._prev_total is not None and total > self._prev_total:
+            dtotal = total - self._prev_total   # spans ALL cores, same basis as cpu_pct
+            out = {}
+            for name, pids in groups.items():
+                dj = sum(max(0, cur.get(p, 0) - self._prev.get(p, cur.get(p, 0)))
+                         for p in pids if p in cur)
+                out[name] = round(100.0 * dj / dtotal, 1)
+        self._prev = cur
+        self._prev_total = total
+        return out

@@ -224,6 +224,7 @@ export interface CapacitySample {
   err_rate: number
   cost_usd?: number
   cost_per_hour?: number
+  cpu_by?: Record<string, number>   // per-component CPU%, same basis as cpu_pct
 }
 
 export interface CapacityScenarioStat {
@@ -282,6 +283,7 @@ export interface CapacityResult {
     bw_gbs?: number | null; kv_pct?: number | null
   }
   energy_wh?: number | null
+  cpu_breakdown?: Record<string, number> | null   // steady-state CPU% by component
   workflows_per_hour?: number | null
   mem_mb_per_user?: number | null
   per_scenario: Record<string, CapacityScenarioStat>

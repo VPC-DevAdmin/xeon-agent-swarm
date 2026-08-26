@@ -53,7 +53,8 @@ from backend.capacity.scenarios import (load_scenarios, load_tile, tile_sessions
                                          load_e2e_workflows, load_e2e_tile,
                                          e2e_tile_sessions)
 from backend.capacity.e2e import E2ERunner
-from backend.capacity.telemetry import (SystemSampler, mem_slope_mb_per_user,
+from backend.capacity.telemetry import (ProcessCpuSampler, SystemSampler,
+                                        find_pids, mem_slope_mb_per_user,
                                          sample_bandwidth_gbs, sample_kv_pct)
 from backend.capacity.client import LOCAL_BASE
 from backend.capacity.models import public_endpoint
@@ -419,13 +420,45 @@ class CapacityTest:
         return rec
 
     # ── telemetry ────────────────────────────────────────────────────────────
+    def _cpu_groups(self) -> dict[str, list[int]]:
+        """Named pid groups for CPU attribution. Rebuilt each sample so
+        late-started components (engine container, mock router) join when
+        they appear; a dead pid simply reads 0."""
+        groups: dict[str, list[int]] = {"control": [os.getpid()]}
+        try:
+            from backend import workerpool as wp
+            groups["executors"] = [p.pid for p in wp._procs if p.poll() is None]
+        except Exception:  # noqa: BLE001
+            groups["executors"] = []
+        try:
+            from backend.capacity import mockrouter
+            if mockrouter._proc is not None and mockrouter._proc.poll() is None:
+                groups["mock_router"] = [mockrouter._proc.pid]
+        except Exception:  # noqa: BLE001
+            pass
+        if self.inference_backend == "local":
+            if self._engine_pids is None:
+                self._engine_pids = find_pids("sglang.launch_server")
+            if self._engine_pids:
+                groups["engine"] = self._engine_pids
+        return groups
+
     async def _sample_loop(self):
         # Bandwidth/KV are local-mode readings; stop attempting after repeated
         # misses so we never spawn perf / scrape a dead endpoint in a tight loop.
         bw_misses = 0
         kv_misses = 0
+        proc_cpu = ProcessCpuSampler()
+        self._engine_pids: list[int] | None = None
         while not self._stop.is_set():
             s = self._sampler.sample()
+            # Attribution: who is burning the box — the agent runtime's own
+            # processes, the inference engine, or everything else. Same basis
+            # as cpu_pct, so components stack under the host line.
+            by = proc_cpu.sample(self._cpu_groups())
+            if by is not None and s.get("cpu_pct") is not None:
+                by["other"] = round(max(0.0, s["cpu_pct"] - sum(by.values())), 1)
+                s["cpu_by"] = by
             s["users"] = len(self.users)
             s.update(self._window_stats(self.cfg["sample_interval_s"] * 5))
             # Includes work waiting on router, database, or execution resources;
@@ -882,6 +915,12 @@ class CapacityTest:
             vals = [s[key] for s in hold_samples if s.get(key) is not None]
             return round(statistics.mean(vals), 1) if vals else None
 
+        # Steady-state CPU attribution: who was burning the box at capacity.
+        by_samples = [s["cpu_by"] for s in hold_samples if s.get("cpu_by")]
+        cpu_breakdown = ({k: round(statistics.mean(b.get(k, 0.0) for b in by_samples), 1)
+                          for k in sorted({k for b in by_samples for k in b})}
+                         if by_samples else None)
+
         per_scenario: dict[str, dict] = {}
         for sid in self.scenario_ids:
             cs = [c for c in self.calls if c["scenario"] == sid]
@@ -976,6 +1015,7 @@ class CapacityTest:
                                      if self.mode == "e2e"
                                      and self.capacity_users is not None
                                      else None),
+            "cpu_breakdown": cpu_breakdown,
             "steady": {**hold, "cpu_pct": avg("cpu_pct"), "mem_pct": avg("mem_pct"),
                         "power_w": avg("power_w"), "load1": avg("load1"),
                         "bw_gbs": avg("bw_gbs"), "kv_pct": avg("kv_pct")},
