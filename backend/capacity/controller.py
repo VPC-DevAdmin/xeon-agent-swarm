@@ -760,8 +760,12 @@ class CapacityTest:
                 if time.time() - self._last_bad_count >= eval_window:
                     slo_bad = slo_bad + 1
                     self._last_bad_count = time.time()
+                    self._accel_tiles = 1    # CONFIRMED bad: probe, don't leap
+                else:
+                    # transient wobble: back off multiplicatively (AIMD), don't
+                    # rebuild the whole doubling ladder from 1
+                    self._accel_tiles = max(1, self._accel_tiles // 2)
                 self.breach = breach
-                self._accel_tiles = 1        # near the wall: probe, don't leap
             # inconclusive: neither certify nor condemn — hold judgment
             self._record_level("ramp", stats, rung_state)
 
@@ -890,15 +894,20 @@ class CapacityTest:
                     return
                 if (at_boundary and rung_state == "good"
                         and self._headroom(stats)):
-                    n = self._accel_tiles * self.tile_size
+                    # Proportional cap: a fixed 8-tile batch is a bold doubling
+                    # at 27 sessions and a crawl at 273 — allow up to 25% of
+                    # the current level per step (min 8 tiles).
+                    max_tiles = max(8, (len(self.users) // max(1, self.tile_size)) // 4)
+                    n = min(self._accel_tiles, max_tiles) * self.tile_size
                     for _ in range(n):
                         if cap is not None and len(self.users) >= int(cap):
                             break
                         self._add_user(
                             self.tile_assignment[len(self.users) % self.tile_size])
-                    self._accel_tiles = min(8, self._accel_tiles * 2)
+                    self._accel_tiles = min(max_tiles, self._accel_tiles * 2)
                 else:
-                    self._accel_tiles = 1
+                    # probing step — accel only decays on BAD evaluations, not
+                    # on ordinary mid-tile ticks
                     self._add_user(
                         self.tile_assignment[len(self.users) % self.tile_size])
             else:
