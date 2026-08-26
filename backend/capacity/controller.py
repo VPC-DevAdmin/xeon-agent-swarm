@@ -220,6 +220,7 @@ class CapacityTest:
         self.slo_capacity_users: int | None = None   # OVERLAY: last level within the default
         self.slo_capacity_tiles: int | None = None   #   3x-baseline latency budget (not the verdict)
         self._eval_window_s: float | None = None     # e2e SLO window, derived at rung 1
+        self._p95_streak = 0                         # consecutive tail-outside evals
         self.started_at = time.time()
         self.ended_at: float | None = None
         self.error: str | None = None
@@ -569,15 +570,33 @@ class CapacityTest:
               if c["ok"] and c["ts"] < now - half]
         h2 = [c["latency_ms"] for c in window
               if c["ok"] and c["ts"] >= now - half]
-        need = max(min_n, 2)      # a single-sample p95 is noise, not a trend
+        need = max(min_n, 2)      # a single-sample quantile is noise, not a trend
         if len(h1) < need or len(h2) < need:
             return "inconclusive", None
-        p1, p2 = _pct(h1, 95), _pct(h2, 95)
         tol = 1.0 + float(self.cfg["stat_tolerance"])
-        if p1 and p2 and p2 > p1 * tol:
+        # PRIMARY: p80 stationarity. The p95 of a half-window is decided by a
+        # handful of tail samples, and batch-cohort waves made it oscillate
+        # 3s<->10s at ~900 sessions — halving the ramp accelerator on noise.
+        # p80 tracks the body of the distribution and decides the ramp.
+        p80_1, p80_2 = _pct(h1, 80), _pct(h2, 80)
+        if p80_1 and p80_2 and p80_2 > p80_1 * tol:
+            self._p95_streak = 0
             return "bad", {"profile": "aggregate", "metric": "latency_unstable",
-                            "value": round(p2, 1), "limit": round(p1 * tol, 1),
-                            "baseline_ms": round(p1, 1)}
+                            "value": round(p80_2, 1), "limit": round(p80_1 * tol, 1),
+                            "baseline_ms": round(p80_1, 1)}
+        # SECONDARY: the p95 tail only condemns a rung when it is outside
+        # tolerance CONSISTENTLY (3 consecutive evaluations) — a persistent
+        # tail divergence with a stable body is real; a single spike is not.
+        p95_1, p95_2 = _pct(h1, 95), _pct(h2, 95)
+        if p95_1 and p95_2 and p95_2 > p95_1 * tol:
+            self._p95_streak += 1
+            if self._p95_streak >= 3:
+                return "bad", {"profile": "aggregate", "metric": "tail_unstable",
+                                "value": round(p95_2, 1),
+                                "limit": round(p95_1 * tol, 1),
+                                "baseline_ms": round(p95_1, 1)}
+        else:
+            self._p95_streak = 0
         return state, None
 
     def _window_stats(self, window_s: float) -> dict:
@@ -823,7 +842,8 @@ class CapacityTest:
                 # per-profile error breach is an error boundary.
                 self.verdict = ("unstable"
                                 if (self.breach or {}).get("metric")
-                                in ("latency_unstable", "no_samples")
+                                in ("latency_unstable", "tail_unstable",
+                                    "no_samples")
                                 else "errors")
             elif cpu_hot >= 2:
                 # Attribution-aware: when the host crosses the CPU line but
