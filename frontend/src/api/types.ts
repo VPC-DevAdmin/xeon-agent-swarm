@@ -284,6 +284,7 @@ export interface CapacityResult {
   }
   energy_wh?: number | null
   cpu_breakdown?: Record<string, number> | null   // steady-state CPU% by component
+  background_cpu_pct?: number | null   // whole-run median CPU from processes outside the benchmark
   workflows_per_hour?: number | null
   mem_mb_per_user?: number | null
   per_scenario: Record<string, CapacityScenarioStat>
@@ -308,6 +309,7 @@ export interface CapacityResult {
     eval_window_s?: number | null
     hold_window_s?: number | null
     e2e_timeout_s?: number | null
+    background_cpu_pct?: number | null
     benchmark_version: number
     scenario_fingerprint?: string | null
     git_commit?: string | null

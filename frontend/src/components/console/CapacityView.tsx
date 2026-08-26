@@ -811,8 +811,16 @@ function ResultCard({ result }: { result: CapacityResult }) {
             ))}
           </div>
           <p className="font-code text-[10.5px] mt-1 text-[var(--muted)]">
-            {Object.entries(result.cpu_breakdown).map(([k, v]) => `${k} ${v}%`).join(' · ')}
+            {Object.entries(result.cpu_breakdown).map(([k, v]) =>
+              `${k === 'other' ? 'other processes (not this benchmark)' : k} ${v}%`).join(' · ')}
           </p>
+          {(result.background_cpu_pct ?? 0) >= 10 && (
+            <p className="text-[11px] mt-1" style={{ color: 'var(--warn, #d97706)' }}>
+              ⚠ ~{result.background_cpu_pct}% background load from other processes ran on this
+              host during the benchmark. The CPU boundary is host-level, so the capacity number
+              is conditional on that background — quiesce the box for an official run.
+            </p>
+          )}
         </div>
       )}
 
@@ -929,6 +937,7 @@ function ResultCard({ result }: { result: CapacityResult }) {
           {result.repro.host?.cpu_count && ` · ${result.repro.host.cpu_count} cores`}
           {result.repro.host?.mem_total_gb != null && ` / ${result.repro.host.mem_total_gb} GB`}
           {result.repro.host?.numa_nodes != null && ` / ${result.repro.host.numa_nodes} NUMA`}
+          {result.repro.background_cpu_pct != null && ` · background ${result.repro.background_cpu_pct}% CPU (other processes)`}
         </p>
       )}
     </div>

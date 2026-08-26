@@ -932,6 +932,14 @@ class CapacityTest:
         cpu_breakdown = ({k: round(statistics.mean(b.get(k, 0.0) for b in by_samples), 1)
                           for k in sorted({k for b in by_samples for k in b})}
                          if by_samples else None)
+        # Background load is a MEASUREMENT CONDITION, not noise: the CPU
+        # saturation verdict is host-level, so other tenants on the box lower
+        # the measured capacity. Record it (whole-run median of the 'other'
+        # bucket) so two runs under different background load are visibly
+        # non-comparable, and the UI can caveat the number.
+        bg = [s["cpu_by"]["other"] for s in self.samples
+              if s.get("cpu_by") and "other" in s["cpu_by"]]
+        background_cpu = round(statistics.median(bg), 1) if bg else None
 
         per_scenario: dict[str, dict] = {}
         for sid in self.scenario_ids:
@@ -1028,6 +1036,7 @@ class CapacityTest:
                                      and self.capacity_users is not None
                                      else None),
             "cpu_breakdown": cpu_breakdown,
+            "background_cpu_pct": background_cpu,
             "steady": {**hold, "cpu_pct": avg("cpu_pct"), "mem_pct": avg("mem_pct"),
                         "power_w": avg("power_w"), "load1": avg("load1"),
                         "bw_gbs": avg("bw_gbs"), "kv_pct": avg("kv_pct")},
@@ -1069,6 +1078,10 @@ class CapacityTest:
                 "cache_mode": (None if self.mode == "e2e"
                                else self._caller.cache_mode),
                 "warmup_s": self.cfg.get("warmup_s"),
+                # Host-sharing condition: median CPU from processes OUTSIDE the
+                # benchmark. The saturation verdict is host-level, so runs with
+                # different background load are not comparable.
+                "background_cpu_pct": background_cpu,
                 # e2e measurement geometry — derived by declared rule, recorded
                 # so a run's certification conditions are reconstructible.
                 "eval_window_s": (round(self._eval_window_s, 1)
