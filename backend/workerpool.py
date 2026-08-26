@@ -92,7 +92,15 @@ _client: httpx.AsyncClient | None = None
 def _http() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(timeout=10.0)
+        # Sized for the control plane's burst profile: a large AIMD batch can
+        # launch hundreds of dispatches in the same instant, and 48 executors
+        # push completion callbacks + event batches concurrently. httpx's
+        # default 100-connection cap made dispatches fail in bursts at 1,242
+        # sessions (the finale's stop) — a client limit, not a system one.
+        _client = httpx.AsyncClient(
+            timeout=30.0,
+            limits=httpx.Limits(max_connections=2000,
+                                max_keepalive_connections=256))
     return _client
 
 
@@ -166,9 +174,20 @@ def owner(run_id: str) -> str | None:
 
 
 async def dispatch_run(url: str, payload: dict) -> None:
-    r = await _http().post(f"{url}/internal/run", json=payload,
-                           headers={"X-Internal-Token": internal_token()})
-    r.raise_for_status()
+    """Dispatch with retry: a transient client-pool or socket hiccup must not
+    turn into a failed run when the executor is perfectly healthy."""
+    last: Exception | None = None
+    for delay in (0.0, 0.2, 1.0):
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            r = await _http().post(f"{url}/internal/run", json=payload,
+                                   headers={"X-Internal-Token": internal_token()})
+            r.raise_for_status()
+            return
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+    raise last
 
 
 _event_buf: list[dict] = []
