@@ -40,6 +40,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import os
 import random
 import statistics
 import time
@@ -266,7 +268,14 @@ class CapacityTest:
         try:
             if self.inference_backend == "local":
                 self._engine_info = await repro_mod.engine_info(LOCAL_BASE)
-            self._tasks.append(asyncio.create_task(self._sample_loop()))
+            sampler_task = asyncio.create_task(self._sample_loop())
+            # A dead sampler must be LOUD: its exception is otherwise trapped
+            # unobserved in the task while the run reports empty telemetry
+            # (cost us a live run to learn this).
+            sampler_task.add_done_callback(
+                lambda t: (not t.cancelled() and t.exception()) and logging.getLogger(
+                    __name__).error("telemetry sampler died: %r", t.exception()))
+            self._tasks.append(sampler_task)
             await self._ramp()
         except Exception as exc:  # noqa: BLE001
             self.phase, self.error = "error", f"{type(exc).__name__}: {exc}"
@@ -455,10 +464,13 @@ class CapacityTest:
             # Attribution: who is burning the box — the agent runtime's own
             # processes, the inference engine, or everything else. Same basis
             # as cpu_pct, so components stack under the host line.
-            by = proc_cpu.sample(self._cpu_groups())
-            if by is not None and s.get("cpu_pct") is not None:
-                by["other"] = round(max(0.0, s["cpu_pct"] - sum(by.values())), 1)
-                s["cpu_by"] = by
+            try:
+                by = proc_cpu.sample(self._cpu_groups())
+                if by is not None and s.get("cpu_pct") is not None:
+                    by["other"] = round(max(0.0, s["cpu_pct"] - sum(by.values())), 1)
+                    s["cpu_by"] = by
+            except Exception:  # noqa: BLE001 — attribution must never kill telemetry
+                pass
             s["users"] = len(self.users)
             s.update(self._window_stats(self.cfg["sample_interval_s"] * 5))
             # Includes work waiting on router, database, or execution resources;
