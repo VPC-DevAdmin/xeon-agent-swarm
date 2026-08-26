@@ -998,7 +998,12 @@ class CapacityTest:
         evaluations halve the batch and gate adds), not this heuristic's."""
         if self.samples:
             cpu = self.samples[-1].get("cpu_pct")
-            if cpu is not None and cpu >= 0.5 * float(self.cfg["cpu_target"]):
+            # Batch while CPU < 85% of the saturation target: the final
+            # approach is guarded by stationarity, per-profile errors, and the
+            # interference check, so the gate only needs to prevent leaping
+            # PAST the wall — the earlier 50% setting left an hour of
+            # single-session creep between half-load and the cpu verdict.
+            if cpu is not None and cpu >= 0.85 * float(self.cfg["cpu_target"]):
                 return False
         p95 = stats.get("p95_ms")
         if p95 and p95 >= 0.5 * float(self.cfg["e2e_timeout_s"]) * 1000:
