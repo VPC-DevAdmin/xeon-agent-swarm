@@ -937,15 +937,20 @@ class CapacityTest:
             self._rung_t0 = time.time()
 
     def _headroom(self, stats: dict) -> bool:
-        """Obvious distance from every boundary: host CPU under half the
-        saturation target and latency under 2x the healthy baseline. Anything
-        less certain means single-session probing, not batch adds."""
+        """Obvious distance from the boundaries that actually stop the ramp:
+        host CPU under half the saturation target, and latency under half the
+        workflow timeout (sanity ceiling). A baseline-multiple check proved
+        wrong here: closed-loop latency is ALWAYS a few x the empty-machine
+        baseline at scale while remaining perfectly stationary — it throttled
+        the ramp to single-session probing at 500 sessions with p95 flat at
+        5s. Wall proximity is the stationarity machinery's job (bad
+        evaluations halve the batch and gate adds), not this heuristic's."""
         if self.samples:
             cpu = self.samples[-1].get("cpu_pct")
             if cpu is not None and cpu >= 0.5 * float(self.cfg["cpu_target"]):
                 return False
         p95 = stats.get("p95_ms")
-        if self.baseline_p95 and p95 and p95 >= 2.0 * self.baseline_p95:
+        if p95 and p95 >= 0.5 * float(self.cfg["e2e_timeout_s"]) * 1000:
             return False
         return True
 
