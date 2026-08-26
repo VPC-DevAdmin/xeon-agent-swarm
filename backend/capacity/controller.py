@@ -216,6 +216,7 @@ class CapacityTest:
         self.capacity_tiles: int | None = None       # same, in tiles (tile mix)
         self.breach: dict | None = None              # which profile broke which limit
         self.knee_users: int | None = None           # efficiency knee (diagnostic, not a stop)
+        self._accel_tiles = 1                        # geometric-climb batch size (tiles)
         self.slo_capacity_users: int | None = None   # OVERLAY: last level within the default
         self.slo_capacity_tiles: int | None = None   #   3x-baseline latency budget (not the verdict)
         self._eval_window_s: float | None = None     # e2e SLO window, derived at rung 1
@@ -760,6 +761,7 @@ class CapacityTest:
                     slo_bad = slo_bad + 1
                     self._last_bad_count = time.time()
                 self.breach = breach
+                self._accel_tiles = 1        # near the wall: probe, don't leap
             # inconclusive: neither certify nor condemn — hold judgment
             self._record_level("ramp", stats, rung_state)
 
@@ -874,21 +876,50 @@ class CapacityTest:
                 continue
 
             if self.mix == "tile":
-                # One session per tick, following the tile rotation, so the
-                # boundary is approached gently; capacity is still certified
-                # and reported in whole comparable tiles.
+                # Geometric climb with headroom gating: while the certified
+                # boundary is green AND there is obvious headroom, add tiles in
+                # doubling batches (1,2,4,8) — one session per tick would crawl
+                # for an hour when the wall is nowhere in sight. The moment
+                # headroom shrinks or an evaluation is anything but good, drop
+                # to single-session probing. Bulk adds are whole tiles from a
+                # boundary, so certification/comparability are untouched.
                 cap = self.cfg.get("max_users")
                 if cap is not None and len(self.users) >= int(cap):
                     self.verdict = "capped"
                     await self._hold()
                     return
-                self._add_user(self.tile_assignment[len(self.users) % self.tile_size])
+                if (at_boundary and rung_state == "good"
+                        and self._headroom(stats)):
+                    n = self._accel_tiles * self.tile_size
+                    for _ in range(n):
+                        if cap is not None and len(self.users) >= int(cap):
+                            break
+                        self._add_user(
+                            self.tile_assignment[len(self.users) % self.tile_size])
+                    self._accel_tiles = min(8, self._accel_tiles * 2)
+                else:
+                    self._accel_tiles = 1
+                    self._add_user(
+                        self.tile_assignment[len(self.users) % self.tile_size])
             else:
                 for _ in range(int(self.cfg["step_users"])):
                     if (self.cfg.get("max_users") is None
                             or len(self.users) < int(self.cfg["max_users"])):
                         self._add_user()
             self._rung_t0 = time.time()
+
+    def _headroom(self, stats: dict) -> bool:
+        """Obvious distance from every boundary: host CPU under half the
+        saturation target and latency under 2x the healthy baseline. Anything
+        less certain means single-session probing, not batch adds."""
+        if self.samples:
+            cpu = self.samples[-1].get("cpu_pct")
+            if cpu is not None and cpu >= 0.5 * float(self.cfg["cpu_target"]):
+                return False
+        p95 = stats.get("p95_ms")
+        if self.baseline_p95 and p95 and p95 >= 2.0 * self.baseline_p95:
+            return False
+        return True
 
     def _update_slo_overlay(self, window_s: float) -> None:
         """Buyer's-latency-budget OVERLAY (default 3x each profile's baseline):
