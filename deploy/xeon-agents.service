@@ -17,10 +17,11 @@ WorkingDirectory=/home/devadmin/work/repos/xeon-agent-swarm
 EnvironmentFile=/home/devadmin/work/repos/xeon-agent-swarm/.env.adl
 Environment=CONFIG_DIR=config
 Environment=FRONTEND_DIST=frontend/dist
-# Multi-process orchestrator: 8 run-executor child processes (127.0.0.1:8011+).
+# Multi-process orchestrator: 48 run-executor child processes (127.0.0.1:8011+).
+# Executor event loops saturate ~0.5 core each; lanes sized toward the 64 cores.
 # systemd kills the whole cgroup on stop, so executors never outlive the
 # control process.
-Environment=ADL_WORKERS=24
+Environment=ADL_WORKERS=48
 ExecStart=/home/devadmin/work/repos/xeon-agent-swarm/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8010
 Restart=always
 RestartSec=5

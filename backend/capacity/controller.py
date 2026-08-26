@@ -726,10 +726,12 @@ class CapacityTest:
             # Evaluate over a wider window than the ramp cadence: slow-cadence
             # profiles (long think times, tool waits) need room to produce
             # min_samples, or every rung reads as inconclusive. In e2e mode the
-            # window is derived from measured rung-1 workflow durations.
-            eval_window = (self._eval_window_s
-                           if self.mode == "e2e" and self._eval_window_s
-                           else 3 * interval)
+            # window tracks the CURRENT measured workflow duration — a window
+            # frozen at rung-1 geometry silently broke certification when
+            # workflow durations drifted 200x during the 27k-session ramp
+            # (top-level windows were judging completions launched minutes
+            # earlier at lower levels).
+            eval_window = self._current_eval_window(interval)
             rung_state, breach = self._evaluate_rung(eval_window)
             # Certification happens only at TILE BOUNDARIES, where the mix is
             # complete and rungs are comparable; sessions are introduced one at
@@ -940,6 +942,22 @@ class CapacityTest:
                             or len(self.users) < int(self.cfg["max_users"])):
                         self._add_user()
             self._rung_t0 = time.time()
+
+    def _current_eval_window(self, interval: float) -> float:
+        """e2e SLO window sized to what workflows take NOW: 2x the median of
+        the most recent completed workflows (declared rule, same as the rung-1
+        derivation — just re-derived continuously so certification geometry
+        follows the workload as latency grows with load)."""
+        if self.mode != "e2e":
+            return 3 * interval
+        import itertools
+        lats = [c["latency_ms"] / 1000.0
+                for c in itertools.islice(reversed(self.calls), 200) if c["ok"]]
+        if not lats:
+            return self._eval_window_s or 3 * interval
+        win = max(3 * interval, 2.0 * statistics.median(lats))
+        self._eval_window_s = win          # recorded in the repro block
+        return win
 
     def _headroom(self, stats: dict) -> bool:
         """Obvious distance from the boundaries that actually stop the ramp:
