@@ -267,6 +267,9 @@ export interface CapabilityBlock {
 
 export interface CapacityRateLevel {
   offered_rate: number
+  // The rate the schedule actually fired at, counted per level. A gap below
+  // offered_rate is the generator saturating, and it censors the run.
+  achieved_rate?: number
   clean_rate: number
   backlog_slope_lb?: number | null
   outstanding?: number
@@ -274,6 +277,8 @@ export interface CapacityRateLevel {
   errors?: number
   err_rate?: number
   rejected?: number
+  // What the in-process generator (the control plane) cost during this level.
+  control_cpu_pct?: number | null
 }
 
 export interface SustainableCapacityBlock {

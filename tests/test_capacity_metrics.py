@@ -336,3 +336,96 @@ def test_a_hand_stopped_open_loop_run_does_not_get_a_fitted_knee():
     test._summarize_capacity()
     assert test.capacity_detail["status"] == "lower bound"
     assert test._result_kind("stopped") == "lower_bound"
+
+
+# ── the generator's own honesty ──────────────────────────────────────────────
+
+def test_the_arrival_loop_delivers_its_schedule_at_high_rate():
+    """A per-submission sleep of 1/rate silently falls behind past a few
+    hundred per second. The batched loop must actually deliver — and count —
+    the rate it claims."""
+    test = ctl.CapacityTest("e2e", [], _cfg(load_model="open"), mix="tile")
+
+    async def instant(sid, idx):
+        pass
+
+    test._submit_open = instant
+
+    async def go():
+        test.offered_rate = 500.0
+        task = asyncio.create_task(test._arrival_loop())
+        await asyncio.sleep(1.0)
+        test._stop.set()
+        await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(go())
+    # 500/s for ~1s: the due-counter self-corrects late ticks, so the count
+    # must land close. The old loop delivered a fraction of this.
+    assert 400 <= test._arrivals <= 600
+
+
+def test_open_loop_tasks_are_pruned_as_they_finish():
+    """One task object per unit, retained forever, is an unbounded leak at
+    sustained rates."""
+    test = ctl.CapacityTest("e2e", [], _cfg(load_model="open"), mix="tile")
+
+    async def instant(sid, idx):
+        pass
+
+    test._submit_open = instant
+    tasks_before = len(test._tasks)
+
+    async def go():
+        test.offered_rate = 300.0
+        task = asyncio.create_task(test._arrival_loop())
+        await asyncio.sleep(0.5)
+        test._stop.set()
+        await asyncio.gather(task, return_exceptions=True)
+        await asyncio.sleep(0)          # let done-callbacks run
+
+    asyncio.run(go())
+    assert test._arrivals > 100                    # real volume went through
+    assert len(test._open_tasks) <= 5              # and none of it is retained
+    assert len(test._tasks) == tasks_before        # the run-scoped list is untouched
+
+
+def test_a_generator_that_falls_behind_censors_the_run():
+    """A level judged at an offered rate the generator never delivered would
+    be a conclusion about load nobody offered."""
+    test = ctl.CapacityTest("e2e", [], _cfg(
+        load_model="open", arrival_start_rate=100.0, arrival_hold_s=0.4),
+        mix="tile")
+
+    async def dead_generator():
+        await test._stop.wait()          # fires nothing: achieved rate is 0
+
+    test._arrival_loop = dead_generator
+    asyncio.run(test._rate_ramp())
+    assert test.verdict == "generator_limit"
+    assert test.breach["metric"] == "achieved_rate"
+    # With nothing delivered there is no number to bound: inconclusive.
+    assert test._result_kind("generator_limit") == "inconclusive"
+    # Once lower levels HAVE produced a clean rate, the stop bounds it.
+    test.capacity_wps = 12.0
+    assert test._result_kind("generator_limit") == "lower_bound"
+    assert "harness limit" in ctl.CENSOR_REASON["generator_limit"]
+
+
+def test_each_level_records_achieved_rate_beside_offered():
+    """The offered rate is a claim; the achieved rate is the receipt."""
+    test = ctl.CapacityTest("e2e", [], _cfg(
+        load_model="open", arrival_start_rate=50.0, arrival_hold_s=0.6,
+        max_duration_s=1.2), mix="tile")
+
+    async def instant(sid, idx):
+        key = test._admit(sid)
+        test._release(key)
+
+    test._submit_open = instant
+    asyncio.run(test._rate_ramp())
+    assert test.rate_levels, "no level was recorded"
+    lv = test.rate_levels[0]
+    assert lv["offered_rate"] == 50.0
+    assert "achieved_rate" in lv and "control_cpu_pct" in lv
+    # measured over the second half-hold, self-corrected ticks: close to offered
+    assert 40.0 <= lv["achieved_rate"] <= 60.0

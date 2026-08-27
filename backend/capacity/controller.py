@@ -92,7 +92,8 @@ RESULTS_DIR = Path("data/capacity")
 #               it produced means anything.
 BOUNDARY_VERDICTS = frozenset({"unstable", "errors", "queue_divergence"})
 CENSORING_VERDICTS = frozenset({"cpu", "memory", "kv", "spend_guard", "budget",
-                                "capped", "timeout", "interference", "stopped"})
+                                "capped", "timeout", "interference", "stopped",
+                                "generator_limit"})
 INVALID_VERDICTS = frozenset({"workload_invalid", "harness_degraded"})
 
 CENSOR_REASON = {
@@ -105,6 +106,8 @@ CENSOR_REASON = {
     "timeout": "time limit reached with the system still healthy",
     "interference": "other processes on the host saturated the CPU",
     "stopped": "stopped by hand before a boundary appeared",
+    "generator_limit": "the load generator could not deliver the offered rate "
+                       "— a harness limit, not host capacity",
 }
 
 # DB persistence of finished results (benchmark history). Module flag so unit
@@ -296,6 +299,13 @@ class CapacityTest:
         self.capability_detail: dict = {}
         self.offered_rate: float = 0.0
         self.rejected = 0
+        self._arrivals = 0        # schedule firings actually delivered (open loop)
+        # Per-scenario running tallies for status(): the UI polls every couple
+        # of seconds, and rebuilding them by scanning the whole call history
+        # each poll was control-plane CPU charged to the system under test.
+        self._scen_tally: dict[str, dict] = defaultdict(
+            lambda: {"calls": 0, "errors": 0, "last_error": None,
+                     "ok_latencies": deque(maxlen=200)})
         self.rate_levels: list[dict] = []            # one record per offered rate
         self.capacity_wps: float | None = None
         self.capacity_detail: dict = {}
@@ -343,6 +353,10 @@ class CapacityTest:
         self._sampler = SystemSampler()
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task] = []
+        # Open-loop submissions get their own self-pruning set: appending one
+        # task per unit to a list retains every task object for the run's
+        # lifetime, which at sustained rates is an unbounded leak.
+        self._open_tasks: set[asyncio.Task] = set()
 
     # ── lifecycle ────────────────────────────────────────────────────────────
     async def run(self):
@@ -367,9 +381,10 @@ class CapacityTest:
             self.phase, self.error = "error", f"{type(exc).__name__}: {exc}"
         finally:
             self._stop.set()
-            for t in [*self.users, *self._tasks]:
+            for t in [*self.users, *self._tasks, *self._open_tasks]:
                 t.cancel()
-            await asyncio.gather(*self.users, *self._tasks, return_exceptions=True)
+            await asyncio.gather(*self.users, *self._tasks, *self._open_tasks,
+                                 return_exceptions=True)
             await self._caller.aclose()
             self.ended_at = time.time()
             if self.phase not in ("error", "stopped"):
@@ -497,8 +512,7 @@ class CapacityTest:
             rec.update(scenario=wid, step="workflow", user=idx, ts=time.time(),
                        t_submit=t_submit)
             self._check_contract(wid, rec)
-            self.calls.append(rec)
-            self.completed_requests += 1
+            self._tally_call(rec)
             await self._settle_spend(reserved, rec)
             try:
                 await asyncio.wait_for(self._stop.wait(),
@@ -525,8 +539,7 @@ class CapacityTest:
         t_submit = self._release(admit_key)
         rec.update(scenario=sid, step=label, user=idx, ts=time.time(),
                    t_submit=t_submit)
-        self.calls.append(rec)
-        self.completed_requests += 1
+        self._tally_call(rec)
         await self._settle_spend(reserved, rec)
         return rec
 
@@ -732,8 +745,15 @@ class CapacityTest:
             return "inconclusive", None          # cohort too young to judge
         mid = low + span / 2.0
 
+        # One newest-first walk covers both halves: a call admitted at or
+        # after `low` completed at or after `low`, so stopping the walk at
+        # ts < low loses nothing. This replaced a full scan of the 100k-deep
+        # deque per half per evaluation — control-plane CPU that was being
+        # charged to the system under test.
+        recent = self._recent(low)
+
         def _cohort(a: float, b: float) -> tuple[list[float], int]:
-            done = [c["latency_ms"] for c in self.calls
+            done = [c["latency_ms"] for c in recent
                     if c.get("ok") and not c.get("invalid")
                     and a <= c.get("t_submit", c["ts"]) < b]
             censored = sum(1 for _sid, t in self._inflight.values() if a <= t < b)
@@ -1295,7 +1315,9 @@ class CapacityTest:
         if deadline is None:
             return 0, 0, 0
         successes = decided = 0
-        for c in self.calls:
+        # _recent walks from the newest end and stops at ts < since; every
+        # call with t_submit >= since also has ts >= since, so none is missed.
+        for c in self._recent(since):
             if c.get("scenario") != sid or c.get("invalid"):
                 continue
             if c.get("t_submit", c["ts"]) < since:
@@ -1431,22 +1453,53 @@ class CapacityTest:
         overload becomes directly observable. The queue is bounded: past
         max_backlog the generator records a rejection rather than growing
         without limit, since an out-of-memory kill would end the run before it
-        produced evidence."""
+        produced evidence.
+
+        Timing: a per-submission sleep of 1/rate cannot be delivered once the
+        rate passes a few hundred per second — the event loop's timer
+        resolution is coarser than the interval, so the generator would fall
+        behind while the run kept reporting the offered rate as fact.
+        Submissions are therefore released in batches from a due-counter on a
+        fixed 20 ms tick (a late tick releases more, so the average
+        self-corrects), and every firing is counted so the ACHIEVED rate is
+        recorded per level instead of assumed. After a stall the due-counter
+        is clamped to half a second of arrivals: replaying a long gap as one
+        burst would hammer the host with a pattern nobody offered, and the
+        clamp surfaces in the achieved rate rather than hiding.
+
+        A rejection counts as a delivered arrival — the schedule fired; the
+        bounded queue refusing it is the host's problem, not the generator's."""
+        TICK = 0.02
         idx = 0
         rotation = self.tile_assignment or self.scenario_ids
+        last = time.monotonic()
+        due = 0.0
         while not self._stop.is_set():
-            rate = max(0.01, self.offered_rate)
-            if len(self._inflight) >= int(self.cfg["max_backlog"]):
-                self.rejected += 1
-            else:
-                sid = rotation[idx % len(rotation)]
-                self._tasks.append(asyncio.create_task(self._submit_open(sid, idx)))
-            idx += 1
             try:
-                await asyncio.wait_for(self._stop.wait(), timeout=1.0 / rate)
+                await asyncio.wait_for(self._stop.wait(), timeout=TICK)
                 return
             except asyncio.TimeoutError:
                 pass
+            now = time.monotonic()
+            rate = max(0.01, self.offered_rate)
+            due = min(due + (now - last) * rate, 0.5 * rate)
+            last = now
+            while due >= 1.0 and not self._stop.is_set():
+                due -= 1.0
+                self._arrivals += 1
+                if len(self._inflight) >= int(self.cfg["max_backlog"]):
+                    self.rejected += 1
+                else:
+                    sid = rotation[idx % len(rotation)]
+                    t = asyncio.create_task(self._submit_open(sid, idx))
+                    self._open_tasks.add(t)
+                    t.add_done_callback(self._open_tasks.discard)
+                    # Yield so the task runs to its first await and ADMITS
+                    # before the next backlog check — without this a whole
+                    # tick's batch lands before _inflight reflects any of it
+                    # and the bounded queue overshoots its own bound.
+                    await asyncio.sleep(0)
+                idx += 1
 
     async def _submit_open(self, sid: str, idx: int) -> None:
         """One open-loop submission, followed to a terminal outcome."""
@@ -1472,8 +1525,20 @@ class CapacityTest:
         rec.update(scenario=sid, step="workflow", user=-1, ts=time.time(),
                    t_submit=t_submit, offered_rate=self.offered_rate)
         self._check_contract(sid, rec)
+        self._tally_call(rec)
+
+    def _tally_call(self, rec: dict) -> None:
+        """Append a finished unit and keep the running tallies current."""
         self.calls.append(rec)
         self.completed_requests += 1
+        t = self._scen_tally[rec.get("scenario", "?")]
+        t["calls"] += 1
+        if not rec.get("ok"):
+            t["errors"] += 1
+            if rec.get("error"):
+                t["last_error"] = rec["error"]
+        elif rec.get("latency_ms") is not None:
+            t["ok_latencies"].append(rec["latency_ms"])
 
     def _clean_rate(self, since: float) -> float:
         """Clean durable completions per second since `since`.
@@ -1482,8 +1547,8 @@ class CapacityTest:
         cannot raise its apparent capacity by discarding work or by finishing
         it incorrectly."""
         span = max(1e-6, time.time() - since)
-        clean = sum(1 for c in self.calls
-                    if c["ts"] >= since and c.get("ok") and not c.get("invalid")
+        clean = sum(1 for c in self._recent(since)
+                    if c.get("ok") and not c.get("invalid")
                     and c.get("durable", True))
         return clean / span
 
@@ -1514,26 +1579,55 @@ class CapacityTest:
             except asyncio.TimeoutError:
                 pass
             since = time.time()
+            arrivals_at_start = self._arrivals
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=hold / 2)
                 return
             except asyncio.TimeoutError:
                 pass
+            span = max(1e-6, time.time() - since)
+            achieved = (self._arrivals - arrivals_at_start) / span
             xs, ys = self._backlog_series(since)
             slope_lb = st.slope_lower_bound(xs, ys)
             clean = self._clean_rate(since)
-            errors = sum(1 for c in self.calls
-                         if c["ts"] >= since and not c.get("ok") and not c.get("invalid"))
-            decided = sum(1 for c in self.calls if c["ts"] >= since and not c.get("invalid"))
+            window = self._recent(since)
+            errors = sum(1 for c in window
+                         if not c.get("ok") and not c.get("invalid"))
+            decided = sum(1 for c in window if not c.get("invalid"))
+            # What the generator itself cost during this window, so the
+            # in-process contamination is a recorded fact rather than an
+            # assumption (measured 0.3% of the host at 21.5 wf/s).
+            ctl_cpu = [s_["cpu_by"]["control"] for s_ in self.samples
+                       if s_["ts"] >= since and s_.get("cpu_by")
+                       and "control" in s_["cpu_by"]]
             level = {"offered_rate": round(rate, 2),
+                     # The rate the schedule actually fired at, counted, not
+                     # assumed. The gap between offered and achieved is the
+                     # generator's own saturation and it must be visible.
+                     "achieved_rate": round(achieved, 2),
                      "clean_rate": round(clean, 2),
                      "backlog_slope_lb": round(slope_lb, 4) if slope_lb is not None else None,
                      "outstanding": len(self._inflight),
                      "oldest_inflight_s": self._oldest_inflight_s(),
                      "errors": errors,
                      "err_rate": round(errors / decided, 4) if decided else 0.0,
-                     "rejected": self.rejected - rejected_at_start}
+                     "rejected": self.rejected - rejected_at_start,
+                     "control_cpu_pct": (round(statistics.median(ctl_cpu), 1)
+                                          if ctl_cpu else None)}
             self.rate_levels.append(level)
+            # The +1 grants one arrival at the window boundary: at low rates
+            # a short window straddles a period edge, and 9-vs-10 counted
+            # arrivals must not read as the generator failing. At real rates
+            # one arrival is nothing and the gate keeps its teeth.
+            if (self._arrivals - arrivals_at_start + 1) / span < 0.95 * rate:
+                # The generator fell behind its own schedule: every conclusion
+                # at this level would be about load nobody offered. Stop and
+                # censor rather than judging the host on the harness's limit.
+                self.verdict = "generator_limit"
+                self.breach = {"profile": "harness", "metric": "achieved_rate",
+                                "value": round(achieved, 2),
+                                "limit": round(0.95 * rate, 2)}
+                return
             growing = slope_lb is not None and slope_lb > 0
             failing = (level["err_rate"] > float(self.cfg["error_rate_limit"])
                        or level["rejected"] > 0)
@@ -1875,18 +1969,16 @@ class CapacityTest:
         latest = self.samples[-1] if self.samples else {}
         per_scenario = {}
         for sid in self.scenario_ids:
-            cs = [c for c in self.calls if c["scenario"] == sid]
-            ok = [c for c in cs if c["ok"]]
+            t = self._scen_tally[sid]
             per_scenario[sid] = {
                 "name": self.scenarios[sid]["name"],
                 "users": self.user_scenario.count(sid),
-                "calls": len(cs),
-                "errors": len(cs) - len(ok),
-                "p50_ms": _pct([c["latency_ms"] for c in ok[-200:]], 50),
+                "calls": t["calls"],
+                "errors": t["errors"],
+                "p50_ms": _pct(list(t["ok_latencies"]), 50),
             }
-            errs = [c["error"] for c in cs if not c["ok"] and c.get("error")]
-            if errs:
-                per_scenario[sid]["last_error"] = errs[-1]
+            if t["last_error"]:
+                per_scenario[sid]["last_error"] = t["last_error"]
         samples = list(self.samples)[-150:]
         return {
             "active": self.phase in ("starting", "ramping", "holding"),

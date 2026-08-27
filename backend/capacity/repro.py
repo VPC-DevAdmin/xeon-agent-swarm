@@ -71,7 +71,15 @@ def host_info() -> dict:
         "database": _database_dialect(),
         "requirements_sha": _file_sha("backend/requirements.txt"),
         "git_dirty": _git_dirty(),
-        "load_generator": "in-process (control plane drives launch_run directly)",
+        # The generator lives in the control plane. That contamination is
+        # MEASURED, not assumed: cpu_breakdown carries the control group per
+        # run (0.3% of the host at 21.5 wf/s), open-loop levels record the
+        # generator's own CPU share, and every level records the ACHIEVED
+        # arrival rate next to the offered one — a generator that falls
+        # behind censors the run instead of misreporting it.
+        "load_generator": ("in-process, batched 20ms ticks (control plane "
+                           "drives launch_run directly); achieved arrival "
+                           "rate recorded per level"),
     }
 
 

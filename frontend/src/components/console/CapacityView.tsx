@@ -882,6 +882,7 @@ const VERDICT_TEXT: Record<string, string> = {
   spend_guard: 'dollar circuit breaker reached',
   workload_invalid: 'too many units violated the workload contract — the run did not exercise the intended work',
   harness_degraded: 'the harness lost writes or completion callbacks — benchmark failures are indistinguishable from agent failures here',
+  generator_limit: 'the load generator could not deliver the offered rate — a harness limit, not host capacity',
   stopped: 'stopped manually',
 }
 
