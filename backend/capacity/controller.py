@@ -1441,14 +1441,21 @@ class CapacityTest:
         self._tasks.append(asyncio.create_task(self._arrival_loop()))
         while not self._stop.is_set():
             self.offered_rate = rate
-            level_start = time.time()
-            for _ in range(2):                     # two independent windows
-                try:
-                    await asyncio.wait_for(self._stop.wait(), timeout=hold / 2)
-                    return
-                except asyncio.TimeoutError:
-                    pass
-            since = level_start
+            rejected_at_start = self.rejected
+            # Settle before measuring. The first moments at a new rate contain
+            # the queue filling to its new steady depth, which reads as growth
+            # and has nothing to do with the host's ability to sustain the rate.
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=hold / 2)
+                return
+            except asyncio.TimeoutError:
+                pass
+            since = time.time()
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=hold / 2)
+                return
+            except asyncio.TimeoutError:
+                pass
             xs, ys = self._backlog_series(since)
             slope_lb = st.slope_lower_bound(xs, ys)
             clean = self._clean_rate(since)
@@ -1462,11 +1469,11 @@ class CapacityTest:
                      "oldest_inflight_s": self._oldest_inflight_s(),
                      "errors": errors,
                      "err_rate": round(errors / decided, 4) if decided else 0.0,
-                     "rejected": self.rejected}
+                     "rejected": self.rejected - rejected_at_start}
             self.rate_levels.append(level)
             growing = slope_lb is not None and slope_lb > 0
             failing = (level["err_rate"] > float(self.cfg["error_rate_limit"])
-                       or self.rejected > 0)
+                       or level["rejected"] > 0)
             if growing or failing:
                 diverging += 1
                 if self.failure_onset is None:
