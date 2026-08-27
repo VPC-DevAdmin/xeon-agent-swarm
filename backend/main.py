@@ -129,7 +129,8 @@ async def read_run_outcome(run_id: str) -> dict:
             "tokens_out": tokens_out, "run_id": run_id, "error": err,
             "trace": {"llm_calls": int(m.get("call_count") or 0),
                       "steps": len(steps), "validations": validations,
-                      "task_count": int(m.get("task_count") or 0)}}
+                      "task_count": int(m.get("task_count") or 0),
+                      "tool_calls": int(m.get("tool_calls") or 0)}}
 
 
 @asynccontextmanager

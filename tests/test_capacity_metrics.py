@@ -25,10 +25,11 @@ def test_confidence_bound_refuses_to_certify_a_tiny_sample():
 
 
 def test_sample_cost_of_a_95_95_claim():
-    n = st.samples_for_bound(0.95)
-    assert 40 <= n <= 80                      # the real price of the claim
-    assert st.wilson_lower(n, n) >= 0.95
-    assert st.wilson_lower(n - 1, n) < 0.95   # one failure at the floor fails
+    z = st.familywise_z(3, 0.95)
+    n = st.samples_for_bound(0.95, z)
+    assert 80 <= n <= 100                     # joint claim across three types
+    assert st.wilson_lower(n, n, z) >= 0.95
+    assert st.wilson_lower(n - 1, n, z) < 0.95
 
 
 def test_backlog_slope_bound_separates_scatter_from_growth():
@@ -44,8 +45,10 @@ def test_breakpoint_is_found_when_present_and_refused_when_absent():
     saturating = [10, 20, 30, 40, 48, 50, 50, 50]
     fit = st.bootstrap_breakpoint_ci(rates, saturating, seed=7)
     assert fit is not None
-    estimate, low, high = fit
+    estimate = fit["estimate"]
+    low, high = fit["ci95"]
     assert low <= estimate <= high
+    assert fit["lower_bound_95"] <= estimate
     assert 30 <= estimate <= 70
     # a host that never saturated must not be handed a boundary
     assert st.segmented_breakpoint(rates, list(rates)) is None
@@ -95,7 +98,7 @@ def test_capability_passes_only_with_enough_evidence():
         _seed_cohort(test, sid, 10, since=since)     # clean but far too few
     assert test._capability_state(since)[0] == "inconclusive"
     for sid in test.scenario_ids:
-        _seed_cohort(test, sid, 60, since=since)     # now past the sample floor
+        _seed_cohort(test, sid, 100, since=since)    # now past joint-confidence floor
     assert test._capability_state(since)[0] == "good"
 
 
@@ -106,7 +109,7 @@ def test_late_workflows_fail_capability_even_when_they_succeed():
     test.user_scenario = list(test.scenario_ids)
     since = ctl.time.time() - 30
     for sid in test.scenario_ids:
-        _seed_cohort(test, sid, 60, since=since)
+        _seed_cohort(test, sid, 100, since=since)
     slow = test.scenario_ids[0]
     _seed_cohort(test, slow, 0, late=12, since=since)
     state, breach = test._capability_state(since)
@@ -194,7 +197,101 @@ def test_capacity_summary_reports_the_conservative_bound():
     assert detail["clean_workflows_per_s"] == test.capacity_wps
     low, high = detail["ci95"]
     assert low <= detail["breakpoint_estimate"] <= high
-    assert test.capacity_wps == low            # published number is the lower bound
+    assert test.capacity_wps == detail["lower_bound_95"]
+    assert detail["fit_rate_basis"] == "achieved admission rate"
+
+
+def test_queue_growth_uses_increments_not_ols_on_integrated_levels():
+    # A high but stationary queue with serial waves must not become growth just
+    # because adjacent levels share almost all their state.
+    xs = [float(i) for i in range(40)]
+    stationary = [100 + (i % 8) for i in range(40)]
+    rising = [100 + i * 2 + (i % 4) for i in range(40)]
+    assert st.queue_growth_lower_bound(xs, stationary, seed=9) <= 0
+    assert st.queue_growth_lower_bound(xs, rising, seed=9) > 0
+
+
+def test_open_loop_confirms_in_a_second_window_at_the_same_rate():
+    test = ctl.CapacityTest("e2e", [], _cfg(
+        load_model="open", arrival_start_rate=20, arrival_max_rate=100), mix="tile")
+    calls = []
+
+    async def idle_generator():
+        await test._stop.wait()
+
+    async def measure(rate, *, confirm=False):
+        calls.append((rate, confirm))
+        return {"generator_ok": True, "backlog_slope_lb": 1.0,
+                "err_rate": 0.0, "per_type": {}, "worst_error_type": None,
+                "rejected": 0, "achieved_rate": rate, "clean_rate": rate - 1,
+                "offered_rate": rate, "resource_verdict": None}
+
+    test._arrival_loop = idle_generator
+    test._measure_open_level = measure
+    asyncio.run(test._rate_ramp())
+    assert calls == [(20.0, False), (20.0, True)]
+    assert test.verdict == "queue_divergence"
+
+
+def test_open_loop_adds_denser_rate_points_near_the_knee():
+    test = ctl.CapacityTest("e2e", [], _cfg(
+        load_model="open", arrival_start_rate=10, arrival_step_factor=4,
+        arrival_max_rate=100), mix="tile")
+    calls = []
+
+    async def idle_generator():
+        await test._stop.wait()
+
+    async def measure(rate, *, confirm=False):
+        calls.append((rate, confirm))
+        growing = rate >= 20
+        return {"generator_ok": True, "backlog_slope_lb": 1.0 if growing else None,
+                "err_rate": 0.0, "per_type": {}, "worst_error_type": None,
+                "rejected": 0, "achieved_rate": rate,
+                # 90% completion utilization at the first otherwise-stable
+                # level should replace the 4x jump with sqrt(4)=2x.
+                "clean_rate": rate * 0.9, "offered_rate": rate,
+                "resource_verdict": None}
+
+    test._arrival_loop = idle_generator
+    test._measure_open_level = measure
+    asyncio.run(test._rate_ramp())
+    assert calls == [(10.0, False), (20.0, False), (20.0, True)]
+    assert test.rate_levels[0]["next_step_factor"] == 2.0
+
+
+def test_open_loop_cloud_submission_honours_the_spend_guard():
+    endpoint = {"input_per_mtok": 1.0, "output_per_mtok": 3.0}
+    test = ctl.CapacityTest("e2e", [], _cfg(
+        load_model="open", max_cost_usd=0.01), mix="tile", endpoint=endpoint)
+    asyncio.run(test._submit_open(test.scenario_ids[0], 1))
+    assert test.verdict == "spend_guard"
+    assert test.total_requests == 0
+
+
+def test_open_loop_resource_stop_censors_before_calling_queue_capacity():
+    test = ctl.CapacityTest("e2e", [], _cfg(
+        load_model="open", arrival_start_rate=20, arrival_max_rate=100), mix="tile")
+    observations = iter(["cpu", "cpu"])
+
+    async def idle_generator():
+        await test._stop.wait()
+
+    async def measure(rate, *, confirm=False):
+        rv = next(observations)
+        return {"generator_ok": True, "backlog_slope_lb": None,
+                "err_rate": 0.0, "per_type": {}, "worst_error_type": None,
+                "rejected": 0, "achieved_rate": rate, "clean_rate": rate,
+                "offered_rate": rate, "resource_verdict": rv,
+                "resource_breach": {"profile": "host", "metric": "cpu_pct",
+                                     "value": 91, "limit": 90}}
+
+    test._arrival_loop = idle_generator
+    test._measure_open_level = measure
+    asyncio.run(test._rate_ramp())
+    assert test.verdict == "cpu"
+    test.capacity_wps = 19.0
+    assert test._result_kind("cpu") == "lower_bound"
 
 
 def test_capacity_refuses_to_invent_a_knee():

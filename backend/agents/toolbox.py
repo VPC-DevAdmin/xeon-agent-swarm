@@ -186,7 +186,9 @@ def build_bench_tool() -> StructuredTool:
         delay = 0.05 + (zlib.crc32(key.encode()) % 100) / 1000.0
         # Durable write via the batched single-writer — per-call sessions were
         # exactly the connection-per-op pattern that walled the ramp at 375.
-        await persistence.audit_bench(key)
+        stored_ok = await persistence.audit_bench(key)
+        if not stored_ok:
+            raise RuntimeError("benchmark audit record was not committed")
         stored = "stored"
         await _asyncio.sleep(delay)
         return (f"[bench_record] {stored} record '{key[:60]}'. Retrieved context: "

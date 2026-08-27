@@ -71,6 +71,12 @@ def host_info() -> dict:
         "database": _database_dialect(),
         "requirements_sha": _file_sha("backend/requirements.txt"),
         "git_dirty": _git_dirty(),
+        "cpu_governor": _read_first(
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"),
+        "turbo_disabled": _read_int(
+            "/sys/devices/system/cpu/intel_pstate/no_turbo"),
+        "process_affinity_cpus": _affinity_count(),
+        "cgroup": _read_first("/proc/self/cgroup"),
         # The generator lives in the control plane. That contamination is
         # MEASURED, not assumed: cpu_breakdown carries the control group per
         # run (0.3% of the host at 21.5 wf/s), open-loop levels record the
@@ -81,6 +87,29 @@ def host_info() -> dict:
                            "drives launch_run directly); achieved arrival "
                            "rate recorded per level"),
     }
+
+
+def _read_first(path: str) -> str | None:
+    try:
+        with open(path) as f:
+            return f.readline().strip() or None
+    except OSError:
+        return None
+
+
+def _read_int(path: str) -> int | None:
+    value = _read_first(path)
+    try:
+        return int(value) if value is not None else None
+    except ValueError:
+        return None
+
+
+def _affinity_count() -> int | None:
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return None
 
 
 def _database_dialect() -> str | None:

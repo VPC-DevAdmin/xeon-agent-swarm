@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 7
+version: 8
 
 scenarios:
   support_agent:
@@ -175,8 +175,8 @@ e2e_workflows:
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
     deadlines: {interactive: 30, batch: 300}
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7]}
-    contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20]}
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3]}
+    contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20], tool_calls: [2, 4]}
     budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
     query: >-
       Using ONLY the field notes below (do not research further), write a
@@ -197,8 +197,8 @@ e2e_workflows:
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
     deadlines: {interactive: 30, batch: 300}
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7]}
-    contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20]}
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3]}
+    contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20], tool_calls: [2, 4]}
     budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
     query: >-
       Using ONLY the measurements below (do not research further), compare
@@ -217,8 +217,8 @@ e2e_workflows:
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
     deadlines: {interactive: 30, batch: 300}
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7]}
-    contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20]}
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3]}
+    contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20], tool_calls: [2, 4]}
     budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
     query: >-
       Using ONLY the four items below (do not research further), compile a

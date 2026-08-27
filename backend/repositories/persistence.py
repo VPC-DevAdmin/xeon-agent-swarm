@@ -60,7 +60,10 @@ async def _writer_loop():
 
 async def _flush(batch):
     global _perm_failures
-    ops = [(f, label) for f, label, _fut in batch if f is not None]
+    work = [(i, f, label) for i, (f, label, _fut) in enumerate(batch)
+            if f is not None]
+    outcomes: dict[int, bool] = {}
+    ops = [(f, label) for _i, f, label in work]
     if ops:
         try:
             sm = get_sessionmaker()
@@ -68,8 +71,10 @@ async def _flush(batch):
                 for f, _label in ops:
                     await f(session)
                 await session.commit()
+            outcomes.update({i: True for i, _f, _label in work})
         except Exception:  # noqa: BLE001 — isolate the poison op, keep the rest
-            for f, label in ops:
+            for i, f, label in work:
+                succeeded = False
                 for attempt, delay in enumerate((0.0, 0.1, 0.4)):
                     if delay:
                         await asyncio.sleep(delay)
@@ -78,6 +83,7 @@ async def _flush(batch):
                         async with sm() as session:
                             await f(session)
                             await session.commit()
+                        succeeded = True
                         break
                     except Exception as exc:  # noqa: BLE001
                         transient = ("locked" in str(exc).lower()
@@ -88,9 +94,11 @@ async def _flush(batch):
                         logger.warning("persistence[%s] failed permanently: %s",
                                        label, exc)
                         break
-    for *_, fut in batch:
+                outcomes[i] = succeeded
+    for i, item in enumerate(batch):
+        fut = item[2]
         if fut is not None and not fut.done():
-            fut.set_result(None)
+            fut.set_result(outcomes.get(i, True))
 
 
 def failure_count() -> int:
@@ -113,10 +121,11 @@ async def barrier():
     await fut
 
 
-async def _run(coro_factory, label: str):
-    """Enqueue a write for the batched writer. Fire-and-forget (returns None)."""
-    _ensure_writer().put_nowait((coro_factory, label, None))
-    return None
+async def _run(coro_factory, label: str, *, wait: bool = False):
+    """Enqueue a write; optionally return its durable commit acknowledgement."""
+    fut = asyncio.get_event_loop().create_future() if wait else None
+    _ensure_writer().put_nowait((coro_factory, label, fut))
+    return await fut if fut is not None else None
 
 
 async def audit_bench(key: str):
@@ -126,7 +135,7 @@ async def audit_bench(key: str):
     async def _op(session):
         session.add(AuditLog(action="bench.record", detail={"key": key[:120]}))
 
-    return await _run(_op, "bench.record")
+    return await _run(_op, "bench.record", wait=True)
 
 
 async def create_run(run_id, query, *, job_id=None, trigger="manual", config=None):

@@ -66,6 +66,7 @@ def _metric_value(result: dict, name: str):
 def comparability_key(result: dict) -> dict:
     """The facts that must match for two runs to belong in the same set."""
     repro = result.get("repro") or {}
+    host = repro.get("host") or {}
     return {
         "benchmark_target": result.get("benchmark_target"),
         "inference_backend": result.get("inference_backend"),
@@ -75,6 +76,13 @@ def comparability_key(result: dict) -> dict:
         "scenario_fingerprint": repro.get("scenario_fingerprint"),
         "benchmark_version": repro.get("benchmark_version"),
         "git_commit": repro.get("git_commit"),
+        "cpu_model": host.get("cpu_model"),
+        "cpu_count": host.get("cpu_count"),
+        "mem_total_gb": host.get("mem_total_gb"),
+        "numa_nodes": host.get("numa_nodes"),
+        "orchestrator_workers": host.get("orchestrator_workers"),
+        "database": host.get("database"),
+        "prompt_corpus": repro.get("prompt_corpus"),
     }
 
 
@@ -195,8 +203,15 @@ class RepeatSet:
             return f"{verdict}: the run failed its own integrity check"
         if verdict == "interference":
             return "other tenants saturated the host — the run measured them, not us"
+        if res.get("publication_eligible") is False:
+            return (res.get("publication_exclusion")
+                    or "run is not eligible for a published repeat set")
         if res.get("result_kind") in ("inconclusive", "invalid"):
             return f"no usable number ({res.get('result_kind')})"
+        intended = ("sustainable_capacity" if res.get("load_model") == "open"
+                    else "service_capability")
+        if _metric_value(res, intended) is None:
+            return f"run did not produce its intended metric ({intended})"
         return None
 
     def _comparability_mismatch(self, res: dict) -> str | None:
@@ -230,6 +245,16 @@ class RepeatSet:
         if self.phase != "stopped":
             self.phase = "done"
         censored = any(r.get("censored") for r in self.accepted)
+        intended = None
+        if self.accepted:
+            intended = ("sustainable_capacity"
+                        if self.accepted[0].get("load_model") == "open"
+                        else "service_capability")
+        metrics = aggregate(self.accepted) if complete else None
+        if complete and intended and (not metrics or
+                (metrics.get(intended) or {}).get("n") != self.runs):
+            complete = False
+            metrics = None
         self.result = {
             "kind": "repeat_set",
             "status": "complete" if complete else "incomplete",
@@ -241,7 +266,10 @@ class RepeatSet:
             "censored": censored,
             "censor_reasons": sorted({r.get("censor_reason") for r in self.accepted
                                       if r.get("censor_reason")}),
-            "metrics": aggregate(self.accepted),
+            # Partial sets carry their child observations but publish no
+            # median.  A complete set's intended metric always has n == runs.
+            "metrics": metrics,
+            "intended_metric": intended,
             "excluded": self.excluded,
             "child_run_ids": [r.get("history_id") for r in self.accepted
                               if r.get("history_id")],

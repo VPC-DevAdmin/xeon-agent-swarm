@@ -161,6 +161,7 @@ def test_running_out_of_retries_reports_incomplete_not_a_median(
     assert rs.result["runs_accepted"] == 1
     assert rs.result["runs_excluded"] == 3
     assert "retries" in rs.result["incomplete_reason"]
+    assert rs.result["metrics"] is None
 
 
 def test_a_run_with_no_usable_number_is_excluded(tmp_path, monkeypatch):
@@ -170,6 +171,16 @@ def test_a_run_with_no_usable_number_is_excluded(tmp_path, monkeypatch):
                   tmp_path, monkeypatch)
     assert rs.result["runs_accepted"] == 3
     assert "no usable number" in rs.result["excluded"][0]["reason"]
+
+
+def test_missing_intended_metric_is_excluded_even_with_a_diagnostic_number(
+        tmp_path, monkeypatch):
+    rs = _run_set([_result(ceiling=900), _result(capability=100),
+                   _result(capability=110), _result(capability=105)],
+                  tmp_path, monkeypatch)
+    assert rs.result["status"] == "complete"
+    assert "intended metric" in rs.result["excluded"][0]["reason"]
+    assert rs.result["metrics"]["service_capability"]["n"] == 3
 
 
 # ── censoring carries through ────────────────────────────────────────────────

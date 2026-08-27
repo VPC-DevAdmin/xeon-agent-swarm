@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 import random
+from statistics import NormalDist
 
 # One-sided 95% normal quantile. Capability and slope tests are one-sided: we
 # care that success is high enough and that a slope is above zero, not that
@@ -64,6 +65,18 @@ def samples_for_bound(target: float = 0.95, z: float = Z95) -> int:
     return n
 
 
+def familywise_z(comparisons: int, confidence: float = 0.95) -> float:
+    """Bonferroni-adjusted one-sided normal quantile.
+
+    Capability is one joint claim over every workflow type.  Testing each
+    type at 95% would make the family confidence materially lower than 95%, so
+    the per-type interval spends only alpha / number_of_types.
+    """
+    comparisons = max(1, int(comparisons))
+    alpha = max(1e-9, min(0.5, 1.0 - float(confidence)))
+    return NormalDist().inv_cdf(1.0 - alpha / comparisons)
+
+
 def ols_slope(xs: list[float], ys: list[float]) -> tuple[float, float] | None:
     """(slope, standard error of slope) by ordinary least squares."""
     n = len(xs)
@@ -82,90 +95,126 @@ def ols_slope(xs: list[float], ys: list[float]) -> tuple[float, float] | None:
     return slope, math.sqrt(var / sxx) if var > 0 else 0.0
 
 
-def slope_lower_bound(xs: list[float], ys: list[float]) -> float | None:
-    """Lower one-sided 95% bound on the regression slope of ys against xs.
+def queue_growth_lower_bound(xs: list[float], ys: list[float], *,
+                             iterations: int = 1000, seed: int = 0,
+                             block_size: int | None = None) -> float | None:
+    """One-sided 95% lower bound for backlog growth, in units/second.
 
-    A backlog is declared growing only when this bound is above zero, so
-    ordinary scatter in a stable queue cannot manufacture divergence.
+    Queue *levels* are an integrated, strongly autocorrelated process.  OLS on
+    the levels treats adjacent samples as independent and produces confidence
+    intervals that are far too narrow.  We instead analyze non-overlapping
+    queue increments and moving-block-bootstrap their mean rate.  Blocks keep
+    short-range dependence intact while the first difference removes the
+    integrated level shared by adjacent observations.
     """
-    fit = ols_slope(xs, ys)
-    if fit is None:
+    if len(xs) != len(ys) or len(xs) < 6:
         return None
-    slope, se = fit
-    return slope - t95(len(xs) - 2) * se
+    increments: list[float] = []
+    for x0, x1, y0, y1 in zip(xs, xs[1:], ys, ys[1:]):
+        dt = x1 - x0
+        if dt > 0:
+            increments.append((y1 - y0) / dt)
+    n = len(increments)
+    if n < 5:
+        return None
+    block = block_size or max(2, int(round(math.sqrt(n))))
+    block = min(block, n)
+    blocks = [[increments[(start + j) % n] for j in range(block)]
+              for start in range(n)]
+    rng = random.Random(seed)
+    draws: list[float] = []
+    for _ in range(max(200, int(iterations))):
+        sample: list[float] = []
+        while len(sample) < n:
+            sample.extend(blocks[rng.randrange(len(blocks))])
+        draws.append(sum(sample[:n]) / n)
+    draws.sort()
+    return draws[max(0, int(0.05 * len(draws)) - 1)]
+
+
+def slope_lower_bound(xs: list[float], ys: list[float]) -> float | None:
+    """Compatibility name for the autocorrelation-safe queue-growth test."""
+    return queue_growth_lower_bound(xs, ys)
+
+
+def _capacity_fit(rates: list[float], throughput: list[float]
+                  ) -> tuple[float, float, float, list[float]] | None:
+    """Fit X(lambda)=k*min(lambda, breakpoint), continuous at the knee."""
+    pts = sorted((float(x), float(y)) for x, y in zip(rates, throughput)
+                 if x > 0 and y >= 0)
+    if len(pts) < 4 or len({x for x, _ in pts}) < 4:
+        return None
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    lo, hi = xs[1], xs[-2]             # at least two observations per side
+    if hi <= lo:
+        return None
+    candidates = [lo + (hi - lo) * i / 200 for i in range(201)]
+    best: tuple[float, float, float, list[float]] | None = None
+    for breakpoint in candidates:
+        basis = [min(x, breakpoint) for x in xs]
+        denom = sum(v * v for v in basis)
+        if denom <= 0:
+            continue
+        k = max(0.0, sum(v * y for v, y in zip(basis, ys)) / denom)
+        predicted = [k * v for v in basis]
+        sse = sum((y - p) ** 2 for y, p in zip(ys, predicted))
+        if best is None or sse < best[1]:
+            best = (breakpoint, sse, k, predicted)
+    if best is None:
+        return None
+
+    # Refuse a knee unless the saturation model materially improves on a
+    # single proportional-throughput line through the origin.
+    denom = sum(x * x for x in xs)
+    k_linear = sum(x * y for x, y in zip(xs, ys)) / denom if denom else 0.0
+    sse_linear = sum((y - k_linear * x) ** 2 for x, y in zip(xs, ys))
+    if sse_linear <= 0 or best[1] >= 0.9 * sse_linear:
+        return None
+    return best
 
 
 def segmented_breakpoint(rates: list[float], throughput: list[float]
                          ) -> tuple[float, float] | None:
-    """Fit 'throughput follows offered rate, then flattens' and return the
-    breakpoint with its residual sum of squares.
-
-    The model is deliberately the shape the system is expected to have: a
-    proportional segment while the host keeps up, then a plateau once it does
-    not. A grid search over candidate breakpoints is enough at the handful of
-    rate levels a run produces, and it cannot invent a knee where the two
-    segments fit no better than one line.
-    """
-    pts = sorted(zip(rates, throughput))
-    if len(pts) < 4:
-        return None
-    xs = [p[0] for p in pts]
-    ys = [p[1] for p in pts]
-    best = None
-    for i in range(2, len(pts) - 1):          # need >=2 points per segment
-        b = xs[i]
-        lo_x, lo_y = xs[:i + 1], ys[:i + 1]
-        hi_y = ys[i:]
-        fit = ols_slope(lo_x, lo_y)
-        if fit is None:
-            continue
-        slope, _se = fit
-        mx = sum(lo_x) / len(lo_x)
-        my = sum(lo_y) / len(lo_y)
-        icept = my - slope * mx
-        sse = sum((y - (icept + slope * x)) ** 2 for x, y in zip(lo_x, lo_y))
-        plateau = sum(hi_y) / len(hi_y)
-        sse += sum((y - plateau) ** 2 for y in hi_y)
-        if best is None or sse < best[1]:
-            best = (b, sse)
-    if best is None:
-        return None
-    # Reject a "knee" that fits no better than one straight line: a system
-    # that never saturated must not be handed a boundary.
-    single = ols_slope(xs, ys)
-    if single is not None:
-        slope, _se = single
-        mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
-        icept = my - slope * mx
-        sse_single = sum((y - (icept + slope * x)) ** 2 for x, y in zip(xs, ys))
-        if best[1] >= 0.9 * sse_single:
-            return None
-    return best
+    """Return the continuous proportional-then-plateau knee and its SSE."""
+    fit = _capacity_fit(rates, throughput)
+    return (fit[0], fit[1]) if fit is not None else None
 
 
 def bootstrap_breakpoint_ci(rates: list[float], throughput: list[float],
                             iterations: int = 400, seed: int = 0
-                            ) -> tuple[float, float, float] | None:
-    """(estimate, lower 95%, upper 95%) for the saturation breakpoint.
+                            ) -> dict[str, float | list[float]] | None:
+    """Fixed-design residual bootstrap for the saturation breakpoint.
 
-    Resampling is over observed (rate, throughput) pairs. The reported
-    capacity uses the lower bound, so the published number understates rather
-    than overstates what the host sustained.
+    Offered/achieved rates are experimental design points, not random draws;
+    they must never be duplicated or omitted by a pairs bootstrap.  Residuals
+    are resampled around the fitted continuous curve while rates remain fixed.
+    The one-sided lower bound used for publication is distinct from the
+    central two-sided 95% interval.
     """
-    base = segmented_breakpoint(rates, throughput)
+    pts = sorted((float(x), float(y)) for x, y in zip(rates, throughput))
+    design_rates = [x for x, _y in pts]
+    observed = [y for _x, y in pts]
+    base = _capacity_fit(design_rates, observed)
     if base is None:
         return None
+    estimate, _sse, _k, predicted = base
     rng = random.Random(seed)
-    pts = list(zip(rates, throughput))
+    residuals = [y - p for y, p in zip(observed, predicted)]
+    centre = sum(residuals) / len(residuals)
+    residuals = [r - centre for r in residuals]
     draws: list[float] = []
-    for _ in range(iterations):
-        sample = [pts[rng.randrange(len(pts))] for _ in pts]
-        fit = segmented_breakpoint([p[0] for p in sample], [p[1] for p in sample])
+    for _ in range(max(200, int(iterations))):
+        sample_y = [max(0.0, p + residuals[rng.randrange(len(residuals))])
+                    for p in predicted]
+        fit = _capacity_fit(design_rates, sample_y)
         if fit is not None:
             draws.append(fit[0])
-    if len(draws) < iterations // 4:
+    if len(draws) < max(50, iterations // 4):
         return None
     draws.sort()
-    lo = draws[max(0, int(0.05 * len(draws)) - 1)]
-    hi = draws[min(len(draws) - 1, int(0.95 * len(draws)))]
-    return base[0], lo, hi
+    def q(p: float) -> float:
+        return draws[min(len(draws) - 1, max(0, int(p * (len(draws) - 1))))]
+    return {"estimate": estimate,
+            "lower_bound_95": q(0.05),
+            "ci95": [q(0.025), q(0.975)]}

@@ -45,6 +45,26 @@ def _is_loopback(base_url: str) -> bool:
     return host in ("127.0.0.1", "localhost", "::1")
 
 
+def metadata(base_url: str | None) -> dict | None:
+    """Facts needed to judge whether the inference stand-in was isolated."""
+    if not base_url:
+        return None
+    loopback = _is_loopback(base_url)
+    certified = os.getenv("CAPACITY_MOCK_CERTIFIED_RPS", "").strip()
+    return {
+        "base_url": base_url,
+        "loopback": loopback,
+        "isolated_from_host": not loopback,
+        "spawned_by_benchmark": bool(_proc is not None and _proc.poll() is None),
+        "workers": int(os.getenv("MOCK_ROUTER_WORKERS", "4")),
+        "latency_ms": float(os.getenv("MOCK_LATENCY_MS", "0") or 0),
+        "latency_sigma_ms": float(os.getenv("MOCK_LATENCY_SIGMA_MS", "0") or 0),
+        # Supplied only after an independent endpoint diagnostic.  Agent-host
+        # results require twice the observed model-call demand as headroom.
+        "certified_requests_per_s": float(certified) if certified else None,
+    }
+
+
 async def ensure_mock_router(base_url: str) -> None:
     """Make sure the mock router answers at base_url, spawning it if local.
 

@@ -120,6 +120,7 @@ class E2ERunner:
                         "steps": len(steps),
                         "validations": validations,
                         "task_count": int(m.get("task_count") or 0),
+                        "tool_calls": int(m.get("tool_calls") or 0),
                     },
                 }
             await asyncio.sleep(0.5)

@@ -210,9 +210,12 @@ class EventAdapter:
             await self._emit(EventType.error, {"error": f"synthesis grader: {exc}"})
 
         routing = rollup_routing(self.calls)
+        tool_calls = sum(int(info.get("tool_hops") or 0)
+                         for info in self.steps.values())
         await self.db.set_step_status(self.run_id, _ORCH_STEP, "completed",
                                       total_attempts=self._orch_attempts)
         metrics = {"task_count": self._delegation_n,
+                   "tool_calls": tool_calls,
                    "validation_tokens": self.validation_tokens,
                    "total_tokens": self.total_tokens, **routing.as_dict()}
         if self.budget_exceeded:
@@ -225,14 +228,17 @@ class EventAdapter:
         await self._emit(EventType.run_completed,
                          {"final_answer": self.final_answer or "",
                           "task_count": self._delegation_n,
+                          "tool_calls": tool_calls,
                           "budget_exceeded": self.budget_exceeded})
         await self._emit(EventType.run_metrics, {
             **routing.as_dict(),
             "task_count": self._delegation_n,
+            "tool_calls": tool_calls,
             "total_tokens": self.total_tokens,
             "validation_tokens": self.validation_tokens,
         })
         return {"routing": routing.as_dict(), "task_count": self._delegation_n,
+                "tool_calls": tool_calls,
                 "final_answer": self.final_answer, "budget_exceeded": self.budget_exceeded}
 
     # ── main entry: one stream event (namespace, mode, chunk) ────────────────

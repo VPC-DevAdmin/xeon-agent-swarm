@@ -406,7 +406,7 @@ def _fake_submit(latency_s=0.05, ok=True, llm_calls=10):
         return {"ok": ok, "tokens_in": 5200, "tokens_out": 1400,
                 "error": None if ok else "status=failed",
                 "trace": {"llm_calls": llm_calls, "steps": 3,
-                          "validations": 7, "task_count": 3}}
+                          "validations": 7, "task_count": 3, "tool_calls": 3}}
     return submit
 
 
@@ -476,7 +476,8 @@ def test_e2e_instability_scales_back_to_last_certified_tile(tmp_path, monkeypatc
         else:
             await asyncio.sleep(0.04)
         return {"ok": True, "tokens_in": 5000, "tokens_out": 1300, "error": None,
-                "trace": {"llm_calls": 10, "steps": 3, "validations": 7, "task_count": 3}}
+                "trace": {"llm_calls": 10, "steps": 3, "validations": 7,
+                          "task_count": 3, "tool_calls": 3}}
 
     test._e2e = E2ERunner(timeout_s=5, submit=selective)
     asyncio.run(test.run())
@@ -765,3 +766,38 @@ def test_lost_harness_records_invalidate_the_run(tmp_path, monkeypatch):
     asyncio.run(test._reconcile_harness())
     assert test.verdict == "harness_degraded"
     assert test.harness["ok"] is False and test.harness["lost_fraction"] == 0.045
+
+
+def test_harness_counters_are_scoped_to_this_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _fast_cfg(), mix="tile")
+    test.total_requests = 1000
+    test._harness_start = {"persist_failures": 40, "callback_failures": 5,
+                           "unreachable_executors": 0}
+
+    async def counters():
+        return {"persist_failures": 41, "callback_failures": 5,
+                "unreachable_executors": 0}
+
+    import backend.workerpool as wp
+    monkeypatch.setattr(wp, "collect_counters", counters)
+    asyncio.run(test._reconcile_harness())
+    assert test.harness["persist_failures"] == 1
+    assert test.harness["callback_failures"] == 0
+    assert test.harness["lost_fraction"] == 0.001
+
+
+def test_unreachable_executor_invalidates_harness_integrity(tmp_path, monkeypatch):
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _fast_cfg(), mix="tile")
+    test.total_requests = 100
+
+    async def counters():
+        return {"persist_failures": 0, "callback_failures": 0,
+                "unreachable_executors": 1}
+
+    import backend.workerpool as wp
+    monkeypatch.setattr(wp, "collect_counters", counters)
+    asyncio.run(test._reconcile_harness())
+    assert test.verdict == "harness_degraded"
+    assert test.breach["metric"] == "unreachable_executors"

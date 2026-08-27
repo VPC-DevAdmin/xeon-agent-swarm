@@ -53,6 +53,7 @@ data/capacity/ as JSON for history.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -70,7 +71,8 @@ from backend.capacity.scenarios import (load_scenarios, load_tile, tile_sessions
                                          e2e_tile_sessions)
 from backend.capacity.e2e import E2ERunner
 from backend.capacity.telemetry import (ProcessCpuSampler, SystemSampler,
-                                        find_pids, mem_slope_mb_per_user,
+                                        descendant_pids, find_pids,
+                                        mem_slope_mb_per_user,
                                          sample_bandwidth_gbs, sample_kv_pct)
 from backend.capacity.client import LOCAL_BASE
 from backend.capacity.models import public_endpoint
@@ -139,18 +141,20 @@ DEFAULTS = dict(
     slo_err=0.05,          # SLO: max error rate per profile while a rung counts as "good"
     drift_tolerance=0.25,  # drift: 2nd half-window p80 may exceed the 1st by ≤25%
     cohort_maturity=0.8,   # fraction of the older half that must have COMPLETED to judge it
-    harness_tolerance=0.005,  # lost writes/callbacks above this share invalidate the run
+    harness_tolerance=0.0,    # publishable runs tolerate no lost durable work
     invalid_tolerance=0.01,   # contract-violating units above this share invalidate the run
     # Capability: the declared SLO metric. A level passes only when the lower
     # one-sided 95% bound on each type's on-deadline success is >= target.
     service_class="interactive",
     capability_target=0.95,
-    capability_min_samples=52,   # zero-failure samples needed to clear 95/95
+    capability_confidence=0.95,  # joint confidence across all workflow types
+    capability_min_samples=0,    # optional operator floor; statistical floor is derived
     # Capacity: the open-loop metric. Offered rate steps upward; a level fails
     # when the lower bound on backlog growth is above zero twice over.
     load_model="closed",         # closed | open
     arrival_hold_s=45.0,
     arrival_step_factor=1.4,
+    arrival_refine_utilization=0.95,  # reduce step size as clean rate falls behind arrivals
     arrival_start_rate=2.0,
     arrival_max_rate=4000.0,
     max_backlog=20000,
@@ -288,6 +292,7 @@ class CapacityTest:
         # units until they time out, so a level can read healthy while it is
         # deteriorating (survivorship bias in the latency distribution).
         self._inflight: dict[int, tuple[str, float]] = {}   # id -> (profile, admitted_at)
+        self._admission_rung: dict[int, float] = {}         # id -> rung start at admission
         self._admit_seq = 0
         self.invalid_units = 0                       # units that broke the workload contract
         self.harness: dict = {}                      # persistence/callback integrity counters
@@ -310,6 +315,7 @@ class CapacityTest:
         self.capacity_wps: float | None = None
         self.capacity_detail: dict = {}
         self.failure_onset: dict | None = None
+        self._harness_start: dict = {}
         self.started_at = time.time()
         self.ended_at: float | None = None
         self.error: str | None = None
@@ -322,6 +328,7 @@ class CapacityTest:
         self.samples: deque[dict] = deque(maxlen=1200)    # system telemetry
         self.total_requests = 0
         self.completed_requests = 0
+        self.cancelled_requests = 0
         self.total_tokens_in = 0
         self.total_tokens_out = 0
         self.cost_usd = 0.0
@@ -343,6 +350,7 @@ class CapacityTest:
         e2e_router = e2e_router or {}
         self._backend_model = (e2e_router.get("model_label")
                                or e2e_router.get("model_override"))
+        self._router_base_url = e2e_router.get("base_url")
         self._e2e = E2ERunner(
             timeout_s=float(self.cfg["e2e_timeout_s"]),
             router_base_url=e2e_router.get("base_url"),
@@ -361,6 +369,15 @@ class CapacityTest:
     # ── lifecycle ────────────────────────────────────────────────────────────
     async def run(self):
         try:
+            # Harness counters are process-lifetime diagnostics.  Snapshot
+            # them before this run so a failure from an earlier benchmark can
+            # never contaminate the current result or every child in a set.
+            try:
+                from backend import workerpool as wp
+                self._harness_start = await wp.collect_counters()
+            except Exception as exc:  # noqa: BLE001
+                self._harness_start = {
+                    "snapshot_error": f"{type(exc).__name__}: {exc}"}
             if self.inference_backend == "local":
                 self._engine_info = await repro_mod.engine_info(LOCAL_BASE)
             sampler_task = asyncio.create_task(self._sample_loop())
@@ -502,13 +519,25 @@ class CapacityTest:
                 return
             self.total_requests += 1
             admit_key = self._admit(wid)
-            rec = await self._e2e.run_workflow(wid, wf["query"], {
-                "enabled_tools": wf.get("enabled_tools"),
-                "validator_enabled": wf.get("validator_enabled", True),
-                "budgets": wf.get("budgets"),
-                "toolless": wf.get("toolless", False),
-            }, timeout_s=self._profile_timeout_s(wid))
-            t_submit = self._release(admit_key)
+            self._user_call_n[idx] += 1
+            rec: dict | None = None
+            try:
+                rec = await self._e2e.run_workflow(
+                    wid, self._workflow_query(wf, wid, self._user_call_n[idx]), {
+                        "enabled_tools": wf.get("enabled_tools"),
+                        "validator_enabled": wf.get("validator_enabled", True),
+                        "budgets": wf.get("budgets"),
+                        "toolless": wf.get("toolless", False),
+                    }, timeout_s=self._profile_timeout_s(wid))
+            except asyncio.CancelledError:
+                self.cancelled_requests += 1
+                await self._settle_spend(reserved, {})
+                raise
+            finally:
+                # Cancellation during a scale-back must not strand an
+                # admission forever.  The underlying executor may continue,
+                # but this session no longer owns an in-flight slot.
+                t_submit = self._release(admit_key)
             rec.update(scenario=wid, step="workflow", user=idx, ts=time.time(),
                        t_submit=t_submit)
             self._check_contract(wid, rec)
@@ -520,6 +549,23 @@ class CapacityTest:
                 return
             except asyncio.TimeoutError:
                 pass
+
+    def _workflow_query(self, wf: dict, sid: str, sequence: int) -> str:
+        """Deterministically vary otherwise identical e2e prompts.
+
+        The suffix is fixed-size and semantically inert, but changes with the
+        run seed, workflow type, and sequence.  Real model endpoints therefore
+        cannot turn a benchmark into a repeated-prefix cache test, while the
+        same seed reproduces the exact same corpus.
+        """
+        base = str(wf.get("query") or "")
+        vocabulary = ("amber birch cobalt delta ember frost granite harbor "
+                      "indigo juniper kestrel linen maple nickel ochre pine").split()
+        digest = hashlib.sha256(
+            f"v7:{self.seed}:{sid}:{sequence}".encode()).digest()
+        labels = " ".join(vocabulary[b % len(vocabulary)] for b in digest[:8])
+        return (f"{base}\n\nBenchmark source-note labels (ignore as content): "
+                f"{labels}.")
 
     async def _record_call(self, scenario, step, sid, idx, extra_tokens, label):
         """Budget-checked, recorded single LLM call (incl. tool continuations)."""
@@ -557,7 +603,7 @@ class CapacityTest:
         try:
             from backend.capacity import mockrouter
             if mockrouter._proc is not None and mockrouter._proc.poll() is None:
-                groups["mock_router"] = [mockrouter._proc.pid]
+                groups["mock_router"] = descendant_pids(mockrouter._proc.pid)
         except Exception:  # noqa: BLE001
             pass
         if self.inference_backend == "local":
@@ -596,6 +642,8 @@ class CapacityTest:
             # either, which is how a deteriorating level reads healthy.
             s["inflight_admitted"] = len(self._inflight)
             s["oldest_inflight_s"] = self._oldest_inflight_s()
+            s["oldest_rung_inflight_s"] = self._oldest_inflight_s(
+                getattr(self, "_rung_t0", self.started_at))
             s["bw_gbs"] = None
             s["kv_pct"] = None
             if self.inference_backend == "local":
@@ -613,18 +661,23 @@ class CapacityTest:
         """Register a unit as admitted. Returns its in-flight key."""
         self._admit_seq += 1
         self._inflight[self._admit_seq] = (sid, time.time())
+        self._admission_rung[self._admit_seq] = getattr(
+            self, "_rung_t0", self.started_at)
         return self._admit_seq
 
     def _release(self, key: int) -> float:
         """Deregister a finished unit. Returns the time it was admitted."""
         entry = self._inflight.pop(key, None)
+        self._admission_rung.pop(key, None)
         return entry[1] if entry else time.time()
 
-    def _oldest_inflight_s(self) -> float | None:
-        if not self._inflight:
+    def _oldest_inflight_s(self, admitted_since: float | None = None) -> float | None:
+        entries = [t for _sid, t in self._inflight.values()
+                   if admitted_since is None or t >= admitted_since]
+        if not entries:
             return 0.0
         now = time.time()
-        return round(now - min(t for _sid, t in self._inflight.values()), 2)
+        return round(now - min(entries), 2)
 
     def _check_contract(self, sid: str, rec: dict) -> None:
         """Enforce the declared workflow contract on a completed unit.
@@ -638,12 +691,22 @@ class CapacityTest:
         spec = (wf.get("contract_live") if self.inference_backend != "remote_mock"
                 else wf.get("contract")) or wf.get("contract_live")
         trace = rec.get("trace")
-        if not spec or not trace or not rec.get("ok"):
+        if not spec or not rec.get("ok"):
+            return
+        if not isinstance(trace, dict):
+            rec["ok"] = False
+            rec["invalid"] = True
+            rec["error"] = "contract violation: required trace is missing"
+            self.invalid_units += 1
             return
         for field, bounds in spec.items():
             value = trace.get(field)
             if value is None:
-                continue
+                rec["ok"] = False
+                rec["invalid"] = True
+                rec["error"] = f"contract violation: required field {field} is missing"
+                self.invalid_units += 1
+                return
             low, high = bounds
             if not (low <= value <= high):
                 rec["ok"] = False
@@ -664,11 +727,14 @@ class CapacityTest:
             out.append(c)
         return out
 
-    def _scenario_window(self, sid: str, window_s: float) -> dict:
+    def _scenario_window(self, sid: str, window_s: float,
+                         admitted_since: float | None = None) -> dict:
         """Per-profile stats over the window: the unit of SLO evaluation."""
         cut = time.time() - window_s
         recent = [c for c in self._recent(cut)
-                  if c["scenario"] == sid and not c.get("invalid")]
+                  if c["scenario"] == sid and not c.get("invalid")
+                  and (admitted_since is None
+                       or c.get("t_submit", c["ts"]) >= admitted_since)]
         ok = [c for c in recent if c["ok"]]
         return {
             "n": len(recent),
@@ -724,7 +790,8 @@ class CapacityTest:
             # custom mix whose session count is below its profile count.
             if self.user_scenario and sid not in self.user_scenario:
                 continue
-            s = self._scenario_window(sid, window_s)
+            s = self._scenario_window(
+                sid, window_s, admitted_since=getattr(self, "_rung_t0", None))
             if s["err_rate"] > float(self.cfg["slo_err"]) and s["n"] >= min_n:
                 return "bad", {"profile": sid, "metric": "error_rate",
                                 "value": s["err_rate"],
@@ -774,11 +841,14 @@ class CapacityTest:
         # its visible latency flat while its queue ages. The sampler records
         # the age directly, and the two halves of the window are compared the
         # same way the latency body is.
-        ages1 = [s["oldest_inflight_s"] for s in self.samples
-                 if s.get("oldest_inflight_s") is not None
+        ages1 = [s.get("oldest_rung_inflight_s", s.get("oldest_inflight_s"))
+                 for s in self.samples
+                 if s.get("oldest_rung_inflight_s", s.get("oldest_inflight_s")) is not None
                  and low <= s["ts"] < mid]
-        ages2 = [s["oldest_inflight_s"] for s in self.samples
-                 if s.get("oldest_inflight_s") is not None and s["ts"] >= mid]
+        ages2 = [s.get("oldest_rung_inflight_s", s.get("oldest_inflight_s"))
+                 for s in self.samples
+                 if s.get("oldest_rung_inflight_s", s.get("oldest_inflight_s")) is not None
+                 and s["ts"] >= mid]
         if len(ages1) >= 2 and len(ages2) >= 2:
             a1, a2 = statistics.median(ages1), statistics.median(ages2)
             floor_s = max(2.0, (_pct(h1, 80) or 0) / 1000.0)
@@ -980,7 +1050,8 @@ class CapacityTest:
                 # unknown: name the starved profile and condemn the rung.
                 starved = next(
                     (sid for sid in self.scenario_ids
-                     if self._scenario_window(sid, eval_window)["n"]
+                     if self._scenario_window(
+                         sid, eval_window, admitted_since=self._rung_t0)["n"]
                      < int(self.cfg["min_samples"])), self.scenario_ids[0])
                 rung_state = "bad"
                 breach = {"profile": starved, "metric": "no_samples",
@@ -1235,7 +1306,7 @@ class CapacityTest:
         Bounded by the per-workflow ceiling."""
         limit = time.time() + float(self.cfg["e2e_timeout_s"])
         while (time.time() < limit and not self._stop.is_set()
-               and self.total_requests - self.completed_requests > len(self.users)):
+               and len(self._inflight) > len(self.users)):
             await asyncio.sleep(1.0)
 
     async def _hold(self):
@@ -1268,13 +1339,25 @@ class CapacityTest:
             counters = await wp.collect_counters()
         except Exception as exc:  # noqa: BLE001
             self.harness = {"error": f"{type(exc).__name__}: {exc}"}
+            self.verdict = "harness_degraded"
+            self.breach = {"profile": "harness", "metric": "counter_collection",
+                           "value": 1, "limit": 0}
             return
+        baseline = self._harness_start or {}
+        raw = dict(counters)
+        for name in ("persist_failures", "callback_failures"):
+            counters[name] = max(0, int(raw.get(name, 0))
+                                 - int(baseline.get(name, 0)))
+        counters["counter_baseline"] = baseline
         total = max(1, self.total_requests)
         lost = int(counters.get("persist_failures", 0)) + \
             int(counters.get("callback_failures", 0))
+        unreachable = int(raw.get("unreachable_executors", 0))
         counters["lost_fraction"] = round(lost / total, 5)
         counters["invalid_units"] = self.invalid_units
-        counters["ok"] = lost <= total * float(self.cfg["harness_tolerance"])
+        counters["ok"] = (not baseline.get("snapshot_error")
+                          and unreachable == 0
+                          and lost <= total * float(self.cfg["harness_tolerance"]))
         self.harness = counters
         if self.invalid_units > self.total_requests * float(self.cfg["invalid_tolerance"]):
             self.verdict = "workload_invalid"
@@ -1284,9 +1367,19 @@ class CapacityTest:
                                           * float(self.cfg["invalid_tolerance"]), 1)}
         if not counters["ok"]:
             self.verdict = "harness_degraded"
-            self.breach = {"profile": "harness", "metric": "lost_records",
-                           "value": lost,
-                           "limit": round(total * float(self.cfg["harness_tolerance"]), 1)}
+            if unreachable:
+                self.breach = {"profile": "harness",
+                               "metric": "unreachable_executors",
+                               "value": unreachable, "limit": 0}
+            elif baseline.get("snapshot_error"):
+                self.breach = {"profile": "harness",
+                               "metric": "counter_snapshot", "value": 1,
+                               "limit": 0}
+            else:
+                self.breach = {"profile": "harness", "metric": "lost_records",
+                               "value": lost,
+                               "limit": round(total * float(
+                                   self.cfg["harness_tolerance"]), 1)}
 
 
     # ── metric 1: service capability (closed loop, deadline-bound) ───────────
@@ -1342,7 +1435,12 @@ class CapacityTest:
         """Does the current level meet every type's declared SLO at 95%
         confidence? Returns the same (state, breach) shape as the trend test."""
         target = float(self.cfg["capability_target"])
-        floor = int(self.cfg["capability_min_samples"])
+        active = [sid for sid in self.scenario_ids
+                  if not self.user_scenario or sid in self.user_scenario]
+        z = st.familywise_z(
+            len(active), float(self.cfg["capability_confidence"]))
+        floor = max(int(self.cfg["capability_min_samples"]),
+                    st.samples_for_bound(target, z))
         worst: dict | None = None
         state = "good"
         for sid in self.scenario_ids:
@@ -1355,7 +1453,7 @@ class CapacityTest:
             if decided < floor:
                 state = "inconclusive"
                 continue
-            bound = st.wilson_lower(successes, decided)
+            bound = st.wilson_lower(successes, decided, z)
             if bound < target:
                 cand = {"profile": sid, "metric": "capability",
                         "value": round(bound, 4), "limit": target,
@@ -1369,77 +1467,145 @@ class CapacityTest:
 
     def _capability_report(self, since: float) -> dict:
         out = {}
+        active = [sid for sid in self.scenario_ids
+                  if not self.user_scenario or sid in self.user_scenario]
+        z = st.familywise_z(
+            len(active), float(self.cfg["capability_confidence"]))
         for sid in self.scenario_ids:
             deadline = self._deadline_s(sid)
             if deadline is None:
                 continue
             successes, decided, pending = self._capability_cohort(sid, since)
+            lower = (round(st.wilson_lower(successes, decided, z), 4)
+                     if decided else None)
             out[sid] = {"deadline_s": deadline, "decided": decided,
                         "successes": successes, "pending": pending,
                         "observed": round(successes / decided, 4) if decided else None,
-                        "lower_bound_95": round(st.wilson_lower(successes, decided), 4)
-                        if decided else None}
+                        "lower_bound_95": lower,
+                        "lower_bound_joint_95": lower}
         return out
 
+    async def _set_capability_users(self, target: int) -> None:
+        """Move to an exact candidate level, preserving the reference mix."""
+        step = self.tile_size or max(1, int(self.cfg["step_users"]))
+        target = max(step, (int(target) // step) * step)
+        if len(self.users) > target:
+            self._remove_users(len(self.users) - target)
+            await self._drain()
+        while len(self.users) < target and not self._stop.is_set():
+            if self.mix == "tile" and self.tile_size:
+                if not self._add_tile():
+                    break
+            else:
+                self._add_user()
+
+    async def _measure_capability_candidate(self) -> tuple[str, dict | None, float]:
+        """Hold one candidate until it passes, fails, or remains inconclusive."""
+        since = time.time()
+        self._rung_t0 = since
+        deadline_wait = max(self._deadline_s(sid) or 0 for sid in self.scenario_ids)
+        budget = max(60.0, deadline_wait * 3,
+                     float(self.cfg["step_interval_s"]) * 3)
+        if self.cfg.get("max_duration_s") is not None:
+            remaining = (float(self.cfg["max_duration_s"])
+                         - (time.time() - self.started_at))
+            if remaining <= 0:
+                return "inconclusive", None, since
+            budget = min(budget, remaining)
+        state, breach = "inconclusive", None
+        poll_s = min(5.0, max(0.1, float(self.cfg["step_interval_s"])))
+        while time.time() - since < budget and not self._stop.is_set():
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=poll_s)
+                break
+            except asyncio.TimeoutError:
+                pass
+            state, breach = self._capability_state(since)
+            if state in ("good", "bad", "unconfigured"):
+                break
+        return state, breach, since
+
     async def _certify_capability(self) -> None:
-        """Bracket downward from the level the search phase reached until one
-        passes the 95/95 deadline rule, holding each candidate long enough to
-        gather the samples the bound requires."""
+        """Bracket capability with exponential descent and tile refinement.
+
+        A statistically inconclusive level is never treated as a failure and
+        therefore never supplies the upper side of a measured boundary.
+        """
         if not self.deadlines_configured():
             self.capability_detail = {"status": "not configured"}
             return
         self.phase = "certifying"
         step = self.tile_size or max(1, int(self.cfg["step_users"]))
-        attempts = 0
-        while len(self.users) >= step and attempts < 8 and not self._stop.is_set():
-            attempts += 1
-            since = time.time()
-            self._rung_t0 = since
-            deadline_wait = max(self._deadline_s(sid) or 0 for sid in self.scenario_ids)
-            budget = min(600.0, max(60.0, deadline_wait * 3))
-            state = "inconclusive"
-            while time.time() - since < budget and not self._stop.is_set():
-                try:
-                    await asyncio.wait_for(self._stop.wait(), timeout=5)
-                    if not self.capability_detail:
-                        self.capability_detail = {
-                            "status": "stopped before certification",
-                            "service_class": self.cfg["service_class"],
-                            "last_tested_users": len(self.users)}
-                    return
-                except asyncio.TimeoutError:
-                    pass
-                state, breach = self._capability_state(since)
-                if state in ("good", "bad"):
-                    self.breach = breach or self.breach
-                    break
+        failed_level: int | None = None
+        inconclusive_seen = False
+        descent = step
+        last_since = time.time()
+
+        while len(self.users) >= step and not self._stop.is_set():
+            state, breach, last_since = await self._measure_capability_candidate()
+            current = len(self.users)
             if state == "good":
-                self.capability_users = len(self.users)
+                passed_level = current
+                passed_since = last_since
+                # Once a true failure and a pass bracket the boundary, refine
+                # to one tile.  This may add sessions back; every candidate is
+                # held over a fresh admission cohort.
+                while (failed_level is not None
+                       and failed_level - passed_level > step
+                       and not self._stop.is_set()):
+                    slots = (failed_level - passed_level) // step
+                    candidate = passed_level + max(1, slots // 2) * step
+                    await self._set_capability_users(candidate)
+                    rstate, rbreach, rsince = await self._measure_capability_candidate()
+                    last_since = rsince
+                    if rstate == "good":
+                        passed_level = candidate
+                        passed_since = rsince
+                    elif rstate == "bad":
+                        failed_level = candidate
+                        self.breach = rbreach or self.breach
+                    else:
+                        inconclusive_seen = True
+                        break
+                await self._set_capability_users(passed_level)
+                self.capability_users = passed_level
                 if self.tile_size:
-                    self.capability_tiles = len(self.users) // self.tile_size
-                # A pass on the FIRST candidate bounds rather than measures.
-                # Nothing above it was ever put to the deadline, so the real
-                # capability may be higher and we have no evidence either way.
-                # Only a pass that follows a FAILURE at a higher level has
-                # actually bracketed the boundary.
-                bounded = attempts == 1
+                    self.capability_tiles = passed_level // self.tile_size
+                measured = (failed_level is not None
+                            and failed_level - passed_level == step
+                            and not inconclusive_seen)
                 self.capability_detail = {
-                    "status": "lower bound" if bounded else "measured",
+                    "status": "measured" if measured else "lower bound",
                     "service_class": self.cfg["service_class"],
-                    "confidence": 0.95, "target": float(self.cfg["capability_target"]),
-                    "per_type": self._capability_report(since)}
-                if bounded:
+                    "confidence": float(self.cfg["capability_confidence"]),
+                    "confidence_scope": "joint across workflow types",
+                    "target": float(self.cfg["capability_target"]),
+                    "next_failed_users": failed_level if measured else None,
+                    "per_type": self._capability_report(passed_since)}
+                if not measured:
                     self.capability_detail["reason"] = (
-                        "passed at the first level tested — no higher level was "
-                        "put to the deadline")
+                        "no statistically failed adjacent level was established"
+                        if inconclusive_seen else
+                        "passed at the first level tested — no higher level was put to the deadline")
                 return
-            self.capability_detail = {
-                "status": "not met at any tested level",
-                "service_class": self.cfg["service_class"],
-                "last_tested_users": len(self.users),
-                "per_type": self._capability_report(since)}
-            self._remove_users(step)
-            await self._drain()
+            if state == "bad":
+                failed_level = current
+                self.breach = breach or self.breach
+            else:
+                inconclusive_seen = True
+            if current <= step:
+                break
+            target = max(step, current - descent)
+            await self._set_capability_users(target)
+            descent *= 2
+
+        self.capability_detail = {
+            "status": ("stopped before certification" if self._stop.is_set()
+                       else "not met at any tested level"),
+            "service_class": self.cfg["service_class"],
+            "last_tested_users": len(self.users),
+            "inconclusive_seen": inconclusive_seen,
+            "per_type": self._capability_report(last_since)}
 
 
     # ── metric 2: sustainable capacity (open loop, rate-bound) ───────────────
@@ -1504,11 +1670,24 @@ class CapacityTest:
     async def _submit_open(self, sid: str, idx: int) -> None:
         """One open-loop submission, followed to a terminal outcome."""
         wf = self.scenarios.get(sid) or {}
+        if self.mode == "e2e":
+            token_envelope = int((wf.get("budgets") or {}).get("max_total_tokens")
+                                 or 50_000)
+            estimated_in, estimated_out = (int(token_envelope * 0.8),
+                                            int(token_envelope * 0.2))
+        else:
+            step = (wf.get("steps") or [{}])[0]
+            estimated_in = int(step.get("prompt_tokens") or 0)
+            estimated_out = int(step.get("max_tokens") or 0)
+        reserved = await self._reserve_spend(estimated_in, estimated_out)
+        if reserved is None:
+            return
         self.total_requests += 1
         key = self._admit(sid)
         try:
             if self.mode == "e2e":
-                rec = await self._e2e.run_workflow(sid, wf.get("query", ""), {
+                rec = await self._e2e.run_workflow(
+                    sid, self._workflow_query(wf, sid, idx), {
                     "enabled_tools": wf.get("enabled_tools"),
                     "validator_enabled": wf.get("validator_enabled", True),
                     "budgets": wf.get("budgets"),
@@ -1518,6 +1697,11 @@ class CapacityTest:
                 steps = wf.get("steps") or []
                 rec = await self._caller.call(wf, steps[0] if steps else {},
                                               vary_key=f"{self.seed}:open:{idx}")
+        except asyncio.CancelledError:
+            self.cancelled_requests += 1
+            self._release(key)
+            await self._settle_spend(reserved, {})
+            raise
         except Exception as exc:  # noqa: BLE001 — a failed unit is a data point
             rec = {"ok": False, "latency_ms": 0.0, "tokens_in": 0, "tokens_out": 0,
                    "error": f"{type(exc).__name__}: {exc}"[:160]}
@@ -1526,6 +1710,7 @@ class CapacityTest:
                    t_submit=t_submit, offered_rate=self.offered_rate)
         self._check_contract(sid, rec)
         self._tally_call(rec)
+        await self._settle_spend(reserved, rec)
 
     def _tally_call(self, rec: dict) -> None:
         """Append a finished unit and keep the running tallies current."""
@@ -1560,94 +1745,193 @@ class CapacityTest:
                 ys.append(float(smp["inflight_admitted"]))
         return xs, ys
 
+    def _resource_observation(self, since: float) -> tuple[str | None, dict | None]:
+        """Classify one open-loop measurement window's host resources."""
+        rows = [s for s in self.samples if s["ts"] >= since]
+        def mean(key: str) -> float | None:
+            vals = [float(s[key]) for s in rows if s.get(key) is not None]
+            return statistics.mean(vals) if vals else None
+        cpu, mem, kv = mean("cpu_pct"), mean("mem_pct"), mean("kv_pct")
+        bg = [float(s["cpu_by"]["other"]) for s in rows
+              if s.get("cpu_by") and s["cpu_by"].get("other") is not None]
+        background = statistics.mean(bg) if bg else None
+        host_is_target = (self.benchmark_target != "inference_engine"
+                          or self.inference_backend == "local")
+        if host_is_target and cpu is not None and cpu >= float(self.cfg["cpu_target"]):
+            if background is not None and background >= 0.5 * cpu:
+                return "interference", {
+                    "profile": "host", "metric": "background_cpu",
+                    "value": round(background, 1), "limit": round(0.5 * cpu, 1)}
+            return "cpu", {"profile": "host", "metric": "cpu_pct",
+                           "value": round(cpu, 1),
+                           "limit": float(self.cfg["cpu_target"])}
+        if host_is_target and mem is not None and mem >= float(self.cfg["mem_target"]):
+            return "memory", {"profile": "host", "metric": "mem_pct",
+                              "value": round(mem, 1),
+                              "limit": float(self.cfg["mem_target"])}
+        if (self.inference_backend == "local" and kv is not None
+                and kv >= float(self.cfg["kv_target"])):
+            return "kv", {"profile": "engine", "metric": "kv_pct",
+                          "value": round(kv, 1),
+                          "limit": float(self.cfg["kv_target"])}
+        return None, None
+
+    def _open_window_geometry(self) -> tuple[float, float]:
+        """Settling and measurement periods scaled to observed workflow time."""
+        base = float(self.cfg["arrival_hold_s"])
+        recent = [c["latency_ms"] / 1000.0 for c in self._recent(time.time() - 2 * base)
+                  if c.get("ok") and c.get("latency_ms") is not None]
+        median_s = statistics.median(recent) if recent else 0.0
+        return max(base / 2.0, median_s), max(base, 2.0 * median_s)
+
+    async def _measure_open_level(self, rate: float, *, confirm: bool = False
+                                  ) -> dict | None:
+        """Measure one disjoint window at a fixed achieved arrival rate."""
+        self.offered_rate = rate
+        settle, measure = self._open_window_geometry()
+        if not confirm:
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=settle)
+                return None
+            except asyncio.TimeoutError:
+                pass
+        since = time.time()
+        arrivals_at_start = self._arrivals
+        rejected_at_start = self.rejected
+        try:
+            await asyncio.wait_for(self._stop.wait(), timeout=measure)
+            return None
+        except asyncio.TimeoutError:
+            pass
+        span = max(1e-6, time.time() - since)
+        arrivals = self._arrivals - arrivals_at_start
+        achieved = arrivals / span
+        xs, ys = self._backlog_series(since)
+        slope_lb = st.queue_growth_lower_bound(
+            xs, ys, seed=(self.seed or 0) + len(self.rate_levels))
+        clean = self._clean_rate(since)
+        window = self._recent(since)
+        errors = sum(1 for c in window
+                     if not c.get("ok") and not c.get("invalid"))
+        decided = sum(1 for c in window if not c.get("invalid"))
+        per_type = {}
+        for sid in self.scenario_ids:
+            typed = [c for c in window if c.get("scenario") == sid
+                     and not c.get("invalid")]
+            typed_errors = sum(1 for c in typed if not c.get("ok"))
+            per_type[sid] = {
+                "decided": len(typed), "errors": typed_errors,
+                "err_rate": round(typed_errors / len(typed), 4) if typed else 0.0}
+        worst_type = max(per_type, key=lambda sid: per_type[sid]["err_rate"],
+                         default=None)
+        ctl_cpu = [s_["cpu_by"]["control"] for s_ in self.samples
+                   if s_["ts"] >= since and s_.get("cpu_by")
+                   and "control" in s_["cpu_by"]]
+        resource_verdict, resource_breach = self._resource_observation(since)
+        return {
+            "window": "confirmation" if confirm else "measurement",
+            "window_s": round(span, 2),
+            "offered_rate": round(rate, 2),
+            "achieved_rate": round(achieved, 2),
+            "clean_rate": round(clean, 2),
+            "backlog_slope_lb": round(slope_lb, 4) if slope_lb is not None else None,
+            "outstanding": len(self._inflight),
+            "oldest_inflight_s": self._oldest_inflight_s(),
+            "errors": errors,
+            "err_rate": round(errors / decided, 4) if decided else 0.0,
+            "per_type": per_type,
+            "worst_error_type": worst_type,
+            "rejected": self.rejected - rejected_at_start,
+            "control_cpu_pct": (round(statistics.median(ctl_cpu), 1)
+                                  if ctl_cpu else None),
+            "generator_ok": (arrivals + 1) / span >= 0.95 * rate,
+            "resource_verdict": resource_verdict,
+            "resource_breach": resource_breach,
+        }
+
     async def _rate_ramp(self) -> None:
         """Step the offered rate until the backlog diverges or a limit stops us."""
         self.phase = "ramping"
         rate = float(self.cfg["arrival_start_rate"])
-        hold = float(self.cfg["arrival_hold_s"])
-        diverging = 0
+        resource_streak: dict[str, int] = defaultdict(int)
         self._tasks.append(asyncio.create_task(self._arrival_loop()))
         while not self._stop.is_set():
-            self.offered_rate = rate
-            rejected_at_start = self.rejected
-            # Settle before measuring. The first moments at a new rate contain
-            # the queue filling to its new steady depth, which reads as growth
-            # and has nothing to do with the host's ability to sustain the rate.
-            try:
-                await asyncio.wait_for(self._stop.wait(), timeout=hold / 2)
+            level = await self._measure_open_level(rate)
+            if level is None:
                 return
-            except asyncio.TimeoutError:
-                pass
-            since = time.time()
-            arrivals_at_start = self._arrivals
-            try:
-                await asyncio.wait_for(self._stop.wait(), timeout=hold / 2)
-                return
-            except asyncio.TimeoutError:
-                pass
-            span = max(1e-6, time.time() - since)
-            achieved = (self._arrivals - arrivals_at_start) / span
-            xs, ys = self._backlog_series(since)
-            slope_lb = st.slope_lower_bound(xs, ys)
-            clean = self._clean_rate(since)
-            window = self._recent(since)
-            errors = sum(1 for c in window
-                         if not c.get("ok") and not c.get("invalid"))
-            decided = sum(1 for c in window if not c.get("invalid"))
-            # What the generator itself cost during this window, so the
-            # in-process contamination is a recorded fact rather than an
-            # assumption (measured 0.3% of the host at 21.5 wf/s).
-            ctl_cpu = [s_["cpu_by"]["control"] for s_ in self.samples
-                       if s_["ts"] >= since and s_.get("cpu_by")
-                       and "control" in s_["cpu_by"]]
-            level = {"offered_rate": round(rate, 2),
-                     # The rate the schedule actually fired at, counted, not
-                     # assumed. The gap between offered and achieved is the
-                     # generator's own saturation and it must be visible.
-                     "achieved_rate": round(achieved, 2),
-                     "clean_rate": round(clean, 2),
-                     "backlog_slope_lb": round(slope_lb, 4) if slope_lb is not None else None,
-                     "outstanding": len(self._inflight),
-                     "oldest_inflight_s": self._oldest_inflight_s(),
-                     "errors": errors,
-                     "err_rate": round(errors / decided, 4) if decided else 0.0,
-                     "rejected": self.rejected - rejected_at_start,
-                     "control_cpu_pct": (round(statistics.median(ctl_cpu), 1)
-                                          if ctl_cpu else None)}
             self.rate_levels.append(level)
-            # The +1 grants one arrival at the window boundary: at low rates
-            # a short window straddles a period edge, and 9-vs-10 counted
-            # arrivals must not read as the generator failing. At real rates
-            # one arrival is nothing and the gate keeps its teeth.
-            if (self._arrivals - arrivals_at_start + 1) / span < 0.95 * rate:
-                # The generator fell behind its own schedule: every conclusion
-                # at this level would be about load nobody offered. Stop and
-                # censor rather than judging the host on the harness's limit.
+            if not level["generator_ok"]:
                 self.verdict = "generator_limit"
                 self.breach = {"profile": "harness", "metric": "achieved_rate",
-                                "value": round(achieved, 2),
+                                "value": level["achieved_rate"],
                                 "limit": round(0.95 * rate, 2)}
                 return
-            growing = slope_lb is not None and slope_lb > 0
+
+            rv = level.get("resource_verdict")
+            for name in ("cpu", "memory", "kv", "interference"):
+                resource_streak[name] = resource_streak[name] + 1 if rv == name else 0
+            if rv and resource_streak[rv] >= 2:
+                self.verdict, self.breach = rv, level.get("resource_breach")
+                return
+
+            growing = (level["backlog_slope_lb"] is not None
+                       and level["backlog_slope_lb"] > 0)
+            worst = level.get("worst_error_type")
+            type_failing = bool(worst and level["per_type"][worst]["decided"]
+                                and level["per_type"][worst]["err_rate"]
+                                > float(self.cfg["slo_err"]))
             failing = (level["err_rate"] > float(self.cfg["error_rate_limit"])
-                       or level["rejected"] > 0)
+                       or type_failing or level["rejected"] > 0)
             if growing or failing:
-                diverging += 1
-                if self.failure_onset is None:
+                # Confirmation is a second DISJOINT window at this exact same
+                # offered rate.  A failure at the next geometric step is not
+                # confirmation of the previous rate's instability.
+                confirm = await self._measure_open_level(rate, confirm=True)
+                if confirm is None:
+                    return
+                self.rate_levels.append(confirm)
+                if not confirm["generator_ok"]:
+                    self.verdict = "generator_limit"
+                    self.breach = {"profile": "harness", "metric": "achieved_rate",
+                                   "value": confirm["achieved_rate"],
+                                   "limit": round(0.95 * rate, 2)}
+                    return
+                crv = confirm.get("resource_verdict")
+                for name in ("cpu", "memory", "kv", "interference"):
+                    resource_streak[name] = resource_streak[name] + 1 if crv == name else 0
+                if crv and resource_streak[crv] >= 2:
+                    self.verdict, self.breach = crv, confirm.get("resource_breach")
+                    return
+                confirmed_growing = (growing
+                    and confirm["backlog_slope_lb"] is not None
+                    and confirm["backlog_slope_lb"] > 0)
+                cworst = confirm.get("worst_error_type")
+                confirmed_failing = (failing and (
+                    confirm["err_rate"] > float(self.cfg["error_rate_limit"])
+                    or bool(cworst and confirm["per_type"][cworst]["decided"]
+                            and confirm["per_type"][cworst]["err_rate"]
+                            > float(self.cfg["slo_err"]))
+                    or confirm["rejected"] > 0))
+                if confirmed_growing or confirmed_failing:
+                    reason = "backlog_growth" if confirmed_growing else "technical_failure"
                     self.failure_onset = {
                         "offered_rate": round(rate, 2),
-                        "reason": "backlog_growth" if growing else "technical_failure"}
-                if diverging >= 2:
-                    self.verdict = "queue_divergence" if growing else "errors"
-                    self.breach = {"profile": "aggregate",
-                                   "metric": "backlog_growth" if growing else "error_rate",
-                                   "value": level["backlog_slope_lb"] if growing
-                                   else level["err_rate"],
-                                   "limit": 0.0 if growing
-                                   else float(self.cfg["error_rate_limit"])}
+                        "achieved_rate": confirm["achieved_rate"],
+                        "reason": reason}
+                    self.verdict = "queue_divergence" if confirmed_growing else "errors"
+                    profile = ("aggregate" if confirmed_growing
+                               else (cworst or "aggregate"))
+                    value = (confirm["backlog_slope_lb"] if confirmed_growing
+                             else (confirm["per_type"][cworst]["err_rate"]
+                                   if cworst else confirm["err_rate"]))
+                    self.breach = {
+                        "profile": profile,
+                        "metric": "backlog_growth" if confirmed_growing else "error_rate",
+                        "value": value,
+                        "limit": 0.0 if confirmed_growing else (
+                            float(self.cfg["slo_err"]) if cworst
+                            else float(self.cfg["error_rate_limit"]))}
                     return
-            else:
-                diverging = 0
             if rate >= float(self.cfg["arrival_max_rate"]):
                 self.verdict = "capped"
                 return
@@ -1655,8 +1939,18 @@ class CapacityTest:
                     and time.time() - self.started_at > float(self.cfg["max_duration_s"])):
                 self.verdict = "timeout"
                 return
-            rate = min(float(self.cfg["arrival_max_rate"]),
-                       rate * float(self.cfg["arrival_step_factor"]))
+            step_factor = float(self.cfg["arrival_step_factor"])
+            utilization = (level["clean_rate"] / level["achieved_rate"]
+                           if level["achieved_rate"] > 0 else 0.0)
+            # The geometric ramp is deliberately coarse while the host keeps
+            # up.  Once clean output begins to trail admitted work—or a
+            # suspected boundary fails confirmation—insert denser design
+            # points around the knee before the eventual breakpoint fit.
+            if (utilization < float(self.cfg["arrival_refine_utilization"])
+                    or growing or failing):
+                step_factor = max(1.01, step_factor ** 0.5)
+            level["next_step_factor"] = round(step_factor, 4)
+            rate = min(float(self.cfg["arrival_max_rate"]), rate * step_factor)
 
     def _summarize_capacity(self) -> None:
         """Fit the saturation breakpoint and publish the conservative bound.
@@ -1684,21 +1978,26 @@ class CapacityTest:
         if len(self.rate_levels) < 4:
             self.capacity_detail = {"status": "too few offered rates to fit a breakpoint"}
             return
-        rates = [lv["offered_rate"] for lv in self.rate_levels]
+        rates = [lv.get("achieved_rate", lv["offered_rate"])
+                 for lv in self.rate_levels]
         clean = [lv["clean_rate"] for lv in self.rate_levels]
         fit = st.bootstrap_breakpoint_ci(rates, clean, seed=self.seed or 0)
         if fit is None:
             self.capacity_detail = {"status": "no distinct capacity knee detected",
                                     "levels": self.rate_levels}
             return
-        estimate, low, high = fit
+        estimate = float(fit["estimate"])
+        low = float(fit["lower_bound_95"])
+        ci95 = list(fit["ci95"])
         self.capacity_wps = round(low, 2)
         self.capacity_detail = {
             "status": "measured",
             "clean_workflows_per_s": round(low, 2),
             "breakpoint_estimate": round(estimate, 2),
-            "ci95": [round(low, 2), round(high, 2)],
-            "confirmed_divergence_rate": (self.failure_onset or {}).get("offered_rate"),
+            "lower_bound_95": round(low, 2),
+            "ci95": [round(float(ci95[0]), 2), round(float(ci95[1]), 2)],
+            "fit_rate_basis": "achieved admission rate",
+            "confirmed_divergence_rate": (self.failure_onset or {}).get("achieved_rate"),
             "levels": self.rate_levels}
 
     # ── result ───────────────────────────────────────────────────────────────
@@ -1778,8 +2077,9 @@ class CapacityTest:
             traces = [c["trace"] for c in ok if c.get("trace")]
             if traces:
                 row["trace"] = {
-                    k: round(statistics.mean(tr[k] for tr in traces), 1)
-                    for k in ("llm_calls", "steps", "validations", "task_count")
+                    k: round(statistics.mean(tr.get(k, 0) for tr in traces), 1)
+                    for k in ("llm_calls", "steps", "validations", "task_count",
+                              "tool_calls")
                 }
             per_scenario[sid] = row
 
@@ -1798,6 +2098,36 @@ class CapacityTest:
         # once here and let the published figures inherit it.
         verdict = self.verdict or ("stopped" if self.phase == "stopped" else None)
         kind = self._result_kind(verdict)
+        mock_tier = None
+        if self.inference_backend == "remote_mock":
+            try:
+                from backend.capacity import mockrouter
+                mock_tier = mockrouter.metadata(self._router_base_url)
+            except Exception:  # noqa: BLE001
+                mock_tier = None
+        publication_exclusion = None
+        if (self.benchmark_target == "agent_host"
+                and self.inference_backend == "remote_mock"):
+            if not mock_tier or not mock_tier.get("isolated_from_host"):
+                publication_exclusion = (
+                    "inference stand-in was co-located with the agent host")
+            else:
+                observed_wps = max(
+                    [float(lv.get("achieved_rate") or 0) for lv in self.rate_levels]
+                    + [float(hold.get("rpm") or 0) / 60.0])
+                expected_calls = statistics.mean([
+                    ((wf.get("contract") or {}).get("llm_calls") or [1, 1])[1]
+                    for wf in self.scenarios.values()])
+                required_rps = round(2.0 * observed_wps * expected_calls, 2)
+                mock_tier["required_headroom_requests_per_s"] = required_rps
+                certified_rps = mock_tier.get("certified_requests_per_s")
+                mock_tier["headroom_qualified"] = bool(
+                    certified_rps is not None and certified_rps >= required_rps)
+                if not mock_tier["headroom_qualified"]:
+                    publication_exclusion = (
+                        "inference stand-in lacks independent 2× request-rate "
+                        "headroom qualification")
+        publication_eligible = publication_exclusion is None
         self.result = {
             "mode": self.mode,
             "benchmark_target": self.benchmark_target,
@@ -1807,6 +2137,8 @@ class CapacityTest:
             "censored": kind == "lower_bound",
             "censor_reason": (CENSOR_REASON.get(verdict or "", verdict)
                               if kind == "lower_bound" else None),
+            "publication_eligible": publication_eligible,
+            "publication_exclusion": publication_exclusion,
             "phase": self.phase,
             "error": self.error,
             # THE capacity number: the highest level at which the SLO held.
@@ -1856,7 +2188,9 @@ class CapacityTest:
             "duration_s": round(dur, 1),
             "total_requests": self.total_requests,
             "completed_requests": completed_requests,
-            "unfinished_requests": max(0, self.total_requests - completed_requests),
+            "cancelled_requests": self.cancelled_requests,
+            "unfinished_requests": max(
+                0, self.total_requests - completed_requests - self.cancelled_requests),
             "max_in_flight": max((int(s.get("in_flight") or 0) for s in samples),
                                  default=0),
             "total_tokens_in": self.total_tokens_in,
@@ -1907,7 +2241,11 @@ class CapacityTest:
             "capacity_levels": self.capacity_levels,
             "config": {k: self.cfg[k] for k in
                        ("step_interval_s", "cpu_target", "hold_s", "max_cost_usd",
-                        "mock_ms", "mock_sigma")},
+                        "mock_ms", "mock_sigma", "arrival_start_rate",
+                        "arrival_step_factor", "arrival_max_rate", "arrival_hold_s",
+                        "arrival_refine_utilization",
+                        "capability_target", "capability_confidence",
+                        "capability_min_samples", "harness_tolerance")},
             "started_at": self.started_at,
             "ended_at": self.ended_at,
             "repro": {
@@ -1941,6 +2279,8 @@ class CapacityTest:
                 "tile": self.tile,
                 "benchmark_target": self.benchmark_target,
                 "inference_backend": self.inference_backend,
+                "mock_tier": mock_tier,
+                "prompt_corpus": "seeded fixed-size suffix v1",
             },
         }
         try:

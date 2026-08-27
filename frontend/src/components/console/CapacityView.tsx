@@ -868,9 +868,9 @@ function RepeatSetCard({ set }: { set: RepeatSetStatus }) {
 
 const VERDICT_TEXT: Record<string, string> = {
   slo: 'latency SLO breached beyond this level — capacity measured at the last level that held it',
-  cpu: 'CPU saturated — this is the box’s ceiling',
-  memory: 'system memory saturated — RAM gated before the cores did',
-  kv: 'engine KV cache saturated — model memory gated before CPU',
+  cpu: 'the host CPU safety line was reached before a service boundary — this run is a lower bound',
+  memory: 'the host memory safety line was reached before a service boundary — this run is a lower bound',
+  kv: 'the engine KV-cache safety line was reached before a service boundary — this run is a lower bound',
   plateau: 'throughput plateaued — no headroom past this point',  // legacy rows only; no longer a stop
   unstable: 'latency kept climbing at fixed load — the system stopped absorbing added sessions',
   interference: 'host CPU was saturated by processes OUTSIDE this benchmark — quiesce the box and rerun',
@@ -939,7 +939,7 @@ function ResultCard({ result }: { result: CapacityResult }) {
       value: String((bound ? wps.at_least_workflows_per_s : wps.clean_workflows_per_s) ?? '—'),
       meaning: bound
         ? 'sustained with a flat backlog — the host was never outrun, so no knee was fitted'
-        : `sustained before the backlog diverged${wps.ci95 ? ` · 95% CI ${wps.ci95[0]}–${wps.ci95[1]}` : ''}`,
+        : `conservative one-sided 95% lower bound before backlog divergence${wps.ci95 ? ` · breakpoint 95% CI ${wps.ci95[0]}–${wps.ci95[1]}` : ''}`,
       note: bound ? (wps.reason ?? undefined) : undefined,
     }
   } else if (capShown && cap) {
@@ -988,10 +988,17 @@ function ResultCard({ result }: { result: CapacityResult }) {
       )}
       {result.breach && (
         <p className="text-[12.5px] mt-1" style={{ color: 'var(--warn)' }}>
-          The next rung failed the <b>{result.breach.profile}</b> {result.breach.metric === 'p95_ms' ? 'p95 latency' : 'error-rate'} SLO
-          {result.breach.metric === 'p95_ms'
-            ? ` (${Math.round(result.breach.value)}ms > ${Math.round(result.breach.limit)}ms limit${result.breach.baseline_ms != null ? `, baseline ${Math.round(result.breach.baseline_ms)}ms` : ''})`
-            : ` (${(result.breach.value * 100).toFixed(1)}% > ${(result.breach.limit * 100).toFixed(0)}%)`}
+          Boundary evidence: <b>{result.breach.profile}</b> {result.breach.metric.replace(/_/g, ' ')}
+          {' '}({['error_rate', 'capability'].includes(result.breach.metric)
+            ? `${(result.breach.value * 100).toFixed(1)}% vs ${(result.breach.limit * 100).toFixed(1)}%`
+            : ['p95_ms', 'latency_unstable', 'tail_unstable'].includes(result.breach.metric)
+              ? `${Math.round(result.breach.value)}ms vs ${Math.round(result.breach.limit)}ms`
+              : `${result.breach.value} vs ${result.breach.limit}`})
+        </p>
+      )}
+      {result.publication_eligible === false && (
+        <p className="text-[12.5px] mt-1" style={{ color: 'var(--warn)' }}>
+          <b>Diagnostic only.</b> {result.publication_exclusion}; use an external mock tier for a publishable agent-host result.
         </p>
       )}
       {result.comparable === false && (

@@ -222,6 +222,33 @@ def find_pids(cmdline_substr: str) -> list[int]:
     return out
 
 
+def descendant_pids(pid: int) -> list[int]:
+    """Return pid and every live descendant using Linux /proc parent links."""
+    children: dict[int, list[int]] = {}
+    for path in glob.glob("/proc/[0-9]*/status"):
+        try:
+            child = int(path.split("/")[2])
+            parent = None
+            with open(path) as f:
+                for line in f:
+                    if line.startswith("PPid:"):
+                        parent = int(line.split()[1])
+                        break
+            if parent is not None:
+                children.setdefault(parent, []).append(child)
+        except (OSError, ValueError, IndexError):
+            continue
+    out, stack, seen = [], [int(pid)], set()
+    while stack:
+        cur = stack.pop()
+        if cur in seen:
+            continue
+        seen.add(cur)
+        out.append(cur)
+        stack.extend(children.get(cur, []))
+    return out
+
+
 class ProcessCpuSampler:
     """Delta-based CPU% for named pid groups, on the whole-host basis.
 

@@ -236,7 +236,7 @@ export interface CapacityScenarioStat {
   p95_ms?: number | null
   tokens_out?: number
   avg_tokens_in_flight?: number
-  trace?: { llm_calls: number; steps: number; validations: number; task_count: number }
+  trace?: { llm_calls: number; steps: number; validations: number; task_count: number; tool_calls?: number }
   last_error?: string | null
 }
 
@@ -262,6 +262,7 @@ export interface CapabilityBlock {
   per_type?: Record<string, {
     deadline_s: number; decided: number; successes: number; pending: number
     observed: number | null; lower_bound_95: number | null
+    lower_bound_joint_95?: number | null
   }>
 }
 
@@ -279,6 +280,12 @@ export interface CapacityRateLevel {
   rejected?: number
   // What the in-process generator (the control plane) cost during this level.
   control_cpu_pct?: number | null
+  window?: 'measurement' | 'confirmation'
+  window_s?: number
+  generator_ok?: boolean
+  resource_verdict?: string | null
+  next_step_factor?: number
+  per_type?: Record<string, { decided: number; errors: number; err_rate: number }>
 }
 
 export interface SustainableCapacityBlock {
@@ -289,7 +296,9 @@ export interface SustainableCapacityBlock {
   at_least_workflows_per_s?: number | null
   clean_workflows_per_s?: number
   breakpoint_estimate?: number
+  lower_bound_95?: number
   ci95?: [number, number]
+  fit_rate_basis?: string
   confirmed_divergence_rate?: number | null
   levels?: CapacityRateLevel[]
 }
@@ -313,6 +322,8 @@ export interface CapacityResult {
   result_kind?: 'boundary' | 'lower_bound' | 'invalid' | 'inconclusive'
   censored?: boolean
   censor_reason?: string | null
+  publication_eligible?: boolean
+  publication_exclusion?: string | null
   capacity_users: number | null   // null = no rung certified — capacity unknown
   capacity_certified?: boolean
   capacity_tiles?: number | null
