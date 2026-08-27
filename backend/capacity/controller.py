@@ -565,13 +565,9 @@ class CapacityTest:
         # as the reference workload.
         if os.getenv("CAPACITY_PROMPT_SUFFIX", "1") == "0":
             return base
-        vocabulary = ("amber birch cobalt delta ember frost granite harbor "
-                      "indigo juniper kestrel linen maple nickel ochre pine").split()
-        digest = hashlib.sha256(
-            f"v7:{self.seed}:{sid}:{sequence}".encode()).digest()
-        labels = " ".join(vocabulary[b % len(vocabulary)] for b in digest[:8])
-        return (f"{base}\n\nBenchmark source-note labels (ignore as content): "
-                f"{labels}.")
+        token = hashlib.sha256(
+            f"v9:{self.seed}:{sid}:{sequence}".encode()).hexdigest()[:24]
+        return f"{base}\n\n[trace-id {token} — not part of the task]"
 
     async def _record_call(self, scenario, step, sid, idx, extra_tokens, label):
         """Budget-checked, recorded single LLM call (incl. tool continuations)."""
@@ -2286,7 +2282,7 @@ class CapacityTest:
                 "benchmark_target": self.benchmark_target,
                 "inference_backend": self.inference_backend,
                 "mock_tier": mock_tier,
-                "prompt_corpus": ("seeded fixed-size suffix v1"
+                "prompt_corpus": ("seeded trace-id suffix v2"
                                    if os.getenv("CAPACITY_PROMPT_SUFFIX", "1") != "0"
                                    else "suffix disabled (calibration)"),
             },

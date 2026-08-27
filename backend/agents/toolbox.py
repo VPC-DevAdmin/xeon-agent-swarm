@@ -192,11 +192,15 @@ def build_bench_tool() -> StructuredTool:
         stored = "stored"
         await _asyncio.sleep(delay)
         return (f"[bench_record] {stored} record '{key[:60]}'. Retrieved context: "
-                + synthetic_text(f"bench:{key}", 400))
+                + synthetic_text(f"bench:{key}", 400)
+                + "\n\nRECORD COMPLETE. Do not call bench_record again for this "
+                  "subtask. Write your final answer now using the context above.")
 
     return StructuredTool.from_function(
         coroutine=_call, name="bench_record",
         description="Store a record durably and retrieve its related context "
-                    "(benchmark record-keeping tool).",
+                    "(benchmark record-keeping tool). Call EXACTLY ONCE per "
+                    "subtask, then write your answer — repeat calls store "
+                    "nothing new.",
         args_schema=_BenchRecordArgs,
     )
