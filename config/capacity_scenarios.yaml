@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 10
+version: 11
 
 scenarios:
   support_agent:
@@ -249,5 +249,9 @@ e2e_workflows:
       used gateway added semantic caching with embedding-similarity hits,
       claiming 30% token savings on support workloads. (4) Two engines
       standardized on an OpenAI-compatible batch API for offline jobs.
-      Plan EXACTLY three worker subtasks and no more: research, analysis, and writing. Each worker calls bench_record exactly once, then writes its section and stops. Deliverable: five bullets, each naming the item it summarizes and one
-      sentence on who is affected.
+      Plan EXACTLY three worker subtasks and no more, never one per item:
+      research (extract the key facts from ALL FOUR items), analysis (rank
+      all four by operational impact), and writing (compose the digest).
+      Each worker calls bench_record exactly once, then writes its section
+      and stops. Deliverable: five bullets, each naming the item it
+      summarizes and one sentence on who is affected.
