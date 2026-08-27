@@ -756,6 +756,18 @@ async def internal_events_batch(request: Request):
     return {"relayed": len(body.get("events") or [])}
 
 
+@app.get("/internal/counters")
+async def internal_counters(request: Request):
+    """Harness integrity counters for this process. The capacity controller
+    sums these across the pool before it publishes a result."""
+    from backend import workerpool as wp
+    if not wp.check_token(request.headers.get("X-Internal-Token")):
+        raise HTTPException(403, "internal endpoint")
+    from backend.repositories import persistence
+    return {"persist_failures": persistence.failure_count(),
+            "callback_failures": wp.callback_failures}
+
+
 @app.post("/internal/complete")
 async def internal_complete(request: Request):
     from backend import workerpool as wp

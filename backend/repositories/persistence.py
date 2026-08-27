@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 _BATCH_MAX = 200
 _FLUSH_S = 0.05
+_perm_failures = 0        # writes abandoned after retry: harness integrity signal
 _queue: asyncio.Queue | None = None
 _writer: asyncio.Task | None = None
 
@@ -58,6 +59,7 @@ async def _writer_loop():
 
 
 async def _flush(batch):
+    global _perm_failures
     ops = [(f, label) for f, label, _fut in batch if f is not None]
     if ops:
         try:
@@ -82,15 +84,29 @@ async def _flush(batch):
                                      or "deadlock" in str(exc).lower())
                         if transient and attempt < 2:
                             continue
-                        logger.warning("persistence[%s] failed: %s", label, exc)
+                        _perm_failures += 1
+                        logger.warning("persistence[%s] failed permanently: %s",
+                                       label, exc)
                         break
     for *_, fut in batch:
         if fut is not None and not fut.done():
             fut.set_result(None)
 
 
+def failure_count() -> int:
+    """Writes abandoned after retry since process start.
+
+    A benchmark cannot certify a level whose durable record is incomplete, so
+    the controller reconciles this counter across every process before it
+    publishes a result."""
+    return _perm_failures
+
+
 async def barrier():
-    """Resolve once everything enqueued before this call has been flushed."""
+    """Resolve once everything enqueued before this call has been flushed.
+
+    The barrier reports flush completion, not write success. Callers that need
+    integrity read failure_count()."""
     q = _ensure_writer()
     fut = asyncio.get_event_loop().create_future()
     q.put_nowait((None, "barrier", fut))

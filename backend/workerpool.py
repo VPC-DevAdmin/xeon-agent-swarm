@@ -86,6 +86,7 @@ _procs: list[subprocess.Popen] = []
 _urls: list[str] = []
 _rr = itertools.count()
 _owners: dict[str, str] = {}          # run_id -> executor base_url
+callback_failures = 0                 # completion callbacks lost after retry
 _client: httpx.AsyncClient | None = None
 
 
@@ -224,13 +225,41 @@ async def forward_event(run_id: str, event_json: dict) -> None:
 
 async def post_complete(payload: dict) -> None:
     """Executor -> control: a dispatched run reached a terminal state. Carries
-    the full outcome so the benchmark never has to poll the database."""
-    try:
-        await _http().post(f"{control_url()}/internal/complete", json=payload,
-                           headers={"X-Internal-Token": internal_token()})
-    except Exception:
-        logger.warning("completion callback failed for run %s",
-                       payload.get("run_id"))
+    the full outcome so the benchmark never has to poll the database.
+
+    Retried, and counted when it fails for good: a lost callback would appear
+    to the benchmark as a workflow that never finished, which is a harness
+    failure wearing an agent failure's clothes."""
+    global callback_failures
+    for delay in (0.0, 0.2, 1.0):
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            await _http().post(f"{control_url()}/internal/complete", json=payload,
+                               headers={"X-Internal-Token": internal_token()})
+            return
+        except Exception:  # noqa: BLE001
+            continue
+    callback_failures += 1
+    logger.warning("completion callback lost for run %s", payload.get("run_id"))
+
+
+async def collect_counters() -> dict:
+    """Harness integrity counters for this process and every executor."""
+    from backend.repositories import persistence
+    totals = {"persist_failures": persistence.failure_count(),
+              "callback_failures": callback_failures,
+              "unreachable_executors": 0}
+    for url in _urls:
+        try:
+            r = await _http().get(f"{url}/internal/counters",
+                                  headers={"X-Internal-Token": internal_token()})
+            body = r.json()
+            totals["persist_failures"] += int(body.get("persist_failures") or 0)
+            totals["callback_failures"] += int(body.get("callback_failures") or 0)
+        except Exception:  # noqa: BLE001
+            totals["unreachable_executors"] += 1
+    return totals
 
 
 async def proxy_post(url: str, path: str, body: dict | None = None) -> dict:

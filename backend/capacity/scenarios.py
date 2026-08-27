@@ -30,7 +30,11 @@ def load_e2e_workflows() -> dict[str, dict]:
                     # benchmark's own deterministic tools (bench_record: one
                     # real dispatch + durable write per worker).
                     "enabled_tools": list(w.get("tools") or []),
-                    "toolless": bool(w.get("toolless", False))}
+                    "toolless": bool(w.get("toolless", False)),
+                    # Declared shape of a completed unit. `contract` applies to
+                    # deterministic backends, `contract_live` to a real planner.
+                    "contract": dict(w.get("contract") or {}) or None,
+                    "contract_live": dict(w.get("contract_live") or {}) or None}
     return out
 
 

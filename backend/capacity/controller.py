@@ -91,7 +91,10 @@ DEFAULTS = dict(
     slo_p95_x=3.0,         # SLO: a profile's p95 may grow to this multiple of ITS baseline
     slo_p95_ms=None,       # absolute p95 cap in ms (applies in addition to the multiplier)
     slo_err=0.05,          # SLO: max error rate per profile while a rung counts as "good"
-    stat_tolerance=0.25,   # stationarity: 2nd half-window p95 may exceed the 1st by ≤25%
+    stat_tolerance=0.25,   # trend: 2nd half-window p80 may exceed the 1st by ≤25%
+    cohort_maturity=0.8,   # fraction of the older half that must have COMPLETED to judge it
+    harness_tolerance=0.005,  # lost writes/callbacks above this share invalidate the run
+    invalid_tolerance=0.01,   # contract-violating units above this share invalidate the run
     min_samples=3,         # completed calls per profile per interval to certify a rung
     warmup_s=5.0,          # rung-1 warm-up discarded before baselines are measured
     seed=None,             # benchmark seed (auto-generated when unset; always recorded)
@@ -221,6 +224,14 @@ class CapacityTest:
         self.slo_capacity_tiles: int | None = None   #   3x-baseline latency budget (not the verdict)
         self._eval_window_s: float | None = None     # e2e SLO window, derived at rung 1
         self._p95_streak = 0                         # consecutive tail-outside evals
+        # Admission registry: work is measured from SUBMISSION, not only from
+        # completion. Sampling completions alone hides the slowest and hung
+        # units until they time out, so a level can read healthy while it is
+        # deteriorating (survivorship bias in the latency distribution).
+        self._inflight: dict[int, tuple[str, float]] = {}   # id -> (profile, admitted_at)
+        self._admit_seq = 0
+        self.invalid_units = 0                       # units that broke the workload contract
+        self.harness: dict = {}                      # persistence/callback integrity counters
         self.started_at = time.time()
         self.ended_at: float | None = None
         self.error: str | None = None
@@ -290,6 +301,7 @@ class CapacityTest:
             self.ended_at = time.time()
             if self.phase not in ("error", "stopped"):
                 self.phase = "done"
+            await self._reconcile_harness()
             self._finalize()
             if PERSIST_TO_DB and self.result:
                 await self._persist_db()
@@ -401,13 +413,17 @@ class CapacityTest:
             if reserved is None:
                 return
             self.total_requests += 1
+            admit_key = self._admit(wid)
             rec = await self._e2e.run_workflow(wid, wf["query"], {
                 "enabled_tools": wf.get("enabled_tools"),
                 "validator_enabled": wf.get("validator_enabled", True),
                 "budgets": wf.get("budgets"),
                 "toolless": wf.get("toolless", False),
             }, timeout_s=self._profile_timeout_s(wid))
-            rec.update(scenario=wid, step="workflow", user=idx, ts=time.time())
+            t_submit = self._release(admit_key)
+            rec.update(scenario=wid, step="workflow", user=idx, ts=time.time(),
+                       t_submit=t_submit)
+            self._check_contract(wid, rec)
             self.calls.append(rec)
             self.completed_requests += 1
             await self._settle_spend(reserved, rec)
@@ -430,9 +446,12 @@ class CapacityTest:
         self.total_requests += 1
         self._user_call_n[idx] += 1
         vary_key = f"{self.seed}:{idx}:{self._user_call_n[idx]}"
+        admit_key = self._admit(sid)
         rec = await self._caller.call(scenario, step, extra_context_tokens=extra_tokens,
                                       vary_key=vary_key)
-        rec.update(scenario=sid, step=label, user=idx, ts=time.time())
+        t_submit = self._release(admit_key)
+        rec.update(scenario=sid, step=label, user=idx, ts=time.time(),
+                   t_submit=t_submit)
         self.calls.append(rec)
         self.completed_requests += 1
         await self._settle_spend(reserved, rec)
@@ -486,6 +505,11 @@ class CapacityTest:
             # Includes work waiting on router, database, or execution resources;
             # this is the observable backlog for an async orchestration host.
             s["in_flight"] = max(0, self.total_requests - self.completed_requests)
+            # Censored-work telemetry: units admitted and not yet finished, and
+            # the age of the oldest one. Completion-only sampling cannot see
+            # either, which is how a deteriorating level reads healthy.
+            s["inflight_admitted"] = len(self._inflight)
+            s["oldest_inflight_s"] = self._oldest_inflight_s()
             s["bw_gbs"] = None
             s["kv_pct"] = None
             if self.inference_backend == "local":
@@ -498,6 +522,49 @@ class CapacityTest:
                     kv_misses = 0 if s["kv_pct"] is not None else kv_misses + 1
             self.samples.append(s)
             await asyncio.sleep(self.cfg["sample_interval_s"])
+
+    def _admit(self, sid: str) -> int:
+        """Register a unit as admitted. Returns its in-flight key."""
+        self._admit_seq += 1
+        self._inflight[self._admit_seq] = (sid, time.time())
+        return self._admit_seq
+
+    def _release(self, key: int) -> float:
+        """Deregister a finished unit. Returns the time it was admitted."""
+        entry = self._inflight.pop(key, None)
+        return entry[1] if entry else time.time()
+
+    def _oldest_inflight_s(self) -> float | None:
+        if not self._inflight:
+            return 0.0
+        now = time.time()
+        return round(now - min(t for _sid, t in self._inflight.values()), 2)
+
+    def _check_contract(self, sid: str, rec: dict) -> None:
+        """Enforce the declared workflow contract on a completed unit.
+
+        A unit whose trace falls outside the contract is neither a success nor
+        a capacity failure: it is workload-invalid, excluded from the latency
+        and error statistics, and counted separately. Enough of them
+        invalidates the run, because the benchmark no longer measured the unit
+        it declared."""
+        wf = self.scenarios.get(sid) or {}
+        spec = (wf.get("contract_live") if self.inference_backend != "remote_mock"
+                else wf.get("contract")) or wf.get("contract_live")
+        trace = rec.get("trace")
+        if not spec or not trace or not rec.get("ok"):
+            return
+        for field, bounds in spec.items():
+            value = trace.get(field)
+            if value is None:
+                continue
+            low, high = bounds
+            if not (low <= value <= high):
+                rec["ok"] = False
+                rec["invalid"] = True
+                rec["error"] = f"contract violation: {field}={value} outside [{low}, {high}]"
+                self.invalid_units += 1
+                return
 
     def _recent(self, cut: float) -> list[dict]:
         """Calls newer than `cut`, walking the time-ordered deque from the
@@ -514,7 +581,8 @@ class CapacityTest:
     def _scenario_window(self, sid: str, window_s: float) -> dict:
         """Per-profile stats over the window: the unit of SLO evaluation."""
         cut = time.time() - window_s
-        recent = [c for c in self._recent(cut) if c["scenario"] == sid]
+        recent = [c for c in self._recent(cut)
+                  if c["scenario"] == sid and not c.get("invalid")]
         ok = [c for c in recent if c["ok"]]
         return {
             "n": len(recent),
@@ -560,6 +628,11 @@ class CapacityTest:
         min_n = int(self.cfg["min_samples"])
         state = "good"
         for sid in self.scenario_ids:
+            # A profile with no sessions assigned is not in play at this level.
+            # Requiring samples from it makes certification impossible for any
+            # custom mix whose session count is below its profile count.
+            if self.user_scenario and sid not in self.user_scenario:
+                continue
             s = self._scenario_window(sid, window_s)
             if s["err_rate"] > float(self.cfg["slo_err"]) and s["n"] >= min_n:
                 return "bad", {"profile": sid, "metric": "error_rate",
@@ -567,21 +640,55 @@ class CapacityTest:
                                 "limit": float(self.cfg["slo_err"])}
             if s["n"] < min_n:
                 state = "inconclusive"
-        # Aggregate stationarity across the window's halves. Aggregate, not
-        # per-profile: halving already halves the sample count, and slow
-        # workflows would starve a per-profile split into permanent
-        # inconclusiveness. Errors stay per-profile above.
+        # Trend test over ADMISSION COHORTS. Two rules make the comparison
+        # honest. Units are grouped by when they were submitted, not when they
+        # finished, and only units admitted at the CURRENT level are eligible,
+        # so completions from an easier level cannot certify a harder one. The
+        # older half must also be mature (most of its work has finished),
+        # because judging a half whose slow units are still running measures
+        # the survivors rather than the level.
         now = time.time()
-        half = window_s / 2.0
-        window = self._recent(now - window_s)
-        h1 = [c["latency_ms"] for c in window
-              if c["ok"] and c["ts"] < now - half]
-        h2 = [c["latency_ms"] for c in window
-              if c["ok"] and c["ts"] >= now - half]
+        low = max(now - window_s, self._rung_t0)
+        span = now - low
+        if span < 0.5 * window_s:
+            return "inconclusive", None          # cohort too young to judge
+        mid = low + span / 2.0
+
+        def _cohort(a: float, b: float) -> tuple[list[float], int]:
+            done = [c["latency_ms"] for c in self.calls
+                    if c.get("ok") and not c.get("invalid")
+                    and a <= c.get("t_submit", c["ts"]) < b]
+            censored = sum(1 for _sid, t in self._inflight.values() if a <= t < b)
+            return done, censored
+
+        h1, cens1 = _cohort(low, mid)
+        h2, _cens2 = _cohort(mid, now)
         need = max(min_n, 2)      # a single-sample quantile is noise, not a trend
         if len(h1) < need or len(h2) < need:
             return "inconclusive", None
+        maturity = len(h1) / max(1, len(h1) + cens1)
+        if maturity < float(self.cfg["cohort_maturity"]):
+            return "inconclusive", None          # slow work has not landed yet
         tol = 1.0 + float(self.cfg["stat_tolerance"])
+
+        # Oldest in-flight age must not trend upward. Completion-time sampling
+        # cannot see a unit that never completes, so a stalling level can hold
+        # its visible latency flat while its queue ages. The sampler records
+        # the age directly, and the two halves of the window are compared the
+        # same way the latency body is.
+        ages1 = [s["oldest_inflight_s"] for s in self.samples
+                 if s.get("oldest_inflight_s") is not None
+                 and low <= s["ts"] < mid]
+        ages2 = [s["oldest_inflight_s"] for s in self.samples
+                 if s.get("oldest_inflight_s") is not None and s["ts"] >= mid]
+        if len(ages1) >= 2 and len(ages2) >= 2:
+            a1, a2 = statistics.median(ages1), statistics.median(ages2)
+            floor_s = max(2.0, (_pct(h1, 80) or 0) / 1000.0)
+            if a1 > 0 and a2 > max(a1 * tol, floor_s):
+                return "bad", {"profile": "aggregate", "metric": "work_aging",
+                                "value": round(a2, 1),
+                                "limit": round(max(a1 * tol, floor_s), 1),
+                                "baseline_ms": round(a1 * 1000, 1)}
         # PRIMARY: p80 stationarity. The p95 of a half-window is decided by a
         # handful of tail samples, and batch-cohort waves made it oscillate
         # 3s<->10s at ~900 sessions — halving the ramp accelerator on noise.
@@ -609,7 +716,7 @@ class CapacityTest:
 
     def _window_stats(self, window_s: float) -> dict:
         cut = time.time() - window_s
-        recent = self._recent(cut)
+        recent = [c for c in self._recent(cut) if not c.get("invalid")]
         ok = [c for c in recent if c["ok"]]
         lat = [c["latency_ms"] for c in ok]
         toks = sum(c["tokens_out"] for c in ok)
@@ -767,8 +874,7 @@ class CapacityTest:
             # tile of backlog on arrival.
             at_boundary = (self.mix != "tile" or not self.tile_size
                            or len(self.users) % self.tile_size == 0)
-            if ((self.mode == "e2e" or self.mix == "tile")
-                    and rung_state == "inconclusive"
+            if (rung_state == "inconclusive"
                     and time.time() - self._rung_t0 > 3 * eval_window):
                 # The rung dwelled three full windows and some profile still
                 # could not produce min_samples — it has effectively stopped
@@ -851,7 +957,7 @@ class CapacityTest:
                 self.verdict = ("unstable"
                                 if (self.breach or {}).get("metric")
                                 in ("latency_unstable", "tail_unstable",
-                                    "no_samples")
+                                    "work_aging", "no_samples")
                                 else "errors")
             elif cpu_hot >= 2:
                 # Attribution-aware: when the host crosses the CPU line but
@@ -916,15 +1022,14 @@ class CapacityTest:
 
             if rung_state == "bad":
                 continue                # never add load onto a failing level
-            if (at_boundary and rung_state != "good"
-                    and (self.mode == "e2e" or self.mix == "tile")):
-                # Steady-state-per-boundary (VMmark shape): a mix-complete
-                # level must certify before the ramp moves toward the next
-                # tile — otherwise a boundary can slip past unjudged and
-                # capacity/overlay never latch. Inconclusive levels dwell (the
-                # starvation bound above condemns them if samples never come).
-                # Between boundaries the single-session probing steps below
-                # advance on cadence — bounded overshoot of at most one tile.
+            if at_boundary and rung_state != "good":
+                # Steady-state-per-level: a level must CERTIFY before the ramp
+                # advances. Advancing on an inconclusive reading resets the
+                # cohort clock every interval, so no level ever accumulates
+                # enough of its own admitted work to be judged, and the run
+                # ramps to its ceiling having measured nothing. Inconclusive
+                # levels dwell; the starvation bound above condemns a level
+                # that never produces samples.
                 continue
 
             if self.mix == "tile":
@@ -1053,6 +1158,38 @@ class CapacityTest:
             state, _ = self._evaluate_rung(hold_s)
             self._record_level("steady", steady, state)
 
+    async def _reconcile_harness(self):
+        """Sum persistence and callback failures across every process.
+
+        A lost write or a lost completion callback is a benchmark failure, not
+        an agent failure, and the two are indistinguishable in the latency
+        record. Counts ride in the result; past the tolerance the run stops
+        being a capacity measurement at all."""
+        try:
+            from backend import workerpool as wp
+            counters = await wp.collect_counters()
+        except Exception as exc:  # noqa: BLE001
+            self.harness = {"error": f"{type(exc).__name__}: {exc}"}
+            return
+        total = max(1, self.total_requests)
+        lost = int(counters.get("persist_failures", 0)) + \
+            int(counters.get("callback_failures", 0))
+        counters["lost_fraction"] = round(lost / total, 5)
+        counters["invalid_units"] = self.invalid_units
+        counters["ok"] = lost <= total * float(self.cfg["harness_tolerance"])
+        self.harness = counters
+        if self.invalid_units > self.total_requests * float(self.cfg["invalid_tolerance"]):
+            self.verdict = "workload_invalid"
+            self.breach = {"profile": "workload", "metric": "contract_violations",
+                           "value": self.invalid_units,
+                           "limit": round(self.total_requests
+                                          * float(self.cfg["invalid_tolerance"]), 1)}
+        if not counters["ok"]:
+            self.verdict = "harness_degraded"
+            self.breach = {"profile": "harness", "metric": "lost_records",
+                           "value": lost,
+                           "limit": round(total * float(self.cfg["harness_tolerance"]), 1)}
+
     # ── result ───────────────────────────────────────────────────────────────
     def _finalize(self):
         hold_w = getattr(self, "_hold_window_s", None) or float(self.cfg["hold_s"])
@@ -1080,7 +1217,9 @@ class CapacityTest:
 
         per_scenario: dict[str, dict] = {}
         for sid in self.scenario_ids:
-            cs = [c for c in self.calls if c["scenario"] == sid]
+            allc = [c for c in self.calls if c["scenario"] == sid]
+            cs = [c for c in allc if not c.get("invalid")]
+            invalid_n = len(allc) - len(cs)
             ok = [c for c in cs if c["ok"]]
             dur_so_far = max(1e-6, (self.ended_at or time.time()) - self.started_at)
             # ESTIMATE: average tokens concurrently in flight for this profile
@@ -1102,6 +1241,8 @@ class CapacityTest:
             }
             # Failure reason, not just a count — the most recent recorded error
             # is what turns an "errors" verdict from a mystery into a diagnosis.
+            if invalid_n:
+                row["invalid_units"] = invalid_n
             errs = [c["error"] for c in cs if not c["ok"] and c.get("error")]
             if errs:
                 row["last_error"] = errs[-1]
@@ -1174,6 +1315,10 @@ class CapacityTest:
                                      else None),
             "cpu_breakdown": cpu_breakdown,
             "background_cpu_pct": background_cpu,
+            "harness": self.harness or None,
+            "invalid_units": self.invalid_units,
+            "max_inflight_age_s": max((s.get("oldest_inflight_s") or 0
+                                       for s in self.samples), default=None),
             "steady": {**hold, "cpu_pct": avg("cpu_pct"), "mem_pct": avg("mem_pct"),
                         "power_w": avg("power_w"), "load1": avg("load1"),
                         "bw_gbs": avg("bw_gbs"), "kv_pct": avg("kv_pct")},
@@ -1297,6 +1442,7 @@ class CapacityTest:
             "breach": self.breach,
             "knee_users": self.knee_users,
             "slo_capacity_users": self.slo_capacity_users,
+            "invalid_units": self.invalid_units,
             "baseline_p95_ms": self.baseline_p95,
             "elapsed_s": round(time.time() - self.started_at, 1),
             "total_requests": self.total_requests,

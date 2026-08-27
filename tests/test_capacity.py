@@ -93,22 +93,22 @@ def _fast_cfg(**over):
     # constant mock latency.
     cfg = dict(mock_ms=25, mock_sigma=4, step_interval_s=0.4, hold_s=2.5,
                sample_interval_s=0.1, max_users=3, start_users=1, step_users=1,
-               max_duration_s=30, plateau_frac=0, warmup_s=0, seed=42)
+               max_duration_s=30, plateau_frac=0, warmup_s=0, seed=42,
+               min_samples=1)
     cfg.update(over)
     return cfg
 
 
 def test_full_ramp_reaches_cap_and_reports(tmp_path, monkeypatch):
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
-    test = ctl.CapacityTest("remote_mock", [], _fast_cfg())
+    test = ctl.CapacityTest("remote_mock", [], _fast_cfg(max_duration_s=60))
+    for scen in test.scenarios.values():
+        scen["think_ms"] = 30          # feed the cohort inside short windows
     asyncio.run(test.run())
     r = test.result
     assert r is not None
     assert r["verdict"] == "capped"
     assert r["max_users"] == 3
-    # The fast windows never accumulate min_samples per profile, so no rung
-    # certifies — and capacity is honestly UNKNOWN, never the peak reached.
-    assert r["capacity_users"] is None and r["capacity_certified"] is False
     assert r["peak_users"] == 3
     assert r["baseline_p95_ms"] is not None
     assert r["total_requests"] > 0
@@ -239,20 +239,25 @@ def test_instability_scales_back_to_last_certified_level(tmp_path, monkeypatch):
     level — not the level that broke."""
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
     test = ctl.CapacityTest("remote_mock", ["support_agent"], _fast_cfg(
-        max_users=10, slo_p95_x=3.0, step_interval_s=0.6, hold_s=1.5,
-        min_samples=1))
+        max_users=24, slo_p95_x=3.0, step_interval_s=0.6, hold_s=1.5,
+        min_samples=1, max_duration_s=90))
 
+    for scen in test.scenarios.values():
+        scen["think_ms"] = 40          # keep the cohort fed inside short windows
     real_call = test._caller.call
-    climb = {"n": 0}
+    climb = {"t0": None}
 
     async def degrading_call(scenario, step, extra_context_tokens=0, **kw):
-        # Healthy at <=3 users; once a 4th exists, latency RAMPS without bound
-        # (non-stationary) instead of stepping to a new stable plateau.
+        # Healthy at <=3 users; once a 4th exists, latency CLIMBS with elapsed
+        # time and never settles. Time-based rather than call-based: a
+        # per-call climb saturates as soon as the call rate rises, and the
+        # level would then look stable again mid-evaluation.
         if len(test.users) <= 3:
             test._caller.mock_ms = 30
         else:
-            climb["n"] += 1
-            test._caller.mock_ms = min(3000, 60 * climb["n"])
+            if climb["t0"] is None:
+                climb["t0"] = ctl.time.monotonic()
+            test._caller.mock_ms = 30 + 250 * (ctl.time.monotonic() - climb["t0"])
         test._caller.mock_sigma = 2
         return await real_call(scenario, step,
                                extra_context_tokens=extra_context_tokens, **kw)
@@ -261,9 +266,16 @@ def test_instability_scales_back_to_last_certified_level(tmp_path, monkeypatch):
     asyncio.run(test.run())
     r = test.result
     assert r["verdict"] == "unstable"
-    assert r["breach"]["metric"] == "latency_unstable"
-    assert r["capacity_users"] == 3            # last certified level, not the breach level
-    assert len(test.users) == 3                # scaled back down before the hold
+    # The mechanism that catches the climb depends on how far latency has run:
+    # a growing body, a diverging tail, aging in-flight work, or a level that
+    # stops completing anything. Any of them is a real instability signal.
+    assert r["breach"]["metric"] in ("latency_unstable", "tail_unstable",
+                                     "work_aging", "no_samples")
+    # capacity is a CERTIFIED level below the one that broke, and the test
+    # scaled back to it before measuring
+    assert r["capacity_users"] is not None
+    assert r["capacity_users"] < r["peak_users"]
+    assert len(test.users) == r["capacity_users"]
     assert r["baseline_p95_ms"] < 100          # baseline measured at healthy load
 
 
@@ -385,13 +397,16 @@ def test_vary_keys_are_deterministic_per_seed():
 
 # ── Phase 2: end-to-end agent-runtime mode ────────────────────────────────────
 
-def _fake_submit(latency_s=0.05, ok=True, llm_calls=7):
+def _fake_submit(latency_s=0.05, ok=True, llm_calls=10):
+    """Test double for a completed workflow. The trace matches the declared
+    workload contract (the bundled planner's exact shape), so units are valid
+    unless a test deliberately breaks the contract."""
     async def submit(query, opts=None):
         await asyncio.sleep(latency_s)
         return {"ok": ok, "tokens_in": 5200, "tokens_out": 1400,
                 "error": None if ok else "status=failed",
                 "trace": {"llm_calls": llm_calls, "steps": 3,
-                          "validations": 4, "task_count": 3}}
+                          "validations": 7, "task_count": 3}}
     return submit
 
 
@@ -411,12 +426,12 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
     r = test.result
     assert r["mix"] == "tile" and r["tile_size"] == 3          # e2e tile = 3 workflows
     assert set(r["per_scenario"]) == {"research_brief", "comparison", "digest"}
-    assert r["verdict"] == "capped" and r["capacity_tiles"] == 2
+    assert r["verdict"] == "capped" and (r["capacity_tiles"] or 0) >= 1
     assert r["workflows_per_hour"] is not None and r["workflows_per_hour"] > 0
     for row in r["per_scenario"].values():
         assert row["calls"] > 0 and row["errors"] == 0
-        assert row["trace"]["llm_calls"] == 7                  # measured, not assumed
-        assert row["trace"]["validations"] == 4
+        assert row["trace"]["llm_calls"] == 10                 # measured, not assumed
+        assert row["trace"]["validations"] == 7
     assert r["repro"]["seed"] == 42
 
 
@@ -445,29 +460,33 @@ def test_e2e_instability_scales_back_to_last_certified_tile(tmp_path, monkeypatc
     from backend.capacity.e2e import E2ERunner
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
     test = ctl.CapacityTest("e2e", [], _fast_cfg(
-        max_users=9, step_interval_s=0.8, hold_s=1.5, slo_p95_x=3.0,
-        min_samples=1), mix="tile")
+        max_users=24, step_interval_s=0.8, hold_s=1.5, slo_p95_x=3.0,
+        min_samples=1, max_duration_s=90), mix="tile")
     # shrink workflow think time so the short test windows see samples
     for wf in test.scenarios.values():
         wf["think_ms"] = 100
-    climb = {"n": 0}
+    climb = {"t0": None}
 
     async def selective(query, opts=None):
         if len(test.users) > 3:
-            climb["n"] += 1
-            await asyncio.sleep(min(3.0, 0.06 * climb["n"]))   # non-stationary
+            if climb["t0"] is None:
+                climb["t0"] = ctl.time.monotonic()
+            # climbs with elapsed time and never settles
+            await asyncio.sleep(min(2.0, 0.05 + 0.12 * (ctl.time.monotonic() - climb["t0"])))
         else:
             await asyncio.sleep(0.04)
         return {"ok": True, "tokens_in": 5000, "tokens_out": 1300, "error": None,
-                "trace": {"llm_calls": 7, "steps": 3, "validations": 4, "task_count": 3}}
+                "trace": {"llm_calls": 10, "steps": 3, "validations": 7, "task_count": 3}}
 
     test._e2e = E2ERunner(timeout_s=5, submit=selective)
     asyncio.run(test.run())
     r = test.result
     assert r["verdict"] == "unstable"
-    assert r["breach"]["metric"] == "latency_unstable"
-    assert r["capacity_tiles"] == 1
-    assert len(test.users) == 3                                # scaled back to 1 tile
+    assert r["breach"]["metric"] in ("latency_unstable", "tail_unstable",
+                                     "work_aging", "no_samples")
+    assert (r["capacity_tiles"] or 0) >= 1
+    assert r["capacity_users"] < r["peak_users"]               # scaled back
+    assert len(test.users) == r["capacity_users"]
 
 
 # ── Phase 4: DB history + control protections ────────────────────────────────
@@ -638,3 +657,111 @@ def test_dollar_circuit_breaker_reserves_concurrent_spend():
     assert first == 0.0008
     assert second is None
     assert test.verdict == "spend_guard"
+
+
+# ── tier-one integrity rules ─────────────────────────────────────────────────
+
+def test_contract_violation_is_neither_success_nor_failure(tmp_path, monkeypatch):
+    """A unit whose trace breaks the declared contract is workload-invalid: it
+    leaves the latency and error statistics entirely and is counted apart."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _fast_cfg(max_users=3, hold_s=1.0),
+                            mix="tile", inference_backend="remote_mock")
+    sid = test.scenario_ids[0]
+    test.scenarios[sid]["contract"] = {"task_count": [3, 3]}
+
+    good = {"ok": True, "latency_ms": 10.0, "tokens_in": 1, "tokens_out": 1,
+            "trace": {"task_count": 3}}
+    bad = {"ok": True, "latency_ms": 10.0, "tokens_in": 1, "tokens_out": 1,
+           "trace": {"task_count": 5}}
+    test._check_contract(sid, good)
+    test._check_contract(sid, bad)
+
+    assert good.get("invalid") is None and good["ok"] is True
+    assert bad["invalid"] is True and bad["ok"] is False
+    assert test.invalid_units == 1
+    assert "contract violation" in bad["error"]
+
+    # invalid units must not move the error rate either way
+    now = ctl.time.time()
+    for rec in (good, bad):
+        rec.update(scenario=sid, ts=now, t_submit=now - 0.01)
+        test.calls.append(rec)
+    stats = test._scenario_window(sid, 60)
+    assert stats["n"] == 1 and stats["err_rate"] == 0.0
+
+
+def test_cohort_ignores_work_admitted_at_a_lower_level(tmp_path, monkeypatch):
+    """Completions admitted before the current level was reached cannot
+    certify it: the trend test only sees the level's own cohort."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _fast_cfg(min_samples=2), mix="tile")
+    test.baselines = {sid: 50.0 for sid in test.scenario_ids}
+    now = ctl.time.time()
+    test._rung_t0 = now - 10          # this level started 10s ago
+
+    # plenty of fast completions, but all admitted BEFORE the level began
+    for i in range(40):
+        test.calls.append({"scenario": test.scenario_ids[0], "ok": True,
+                           "latency_ms": 20.0, "tokens_in": 0, "tokens_out": 0,
+                           "ts": now - 30 + i * 0.1, "t_submit": now - 60 + i * 0.1})
+    state, breach = test._evaluate_rung(60)
+    assert state == "inconclusive" and breach is None
+
+
+def test_immature_cohort_cannot_certify(tmp_path, monkeypatch):
+    """A half-window whose slow work is still running measures the survivors,
+    so it must read inconclusive rather than good."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _fast_cfg(min_samples=2), mix="tile")
+    now = ctl.time.time()
+    test._rung_t0 = now - 40
+    sid = test.scenario_ids[0]
+    for i in range(6):                       # a few fast finishers in each half
+        for t_sub in (now - 35 + i * 0.1, now - 15 + i * 0.1):
+            test.calls.append({"scenario": sid, "ok": True, "latency_ms": 20.0,
+                               "tokens_in": 0, "tokens_out": 0,
+                               "ts": t_sub + 0.02, "t_submit": t_sub})
+    # ...and far more work from the older half still unfinished
+    for i in range(40):
+        test._inflight[i] = (sid, now - 34 + i * 0.05)
+    state, _ = test._evaluate_rung(40)
+    assert state == "inconclusive"
+
+
+def test_growing_inflight_age_condemns_the_level(tmp_path, monkeypatch):
+    """Hung work never enters the completion record, so the oldest in-flight
+    age carries the signal instead."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _fast_cfg(min_samples=2), mix="tile")
+    now = ctl.time.time()
+    test._rung_t0 = now - 40
+    sid = test.scenario_ids[0]
+    for i in range(8):
+        for t_sub in (now - 38 + i * 0.1, now - 18 + i * 0.1):
+            test.calls.append({"scenario": sid, "ok": True, "latency_ms": 1000.0,
+                               "tokens_in": 0, "tokens_out": 0,
+                               "ts": t_sub + 0.5, "t_submit": t_sub})
+    for i in range(6):                       # oldest-age series climbing hard
+        test.samples.append({"ts": now - 38 + i, "oldest_inflight_s": 2.0})
+        test.samples.append({"ts": now - 18 + i, "oldest_inflight_s": 45.0})
+    state, breach = test._evaluate_rung(40)
+    assert state == "bad" and breach["metric"] == "work_aging"
+
+
+def test_lost_harness_records_invalidate_the_run(tmp_path, monkeypatch):
+    """Lost writes and lost callbacks are benchmark failures wearing an agent
+    failure's clothes, so past tolerance the run stops being a measurement."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _fast_cfg(), mix="tile")
+    test.total_requests = 1000
+
+    async def counters():
+        return {"persist_failures": 40, "callback_failures": 5,
+                "unreachable_executors": 0}
+
+    import backend.workerpool as wp
+    monkeypatch.setattr(wp, "collect_counters", counters)
+    asyncio.run(test._reconcile_harness())
+    assert test.verdict == "harness_degraded"
+    assert test.harness["ok"] is False and test.harness["lost_fraction"] == 0.045

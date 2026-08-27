@@ -46,15 +46,58 @@ def host_info() -> dict:
                     break
     except OSError:
         pass
+    cpu_model = None
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("model name"):
+                    cpu_model = line.split(":", 1)[1].strip()
+                    break
+    except OSError:
+        pass
     return {
         "platform": platform.platform(),
         "cpu_count": os.cpu_count(),
+        "cpu_model": cpu_model,
         "mem_total_gb": mem_gb,
         "numa_nodes": len(glob.glob("/sys/devices/system/node/node[0-9]*")) or None,
         # Orchestrator topology changes agent-host capacity as much as the
         # hardware does: 0 = single-process (GIL-capped at ~one core).
         "orchestrator_workers": int(os.getenv("ADL_WORKERS", "0") or 0),
+        "python": platform.python_version(),
+        # The record has to name the database that served the run: the same
+        # code path runs on SQLite or Postgres, and the two do not produce
+        # comparable numbers.
+        "database": _database_dialect(),
+        "requirements_sha": _file_sha("backend/requirements.txt"),
+        "git_dirty": _git_dirty(),
+        "load_generator": "in-process (control plane drives launch_run directly)",
     }
+
+
+def _database_dialect() -> str | None:
+    url = os.getenv("DATABASE_URL", "")
+    if not url:
+        return "sqlite (default)"
+    scheme = url.split("://", 1)[0]
+    return scheme or None
+
+
+def _file_sha(path: str) -> str | None:
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()[:12]
+    except OSError:
+        return None
+
+
+def _git_dirty() -> bool | None:
+    try:
+        out = subprocess.run(["git", "status", "--porcelain"], capture_output=True,
+                             text=True, timeout=5)
+        return bool(out.stdout.strip()) if out.returncode == 0 else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 async def engine_info(base_url: str) -> dict | None:

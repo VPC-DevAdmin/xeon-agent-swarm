@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 5
+version: 6
 
 scenarios:
   support_agent:
@@ -138,12 +138,21 @@ e2e_tile:
 # failure, exactly like a timeout. think_ms is the MEAN think time: each
 # session applies seeded +/-25% jitter so ramp batches cannot phase-lock into
 # workload pulses (part of the workload definition; deterministic per seed).
+#
+# contract / contract_live declare the shape a COMPLETED unit must have. The
+# deterministic mock planner produces exactly 3 subtasks, 3 steps, 10 model
+# calls and 7 validations, so contract holds it to that; contract_live gives a
+# real planner the range its guardrails allow. A unit outside its contract is
+# workload-invalid: it counts as neither a success nor a capacity failure, and
+# enough of them invalidate the run.
 e2e_workflows:
   research_brief:
     name: "Research brief (e2e)"
     think_ms: 3000
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7]}
+    contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20]}
     budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
     query: >-
       Using ONLY the field notes below (do not research further), write a
@@ -156,13 +165,15 @@ e2e_workflows:
       capable PyTorch builds. (3) vLLM's CPU mode is maintained primarily for
       development parity; published numbers show roughly half of SGLang's CPU
       throughput on identical hardware. (4) All three engines saturate memory
-      bandwidth before compute at batch sizes above 8. Plan at most TWO worker subtasks for this job. Deliverable: a brief
+      bandwidth before compute at batch sizes above 8. Plan exactly three worker subtasks: research, analysis, and writing. Deliverable: a brief
       with sections for findings, trade-offs, and one recommendation.
   comparison:
     name: "Comparison analysis (e2e)"
     think_ms: 3000
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7]}
+    contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20]}
     budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
     query: >-
       Using ONLY the measurements below (do not research further), compare
@@ -172,7 +183,7 @@ e2e_workflows:
       weights, 1.8% accuracy loss that concentrates in math and code tasks,
       fastest decode on memory-bound hosts. FP8 — 31 GB weights, 0.1% accuracy
       loss, requires recent hardware support (AMX/FP8 kernels), prefill
-      throughput 15% higher than INT8 in vendor tests. Plan at most TWO worker subtasks for this job. Deliverable: a
+      throughput 15% higher than INT8 in vendor tests. Plan exactly three worker subtasks: research, analysis, and writing. Deliverable: a
       comparison table, a paragraph on the trade-offs, and one deployment
       recommendation with its main risk.
   digest:
@@ -180,6 +191,8 @@ e2e_workflows:
     think_ms: 3000
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7]}
+    contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20]}
     budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
     query: >-
       Using ONLY the four items below (do not research further), compile a
@@ -191,5 +204,5 @@ e2e_workflows:
       used gateway added semantic caching with embedding-similarity hits,
       claiming 30% token savings on support workloads. (4) Two engines
       standardized on an OpenAI-compatible batch API for offline jobs.
-      Plan at most TWO worker subtasks for this job. Deliverable: five bullets, each naming the item it summarizes and one
+      Plan exactly three worker subtasks: research, analysis, and writing. Deliverable: five bullets, each naming the item it summarizes and one
       sentence on who is affected.
