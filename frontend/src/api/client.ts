@@ -142,6 +142,8 @@ export const capacityApi = {
     input_cost_per_mtok?: number
     output_cost_per_mtok?: number
     max_cost_usd?: number
+    load_model?: 'closed' | 'open'
+    service_class?: 'interactive' | 'batch'
   }) => req<{ started: boolean }>('/capacity/start', { method: 'POST', body: JSON.stringify(body) }),
   stop: () => req<{ stopping: boolean }>('/capacity/stop', { method: 'POST' }),
   history: (limit = 50) => req<CapacityHistoryRow[]>(`/capacity/history?limit=${limit}`),

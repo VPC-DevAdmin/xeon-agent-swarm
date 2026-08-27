@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 6
+version: 7
 
 scenarios:
   support_agent:
@@ -129,6 +129,14 @@ e2e_tile:
   comparison: 1
   digest: 1
 
+# Open-loop offered-rate ramp (workflows per second), used by the capacity test.
+arrival_schedule:
+  start_rate: 2.0
+  step_factor: 1.4        # geometric while the backlog stays flat
+  max_rate: 4000.0
+  hold_s: 45              # dwell per rate level, evaluated for backlog growth
+  max_backlog: 20000      # bounded queue: past this the generator records a rejection
+
 # End-to-end workflows are FIXED-SIZE, SELF-CONTAINED work units. All source
 # material rides inside the prompt — no web research, no external tools — so a
 # workflow's size cannot depend on tool availability or the model's appetite,
@@ -138,6 +146,21 @@ e2e_tile:
 # failure, exactly like a timeout. think_ms is the MEAN think time: each
 # session applies seeded +/-25% jitter so ramp batches cannot phase-lock into
 # workload pulses (part of the workload definition; deterministic per seed).
+#
+# deadlines declare the CAPABILITY targets for a workflow type, per service
+# class. They are product requirements frozen with this workload version, not
+# measurements: they are never recalculated from the performance of a system
+# under test, because a deadline derived from a machine's own speed gives a
+# slow machine an easy target and destroys comparability. Provenance:
+#   interactive 30 s — a person waiting on a drafted brief
+#   batch       300 s — a scheduled job with no one watching
+# A run declares which class it is measuring. Capability is the largest session
+# level where every workflow type meets its class deadline with 95% success at
+# 95% confidence.
+#
+# arrival_schedule drives the open-loop CAPACITY test. Offered rate is global;
+# the mix of types at any rate follows the same tile rotation the capability
+# test uses, so the two metrics measure the same workload.
 #
 # contract / contract_live declare the shape a COMPLETED unit must have. The
 # deterministic mock planner produces exactly 3 subtasks, 3 steps, 10 model
@@ -151,6 +174,7 @@ e2e_workflows:
     think_ms: 3000
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
+    deadlines: {interactive: 30, batch: 300}
     contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7]}
     contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20]}
     budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
@@ -172,6 +196,7 @@ e2e_workflows:
     think_ms: 3000
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
+    deadlines: {interactive: 30, batch: 300}
     contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7]}
     contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20]}
     budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread
@@ -191,6 +216,7 @@ e2e_workflows:
     think_ms: 3000
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
+    deadlines: {interactive: 30, batch: 300}
     contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7]}
     contract_live: {task_count: [2, 4], steps: [2, 4], llm_calls: [4, 20], validations: [0, 20]}
     budgets: {max_subagents: 4, max_tool_hops: 3}  # each worker: exactly 1 bench_record call; guardrail covers the planner's 2-4 subtask spread

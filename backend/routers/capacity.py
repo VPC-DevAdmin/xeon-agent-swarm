@@ -27,6 +27,7 @@ from backend.capacity.client import LOCAL_BASE, LOCAL_MODEL
 from backend.capacity.models import catalog_for_api, resolve_endpoint
 from backend.capacity.controller import CapacityTest, DEFAULTS
 from backend.capacity.scenarios import scenario_list
+from backend.capacity.scenarios import arrival_schedule as scen_arrival_schedule
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/capacity", tags=["capacity"])
@@ -76,6 +77,15 @@ class StartBody(BaseModel):
     input_cost_per_mtok: float | None = Field(None, ge=0)
     output_cost_per_mtok: float | None = Field(None, ge=0)
     max_cost_usd: float | None = Field(None, gt=0, le=100_000)
+    # Which metric to measure. "closed" runs the capability test (sessions
+    # against a declared deadline); "open" runs the capacity test (offered
+    # rate against queue divergence). The two are never combined.
+    load_model: str | None = Field(None, pattern="^(closed|open)$")
+    service_class: str | None = Field(None, pattern="^(interactive|batch)$")
+    arrival_start_rate: float | None = Field(None, gt=0, le=10_000)
+    arrival_step_factor: float | None = Field(None, gt=1.0, le=4.0)
+    arrival_max_rate: float | None = Field(None, gt=0, le=100_000)
+    arrival_hold_s: float | None = Field(None, ge=10, le=600)
 
 
 def _resolve_dimensions(body: StartBody) -> tuple[str, str, str]:
@@ -164,7 +174,15 @@ async def start_test(body: StartBody,
     if inference_backend == "local" and not (await engine_mgr.probe())["serving"]:
         raise HTTPException(409, "local engine is not serving — start it from the "
                                   "Capacity tab (or POST /capacity/engine/start)")
-    cfg = {"mock_ms": body.mock_ms, "mock_sigma": body.mock_sigma,
+    schedule = scen_arrival_schedule()
+    cfg = {"load_model": (body.load_model or "closed"),
+           "service_class": (body.service_class or "interactive"),
+           "arrival_start_rate": body.arrival_start_rate or schedule["start_rate"],
+           "arrival_step_factor": body.arrival_step_factor or schedule["step_factor"],
+           "arrival_max_rate": body.arrival_max_rate or schedule["max_rate"],
+           "arrival_hold_s": body.arrival_hold_s or schedule["hold_s"],
+           "max_backlog": schedule["max_backlog"],
+           "mock_ms": body.mock_ms, "mock_sigma": body.mock_sigma,
            "step_interval_s": body.step_interval_s,
            "step_users": body.step_users, "seed": body.seed,
            "cache_mode": body.cache_mode, "warmup_s": body.warmup_s,

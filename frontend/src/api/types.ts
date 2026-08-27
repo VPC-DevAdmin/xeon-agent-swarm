@@ -248,7 +248,48 @@ export interface CapacityBreach {
   baseline_ms?: number | null
 }
 
+export interface CapabilityBlock {
+  users: number | null
+  tiles?: number | null
+  status: string
+  service_class?: string
+  confidence?: number
+  target?: number
+  last_tested_users?: number
+  per_type?: Record<string, {
+    deadline_s: number; decided: number; successes: number; pending: number
+    observed: number | null; lower_bound_95: number | null
+  }>
+}
+
+export interface CapacityRateLevel {
+  offered_rate: number
+  clean_rate: number
+  backlog_slope_lb?: number | null
+  outstanding?: number
+  oldest_inflight_s?: number | null
+  errors?: number
+  err_rate?: number
+  rejected?: number
+}
+
+export interface SustainableCapacityBlock {
+  status: string
+  clean_workflows_per_s?: number
+  breakpoint_estimate?: number
+  ci95?: [number, number]
+  confirmed_divergence_rate?: number | null
+  levels?: CapacityRateLevel[]
+}
+
 export interface CapacityResult {
+  capability?: CapabilityBlock | null
+  sustainable_capacity?: SustainableCapacityBlock | null
+  capacity_workflows_per_s?: number | null
+  stability_ceiling_users?: number | null
+  failure_onset?: { offered_rate?: number; reason?: string } | null
+  load_model?: 'closed' | 'open'
+  service_class?: string
   mode: string
   benchmark_target?: CapacityBenchmarkTarget
   inference_backend?: CapacityInferenceBackend

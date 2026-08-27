@@ -107,6 +107,9 @@ class E2ERunner:
                            + (f" — {run.error}" if run.error else ""))[:300]
                 return {
                     "ok": ok,
+                    # The outcome was read back from the durable record after a
+                    # write barrier, so a clean unit is a committed unit.
+                    "durable": True,
                     "tokens_in": max(0, total - tokens_out),
                     "tokens_out": tokens_out,
                     "run_id": run_id,

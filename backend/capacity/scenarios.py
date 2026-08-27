@@ -34,8 +34,20 @@ def load_e2e_workflows() -> dict[str, dict]:
                     # Declared shape of a completed unit. `contract` applies to
                     # deterministic backends, `contract_live` to a real planner.
                     "contract": dict(w.get("contract") or {}) or None,
-                    "contract_live": dict(w.get("contract_live") or {}) or None}
+                    "contract_live": dict(w.get("contract_live") or {}) or None,
+                    # Capability deadlines per service class, in seconds.
+                    "deadlines": dict(w.get("deadlines") or {}) or None}
     return out
+
+
+def arrival_schedule() -> dict:
+    """Open-loop offered-rate ramp for the capacity test."""
+    raw = _load_file().get("arrival_schedule") or {}
+    return {"start_rate": float(raw.get("start_rate", 2.0)),
+            "step_factor": float(raw.get("step_factor", 1.4)),
+            "max_rate": float(raw.get("max_rate", 4000.0)),
+            "hold_s": float(raw.get("hold_s", 45)),
+            "max_backlog": int(raw.get("max_backlog", 20000))}
 
 
 def e2e_tile_sessions() -> list[str]:

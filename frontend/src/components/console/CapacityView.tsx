@@ -51,6 +51,7 @@ export function CapacityView() {
   const [busy, setBusy] = useState(false)
   const [armReal, setArmReal] = useState(false)   // cloud mode needs an explicit second click
   const [cacheMode, setCacheMode] = useState<'warm' | 'cold'>('warm')
+  const [loadModel, setLoadModel] = useState<'closed' | 'open'>('closed')
   const [cloudModels, setCloudModels] = useState<CapacityCloudModel[]>([])
   const [cloudModelId, setCloudModelId] = useState('openai:gpt-5.4-mini')
   const [cloudApiKey, setCloudApiKey] = useState('')
@@ -123,6 +124,7 @@ export function CapacityView() {
         mock_ms: target === 'inference_engine' && backend === 'remote_mock' ? mockMs : undefined,
         mock_sigma: target === 'inference_engine' && backend === 'remote_mock' ? mockSigma : undefined,
         cache_mode: cacheMode,
+        load_model: loadModel,
         confirm_real: backend === 'remote_real' ? true : undefined,
         cloud_model: backend === 'remote_real' ? cloudModelId : undefined,
         cloud_api_key: backend === 'remote_real' && cloudApiKey ? cloudApiKey : undefined,
@@ -145,6 +147,30 @@ export function CapacityView() {
 
   return (
     <div className="max-w-[820px] mx-auto pb-10">
+      {/* which metric this run measures */}
+      <div className="console-panel p-3.5 mb-3">
+        <div className="eyebrow mb-2">Which number are we measuring?</div>
+        <div className="flex flex-wrap gap-1 p-[3px] rounded-[10px] border w-fit"
+          style={{ background: 'var(--ink)', borderColor: 'var(--line)' }}>
+          {([
+            ['closed', 'Service capability', 'Concurrent sessions meeting each workflow type\u2019s declared deadline'],
+            ['open', 'Sustainable capacity', 'Clean workflows per second before the backlog grows'],
+          ] as const).map(([id, label, hint]) => (
+            <button key={id} onClick={() => setLoadModel(id)} disabled={active} title={hint}
+              className={clsx('px-3 py-1.5 rounded-lg text-[13px] transition-colors',
+                loadModel === id ? 'bg-[var(--elev2)] text-[var(--text)]'
+                  : 'text-[var(--muted)] hover:text-[var(--text)]')}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11.5px] text-[var(--muted)] mt-2">
+          {loadModel === 'closed'
+            ? 'Closed loop: each session holds one workflow at a time. Reported in sessions and tiles against a declared deadline.'
+            : 'Open loop: arrivals follow a fixed schedule regardless of completions, so overload shows up as a growing queue. Reported in clean workflows per second.'}
+        </p>
+      </div>
+
       {/* benchmark boundary + inference backend */}
       <div className="flex flex-wrap items-stretch gap-3 mb-4">
         <div className="console-panel flex-1 min-w-[340px] p-3.5">
@@ -751,7 +777,7 @@ function ResultCard({ result }: { result: CapacityResult }) {
   const capacityCertified = result.capacity_certified ?? true
   const safetyStop = ['capped', 'timeout', 'budget', 'spend_guard', 'interference'].includes(result.verdict ?? '')
   const lowerBound = Boolean(capacityCertified && safetyStop)
-  const capacityLabel = capacityCertified
+  const stabilityLabel = capacityCertified
     ? (result.mix === 'tile' && result.capacity_tiles != null
         ? `tile${result.capacity_tiles === 1 ? '' : 's'} (${result.capacity_users} ${isRuntime ? 'agent workflow' : 'synthetic'} sessions) within SLO`
         : 'concurrent agent sessions within SLO')
@@ -771,7 +797,7 @@ function ResultCard({ result }: { result: CapacityResult }) {
               ? result.capacity_tiles : result.capacity_users}
         </span>
         <span className="text-[15px] text-[var(--text)]">
-          {capacityLabel}
+          {stabilityLabel}
         </span>
         <span className="text-[12.5px] text-[var(--muted)]">
           {verdictText}
@@ -797,6 +823,85 @@ function ResultCard({ result }: { result: CapacityResult }) {
         {(result.peak_users ?? result.max_users) > (result.capacity_users ?? result.peak_users ?? result.max_users) &&
           ` · ramped to ${result.peak_users ?? result.max_users}, scaled back to measure at ${result.capacity_users}`}
       </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+        <div className="rounded-lg border p-3.5" style={{ borderColor: 'var(--line-soft)' }}>
+          <div className="eyebrow mb-1"
+            title="Largest concurrent session count where every workflow type met its declared deadline, at 95% confidence">
+            Service capability
+          </div>
+          {result.capability?.status === 'measured' ? (
+            <>
+              <div className="font-display font-bold text-[26px] tracking-[-0.02em]"
+                style={{ color: 'var(--accent)' }}>
+                {result.capability.users}
+                <span className="text-[13px] font-normal text-[var(--muted)]"> sessions</span>
+              </div>
+              <p className="text-[11.5px] text-[var(--muted)] mt-0.5">
+                {result.capability.tiles != null && `${result.capability.tiles} tiles · `}
+                every type ≥{((result.capability.target ?? 0.95) * 100).toFixed(0)}% on deadline,
+                {' '}{((result.capability.confidence ?? 0.95) * 100).toFixed(0)}% confidence
+                {result.capability.service_class && ` · ${result.capability.service_class} class`}
+              </p>
+            </>
+          ) : (
+            <div className="text-[13px] text-[var(--muted)] mt-1">
+              {result.capability?.status ?? 'not measured in this run'}
+            </div>
+          )}
+        </div>
+        <div className="rounded-lg border p-3.5" style={{ borderColor: 'var(--line-soft)' }}>
+          <div className="eyebrow mb-1"
+            title="Highest sustained rate of clean durable completions before the backlog grows; open-loop arrivals">
+            Sustainable capacity
+          </div>
+          {result.sustainable_capacity?.status === 'measured' ? (
+            <>
+              <div className="font-display font-bold text-[26px] tracking-[-0.02em]"
+                style={{ color: 'var(--accent)' }}>
+                {result.sustainable_capacity.clean_workflows_per_s}
+                <span className="text-[13px] font-normal text-[var(--muted)]"> clean wf/s</span>
+              </div>
+              <p className="text-[11.5px] text-[var(--muted)] mt-0.5">
+                breakpoint {result.sustainable_capacity.breakpoint_estimate}
+                {result.sustainable_capacity.ci95 &&
+                  ` (95% CI ${result.sustainable_capacity.ci95[0]}–${result.sustainable_capacity.ci95[1]})`}
+                {result.sustainable_capacity.confirmed_divergence_rate != null &&
+                  ` · divergence at ${result.sustainable_capacity.confirmed_divergence_rate}`}
+              </p>
+            </>
+          ) : (
+            <div className="text-[13px] text-[var(--muted)] mt-1">
+              {result.sustainable_capacity?.status ?? 'run the open-loop test to measure this'}
+            </div>
+          )}
+        </div>
+      </div>
+      {result.capability?.per_type && Object.keys(result.capability.per_type).length > 0 && (
+        <div className="mt-3">
+          <div className="eyebrow mb-1.5">On-deadline success by workflow type</div>
+          <div className="flex flex-col gap-1">
+            {Object.entries(result.capability.per_type).map(([sid, t]) => (
+              <div key={sid} className="flex items-center gap-3 text-[12px]">
+                <span className="w-[34%] truncate text-[var(--text)]">{sid}</span>
+                <span className="font-code text-[11px] text-[var(--muted)] w-24">≤ {t.deadline_s}s</span>
+                <span className="font-code text-[11px] text-[var(--muted)] w-28">
+                  {t.successes}/{t.decided} on time
+                </span>
+                <span className="font-code text-[11px] w-28"
+                  style={{ color: (t.lower_bound_95 ?? 0) >= 0.95 ? 'var(--good)' : 'var(--bad)' }}>
+                  bound {t.lower_bound_95 != null ? (t.lower_bound_95 * 100).toFixed(1) : '—'}%
+                </span>
+                {t.pending > 0 && (
+                  <span className="font-code text-[10.5px] text-[var(--faint)]">
+                    {t.pending} still running
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {result.cpu_breakdown && Object.keys(result.cpu_breakdown).length > 0 && (
         <div className="mt-4">
