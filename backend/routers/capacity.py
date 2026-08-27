@@ -26,6 +26,8 @@ from backend.capacity import engine as engine_mgr
 from backend.capacity.client import LOCAL_BASE, LOCAL_MODEL
 from backend.capacity.models import catalog_for_api, resolve_endpoint
 from backend.capacity.controller import CapacityTest, DEFAULTS
+from backend.capacity import repeat as rpt
+from backend.capacity.repeat import RepeatSet
 from backend.capacity.scenarios import scenario_list
 from backend.capacity.scenarios import arrival_schedule as scen_arrival_schedule
 
@@ -35,6 +37,9 @@ router = APIRouter(prefix="/capacity", tags=["capacity"])
 _current: CapacityTest | None = None
 _task: asyncio.Task | None = None
 _last_result: dict | None = None
+_repeat: RepeatSet | None = None
+_repeat_task: asyncio.Task | None = None
+_last_repeat: dict | None = None
 _last_engine_start: float = 0.0
 _ENGINE_COOLDOWN_S = 30.0
 
@@ -148,12 +153,10 @@ async def start_engine(_: None = Depends(_check_control_token)) -> dict:
     return out
 
 
-@router.post("/start")
-async def start_test(body: StartBody,
-                     _: None = Depends(_check_control_token)) -> dict:
-    global _current, _task
-    if _current is not None and _current.status()["active"]:
-        raise HTTPException(409, "a capacity test is already running")
+async def _prepare(body: StartBody) -> dict:
+    """Resolve everything a run needs, ONCE. A repeat set then builds N tests
+    that differ only by seed — resolving per run would let a config change
+    slip in between them."""
     target, inference_backend, mode = _resolve_dimensions(body)
     endpoint: dict | None = None
     if inference_backend == "remote_real":
@@ -259,17 +262,46 @@ async def start_test(body: StartBody,
                                       "the reference tile stays locked for comparability")
         if extra_workflows:
             scenario_ids.extend(extra_workflows)
-    _current = CapacityTest(mode, scenario_ids, cfg, mix=body.mix,
-                            extra_workflows=extra_workflows,
-                            benchmark_target=target,
-                            inference_backend=inference_backend,
-                            e2e_router=e2e_router,
-                            endpoint=endpoint)
+    return {"mode": mode, "target": target, "inference_backend": inference_backend,
+            "cfg": cfg, "scenario_ids": scenario_ids, "mix": body.mix,
+            "extra_workflows": extra_workflows, "e2e_router": e2e_router,
+            "endpoint": endpoint}
+
+
+def _build_test(plan: dict, seed: int | None = None) -> CapacityTest:
+    cfg = dict(plan["cfg"])
+    if seed is not None:
+        cfg["seed"] = int(seed)
+    return CapacityTest(plan["mode"], list(plan["scenario_ids"]), cfg,
+                        mix=plan["mix"],
+                        extra_workflows=plan["extra_workflows"],
+                        benchmark_target=plan["target"],
+                        inference_backend=plan["inference_backend"],
+                        e2e_router=plan["e2e_router"],
+                        endpoint=plan["endpoint"])
+
+
+def _require_idle() -> None:
+    """One measurement at a time, single run or set."""
+    if _current is not None and _current.status()["active"]:
+        raise HTTPException(409, "a capacity test is already running")
+    if _repeat is not None and _repeat.status()["active"]:
+        raise HTTPException(409, "a repeat set is already running")
+
+
+@router.post("/start")
+async def start_test(body: StartBody,
+                     _: None = Depends(_check_control_token)) -> dict:
+    global _current, _task
+    _require_idle()
+    plan = await _prepare(body)
+    _current = _build_test(plan)
     _task = asyncio.create_task(_run_and_keep(_current))
     logger.info("capacity test started: target=%s backend=%s scenarios=%s",
-                target, inference_backend, _current.scenario_ids)
-    return {"started": True, "mode": mode, "benchmark_target": target,
-            "inference_backend": inference_backend, "mix": _current.mix,
+                plan["target"], plan["inference_backend"], _current.scenario_ids)
+    return {"started": True, "mode": plan["mode"],
+            "benchmark_target": plan["target"],
+            "inference_backend": plan["inference_backend"], "mix": _current.mix,
             "scenarios": _current.scenario_ids}
 
 
@@ -280,19 +312,90 @@ async def _run_and_keep(test: CapacityTest):
         _last_result = test.result
 
 
+# ── repeat sets: three runs, a median, and a range ──────────────────────────
+
+class RepeatBody(StartBody):
+    runs: int = Field(3, ge=2, le=10)
+    settle_s: float | None = Field(None, ge=0, le=1800)
+    max_retries: int | None = Field(None, ge=0, le=5)
+
+
+@router.post("/repeat/start")
+async def start_repeat(body: RepeatBody,
+                       _: None = Depends(_check_control_token)) -> dict:
+    global _current, _repeat, _repeat_task
+    _require_idle()
+    plan = await _prepare(body)
+    # The dollar circuit breaker is per run. A set of N runs would spend it N
+    # times over, which is not what someone declaring a ceiling meant. Split it
+    # so the SET honours the number the user typed.
+    guard = plan["cfg"].get("max_cost_usd")
+    per_run_guard = round(float(guard) / body.runs, 4) if guard else None
+    if per_run_guard is not None:
+        plan["cfg"]["max_cost_usd"] = per_run_guard
+
+    def factory(seed: int) -> CapacityTest:
+        # The set owns _current so /status and /stop keep working per run.
+        global _current
+        _current = _build_test(plan, seed)
+        return _current
+
+    _repeat = RepeatSet(factory, runs=body.runs, seed=body.seed,
+                        settle_s=(rpt.DEFAULT_SETTLE_S if body.settle_s is None
+                                  else body.settle_s),
+                        max_retries=(rpt.DEFAULT_MAX_RETRIES
+                                     if body.max_retries is None
+                                     else body.max_retries))
+    _repeat_task = asyncio.create_task(_run_set(_repeat))
+    logger.info("repeat set started: %d runs, base seed %d, target=%s",
+                body.runs, _repeat.seed, plan["target"])
+    return {"started": True, "runs": body.runs, "base_seed": _repeat.seed,
+            "mode": plan["mode"], "benchmark_target": plan["target"],
+            "inference_backend": plan["inference_backend"], "mix": plan["mix"],
+            "max_cost_usd_total": guard, "max_cost_usd_per_run": per_run_guard}
+
+
+async def _run_set(rs: RepeatSet):
+    global _last_repeat
+    await rs.run()
+    _last_repeat = rs.result
+
+
+@router.get("/repeat/status")
+async def repeat_status() -> dict:
+    if _repeat is None:
+        return {"active": False, "phase": "idle", "result": _last_repeat}
+    return _repeat.status()
+
+
 @router.post("/stop")
 async def stop_test() -> dict:
-    if _current is None or not _current.status()["active"]:
+    stopping = False
+    # Stop the SET first: stopping only the child would let the next run start.
+    if _repeat is not None and _repeat.status()["active"]:
+        _repeat.stop()
+        stopping = True
+    if _current is not None and _current.status()["active"]:
+        _current.stop()
+        stopping = True
+    if not stopping:
         raise HTTPException(409, "no capacity test is running")
-    _current.stop()
     return {"stopping": True}
 
 
 @router.get("/status")
 async def get_status() -> dict:
-    if _current is None:
-        return {"active": False, "phase": "idle", "result": _last_result}
-    return _current.status()
+    base = (_current.status() if _current is not None
+            else {"active": False, "phase": "idle", "result": _last_result})
+    if _repeat is not None:
+        rs = _repeat.status()
+        base = {**base, "repeat": {k: v for k, v in rs.items() if k != "current"}}
+        if rs["active"]:
+            # Between runs there is no child, but the set is still working.
+            base["active"] = True
+            if _repeat.current is None:
+                base["phase"] = rs["phase"]
+    return base
 
 
 # ── benchmark history (DB-persisted; survives restarts) ──────────────────────

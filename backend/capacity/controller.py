@@ -6,16 +6,30 @@ the five fixed agent scenarios looping continuously. The ramp stops when the
 system shows CONSISTENT saturation, then holds at that level to measure a clean
 steady state, and reports a speed-test-style result.
 
-CAPACITY DEFINITION (the number this test reports): the highest agent count at
-which the service level still held — p95 latency within slo_p95_x × the
-low-load baseline (or an absolute slo_p95_ms) AND error rate within slo_err.
-When the ramp breaches the SLO it SCALES BACK DOWN to the last good level and
-measures the steady state THERE: capacity is what you can sustain, not the
-level you died at. Resource verdicts explain the cause.
+WHAT THIS REPORTS — two metrics, different questions, different units, never
+combined into one unlabelled number:
+
+  service capability    closed loop. The largest concurrent session count at
+                        which every workflow type meets its DECLARED deadline,
+                        with the lower 95% bound on on-deadline success at or
+                        above the target. Sessions.
+  sustainable capacity  open loop. The highest offered rate whose clean,
+                        durable completions the host keeps up with before the
+                        backlog diverges. Clean workflows per second.
+
+The closed-loop ramp also yields a stability ceiling: the level past which
+added sessions stop being absorbed into a steady state. It carries no service
+promise, so it is a DIAGNOSTIC and never the headline. When the ramp breaches
+it, the run SCALES BACK DOWN to the last good level and measures there.
+
+Every one of those numbers means something different depending on how the run
+ENDED — see BOUNDARY_VERDICTS / CENSORING_VERDICTS / INVALID_VERDICTS below.
+A run that ran out of CPU, clock, or dollars before the system showed its edge
+produced a LOWER BOUND, and the result says so.
 
 Stop conditions (first one to fire wins):
-  unstable  latency kept climbing at FIXED load (window's 2nd half p95 over
-            the 1st by > stat_tolerance) for 2 consecutive evaluations — the
+  unstable  latency kept climbing at FIXED load (window's 2nd half p80 over
+            the 1st by > drift_tolerance) for 2 consecutive evaluations — the
             system stopped absorbing the load into a steady state. Scale down
             to the last certified level, drain the breach backlog, hold,
             measure. The buyer's-latency-budget view (slo_p95_x x baseline)
@@ -65,6 +79,34 @@ from backend.capacity import repro as repro_mod
 
 RESULTS_DIR = Path("data/capacity")
 
+# How a run ENDED decides what its numbers MEAN.
+#
+#   boundary    the ramp found the edge it went looking for: the system itself
+#               stopped absorbing the load. The number is a measurement.
+#   censoring   the run hit a limit of the harness, the budget, or the host
+#               before any edge appeared. Everything it measured is a LOWER
+#               BOUND on the real figure, because the levels above were never
+#               tested. Reporting these as capacity sells a harness limit as a
+#               system limit.
+#   invalid     the run did not measure what it claims to measure. No number
+#               it produced means anything.
+BOUNDARY_VERDICTS = frozenset({"unstable", "errors", "queue_divergence"})
+CENSORING_VERDICTS = frozenset({"cpu", "memory", "kv", "spend_guard", "budget",
+                                "capped", "timeout", "interference", "stopped"})
+INVALID_VERDICTS = frozenset({"workload_invalid", "harness_degraded"})
+
+CENSOR_REASON = {
+    "cpu": "host CPU saturated before a service boundary appeared",
+    "memory": "host memory saturated before a service boundary appeared",
+    "kv": "engine KV cache saturated before a service boundary appeared",
+    "spend_guard": "dollar circuit breaker stopped the run",
+    "budget": "dollar circuit breaker stopped the run",
+    "capped": "configured ceiling reached with the system still healthy",
+    "timeout": "time limit reached with the system still healthy",
+    "interference": "other processes on the host saturated the CPU",
+    "stopped": "stopped by hand before a boundary appeared",
+}
+
 # DB persistence of finished results (benchmark history). Module flag so unit
 # tests can run without a schema; the JSON file fallback always happens.
 PERSIST_TO_DB = True
@@ -92,7 +134,7 @@ DEFAULTS = dict(
     slo_p95_x=3.0,         # SLO: a profile's p95 may grow to this multiple of ITS baseline
     slo_p95_ms=None,       # absolute p95 cap in ms (applies in addition to the multiplier)
     slo_err=0.05,          # SLO: max error rate per profile while a rung counts as "good"
-    stat_tolerance=0.25,   # trend: 2nd half-window p80 may exceed the 1st by ≤25%
+    drift_tolerance=0.25,  # drift: 2nd half-window p80 may exceed the 1st by ≤25%
     cohort_maturity=0.8,   # fraction of the older half that must have COMPLETED to judge it
     harness_tolerance=0.005,  # lost writes/callbacks above this share invalidate the run
     invalid_tolerance=0.01,   # contract-violating units above this share invalidate the run
@@ -432,7 +474,7 @@ class CapacityTest:
         per session from the run seed): AIMD batches otherwise create cohorts
         of phase-locked timers — observed live at ~870 sessions as in-flight
         oscillating 63<->771 while the latency body pulsed with the wave. A
-        pulsing workload cannot certify stationarity; decohered timers can."""
+        pulsing workload cannot pass a drift test; decohered timers can."""
         rng = random.Random((self.seed or 0) ^ (idx * 2654435761))
         while not self._stop.is_set():
             # Reserve a conservative workflow envelope before launch. Actual
@@ -646,15 +688,20 @@ class CapacityTest:
         Capacity is the load the system absorbs into a steady state. A closed-
         loop rig cannot show a queue explosion (in-flight is capped at N), so
         the intrinsic failure signals at fixed load are:
-          - latency non-stationarity: p95 in the window's 2nd half exceeds the
-            1st half by more than stat_tolerance — the system is still
-            accumulating delay at constant load;
+          - latency drift: the p80 of the window's 2nd half exceeds the p80
+            of the 1st half by more than drift_tolerance — the system is
+            still accumulating delay at constant load;
           - per-profile error rate over slo_err (timeouts are the closed-loop
             analog of a wait explosion).
         The old p95 <= slo_p95_x x baseline test is an OVERLAY (a buyer's
         latency budget), reported as slo_capacity_users, never the verdict.
 
-        Returns (state, breach): 'good' (stationary + errors bounded, enough
+        This is a two-sample comparison of half-window quantiles against a
+        tolerance, not a test for stationarity in the formal sense: it detects
+        a level that is still accumulating delay, and makes no claim about the
+        distribution being time-invariant.
+
+        Returns (state, breach): 'good' (no drift + errors bounded, enough
         samples), 'bad' (breach names the mechanism), or 'inconclusive'."""
         min_n = int(self.cfg["min_samples"])
         state = "good"
@@ -700,7 +747,7 @@ class CapacityTest:
         maturity = len(h1) / max(1, len(h1) + cens1)
         if maturity < float(self.cfg["cohort_maturity"]):
             return "inconclusive", None          # slow work has not landed yet
-        tol = 1.0 + float(self.cfg["stat_tolerance"])
+        tol = 1.0 + float(self.cfg["drift_tolerance"])
 
         # Oldest in-flight age must not trend upward. Completion-time sampling
         # cannot see a unit that never completes, so a stalling level can hold
@@ -720,7 +767,7 @@ class CapacityTest:
                                 "value": round(a2, 1),
                                 "limit": round(max(a1 * tol, floor_s), 1),
                                 "baseline_ms": round(a1 * 1000, 1)}
-        # PRIMARY: p80 stationarity. The p95 of a half-window is decided by a
+        # PRIMARY: p80 drift. The p95 of a half-window is decided by a
         # handful of tail samples, and batch-cohort waves made it oscillate
         # 3s<->10s at ~900 sessions — halving the ramp accelerator on noise.
         # p80 tracks the body of the distribution and decides the ramp.
@@ -1082,7 +1129,7 @@ class CapacityTest:
                     # step (min 8 tiles) — with the wall far away, small
                     # batches only waste wall-clock. Adds are STAGGERED across
                     # ~5s so a batch doesn't launch a thundering herd whose
-                    # spike the stationarity check then measures.
+                    # spike the drift check then measures.
                     max_tiles = max(8, (len(self.users) // max(1, self.tile_size)) // 2)
                     n = min(self._accel_tiles, max_tiles) * self.tile_size
                     pause = min(0.25, 5.0 / max(1, n))
@@ -1128,14 +1175,14 @@ class CapacityTest:
         host CPU under half the saturation target, and latency under half the
         workflow timeout (sanity ceiling). A baseline-multiple check proved
         wrong here: closed-loop latency is ALWAYS a few x the empty-machine
-        baseline at scale while remaining perfectly stationary — it throttled
-        the ramp to single-session probing at 500 sessions with p95 flat at
-        5s. Wall proximity is the stationarity machinery's job (bad
-        evaluations halve the batch and gate adds), not this heuristic's."""
+        baseline at scale while remaining perfectly flat — it throttled the
+        ramp to single-session probing at 500 sessions with p95 flat at 5s.
+        Wall proximity is the drift machinery's job (bad evaluations halve
+        the batch and gate adds), not this heuristic's."""
         if self.samples:
             cpu = self.samples[-1].get("cpu_pct")
             # Batch while CPU < 85% of the saturation target: the final
-            # approach is guarded by stationarity, per-profile errors, and the
+            # approach is guarded by the drift test, per-profile errors, and
             # interference check, so the gate only needs to prevent leaping
             # PAST the wall — the earlier 50% setting left an hour of
             # single-session creep between half-load and the cpu verdict.
@@ -1332,6 +1379,11 @@ class CapacityTest:
             while time.time() - since < budget and not self._stop.is_set():
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=5)
+                    if not self.capability_detail:
+                        self.capability_detail = {
+                            "status": "stopped before certification",
+                            "service_class": self.cfg["service_class"],
+                            "last_tested_users": len(self.users)}
                     return
                 except asyncio.TimeoutError:
                     pass
@@ -1343,10 +1395,21 @@ class CapacityTest:
                 self.capability_users = len(self.users)
                 if self.tile_size:
                     self.capability_tiles = len(self.users) // self.tile_size
+                # A pass on the FIRST candidate bounds rather than measures.
+                # Nothing above it was ever put to the deadline, so the real
+                # capability may be higher and we have no evidence either way.
+                # Only a pass that follows a FAILURE at a higher level has
+                # actually bracketed the boundary.
+                bounded = attempts == 1
                 self.capability_detail = {
-                    "status": "measured", "service_class": self.cfg["service_class"],
+                    "status": "lower bound" if bounded else "measured",
+                    "service_class": self.cfg["service_class"],
                     "confidence": 0.95, "target": float(self.cfg["capability_target"]),
                     "per_type": self._capability_report(since)}
+                if bounded:
+                    self.capability_detail["reason"] = (
+                        "passed at the first level tested — no higher level was "
+                        "put to the deadline")
                 return
             self.capability_detail = {
                 "status": "not met at any tested level",
@@ -1502,7 +1565,28 @@ class CapacityTest:
                        rate * float(self.cfg["arrival_step_factor"]))
 
     def _summarize_capacity(self) -> None:
-        """Fit the saturation breakpoint and publish the conservative bound."""
+        """Fit the saturation breakpoint and publish the conservative bound.
+
+        A breakpoint only means something when the offered rate actually
+        outran the host. When the run stopped for its OWN reasons — the
+        configured rate ceiling, the clock, the spend guard — the throughput
+        curve is a straight line, and a segmented fit would happily place a
+        knee in the noise at the top of it. That would invent a boundary the
+        host never showed. Report the highest rate it sustained instead, as
+        the lower bound it is."""
+        top_clean = max((lv["clean_rate"] for lv in self.rate_levels), default=None)
+        # A hand stop leaves no verdict at all, only the phase, and it censors
+        # the run exactly as a ceiling does.
+        ended_early = (self.verdict in CENSORING_VERDICTS
+                       or (self.verdict is None and self.phase == "stopped"))
+        if self.failure_onset is None and ended_early:
+            self.capacity_wps = round(top_clean, 2) if top_clean else None
+            self.capacity_detail = {
+                "status": "lower bound",
+                "at_least_workflows_per_s": self.capacity_wps,
+                "reason": CENSOR_REASON.get(self.verdict or "stopped", self.verdict),
+                "levels": self.rate_levels}
+            return
         if len(self.rate_levels) < 4:
             self.capacity_detail = {"status": "too few offered rates to fit a breakpoint"}
             return
@@ -1524,6 +1608,24 @@ class CapacityTest:
             "levels": self.rate_levels}
 
     # ── result ───────────────────────────────────────────────────────────────
+    def _result_kind(self, verdict: str | None) -> str:
+        """Classify what this run's numbers mean: see the verdict sets above.
+
+        A run with no number at all is 'inconclusive' regardless of how it
+        ended — there is nothing to bound."""
+        if verdict in INVALID_VERDICTS:
+            return "invalid"
+        have_number = (self.capability_users is not None
+                       or self.capacity_wps is not None
+                       or self.capacity_users is not None)
+        if not have_number:
+            return "inconclusive"
+        if verdict in BOUNDARY_VERDICTS:
+            return "boundary"
+        if verdict in CENSORING_VERDICTS:
+            return "lower_bound"
+        return "inconclusive"
+
     def _finalize(self):
         hold_w = getattr(self, "_hold_window_s", None) or float(self.cfg["hold_s"])
         hold = self._window_stats(hold_w)
@@ -1598,11 +1700,19 @@ class CapacityTest:
         energy_wh = round(statistics.mean(powers) * dur / 3600, 2) if powers else None
 
         completed_requests = self.completed_requests
+        # How the run ended decides what every number in it means, so classify
+        # once here and let the published figures inherit it.
+        verdict = self.verdict or ("stopped" if self.phase == "stopped" else None)
+        kind = self._result_kind(verdict)
         self.result = {
             "mode": self.mode,
             "benchmark_target": self.benchmark_target,
             "inference_backend": self.inference_backend,
-            "verdict": self.verdict or ("stopped" if self.phase == "stopped" else None),
+            "verdict": verdict,
+            "result_kind": kind,
+            "censored": kind == "lower_bound",
+            "censor_reason": (CENSOR_REASON.get(verdict or "", verdict)
+                              if kind == "lower_bound" else None),
             "phase": self.phase,
             "error": self.error,
             # THE capacity number: the highest level at which the SLO held.
@@ -1626,7 +1736,10 @@ class CapacityTest:
             # headline and never substitutes for capability.
             "stability_ceiling_users": self.capacity_users,
             "capacity_users": self.capacity_users,
-            "capacity_certified": self.capacity_users is not None,
+            # Certified means the run found the boundary. A run that ran out
+            # of CPU, clock, or dollars first produced a lower bound, and
+            # calling that certified sells a harness limit as a system limit.
+            "capacity_certified": kind == "boundary" and self.capacity_users is not None,
             "capacity_tiles": (self.capacity_tiles
                                 if self.capacity_tiles is not None
                                 else (self.capacity_users // self.tile_size

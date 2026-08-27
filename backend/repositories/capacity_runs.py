@@ -46,6 +46,10 @@ def summary(row: CapacityRun) -> dict:
         "verdict": row.verdict,
         "capacity_users": row.capacity_users, "capacity_tiles": row.capacity_tiles,
         "capacity_certified": r.get("capacity_certified"),
+        # What the number means: a censored run's figure is a floor, and the
+        # list view has to say so without opening the blob.
+        "result_kind": r.get("result_kind"),
+        "censored": r.get("censored"),
         "workflows_per_hour": r.get("workflows_per_hour"),
         "cloud_model_name": (r.get("cloud_model") or {}).get("name"),
         "run_cost_usd": (r.get("cost") or {}).get("run_total_usd"),

@@ -251,7 +251,10 @@ export interface CapacityBreach {
 export interface CapabilityBlock {
   users: number | null
   tiles?: number | null
+  // 'measured' | 'lower bound' | 'not met at any tested level' |
+  // 'not configured' | 'stopped before certification'
   status: string
+  reason?: string
   service_class?: string
   confidence?: number
   target?: number
@@ -274,7 +277,11 @@ export interface CapacityRateLevel {
 }
 
 export interface SustainableCapacityBlock {
+  // 'measured' | 'lower bound' | 'no distinct capacity knee detected' |
+  // 'too few offered rates to fit a breakpoint'
   status: string
+  reason?: string
+  at_least_workflows_per_s?: number | null
   clean_workflows_per_s?: number
   breakpoint_estimate?: number
   ci95?: [number, number]
@@ -294,6 +301,13 @@ export interface CapacityResult {
   benchmark_target?: CapacityBenchmarkTarget
   inference_backend?: CapacityInferenceBackend
   verdict: string | null
+  // What the run's numbers MEAN, decided by how it ended. 'boundary' = the
+  // system showed its edge. 'lower_bound' = the run stopped for its own
+  // reasons first, so every figure is a floor. 'invalid' = the run did not
+  // measure what it claims to.
+  result_kind?: 'boundary' | 'lower_bound' | 'invalid' | 'inconclusive'
+  censored?: boolean
+  censor_reason?: string | null
   capacity_users: number | null   // null = no rung certified — capacity unknown
   capacity_certified?: boolean
   capacity_tiles?: number | null
@@ -364,9 +378,59 @@ export interface CapacityResult {
   } | null
 }
 
+export interface RepeatMetric {
+  unit: string
+  n: number
+  median: number
+  min: number
+  max: number
+  values: number[]
+  // How far apart the runs landed as a share of the median: the number that
+  // says whether the set agrees with itself.
+  spread_pct?: number | null
+}
+
+export interface RepeatExclusion {
+  seed: number
+  verdict?: string | null
+  reason: string
+  history_id?: string | null
+}
+
+export interface RepeatSetResult {
+  kind: 'repeat_set'
+  status: 'complete' | 'incomplete'
+  runs_requested: number
+  runs_accepted: number
+  runs_excluded: number
+  censored: boolean
+  censor_reasons?: string[]
+  metrics: Record<string, RepeatMetric>
+  excluded: RepeatExclusion[]
+  child_run_ids: string[]
+  seeds: (number | null)[]
+  comparability?: Record<string, string | number | null> | null
+  base_seed: number
+  duration_s: number
+  incomplete_reason?: string
+}
+
+export interface RepeatSetStatus {
+  active: boolean
+  phase: string
+  runs_requested: number
+  runs_accepted: number
+  runs_excluded: number
+  excluded: RepeatExclusion[]
+  base_seed: number
+  elapsed_s: number
+  result?: RepeatSetResult | null
+}
+
 export interface CapacityStatus {
   active: boolean
   phase: string
+  repeat?: RepeatSetStatus | null
   verdict?: string | null
   mode?: string
   benchmark_target?: CapacityBenchmarkTarget
@@ -446,6 +510,8 @@ export interface CapacityHistoryRow {
   mix: string
   comparable?: boolean | null
   verdict?: string | null
+  result_kind?: 'boundary' | 'lower_bound' | 'invalid' | 'inconclusive' | null
+  censored?: boolean | null
   capacity_users?: number | null
   capacity_certified?: boolean | null
   capacity_tiles?: number | null

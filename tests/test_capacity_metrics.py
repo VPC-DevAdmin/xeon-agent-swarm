@@ -221,3 +221,118 @@ def test_the_two_metrics_are_reported_separately(tmp_path, monkeypatch):
     assert r["service_class"] == "interactive"
     # the closed-loop diagnostic keeps its own name and is not the headline
     assert "stability_ceiling_users" in r
+
+
+# ── what a result MEANS ──────────────────────────────────────────────────────
+
+def _stopped_at(verdict, **fields):
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.verdict = verdict
+    for k, v in fields.items():
+        setattr(test, k, v)
+    return test
+
+
+def test_a_resource_stop_is_a_lower_bound_not_a_capacity():
+    """Running out of CPU is a fact about the box's headroom, not a service
+    boundary. The levels above were never tested, so the number is a floor."""
+    for verdict in ("cpu", "memory", "kv", "spend_guard", "capped", "timeout",
+                    "interference", "stopped"):
+        test = _stopped_at(verdict, capacity_users=400)
+        assert test._result_kind(verdict) == "lower_bound", verdict
+
+
+def test_a_service_boundary_is_a_measurement():
+    for verdict in ("unstable", "errors", "queue_divergence"):
+        test = _stopped_at(verdict, capacity_users=400)
+        assert test._result_kind(verdict) == "boundary", verdict
+
+
+def test_a_run_that_produced_no_number_is_inconclusive_however_it_ended():
+    for verdict in ("cpu", "unstable", "stopped", None):
+        test = _stopped_at(verdict)
+        assert test._result_kind(verdict) == "inconclusive", verdict
+
+
+def test_an_invalid_run_is_not_even_a_lower_bound():
+    """A run whose workload or harness failed its own integrity check measured
+    nothing, so its number does not bound anything."""
+    for verdict in ("workload_invalid", "harness_degraded"):
+        test = _stopped_at(verdict, capacity_users=400)
+        assert test._result_kind(verdict) == "invalid", verdict
+
+
+def test_the_published_result_says_which_kind_it_is(tmp_path, monkeypatch):
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = _stopped_at("cpu", capacity_users=400, capacity_tiles=4)
+    test.ended_at = ctl.time.time()
+    test._finalize()
+    r = test.result
+    assert r["result_kind"] == "lower_bound"
+    assert r["censored"] is True
+    assert "CPU" in r["censor_reason"]
+    # the number survives — it is real, it is just a floor
+    assert r["capacity_users"] == 400
+    assert r["capacity_certified"] is False
+
+
+def test_a_certified_result_says_so(tmp_path, monkeypatch):
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = _stopped_at("unstable", capacity_users=400)
+    test.ended_at = ctl.time.time()
+    test._finalize()
+    assert test.result["capacity_certified"] is True
+    assert test.result["censored"] is False
+    assert test.result["censor_reason"] is None
+
+
+def test_open_loop_refuses_a_knee_when_the_backlog_never_diverged():
+    """A straight line has no knee. A segmented fit will happily place one in
+    the noise at the top, which would invent a boundary the host never showed."""
+    test = ctl.CapacityTest("e2e", [], _cfg(load_model="open"), mix="tile")
+    test.rate_levels = [{"offered_rate": r, "clean_rate": r}
+                        for r in (10, 20, 30, 40, 50, 60)]
+    test.verdict = "capped"          # hit the configured ceiling, still healthy
+    test.failure_onset = None
+    test._summarize_capacity()
+    detail = test.capacity_detail
+    assert detail["status"] == "lower bound"
+    assert detail["at_least_workflows_per_s"] == 60
+    assert test.capacity_wps == 60
+    assert "ci95" not in detail and "breakpoint_estimate" not in detail
+
+
+def test_open_loop_still_fits_when_divergence_was_confirmed():
+    test = ctl.CapacityTest("e2e", [], _cfg(load_model="open"), mix="tile")
+    test.rate_levels = [{"offered_rate": r, "clean_rate": min(r, 46.0)}
+                        for r in (10, 20, 30, 40, 50, 60, 70)]
+    test.verdict = "queue_divergence"
+    test.failure_onset = {"offered_rate": 60, "reason": "backlog_growth"}
+    test._summarize_capacity()
+    assert test.capacity_detail["status"] == "measured"
+
+
+def test_capability_passing_at_the_first_level_tested_is_a_floor():
+    """Nothing above it was ever put to the deadline, so it bounds rather than
+    measures. Only a pass BELOW a failure has bracketed the boundary."""
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.user_scenario = list(test.scenario_ids)
+    test.users = [None] * (test.tile_size or 1)
+    test._capability_state = lambda since: ("good", None)
+    asyncio.run(test._certify_capability())
+    assert test.capability_detail["status"] == "lower bound"
+    assert "no higher level" in test.capability_detail["reason"]
+    assert test.capability_users == len(test.users)
+
+
+def test_a_hand_stopped_open_loop_run_does_not_get_a_fitted_knee():
+    """Stopping by hand leaves no verdict, only a phase. It censors the run
+    exactly as a configured ceiling does."""
+    test = ctl.CapacityTest("e2e", [], _cfg(load_model="open"), mix="tile")
+    test.rate_levels = [{"offered_rate": r, "clean_rate": min(r, 46.0)}
+                        for r in (10, 20, 30, 40, 50, 60, 70)]
+    test.stop()
+    assert test.verdict is None and test.phase == "stopped"
+    test._summarize_capacity()
+    assert test.capacity_detail["status"] == "lower bound"
+    assert test._result_kind("stopped") == "lower_bound"

@@ -6,7 +6,7 @@ import type {
   AgentDefinition,
   CapacityBenchmarkTarget, CapacityInferenceBackend,
   CapacityCloudModel, CapacityEngine, CapacityResult, CapacityScenario,
-  CapacitySample, CapacityStatus,
+  CapacitySample, CapacityStatus, RepeatSetStatus,
 } from '../../api/types'
 
 const TARGETS: { id: CapacityBenchmarkTarget; label: string; hint: string }[] = [
@@ -50,6 +50,7 @@ export function CapacityView() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [armReal, setArmReal] = useState(false)   // cloud mode needs an explicit second click
+  const [runs, setRuns] = useState(1)             // >1 runs a repeat set
   const [cacheMode, setCacheMode] = useState<'warm' | 'cold'>('warm')
   const [loadModel, setLoadModel] = useState<'closed' | 'open'>('closed')
   const [cloudModels, setCloudModels] = useState<CapacityCloudModel[]>([])
@@ -115,7 +116,7 @@ export function CapacityView() {
     setArmReal(false)
     setBusy(true); setError(null)
     try {
-      await capacityApi.start({
+      const body = {
         benchmark_target: target,
         inference_backend: backend,
         mix,
@@ -133,7 +134,11 @@ export function CapacityView() {
         input_cost_per_mtok: backend === 'remote_real' && customCloud ? customInputCost : undefined,
         output_cost_per_mtok: backend === 'remote_real' && customCloud ? customOutputCost : undefined,
         max_cost_usd: backend === 'remote_real' ? maxCostUsd : undefined,
-      })
+      }
+      // One run is one sample. A set runs the same benchmark under different
+      // seeds and reports the median with the range it actually observed.
+      if (runs > 1) await capacityApi.startRepeat({ ...body, runs })
+      else await capacityApi.start(body)
       const s = await capacityApi.status(); setStatus(s)
     } catch (e) { setError(e instanceof Error ? e.message : 'start failed') }
     finally { setBusy(false) }
@@ -255,13 +260,30 @@ export function CapacityView() {
 
         {/* start / stop */}
         <div className="console-panel w-[210px] p-3.5 flex flex-col items-center justify-center gap-2">
+          {!active && (
+            <div className="w-full">
+              <div className="eyebrow mb-1 text-center">runs</div>
+              <div className="flex gap-1">
+                {[1, 3, 5].map((n) => (
+                  <button key={n} onClick={() => setRuns(n)}
+                    title={n === 1 ? 'a single run — one sample, no error bar'
+                      : `${n} runs under different seeds, reported as a median and a range`}
+                    className="flex-1 py-1 rounded-lg border font-code text-[11px]"
+                    style={{ borderColor: runs === n ? 'var(--accent)' : 'var(--line)',
+                             color: runs === n ? 'var(--accent)' : 'var(--muted)' }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {!active ? (
             <button onClick={start}
               disabled={busy || (!runtimeTarget && enabled.length === 0) || (backend === 'local' && !engine?.serving)
                 || (backend === 'remote_real' && !cloudReady)}
               className="w-full py-3 rounded-xl font-display font-semibold text-[15px] transition-opacity disabled:opacity-35"
               style={{ background: armReal ? 'var(--bad)' : 'var(--accent)', color: armReal ? '#fff' : '#0b0f18' }}>
-              {armReal ? 'Confirm cloud spend' : 'Start test'}
+              {armReal ? 'Confirm cloud spend' : runs > 1 ? `Start ${runs}-run set` : 'Start test'}
             </button>
           ) : (
             <button onClick={stop} disabled={busy}
@@ -273,7 +295,8 @@ export function CapacityView() {
           <p className="font-code text-[10.5px] text-center"
             style={{ color: armReal ? 'var(--bad)' : 'var(--faint)' }}>
             {active ? `${status?.phase} · ${Math.round(status?.elapsed_s ?? 0)}s`
-              : armReal ? `confirm ${selectedCloudModel?.name ?? (customModel || 'custom model')} · circuit breaker $${maxCostUsd.toFixed(2)}`
+              : armReal ? `confirm ${selectedCloudModel?.name ?? (customModel || 'custom model')} · circuit breaker $${maxCostUsd.toFixed(2)}${runs > 1 ? ` total, $${(maxCostUsd / runs).toFixed(2)} per run` : ''}`
+              : runs > 1 ? `${runs} runs · median and range · contaminated runs are retried, not averaged`
               : 'failure-driven ramp · no session or duration cap · cloud spend is dollar-guarded'}
           </p>
         </div>
@@ -433,6 +456,9 @@ export function CapacityView() {
       {(active || (status?.timeline?.length ?? 0) > 0) && status && (
         <LivePanel status={status} />
       )}
+
+      {/* a repeat set: three runs, a median, and a range */}
+      {status?.repeat && <RepeatSetCard set={status.repeat} />}
 
       {/* final result (live) or a history result being viewed */}
       {viewing ? (
@@ -747,6 +773,97 @@ function Spark({ title, series, maxHint }: {
   )
 }
 
+/* ── repeat set ──────────────────────────────────────────────────────────────── */
+
+const REPEAT_METRIC_LABEL: Record<string, string> = {
+  service_capability: 'Service capability',
+  sustainable_capacity: 'Sustainable capacity',
+  stability_ceiling: 'Stability ceiling · diagnostic',
+}
+
+function RepeatSetCard({ set }: { set: RepeatSetStatus }) {
+  const r = set.result
+  const metrics = Object.entries(r?.metrics ?? {})
+  return (
+    <div className="console-panel p-5">
+      <div className="flex items-baseline gap-3 flex-wrap">
+        <span className="eyebrow" style={{ color: 'var(--accent)' }}>Repeat set</span>
+        <span className="text-[13px] text-[var(--text)]">
+          {set.runs_accepted} of {set.runs_requested} runs accepted
+          {set.runs_excluded > 0 && ` · ${set.runs_excluded} excluded`}
+        </span>
+        <span className="font-code text-[11px] text-[var(--faint)]">
+          {set.active ? `${set.phase} · ${Math.round(set.elapsed_s)}s elapsed`
+            : `base seed ${set.base_seed}${r ? ` · ${Math.round(r.duration_s)}s` : ''}`}
+        </span>
+      </div>
+
+      {r?.status === 'incomplete' && (
+        <p className="text-[12.5px] mt-1.5" style={{ color: 'var(--warn)' }}>
+          <b>Incomplete set — no median published.</b>{' '}
+          {r.incomplete_reason}. A median over whatever survived would misstate
+          how much evidence there is.
+        </p>
+      )}
+      {r?.censored && (
+        <p className="text-[12.5px] mt-1.5" style={{ color: 'var(--warn)' }}>
+          <b>The set is a lower bound.</b>{' '}
+          {(r.censor_reasons ?? []).join('; ') || 'at least one run stopped before its boundary'}
+          {' '}— the median of floors is itself a floor.
+        </p>
+      )}
+
+      {r?.status === 'complete' && metrics.length > 0 && (
+        <div className="flex flex-col gap-2.5 mt-3">
+          {metrics.map(([key, m]) => (
+            <div key={key} className="rounded-lg border p-3" style={{ borderColor: 'var(--line-soft)' }}>
+              <div className="eyebrow mb-1">{REPEAT_METRIC_LABEL[key] ?? key}</div>
+              <div className="flex items-baseline gap-2.5 flex-wrap">
+                <span className="font-display font-bold text-[26px] tracking-[-0.02em]"
+                  style={{ color: key === 'stability_ceiling' ? 'var(--muted)' : 'var(--accent)' }}>
+                  {r.censored && '≥'}{m.median}
+                </span>
+                <span className="text-[13px] text-[var(--muted)]">{m.unit} (median of {m.n})</span>
+                <span className="font-code text-[11.5px] text-[var(--faint)]">
+                  range {m.min}–{m.max}
+                  {m.spread_pct != null && ` · spread ${m.spread_pct}%`}
+                </span>
+              </div>
+              <p className="font-code text-[10.5px] mt-1 text-[var(--faint)]">
+                runs: {m.values.join(' · ')}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(set.excluded?.length ?? 0) > 0 && (
+        <div className="mt-3">
+          <div className="eyebrow mb-1.5">Excluded runs</div>
+          <div className="flex flex-col gap-1">
+            {set.excluded.map((x, i) => (
+              <div key={i} className="text-[11.5px] text-[var(--muted)]">
+                <span className="font-code text-[10.5px] text-[var(--faint)]">seed {x.seed}</span>
+                {' — '}{x.reason}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {r?.comparability && (
+        <p className="font-code text-[10.5px] mt-3 text-[var(--faint)]">
+          every run shared: workload {String(r.comparability.scenario_fingerprint ?? '—')}
+          {' '}· commit {String(r.comparability.git_commit ?? '—')}
+          {' '}· {String(r.comparability.benchmark_target ?? '—')}
+          {' / '}{String(r.comparability.inference_backend ?? '—')}
+          {' '}· {String(r.comparability.load_model ?? '—')} loop
+        </p>
+      )}
+    </div>
+  )
+}
+
 /* ── result card ─────────────────────────────────────────────────────────────── */
 
 const VERDICT_TEXT: Record<string, string> = {
@@ -756,12 +873,15 @@ const VERDICT_TEXT: Record<string, string> = {
   kv: 'engine KV cache saturated — model memory gated before CPU',
   plateau: 'throughput plateaued — no headroom past this point',  // legacy rows only; no longer a stop
   unstable: 'latency kept climbing at fixed load — the system stopped absorbing added sessions',
-  interference: 'host CPU was saturated by processes OUTSIDE this benchmark — not a capacity boundary; quiesce the box and rerun',
+  interference: 'host CPU was saturated by processes OUTSIDE this benchmark — quiesce the box and rerun',
   errors: 'error rate exceeded the limit',
-  capped: 'safety ceiling reached without saturation — this is a lower bound, not the system limit',
-  timeout: 'time safety limit reached without saturation — this is a lower bound when the SLO was certified',
-  budget: 'live-API spend guard reached — this is a lower bound, not a capacity boundary',
-  spend_guard: 'dollar circuit breaker reached — the run stopped before a system limit, so this is not a capacity result',
+  queue_divergence: 'the backlog grew faster than the host drained it — arrivals outran the service rate',
+  capped: 'configured ceiling reached with the system still healthy',
+  timeout: 'time limit reached with the system still healthy',
+  budget: 'live-API spend guard reached',
+  spend_guard: 'dollar circuit breaker reached',
+  workload_invalid: 'too many units violated the workload contract — the run did not exercise the intended work',
+  harness_degraded: 'the harness lost writes or completion callbacks — benchmark failures are indistinguishable from agent failures here',
   stopped: 'stopped manually',
 }
 
@@ -774,35 +894,97 @@ function ResultCard({ result }: { result: CapacityResult }) {
   const backendLabel = backend === 'remote_mock' ? 'remote mock'
     : backend === 'remote_real' ? 'remote cloud' : 'local inference'
   const isRuntime = target !== 'inference_engine'
-  const capacityCertified = result.capacity_certified ?? true
-  const safetyStop = ['capped', 'timeout', 'budget', 'spend_guard', 'interference'].includes(result.verdict ?? '')
-  const lowerBound = Boolean(capacityCertified && safetyStop)
-  const stabilityLabel = capacityCertified
+  // Runs saved before result_kind existed are classified the old way, from
+  // the verdict, so history keeps rendering correctly.
+  const safetyStop = ['capped', 'timeout', 'budget', 'spend_guard', 'interference', 'stopped'].includes(result.verdict ?? '')
+  const kind = result.result_kind
+    ?? ((result.capacity_certified ?? true) && result.capacity_users != null
+          ? (safetyStop ? 'lower_bound' : 'boundary')
+          : 'inconclusive')
+  const lowerBound = kind === 'lower_bound'
+  // A censored run still measured something real. Its number is a floor, not
+  // a blank: the box DID sustain that level, we just never found its edge.
+  const haveNumber = result.capacity_users != null && (kind === 'boundary' || lowerBound)
+  const stabilityLabel = haveNumber
     ? (result.mix === 'tile' && result.capacity_tiles != null
-        ? `tile${result.capacity_tiles === 1 ? '' : 's'} (${result.capacity_users} ${isRuntime ? 'agent workflow' : 'synthetic'} sessions) within SLO`
-        : 'concurrent agent sessions within SLO')
-    : `capacity unknown — peaked at ${result.peak_users ?? result.max_users} sessions; no rung was SLO-certified`
-  const verdictText = !capacityCertified && safetyStop
-    ? 'safety stop occurred before a healthy rung could be certified — result is inconclusive'
+        ? `tile${result.capacity_tiles === 1 ? '' : 's'} (${result.capacity_users} ${isRuntime ? 'agent workflow' : 'synthetic'} sessions) absorbed into a steady state`
+        : 'concurrent agent sessions absorbed into a steady state')
+    : kind === 'invalid'
+      ? 'this run did not measure what it claims to — see the harness and workload counters below'
+      : `capacity unknown — peaked at ${result.peak_users ?? result.max_users} sessions; no level was certified`
+  const verdictText = kind === 'inconclusive' && safetyStop
+    ? 'the run stopped before a healthy level could be certified — result is inconclusive'
     : (VERDICT_TEXT[result.verdict ?? ''] ?? result.verdict)
   const resourceMetricsMeaningful = target !== 'inference_engine' || backend === 'local'
+
+  // The headline is the metric THIS run measured. A closed-loop run measures
+  // service capability; an open-loop run measures sustainable capacity. The
+  // stability ceiling leads only when neither was produced (older results),
+  // and then it is labelled as the diagnostic it is.
+  const cap = result.capability
+  const capShown = Boolean(cap && (cap.status === 'measured' || cap.status === 'lower bound'))
+  const wps = result.sustainable_capacity
+  const wpsShown = Boolean(wps && (wps.status === 'measured' || wps.status === 'lower bound'))
+  const pct = (v: number | undefined, d: number) => ((v ?? d) * 100).toFixed(0)
+
+  let headKey: 'capability' | 'capacity' | 'ceiling' | 'none' = 'none'
+  let head = { label: 'Result', value: '—', unit: '', bound: false,
+               meaning: stabilityLabel, note: undefined as string | undefined }
+  if (wpsShown && wps && (result.load_model === 'open' || !capShown)) {
+    const bound = wps.status === 'lower bound'
+    headKey = 'capacity'
+    head = {
+      label: 'Sustainable capacity', bound, unit: 'clean workflows/s',
+      value: String((bound ? wps.at_least_workflows_per_s : wps.clean_workflows_per_s) ?? '—'),
+      meaning: bound
+        ? 'sustained with a flat backlog — the host was never outrun, so no knee was fitted'
+        : `sustained before the backlog diverged${wps.ci95 ? ` · 95% CI ${wps.ci95[0]}–${wps.ci95[1]}` : ''}`,
+      note: bound ? (wps.reason ?? undefined) : undefined,
+    }
+  } else if (capShown && cap) {
+    const bound = cap.status === 'lower bound'
+    headKey = 'capability'
+    head = {
+      label: 'Service capability', bound, unit: 'concurrent sessions',
+      value: String(cap.users ?? '—'),
+      meaning: `every workflow type met its declared deadline at ${pct(cap.target, 0.95)}% success, `
+        + `${pct(cap.confidence, 0.95)}% confidence`
+        + `${cap.tiles != null ? ` · ${cap.tiles} tiles` : ''}`
+        + `${cap.service_class ? ` · ${cap.service_class} class` : ''}`,
+      note: bound ? (cap.reason ?? undefined) : undefined,
+    }
+  } else if (haveNumber) {
+    headKey = 'ceiling'
+    const asTiles = result.mix === 'tile' && result.capacity_tiles != null
+    head = {
+      label: 'Stability ceiling (diagnostic)', bound: lowerBound,
+      value: String((asTiles ? result.capacity_tiles : result.capacity_users) ?? '—'),
+      unit: asTiles ? `tiles (${result.capacity_users} sessions)` : 'concurrent sessions',
+      meaning: 'load absorbed into a steady state — this carries no service promise, '
+        + 'so it is not a capability figure',
+      note: lowerBound ? (result.censor_reason ?? undefined) : undefined,
+    }
+  }
   return (
     <div className="console-panel p-5" style={{ borderColor: 'rgba(124,135,245,.4)' }}>
       <div className="eyebrow mb-1">{targetLabel} · inference: {backendLabel}{result.cloud_model ? ` · ${result.cloud_model.name}` : ''} · {isRuntime ? 'real agent workflows' : 'synthetic agent traces'}</div>
+      <div className="eyebrow mb-0.5" style={{ color: 'var(--accent)' }}>{head.label}</div>
       <div className="flex items-baseline gap-3 flex-wrap">
         <span className="font-display font-bold text-[40px] tracking-[-0.03em]" style={{ color: 'var(--accent)' }}>
-          {lowerBound && '≥'}
-          {!capacityCertified ? '—'
-            : result.mix === 'tile' && result.capacity_tiles != null
-              ? result.capacity_tiles : result.capacity_users}
+          {head.bound && '≥'}{head.value}
         </span>
-        <span className="text-[15px] text-[var(--text)]">
-          {stabilityLabel}
-        </span>
-        <span className="text-[12.5px] text-[var(--muted)]">
-          {verdictText}
-        </span>
+        <span className="text-[15px] text-[var(--text)]">{head.unit}</span>
       </div>
+      <p className="text-[13px] mt-0.5 text-[var(--text)]">{head.meaning}</p>
+      <p className="text-[12.5px] mt-0.5 text-[var(--muted)]">{verdictText}</p>
+      {head.bound && (
+        <p className="text-[12.5px] mt-1" style={{ color: 'var(--warn)' }}>
+          <b>Lower bound, not a measurement.</b>{' '}
+          {head.note ?? result.censor_reason
+            ?? 'the run stopped before the system showed its boundary'}
+          {' '}— nothing above this level was tested, so the real figure may be higher.
+        </p>
+      )}
       {result.breach && (
         <p className="text-[12.5px] mt-1" style={{ color: 'var(--warn)' }}>
           The next rung failed the <b>{result.breach.profile}</b> {result.breach.metric === 'p95_ms' ? 'p95 latency' : 'error-rate'} SLO
@@ -817,23 +999,26 @@ function ResultCard({ result }: { result: CapacityResult }) {
         </p>
       )}
       <p className="font-code text-[11px] mt-1" style={{ color: 'var(--faint)' }}>
-        SLO: p95 ≤ {result.slo?.p95_ms != null ? `${result.slo.p95_ms}ms`
+        stability gate: errors ≤ {((result.slo?.err ?? 0.05) * 100).toFixed(0)}% per type
+        {' '}· latency overlay: p95 ≤ {result.slo?.p95_ms != null ? `${result.slo.p95_ms}ms`
           : `${result.slo?.p95_x ?? 3}× each profile’s healthy baseline`}
-        {' '}· errors ≤ {((result.slo?.err ?? 0.05) * 100).toFixed(0)}%
         {(result.peak_users ?? result.max_users) > (result.capacity_users ?? result.peak_users ?? result.max_users) &&
           ` · ramped to ${result.peak_users ?? result.max_users}, scaled back to measure at ${result.capacity_users}`}
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+        {headKey !== 'capability' && (
         <div className="rounded-lg border p-3.5" style={{ borderColor: 'var(--line-soft)' }}>
           <div className="eyebrow mb-1"
             title="Largest concurrent session count where every workflow type met its declared deadline, at 95% confidence">
             Service capability
           </div>
-          {result.capability?.status === 'measured' ? (
+          {result.capability && (result.capability.status === 'measured'
+                                 || result.capability.status === 'lower bound') ? (
             <>
               <div className="font-display font-bold text-[26px] tracking-[-0.02em]"
                 style={{ color: 'var(--accent)' }}>
+                {result.capability.status === 'lower bound' && '≥'}
                 {result.capability.users}
                 <span className="text-[13px] font-normal text-[var(--muted)]"> sessions</span>
               </div>
@@ -843,6 +1028,11 @@ function ResultCard({ result }: { result: CapacityResult }) {
                 {' '}{((result.capability.confidence ?? 0.95) * 100).toFixed(0)}% confidence
                 {result.capability.service_class && ` · ${result.capability.service_class} class`}
               </p>
+              {result.capability.status === 'lower bound' && (
+                <p className="text-[11px] mt-1" style={{ color: 'var(--warn)' }}>
+                  floor only — {result.capability.reason ?? 'no higher level was tested'}
+                </p>
+              )}
             </>
           ) : (
             <div className="text-[13px] text-[var(--muted)] mt-1">
@@ -850,25 +1040,38 @@ function ResultCard({ result }: { result: CapacityResult }) {
             </div>
           )}
         </div>
+        )}
+        {headKey !== 'capacity' && (
         <div className="rounded-lg border p-3.5" style={{ borderColor: 'var(--line-soft)' }}>
           <div className="eyebrow mb-1"
             title="Highest sustained rate of clean durable completions before the backlog grows; open-loop arrivals">
             Sustainable capacity
           </div>
-          {result.sustainable_capacity?.status === 'measured' ? (
+          {result.sustainable_capacity && (result.sustainable_capacity.status === 'measured'
+                                           || result.sustainable_capacity.status === 'lower bound') ? (
             <>
               <div className="font-display font-bold text-[26px] tracking-[-0.02em]"
                 style={{ color: 'var(--accent)' }}>
-                {result.sustainable_capacity.clean_workflows_per_s}
+                {result.sustainable_capacity.status === 'lower bound' && '≥'}
+                {result.sustainable_capacity.status === 'lower bound'
+                  ? result.sustainable_capacity.at_least_workflows_per_s
+                  : result.sustainable_capacity.clean_workflows_per_s}
                 <span className="text-[13px] font-normal text-[var(--muted)]"> clean wf/s</span>
               </div>
-              <p className="text-[11.5px] text-[var(--muted)] mt-0.5">
-                breakpoint {result.sustainable_capacity.breakpoint_estimate}
-                {result.sustainable_capacity.ci95 &&
-                  ` (95% CI ${result.sustainable_capacity.ci95[0]}–${result.sustainable_capacity.ci95[1]})`}
-                {result.sustainable_capacity.confirmed_divergence_rate != null &&
-                  ` · divergence at ${result.sustainable_capacity.confirmed_divergence_rate}`}
-              </p>
+              {result.sustainable_capacity.status === 'lower bound' ? (
+                <p className="text-[11.5px] mt-0.5" style={{ color: 'var(--warn)' }}>
+                  the backlog never diverged — {result.sustainable_capacity.reason
+                    ?? 'the run ended before the host was outrun'}. No knee was fitted.
+                </p>
+              ) : (
+                <p className="text-[11.5px] text-[var(--muted)] mt-0.5">
+                  breakpoint {result.sustainable_capacity.breakpoint_estimate}
+                  {result.sustainable_capacity.ci95 &&
+                    ` (95% CI ${result.sustainable_capacity.ci95[0]}–${result.sustainable_capacity.ci95[1]})`}
+                  {result.sustainable_capacity.confirmed_divergence_rate != null &&
+                    ` · divergence at ${result.sustainable_capacity.confirmed_divergence_rate}`}
+                </p>
+              )}
             </>
           ) : (
             <div className="text-[13px] text-[var(--muted)] mt-1">
@@ -876,6 +1079,28 @@ function ResultCard({ result }: { result: CapacityResult }) {
             </div>
           )}
         </div>
+        )}
+        {headKey !== 'ceiling' && haveNumber && (
+        <div className="rounded-lg border p-3.5" style={{ borderColor: 'var(--line-soft)' }}>
+          <div className="eyebrow mb-1"
+            title="The level past which added sessions stop being absorbed into a steady state. It carries no service promise, so it is never the headline.">
+            Stability ceiling · diagnostic
+          </div>
+          <div className="font-display font-bold text-[26px] tracking-[-0.02em]"
+            style={{ color: 'var(--muted)' }}>
+            {lowerBound && '≥'}
+            {result.mix === 'tile' && result.capacity_tiles != null
+              ? result.capacity_tiles : result.capacity_users}
+            <span className="text-[13px] font-normal text-[var(--muted)]">
+              {result.mix === 'tile' && result.capacity_tiles != null
+                ? ` tiles (${result.capacity_users} sessions)` : ' sessions'}
+            </span>
+          </div>
+          <p className="text-[11.5px] text-[var(--muted)] mt-0.5">
+            load absorbed into a steady state · no service promise attached
+          </p>
+        </div>
+        )}
       </div>
       {result.capability?.per_type && Object.keys(result.capability.per_type).length > 0 && (
         <div className="mt-3">

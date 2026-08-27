@@ -118,33 +118,43 @@ export function approveRun(runId: string, decision: 'approve' | 'reject') {
 }
 
 // ── Capacity tester ───────────────────────────────────────────────────────────
+export interface CapacityStartBody {
+  benchmark_target: 'agent_host' | 'integrated_node' | 'inference_engine'
+  inference_backend: 'local' | 'remote_mock' | 'remote_real'
+  mix?: 'tile' | 'custom'
+  scenarios?: string[]
+  agent_definitions?: string[]
+  mock_ms?: number
+  mock_sigma?: number
+  seed?: number
+  cache_mode?: 'warm' | 'cold'
+  confirm_real?: boolean
+  cloud_model?: string
+  cloud_api_key?: string
+  custom_base_url?: string
+  custom_model?: string
+  input_cost_per_mtok?: number
+  output_cost_per_mtok?: number
+  max_cost_usd?: number
+  load_model?: 'closed' | 'open'
+  service_class?: 'interactive' | 'batch'
+}
+
 export const capacityApi = {
   scenarios: () => req<{ scenarios: CapacityScenario[]; tile: Record<string, number>; e2e_workflows: { id: string; name: string; query: string }[]; e2e_tile: Record<string, number>; defaults: Record<string, number> }>('/capacity/scenarios'),
   engine: () => req<CapacityEngine>('/capacity/engine'),
   models: () => req<{ models: import('./types').CapacityCloudModel[]; custom: { id: 'custom'; name: string; provider: 'custom'; protocol: string } }>('/capacity/models'),
   startEngine: () => req<{ started: boolean; reason?: string }>('/capacity/engine/start', { method: 'POST' }),
   status: () => req<CapacityStatus>('/capacity/status'),
-  start: (body: {
-    benchmark_target: 'agent_host' | 'integrated_node' | 'inference_engine'
-    inference_backend: 'local' | 'remote_mock' | 'remote_real'
-    mix?: 'tile' | 'custom'
-    scenarios?: string[]
-    agent_definitions?: string[]
-    mock_ms?: number
-    mock_sigma?: number
-    seed?: number
-    cache_mode?: 'warm' | 'cold'
-    confirm_real?: boolean
-    cloud_model?: string
-    cloud_api_key?: string
-    custom_base_url?: string
-    custom_model?: string
-    input_cost_per_mtok?: number
-    output_cost_per_mtok?: number
-    max_cost_usd?: number
-    load_model?: 'closed' | 'open'
-    service_class?: 'interactive' | 'batch'
-  }) => req<{ started: boolean }>('/capacity/start', { method: 'POST', body: JSON.stringify(body) }),
+  start: (body: CapacityStartBody) =>
+    req<{ started: boolean }>('/capacity/start', { method: 'POST', body: JSON.stringify(body) }),
+  startRepeat: (body: CapacityStartBody & {
+    runs?: number
+    settle_s?: number
+    max_retries?: number
+  }) => req<{ started: boolean; runs: number; base_seed: number }>(
+    '/capacity/repeat/start', { method: 'POST', body: JSON.stringify(body) }),
+  repeatStatus: () => req<import('./types').RepeatSetStatus>('/capacity/repeat/status'),
   stop: () => req<{ stopping: boolean }>('/capacity/stop', { method: 'POST' }),
   history: (limit = 50) => req<CapacityHistoryRow[]>(`/capacity/history?limit=${limit}`),
   historyGet: (id: string) => req<CapacityHistoryRow & { result: CapacityResult }>(`/capacity/history/${id}`),
