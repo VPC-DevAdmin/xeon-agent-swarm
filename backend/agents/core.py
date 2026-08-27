@@ -137,7 +137,8 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
                 plan_approval: bool | None = None,
                 enabled_tools: list[str] | None = None,
                 model_factory: ModelFactory | None = None,
-                toolless: bool = False):
+                toolless: bool = False,
+                budget: dict | None = None):
     """Assemble the deep agent.
 
     mcp_tools:    LangChain tools granted to the MAIN agent (the planner). Usually a
@@ -172,12 +173,30 @@ def build_agent(checkpointer: AsyncSqliteSaver, mcp_tools: list | None = None,
         main_tools.append(build_submit_plan_tool())
         system_prompt = system_prompt + PLAN_APPROVAL_SUFFIX
 
+    # Budgets ENFORCE gracefully instead of aborting: an oversized delegation
+    # plan is rejected whole before any worker spawns (bounded replans), and a
+    # worker's tools decline past the hop budget with a finalize-now notice.
+    # The event adapter keeps its checks only as runaway backstops.
+    from backend.agents.budget_guard import PlanBudgetGuard, ToolBudgetGuard
+    from backend.observability.event_adapter import _budget_from_env
+    caps = {**_budget_from_env(), **{k: int(v) for k, v in (budget or {}).items()
+                                     if v is not None}}
+    main_middleware = []
+    if int(caps.get("max_subagents") or 0) > 0:
+        main_middleware.append(PlanBudgetGuard(int(caps["max_subagents"])))
+    worker_guard = (ToolBudgetGuard(int(caps["max_tool_hops"]))
+                    if int(caps.get("max_tool_hops") or 0) > 0 else None)
+
     return create_deep_agent(
         model=mf.for_tier(planner_tier),                      # main agent: planner+synthesis
         tools=main_tools,
         system_prompt=system_prompt,
+        middleware=main_middleware,
         subagents=build_subagent_profiles(mf, tools_by_name, enabled_tools,
-                                          strip_builtin_tools=toolless),  # workers on auto
+                                          strip_builtin_tools=toolless,
+                                          extra_middleware=(
+                                              [worker_guard] if worker_guard
+                                              else None)),      # workers on auto
         interrupt_on=build_interrupts(approval_on),             # HITL at main-agent level
         checkpointer=checkpointer,                              # REQUIRED for HITL + resume
     )

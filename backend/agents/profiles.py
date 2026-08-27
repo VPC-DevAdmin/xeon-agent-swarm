@@ -72,7 +72,8 @@ _BUILTIN_TOOL_NAMES = frozenset(
 
 def build_subagent_profiles(mf, tools_by_name: dict | None = None,
                             enabled_tools: list[str] | None = None,
-                            strip_builtin_tools: bool = False) -> list[dict]:
+                            strip_builtin_tools: bool = False,
+                            extra_middleware: list | None = None) -> list[dict]:
     """Build the deepagents `subagents=[...]` list from worker_roles.yaml.
 
     mf: a ModelFactory (backend.inference.model.ModelFactory). Workers run on
@@ -103,10 +104,13 @@ def build_subagent_profiles(mf, tools_by_name: dict | None = None,
                       else _granted_tools(grant, tools_by_name)),
             "model": worker_model,
         }
+        middleware = list(extra_middleware or [])
         if strip_builtin_tools:
             from deepagents.middleware._tool_exclusion import _ToolExclusionMiddleware
-            profile["middleware"] = [
-                _ToolExclusionMiddleware(excluded=_BUILTIN_TOOL_NAMES)]
+            middleware.append(
+                _ToolExclusionMiddleware(excluded=_BUILTIN_TOOL_NAMES))
+        if middleware:
+            profile["middleware"] = middleware
         profiles.append(profile)
     return profiles
 

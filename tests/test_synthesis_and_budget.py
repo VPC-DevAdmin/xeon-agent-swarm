@@ -112,17 +112,21 @@ def test_max_subagents_budget_stops_cleanly():
         await adapter.handle((), "updates", {"model": {"messages": [_task("t1", "research")]}})
         await adapter.handle((), "updates", {"tools": {"messages": [ToolMessage(
             name="task", tool_call_id="t1", content='{"result":"ok finding","confidence":0.8}')]}})
-        # second delegation breaches max_subagents=1
-        try:
-            await adapter.handle((), "updates", {"model": {"messages": [_task("t2", "analysis")]}})
-            raised = False
-        except BudgetExceeded as be:
-            raised = True
-            adapter.budget_exceeded = {"kind": be.kind, "used": be.used, "limit": be.limit}
+        # Oversized batches are REJECTED for replanning (PlanBudgetGuard
+        # declines them in the graph; the adapter mirrors and counts). Only
+        # past the bounded replans does the runaway backstop raise.
+        raised = False
+        for attempt in ("t2", "t3", "t4"):
+            try:
+                await adapter.handle((), "updates", {"model": {"messages": [_task(attempt, "analysis")]}})
+            except BudgetExceeded as be:
+                raised = True
+                adapter.budget_exceeded = {"kind": be.kind, "used": be.used, "limit": be.limit}
         return raised, await adapter.finalize(status="completed")
 
     raised, summary = asyncio.run(go())
-    assert raised                                       # the breach was signalled
+    assert raised                                       # the backstop still exists
+    assert adapter.plan_rejections == 2                 # two replans granted first
     assert summary["budget_exceeded"]["kind"] == "max_subagents"
     # run still finalizes cleanly with the partial result preserved
     assert fdb.run["status"] == "completed"
@@ -193,9 +197,12 @@ def test_run_with_adapter_catches_budget_and_completes():
             yield (), "updates", {"model": {"messages": [_task("t1", "research")]}}
             yield (), "updates", {"tools": {"messages": [ToolMessage(
                 name="task", tool_call_id="t1", content='{"result":"finding one","confidence":0.8}')]}}
-            # breaches max_subagents=1
+            # Three oversized plans in a row: the first two are counted as
+            # replans (the guard rejects them in-graph), the third trips the
+            # runaway backstop.
             yield (), "updates", {"model": {"messages": [_task("t2", "analysis")]}}
-            # (graph would continue, but the adapter raises before consuming more)
+            yield (), "updates", {"model": {"messages": [_task("t3", "analysis")]}}
+            yield (), "updates", {"model": {"messages": [_task("t4", "analysis")]}}
 
     summary = asyncio.run(run_with_adapter(
         FakeAgent(), "q", "s3", persistence=fdb, budget={"max_subagents": 1}))

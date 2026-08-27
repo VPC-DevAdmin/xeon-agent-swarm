@@ -135,6 +135,11 @@ class EventAdapter:
         self.budget = budget if budget is not None else _budget_from_env()
         self.total_tokens = 0
         self.budget_exceeded: dict | None = None
+        # Graceful-enforcement telemetry (budget_guard middlewares): plans
+        # rejected before any worker spawned, and worker tool calls declined
+        # past the hop budget. Visible in metrics, never silent.
+        self.plan_rejections = 0
+        self.tool_clamps = 0
 
         self.calls: list[dict] = []                 # every model call, for the routing rollup
         self.steps: dict[str, dict] = {}            # task_call_id -> {step_key, role, attempts}
@@ -216,6 +221,8 @@ class EventAdapter:
                                       total_attempts=self._orch_attempts)
         metrics = {"task_count": self._delegation_n,
                    "tool_calls": tool_calls,
+                   "plan_rejections": self.plan_rejections,
+                   "tool_clamps": self.tool_clamps,
                    "validation_tokens": self.validation_tokens,
                    "total_tokens": self.total_tokens, **routing.as_dict()}
         if self.budget_exceeded:
@@ -270,8 +277,21 @@ class EventAdapter:
                 self._account_tokens(tin, tout)
             tcalls = _task_calls(m)
             if tcalls:
-                for tc in tcalls:
-                    await self._open_delegation(tc)
+                cap = self.budget.get("max_subagents", 0)
+                if cap and self._delegation_n + len(tcalls) > cap:
+                    # PlanBudgetGuard rejects this whole batch before any
+                    # worker spawns; count the replan and open nothing. The
+                    # raise survives only as a runaway backstop past the
+                    # guard's own replan bound.
+                    from backend.agents.budget_guard import MAX_REPLANS
+                    if self.plan_rejections >= MAX_REPLANS:
+                        raise BudgetExceeded(
+                            "max_subagents", self._delegation_n + len(tcalls),
+                            cap)
+                    self.plan_rejections += 1
+                else:
+                    for tc in tcalls:
+                        await self._open_delegation(tc)
             elif (getattr(m, "content", "") or "").strip():
                 # No delegation + content = the synthesis turn.
                 self.final_answer = m.content
@@ -283,9 +303,6 @@ class EventAdapter:
 
     async def _open_delegation(self, tc: dict) -> None:
         self._delegation_n += 1
-        cap = self.budget.get("max_subagents", 0)
-        if cap and self._delegation_n > cap:
-            raise BudgetExceeded("max_subagents", self._delegation_n, cap)
         role = (tc.get("args") or {}).get("subagent_type") or "general-purpose"
         desc = (tc.get("args") or {}).get("description") or ""
         step_key = f"{role}-{self._delegation_n}"[:32]
@@ -446,10 +463,18 @@ class EventAdapter:
             return
         kind = type(m).__name__
         if kind == "ToolMessage":
-            # A worker tool call (one tool hop). Bound per agent (plan §4.4).
+            # A worker tool call (one tool hop). ToolBudgetGuard declines
+            # calls past the cap with an exhaustion notice; those are counted
+            # as clamps, not hops, and the raise survives only as a runaway
+            # backstop at twice the cap (a guard that is not installed or not
+            # working must still not let a loop run away).
+            from backend.agents.budget_guard import TOOL_EXHAUSTED_PREFIX
+            if str(getattr(m, "content", "")).startswith(TOOL_EXHAUSTED_PREFIX):
+                self.tool_clamps += 1
+                return
             info["tool_hops"] += 1
             cap = self.budget.get("max_tool_hops", 0)
-            if cap and info["tool_hops"] > cap:
+            if cap and info["tool_hops"] > 2 * cap:
                 raise BudgetExceeded("max_tool_hops", info["tool_hops"], cap)
             return
         if kind == "AIMessage":

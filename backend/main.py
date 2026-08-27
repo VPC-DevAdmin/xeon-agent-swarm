@@ -130,7 +130,9 @@ async def read_run_outcome(run_id: str) -> dict:
             "trace": {"llm_calls": int(m.get("call_count") or 0),
                       "steps": len(steps), "validations": validations,
                       "task_count": int(m.get("task_count") or 0),
-                      "tool_calls": int(m.get("tool_calls") or 0)}}
+                      "tool_calls": int(m.get("tool_calls") or 0),
+                      "plan_rejections": int(m.get("plan_rejections") or 0),
+                      "tool_clamps": int(m.get("tool_clamps") or 0)}}
 
 
 @asynccontextmanager
@@ -345,7 +347,8 @@ async def _await_approval(run_id: str):
 _bench_agents: dict = {}
 
 
-async def _bench_agent(ckpt_dir: str, mf, *, plan_approval, enabled_tools, key):
+async def _bench_agent(ckpt_dir: str, mf, *, plan_approval, enabled_tools, key,
+                       budget: dict | None = None):
     """Benchmark agents run with NO checkpointer — whole-workflow-retry policy
     (see run_deepagents). Compiled once per configuration per executor."""
     from backend.agents.core import build_agent
@@ -357,7 +360,7 @@ async def _bench_agent(ckpt_dir: str, mf, *, plan_approval, enabled_tools, key):
         _bench_agents[key] = build_agent(
             None, plan_approval=False,
             enabled_tools=enabled_tools, model_factory=mf,
-            tools_by_name=bench_tools, toolless=True)
+            tools_by_name=bench_tools, toolless=True, budget=budget)
     return _bench_agents[key]
 
 
@@ -460,9 +463,10 @@ async def run_deepagents(
             # ~30% of profiled stacks at 150 workflows/min.
             agent = await _bench_agent(
                 ckpt_dir, mf, plan_approval=plan_approval,
-                enabled_tools=enabled_tools,
+                enabled_tools=enabled_tools, budget=budget,
                 key=(tuple(sorted(enabled_tools or [])), plan_approval,
-                     router_base_url, router_model, router_provider))
+                     router_base_url, router_model, router_provider,
+                     tuple(sorted((budget or {}).items()))))
             summary = await run_with_adapter(agent, query, run_id, **run_kwargs)
         elif os.environ.get("CHECKPOINT_DURABLE", "").lower() in ("1", "true", "yes"):
             # Opt-in durable-execution mode (per-run checkpoint DB, deleted on
@@ -471,7 +475,8 @@ async def run_deepagents(
             async with AsyncSqliteSaver.from_conn_string(checkpoint_db) as checkpointer:
                 await checkpointer.conn.execute("PRAGMA journal_mode=WAL")
                 agent = build_agent(checkpointer, plan_approval=plan_approval,
-                                    enabled_tools=enabled_tools, model_factory=mf)
+                                    enabled_tools=enabled_tools, model_factory=mf,
+                                    budget=budget)
                 summary = await run_with_adapter(agent, query, run_id, **run_kwargs)
         else:
             # POLICY: whole-workflow retry + durable event log. Short agent
@@ -488,7 +493,8 @@ async def run_deepagents(
                 from langgraph.checkpoint.memory import InMemorySaver
                 checkpointer = InMemorySaver()
             agent = build_agent(checkpointer, plan_approval=plan_approval,
-                                enabled_tools=enabled_tools, model_factory=mf)
+                                enabled_tools=enabled_tools, model_factory=mf,
+                                budget=budget)
             summary = await run_with_adapter(agent, query, run_id, **run_kwargs)
 
         latency_ms = (time.perf_counter() - t0) * 1000
