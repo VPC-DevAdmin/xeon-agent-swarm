@@ -559,6 +559,12 @@ class CapacityTest:
         same seed reproduces the exact same corpus.
         """
         base = str(wf.get("query") or "")
+        # Calibration escape hatch: the suffix is under investigation as a
+        # planner perturbation on live models. Turning it off is recorded in
+        # the run's prompt_corpus so an unsuffixed run can never masquerade
+        # as the reference workload.
+        if os.getenv("CAPACITY_PROMPT_SUFFIX", "1") == "0":
+            return base
         vocabulary = ("amber birch cobalt delta ember frost granite harbor "
                       "indigo juniper kestrel linen maple nickel ochre pine").split()
         digest = hashlib.sha256(
@@ -2280,7 +2286,9 @@ class CapacityTest:
                 "benchmark_target": self.benchmark_target,
                 "inference_backend": self.inference_backend,
                 "mock_tier": mock_tier,
-                "prompt_corpus": "seeded fixed-size suffix v1",
+                "prompt_corpus": ("seeded fixed-size suffix v1"
+                                   if os.getenv("CAPACITY_PROMPT_SUFFIX", "1") != "0"
+                                   else "suffix disabled (calibration)"),
             },
         }
         try:
