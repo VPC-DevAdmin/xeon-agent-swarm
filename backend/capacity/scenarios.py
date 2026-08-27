@@ -35,9 +35,26 @@ def load_e2e_workflows() -> dict[str, dict]:
                     # deterministic backends, `contract_live` to a real planner.
                     "contract": dict(w.get("contract") or {}) or None,
                     "contract_live": dict(w.get("contract_live") or {}) or None,
-                    # Capability deadlines per service class, in seconds.
-                    "deadlines": dict(w.get("deadlines") or {}) or None}
+                    }
     return out
+
+
+def service_ladder() -> dict[str, float]:
+    """Capability rungs, tightest deadline first: {rung_name: deadline_s}.
+
+    Rungs are use-case policy frozen with the workload. The order matters:
+    the weigh-in assigns the first (tightest) rung the host is eligible for.
+    """
+    raw = _load_file().get("service_ladder") or {}
+    return dict(sorted(((str(k), float(v)) for k, v in raw.items()),
+                       key=lambda kv: kv[1]))
+
+
+def weigh_in_spec() -> dict:
+    raw = _load_file().get("weigh_in") or {}
+    return {"samples_per_type": int(raw.get("samples_per_type", 4)),
+            "margin": float(raw.get("margin", 0.5)),
+            "max_s": float(raw.get("max_s", 1800.0))}
 
 
 def arrival_schedule() -> dict:

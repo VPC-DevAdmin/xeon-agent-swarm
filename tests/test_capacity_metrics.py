@@ -79,19 +79,22 @@ def _seed_cohort(test, sid, n, *, late=0, since=None, latency_ms=1000.0):
     return since
 
 
-def test_capability_needs_the_declared_deadline():
-    """Without a declared deadline the metric is not configured. It is never
-    inferred from the watchdog."""
+def test_capability_needs_the_declared_ladder():
+    """Without a declared ladder the metric is not configured, and without an
+    assigned rung no deadline exists. Neither is ever inferred from the
+    watchdog or the host."""
     test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
-    for wf in test.scenarios.values():
-        wf["deadlines"] = None
+    test.ladder = {}
     assert test.deadlines_configured() is False
+    test.ladder = {"conversational": 30.0}
+    assert test._deadline_s("any") is None            # no rung assigned yet
     state, _ = test._capability_state(ctl.time.time() - 60)
     assert state == "unconfigured"
 
 
 def test_capability_passes_only_with_enough_evidence():
     test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.assigned_rung = "conversational"
     test.user_scenario = list(test.scenario_ids)
     since = ctl.time.time() - 30
     for sid in test.scenario_ids:
@@ -106,6 +109,7 @@ def test_late_workflows_fail_capability_even_when_they_succeed():
     """On-deadline is part of success: a correct answer after the deadline is
     a capability failure, and the breach names the type."""
     test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.assigned_rung = "conversational"
     test.user_scenario = list(test.scenario_ids)
     since = ctl.time.time() - 30
     for sid in test.scenario_ids:
@@ -120,6 +124,7 @@ def test_late_workflows_fail_capability_even_when_they_succeed():
 
 def test_running_work_inside_its_deadline_counts_neither_way():
     test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.assigned_rung = "conversational"
     sid = test.scenario_ids[0]
     since = ctl.time.time() - 5
     test._inflight[1] = (sid, since + 1)          # young, still allowed to finish
@@ -129,6 +134,7 @@ def test_running_work_inside_its_deadline_counts_neither_way():
 
 def test_work_past_its_deadline_is_a_failure_before_it_finishes():
     test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.assigned_rung = "conversational"
     sid = test.scenario_ids[0]
     since = ctl.time.time() - 120
     test._inflight[1] = (sid, since + 1)          # older than the 30s deadline
@@ -413,6 +419,7 @@ def test_capability_passing_at_the_first_level_tested_is_a_floor():
     """Nothing above it was ever put to the deadline, so it bounds rather than
     measures. Only a pass BELOW a failure has bracketed the boundary."""
     test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.assigned_rung = "conversational"
     test.user_scenario = list(test.scenario_ids)
     test.users = [None] * (test.tile_size or 1)
     test._capability_state = lambda since: ("good", None)
@@ -526,3 +533,88 @@ def test_each_level_records_achieved_rate_beside_offered():
     assert "achieved_rate" in lv and "control_cpu_pct" in lv
     # measured over the second half-hold, self-corrected ticks: close to offered
     assert 40.0 <= lv["achieved_rate"] <= 60.0
+
+
+# ── the service ladder and the weigh-in ──────────────────────────────────────
+
+def _weighed(medians_ms: dict[str, float], **over):
+    """A test poised at the weigh-in with seeded completions per type."""
+    test = ctl.CapacityTest("e2e", [], _cfg(**over), mix="tile")
+    test.user_scenario = list(test.scenario_ids)
+    now = ctl.time.time()
+    for sid, ms in medians_ms.items():
+        for i in range(test.weigh_in_cfg["samples_per_type"]):
+            test.calls.append({"scenario": sid, "ok": True, "durable": True,
+                               "latency_ms": ms, "tokens_in": 0, "tokens_out": 0,
+                               "ts": now - 5 + i * 0.01, "t_submit": now - 6})
+    return test
+
+
+def test_weigh_in_assigns_the_tightest_eligible_rung():
+    """12s medians fit conversational (30s) at margin 0.5. The ladder hands
+    out the most demanding promise the host qualifies for, never a slacker
+    one."""
+    test = _weighed({sid: 12_000.0 for sid in
+                     ctl.CapacityTest("e2e", [], _cfg(), mix="tile").scenario_ids})
+    assert asyncio.run(test._weigh_in()) is True
+    assert test.assigned_rung == "conversational"
+    assert test._deadline_s("any") == 30.0
+    assert test.weigh_in["override"] is False
+
+
+def test_weigh_in_judges_on_the_worst_type():
+    """One fast workflow must not carry a slow one into a promise it cannot
+    keep: two types at 12s and one at 90s land on the queued rung (600s),
+    because 90 > 0.5 x 120."""
+    ids = ctl.CapacityTest("e2e", [], _cfg(), mix="tile").scenario_ids
+    medians = {sid: 12_000.0 for sid in ids}
+    medians[ids[0]] = 90_000.0
+    test = _weighed(medians)
+    assert asyncio.run(test._weigh_in()) is True
+    assert test.assigned_rung == "queued"
+    assert test.weigh_in["worst_median_s"] == 90.0
+
+
+def test_a_host_below_the_bottom_rung_is_unclassifiable():
+    """The ladder has a bottom. A host whose weigh-in fits no rung is unfit
+    for this workload, and that verdict is publishable rather than papered
+    over with an invented deadline."""
+    ids = ctl.CapacityTest("e2e", [], _cfg(), mix="tile").scenario_ids
+    test = _weighed({sid: 400_000.0 for sid in ids})   # 400s > 0.5 x 600s
+    assert asyncio.run(test._weigh_in()) is False
+    assert test.assigned_rung is None
+    assert test.verdict == "unclassifiable"
+    assert test.breach["metric"] == "weigh_in_median"
+
+
+def test_an_operator_override_is_used_but_never_hidden():
+    test = ctl.CapacityTest("e2e", [], _cfg(service_rung="queued"), mix="tile")
+    assert asyncio.run(test._weigh_in()) is True
+    assert test.assigned_rung == "queued"
+    assert test.weigh_in["override"] is True
+
+
+def test_an_unknown_override_rung_is_an_error_not_a_guess():
+    test = ctl.CapacityTest("e2e", [], _cfg(service_rung="warp_speed"), mix="tile")
+    assert asyncio.run(test._weigh_in()) is False
+    assert test.phase == "error" and "unknown service rung" in test.error
+
+
+def test_rung_overlays_report_every_rung_from_the_same_cohort():
+    """The certified claim belongs to the assigned rung; every other rung is
+    an observed overlay so a reader with a different responsiveness need can
+    still use the run."""
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.assigned_rung = "queued"
+    test.user_scenario = list(test.scenario_ids)
+    since = ctl.time.time() - 30
+    for sid in test.scenario_ids:
+        _seed_cohort(test, sid, 20, since=since, latency_ms=60_000.0)  # 60s units
+    overlays = test._rung_overlays(since)
+    assert set(overlays) == {"conversational", "attended", "queued"}
+    assert overlays["queued"]["certified"] is True
+    sid = test.scenario_ids[0]
+    # 60s beats attended (120s) and queued, misses conversational (30s)
+    assert overlays["conversational"]["per_type"][sid]["observed"] == 0.0
+    assert overlays["attended"]["per_type"][sid]["observed"] == 1.0
+    assert overlays["queued"]["per_type"][sid]["observed"] == 1.0

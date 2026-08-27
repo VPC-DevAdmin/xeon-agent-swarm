@@ -248,9 +248,31 @@ export interface CapacityBreach {
   baseline_ms?: number | null
 }
 
+export interface RungOverlay {
+  deadline_s: number
+  certified: boolean
+  per_type: Record<string, { decided: number; successes: number; pending: number
+    observed: number | null }>
+}
+
+export interface WeighIn {
+  protocol?: string
+  override?: boolean
+  rung?: string | null
+  deadline_s?: number | null
+  medians_s?: Record<string, number>
+  worst_median_s?: number
+  eligible?: string[]
+}
+
 export interface CapabilityBlock {
   users: number | null
   tiles?: number | null
+  // The ladder rung this claim belongs to. Class and number are inseparable.
+  rung?: string | null
+  deadline_s?: number | null
+  weigh_in?: WeighIn | null
+  rung_overlays?: Record<string, RungOverlay>
   // 'measured' | 'lower bound' | 'not met at any tested level' |
   // 'not configured' | 'stopped before certification'
   status: string
@@ -311,6 +333,9 @@ export interface CapacityResult {
   failure_onset?: { offered_rate?: number; reason?: string } | null
   load_model?: 'closed' | 'open'
   service_class?: string
+  service_rung?: string | null
+  service_ladder?: Record<string, number> | null
+  weigh_in?: WeighIn | null
   mode: string
   benchmark_target?: CapacityBenchmarkTarget
   inference_backend?: CapacityInferenceBackend

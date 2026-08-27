@@ -73,6 +73,9 @@ def comparability_key(result: dict) -> dict:
         "mix": result.get("mix"),
         "load_model": result.get("load_model"),
         "service_class": result.get("service_class"),
+        # The weigh-in can land differently across children on a host near a
+        # rung boundary; medians across different deadlines mean nothing.
+        "service_rung": result.get("service_rung"),
         "scenario_fingerprint": repro.get("scenario_fingerprint"),
         "benchmark_version": repro.get("benchmark_version"),
         "git_commit": repro.get("git_commit"),

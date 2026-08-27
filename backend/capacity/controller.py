@@ -98,6 +98,10 @@ CENSORING_VERDICTS = frozenset({"cpu", "memory", "kv", "spend_guard", "budget",
                                 "generator_limit"})
 INVALID_VERDICTS = frozenset({"workload_invalid", "harness_degraded"})
 
+# Unclassifiable is its own outcome: the host is unfit for every declared
+# rung of this workload's ladder. It is a publishable fitness verdict, not a
+# bound and not an error, so it belongs to none of the three classes above.
+
 CENSOR_REASON = {
     "cpu": "host CPU saturated before a service boundary appeared",
     "memory": "host memory saturated before a service boundary appeared",
@@ -145,7 +149,8 @@ DEFAULTS = dict(
     invalid_tolerance=0.01,   # contract-violating units above this share invalidate the run
     # Capability: the declared SLO metric. A level passes only when the lower
     # one-sided 95% bound on each type's on-deadline success is >= target.
-    service_class="interactive",
+    service_class="interactive",   # legacy label, no longer selects deadlines
+    service_rung="auto",           # ladder rung: "auto" = assigned by weigh-in
     capability_target=0.95,
     capability_confidence=0.95,  # joint confidence across all workflow types
     capability_min_samples=0,    # optional operator floor; statistical floor is derived
@@ -302,6 +307,13 @@ class CapacityTest:
         self.capability_users: int | None = None
         self.capability_tiles: int | None = None
         self.capability_detail: dict = {}
+        # The service ladder: use-case rungs frozen with the workload. The
+        # weigh-in assigns one; everything deadline-shaped reads from it.
+        from backend.capacity.scenarios import service_ladder, weigh_in_spec
+        self.ladder: dict[str, float] = service_ladder()
+        self.weigh_in_cfg: dict = weigh_in_spec()
+        self.assigned_rung: str | None = None
+        self.weigh_in: dict = {}
         self.offered_rate: float = 0.0
         self.rejected = 0
         self._arrivals = 0        # schedule firings actually delivered (open loop)
@@ -949,6 +961,13 @@ class CapacityTest:
             self.calls.clear()
             self.samples.clear()
             self._t_measure = time.time()
+        # Rung eligibility is measured HERE, at one tile with the machine
+        # otherwise idle, because the weigh-in is a fitness statement about
+        # the host at its best, not under load.
+        if self.mode == "e2e" and self.deadlines_configured():
+            if not await self._weigh_in():
+                return
+            self.phase = "ramping"
         prev_tps: float | None = None
         prev_users = int(self.cfg["start_users"])
         self._baselines_ready = False
@@ -1387,26 +1406,57 @@ class CapacityTest:
     # ── metric 1: service capability (closed loop, deadline-bound) ───────────
 
     def _deadline_s(self, sid: str) -> float | None:
-        """Declared capability deadline for a workflow type, in seconds.
+        """The assigned rung's deadline, in seconds.
 
-        Deadlines come from the workload definition and are never recalculated
-        from the system under test: a deadline derived from a machine's own
-        speed hands a slow machine an easy target."""
-        spec = (self.scenarios.get(sid) or {}).get("deadlines") or {}
-        value = spec.get(str(self.cfg["service_class"]))
+        Rungs are use-case policy declared in the workload ladder. The
+        weigh-in decides WHICH rung this host is judged on; it never invents
+        a deadline, because the ladder is finite and a host whose weigh-in
+        fits no rung is unclassifiable rather than granted an easier target.
+        The reference tile's workflow types are same-size units, so one rung
+        deadline applies to every type."""
+        del sid
+        if self.assigned_rung is None:
+            return None
+        value = self.ladder.get(self.assigned_rung)
         return float(value) if value else None
 
     def deadlines_configured(self) -> bool:
-        return any(self._deadline_s(sid) for sid in self.scenario_ids)
+        return bool(self.ladder)
 
-    def _capability_cohort(self, sid: str, since: float) -> tuple[int, int, int]:
+    def _rung_overlays(self, since: float) -> dict:
+        """Observed on-deadline bounds for EVERY ladder rung at this level.
+
+        The certified claim belongs to the assigned rung alone. The overlays
+        let a reader with a different responsiveness need see, from the same
+        cohort, how this level would have scored on their rung — labelled
+        observed, never certified."""
+        out: dict = {}
+        for rung, deadline in self.ladder.items():
+            per_type: dict = {}
+            for sid in self.scenario_ids:
+                if self.user_scenario and sid not in self.user_scenario:
+                    continue
+                successes, decided, pending = self._capability_cohort(
+                    sid, since, deadline_s=deadline)
+                per_type[sid] = {
+                    "decided": decided, "successes": successes,
+                    "pending": pending,
+                    "observed": (round(successes / decided, 4)
+                                  if decided else None)}
+            out[rung] = {"deadline_s": deadline, "per_type": per_type,
+                         "certified": rung == self.assigned_rung}
+        return out
+
+    def _capability_cohort(self, sid: str, since: float, *,
+                           deadline_s: float | None = None
+                           ) -> tuple[int, int, int]:
         """(successes, decided, pending) for one type at the current level.
 
         A cohort member is decided when it finished or when its deadline has
         already passed. A unit still running inside its deadline is pending and
         counts as neither, which is what keeps a slow level from looking clean
         simply because its slow work has not landed yet."""
-        deadline = self._deadline_s(sid)
+        deadline = deadline_s if deadline_s is not None else self._deadline_s(sid)
         if deadline is None:
             return 0, 0, 0
         successes = decided = 0
@@ -1527,14 +1577,104 @@ class CapacityTest:
                 break
         return state, breach, since
 
+    async def _weigh_in(self) -> bool:
+        """Assign a ladder rung from a pre-ramp eligibility measurement.
+
+        The ladder describes what the WORK tolerates; the weigh-in only
+        decides which rung this host is eligible to certify against. The
+        protocol is frozen with the workload: at one tile, wait for the
+        declared number of completions per type, take each type's median
+        latency, and assign the tightest rung whose deadline covers the
+        WORST type's median with the declared margin. The worst type decides
+        because one fast workflow must not carry a slow one into a promise
+        it cannot keep. No eligible rung, or the time cap expiring first,
+        reads unclassifiable — a publishable verdict about fitness, not an
+        error. Returns True when a rung is assigned.
+
+        An operator override (service_rung != auto) skips the wait but is
+        recorded as an override, so an overridden certification can never
+        pass as an earned one."""
+        requested = str(self.cfg.get("service_rung") or "auto")
+        if requested != "auto":
+            if requested not in self.ladder:
+                self.error = f"unknown service rung: {requested}"
+                self.phase = "error"
+                return False
+            self.assigned_rung = requested
+            self.weigh_in = {"protocol": "operator override",
+                             "override": True, "rung": requested,
+                             "deadline_s": self.ladder[requested]}
+            return True
+        spec = self.weigh_in_cfg
+        need = int(spec["samples_per_type"])
+        margin = float(spec["margin"])
+        deadline_cap = time.time() + float(spec["max_s"])
+        self.phase = "weigh_in"
+        active = [sid for sid in self.scenario_ids
+                  if not self.user_scenario or sid in self.user_scenario]
+        while time.time() < deadline_cap and not self._stop.is_set():
+            counts = {sid: [] for sid in active}
+            for c in self.calls:
+                if c.get("ok") and not c.get("invalid") and c["scenario"] in counts:
+                    counts[c["scenario"]].append(c["latency_ms"] / 1000.0)
+            if all(len(v) >= need for v in counts.values()):
+                medians = {sid: round(statistics.median(v), 1)
+                           for sid, v in counts.items()}
+                worst = max(medians.values())
+                rung = next((name for name, dl in self.ladder.items()
+                             if worst <= margin * dl), None)
+                self.weigh_in = {
+                    "protocol": (f"median of {need} completions per type at "
+                                 f"one tile, margin {margin}"),
+                    "override": False,
+                    "medians_s": medians, "worst_median_s": worst,
+                    "eligible": [n for n, dl in self.ladder.items()
+                                 if worst <= margin * dl],
+                    "rung": rung,
+                    "deadline_s": self.ladder.get(rung) if rung else None}
+                if rung is None:
+                    self.verdict = "unclassifiable"
+                    self.breach = {"profile": "aggregate",
+                                   "metric": "weigh_in_median",
+                                   "value": worst,
+                                   "limit": round(margin * max(
+                                       self.ladder.values(), default=0), 1)}
+                    return False
+                self.assigned_rung = rung
+                return True
+            # Poll at the run's own cadence: a coarse fixed poll silently
+            # taxes short duration budgets on fast workloads.
+            poll = min(2.0, max(0.2, float(self.cfg["step_interval_s"]) / 2))
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=poll)
+                return False
+            except asyncio.TimeoutError:
+                pass
+        if not self._stop.is_set():
+            self.verdict = "unclassifiable"
+            self.breach = {"profile": "aggregate", "metric": "weigh_in_timeout",
+                           "value": round(float(spec["max_s"]), 1), "limit": 0}
+            self.weigh_in = {"protocol": "expired before enough completions",
+                             "override": False, "rung": None}
+        return False
+
     async def _certify_capability(self) -> None:
         """Bracket capability with exponential descent and tile refinement.
 
         A statistically inconclusive level is never treated as a failure and
         therefore never supplies the upper side of a measured boundary.
         """
-        if not self.deadlines_configured():
+        if self.mode != "e2e" or not self.deadlines_configured():
             self.capability_detail = {"status": "not configured"}
+            return
+        if self.assigned_rung is None:
+            # The weigh-in ended the run: unclassifiable, stopped, or errored.
+            self.capability_detail = {
+                "status": ("unclassifiable — no rung's deadline covers this "
+                           "host's weigh-in median"
+                           if self.verdict == "unclassifiable"
+                           else "no rung assigned"),
+                "weigh_in": self.weigh_in or None}
             return
         self.phase = "certifying"
         step = self.tile_size or max(1, int(self.cfg["step_users"]))
@@ -1578,6 +1718,10 @@ class CapacityTest:
                             and not inconclusive_seen)
                 self.capability_detail = {
                     "status": "measured" if measured else "lower bound",
+                    "rung": self.assigned_rung,
+                    "deadline_s": self.ladder.get(self.assigned_rung),
+                    "weigh_in": self.weigh_in or None,
+                    "rung_overlays": self._rung_overlays(passed_since),
                     "service_class": self.cfg["service_class"],
                     "confidence": float(self.cfg["capability_confidence"]),
                     "confidence_scope": "joint across workflow types",
@@ -1604,6 +1748,9 @@ class CapacityTest:
         self.capability_detail = {
             "status": ("stopped before certification" if self._stop.is_set()
                        else "not met at any tested level"),
+            "rung": self.assigned_rung,
+            "deadline_s": self.ladder.get(self.assigned_rung),
+            "weigh_in": self.weigh_in or None,
             "service_class": self.cfg["service_class"],
             "last_tested_users": len(self.users),
             "inconclusive_seen": inconclusive_seen,
@@ -2159,6 +2306,9 @@ class CapacityTest:
             "failure_onset": self.failure_onset,
             "load_model": str(self.cfg["load_model"]),
             "service_class": str(self.cfg["service_class"]),
+            "service_rung": self.assigned_rung,
+            "service_ladder": self.ladder or None,
+            "weigh_in": self.weigh_in or None,
             # Diagnostic, closed loop: the level past which added sessions stop
             # being absorbed. It carries no service promise, so it is never the
             # headline and never substitutes for capability.

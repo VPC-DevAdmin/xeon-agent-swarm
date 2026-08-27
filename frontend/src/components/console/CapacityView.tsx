@@ -882,6 +882,7 @@ const VERDICT_TEXT: Record<string, string> = {
   spend_guard: 'dollar circuit breaker reached',
   workload_invalid: 'too many units violated the workload contract — the run did not exercise the intended work',
   harness_degraded: 'the harness lost writes or completion callbacks — benchmark failures are indistinguishable from agent failures here',
+  unclassifiable: 'no rung of the service ladder covers this host\u2019s weigh-in median \u2014 the host is unfit for this workload, which is the finding',
   generator_limit: 'the load generator could not deliver the offered rate — a harness limit, not host capacity',
   stopped: 'stopped manually',
 }
@@ -948,10 +949,11 @@ function ResultCard({ result }: { result: CapacityResult }) {
     head = {
       label: 'Service capability', bound, unit: 'concurrent sessions',
       value: String(cap.users ?? '—'),
-      meaning: `every workflow type met its declared deadline at ${pct(cap.target, 0.95)}% success, `
+      meaning: `every workflow type met the ${cap.rung ?? 'declared'} rung's `
+        + `${cap.deadline_s != null ? `${cap.deadline_s}s ` : ''}deadline at ${pct(cap.target, 0.95)}% success, `
         + `${pct(cap.confidence, 0.95)}% confidence`
         + `${cap.tiles != null ? ` · ${cap.tiles} tiles` : ''}`
-        + `${cap.service_class ? ` · ${cap.service_class} class` : ''}`,
+        + `${cap.weigh_in?.override ? ' · rung set by operator override' : ''}`,
       note: bound ? (cap.reason ?? undefined) : undefined,
     }
   } else if (haveNumber) {

@@ -87,6 +87,9 @@ class StartBody(BaseModel):
     # rate against queue divergence). The two are never combined.
     load_model: str | None = Field(None, pattern="^(closed|open)$")
     service_class: str | None = Field(None, pattern="^(interactive|batch)$")
+    # Ladder rung override. "auto" (default) assigns by weigh-in; a named
+    # rung skips the wait and is recorded as an operator override.
+    service_rung: str | None = Field(None, pattern="^(auto|[a-z_]{1,32})$")
     arrival_start_rate: float | None = Field(None, gt=0, le=10_000)
     arrival_step_factor: float | None = Field(None, gt=1.0, le=4.0)
     arrival_max_rate: float | None = Field(None, gt=0, le=100_000)
@@ -178,8 +181,14 @@ async def _prepare(body: StartBody) -> dict:
         raise HTTPException(409, "local engine is not serving — start it from the "
                                   "Capacity tab (or POST /capacity/engine/start)")
     schedule = scen_arrival_schedule()
+    if body.service_rung not in (None, "auto"):
+        from backend.capacity.scenarios import service_ladder
+        if body.service_rung not in service_ladder():
+            raise HTTPException(400, f"unknown service rung '{body.service_rung}' — "
+                                      f"ladder: {sorted(service_ladder())}")
     cfg = {"load_model": (body.load_model or "closed"),
            "service_class": (body.service_class or "interactive"),
+           "service_rung": (body.service_rung or "auto"),
            "arrival_start_rate": body.arrival_start_rate or schedule["start_rate"],
            "arrival_step_factor": body.arrival_step_factor or schedule["step_factor"],
            "arrival_max_rate": body.arrival_max_rate or schedule["max_rate"],

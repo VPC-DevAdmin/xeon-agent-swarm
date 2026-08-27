@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 9
+version: 10
 
 scenarios:
   support_agent:
@@ -129,6 +129,27 @@ e2e_tile:
   comparison: 1
   digest: 1
 
+# The capability rung ladder: use-case responsiveness tiers, tightest first.
+# Deadlines are what the USE CASE tolerates. Provenance:
+#   conversational  30 s — a person is waiting in-line for the answer
+#   attended       120 s — a person started it and is still nearby
+#   queued         600 s — submitted into a queue, nobody is watching
+service_ladder:
+  conversational: 30
+  attended: 120
+  queued: 600
+
+# Weigh-in protocol (frozen with the workload): the pre-ramp eligibility
+# measurement that assigns a rung. Median of `samples_per_type` completions
+# per workflow type at one tile; a rung is eligible when the WORST type's
+# median is at or under margin x its deadline; the tightest eligible rung is
+# assigned. Expiry of max_s without enough completions, or no eligible rung,
+# reads unclassifiable.
+weigh_in:
+  samples_per_type: 4
+  margin: 0.5
+  max_s: 1800
+
 # Open-loop offered-rate ramp (workflows per second), used by the capacity test.
 arrival_schedule:
   start_rate: 2.0
@@ -147,16 +168,17 @@ arrival_schedule:
 # session applies seeded +/-25% jitter so ramp batches cannot phase-lock into
 # workload pulses (part of the workload definition; deterministic per seed).
 #
-# deadlines declare the CAPABILITY targets for a workflow type, per service
-# class. They are product requirements frozen with this workload version, not
-# measurements: they are never recalculated from the performance of a system
-# under test, because a deadline derived from a machine's own speed gives a
-# slow machine an easy target and destroys comparability. Provenance:
-#   interactive 30 s — a person waiting on a drafted brief
-#   batch       300 s — a scheduled job with no one watching
-# A run declares which class it is measuring. Capability is the largest session
-# level where every workflow type meets its class deadline with 95% success at
-# 95% confidence.
+# The service ladder declares the CAPABILITY rungs. Each rung is a USE CASE
+# with the deadline that use case tolerates — a fact about the work and the
+# person or pipeline waiting on it, never about any machine. Rungs are frozen
+# with this workload version. A weigh-in before the ramp measures each type's
+# median latency at one tile and assigns the TIGHTEST rung the host is
+# eligible for (worst-type median <= margin x rung deadline). A host whose
+# weigh-in fits no rung is UNCLASSIFIABLE for this workload, which is a
+# publishable verdict, not an error. Capability is then the largest session
+# level where every workflow type meets the assigned rung's deadline at the
+# joint confidence target, and every other rung is reported as an observed
+# overlay from the same data. Class and number are inseparable in reporting.
 #
 # arrival_schedule drives the open-loop CAPACITY test. Offered rate is global;
 # the mix of types at any rate follows the same tile rotation the capability
@@ -174,7 +196,6 @@ e2e_workflows:
     think_ms: 3000
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
-    deadlines: {interactive: 30, batch: 300}
     contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
     budgets: {max_subagents: 5, max_tool_hops: 10}  # the FAILURE line for live-model runaways: calibration showed loops at 17-22 hops; a healthy unit uses 2-8
@@ -196,7 +217,6 @@ e2e_workflows:
     think_ms: 3000
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
-    deadlines: {interactive: 30, batch: 300}
     contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
     budgets: {max_subagents: 5, max_tool_hops: 10}  # the FAILURE line for live-model runaways: calibration showed loops at 17-22 hops; a healthy unit uses 2-8
@@ -216,7 +236,6 @@ e2e_workflows:
     think_ms: 3000
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
-    deadlines: {interactive: 30, batch: 300}
     contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
     budgets: {max_subagents: 5, max_tool_hops: 10}  # the FAILURE line for live-model runaways: calibration showed loops at 17-22 hops; a healthy unit uses 2-8
