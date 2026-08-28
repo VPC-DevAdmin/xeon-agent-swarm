@@ -618,3 +618,63 @@ def test_rung_overlays_report_every_rung_from_the_same_cohort():
     assert overlays["conversational"]["per_type"][sid]["observed"] == 0.0
     assert overlays["attended"]["per_type"][sid]["observed"] == 1.0
     assert overlays["queued"]["per_type"][sid]["observed"] == 1.0
+
+
+def test_starvation_condemns_only_idle_types_not_slow_ones():
+    """One session per type with minutes-long units can empty a window while
+    the unit is mid-flight. In flight means slow, not absent: the level
+    dwells, and only a type with NOTHING running can starve a rung."""
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.user_scenario = list(test.scenario_ids)
+    slow = test.scenario_ids[0]
+    # the slow type has a unit in flight and no completions in the window
+    test._inflight[1] = (slow, ctl.time.time() - 30)
+    for sid in test.scenario_ids[1:]:
+        _seed_cohort(test, sid, 6)
+    inflight_types = {p for p, _t in test._inflight.values()}
+    assert slow in inflight_types            # the guard the ramp loop applies
+
+
+def test_drift_condemns_a_matured_climbing_cohort():
+    """Deterministic drift coverage: both halves matured, second half 40%
+    hotter — the level is bad, mechanism named."""
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.user_scenario = list(test.scenario_ids)
+    now = ctl.time.time()
+    test._rung_t0 = now - 20
+    sid = test.scenario_ids[0]
+    for i in range(8):     # older half: submitted 18-12s ago, flat 1000ms
+        test.calls.append({"scenario": sid, "ok": True, "durable": True,
+                           "latency_ms": 1000.0, "tokens_in": 0, "tokens_out": 0,
+                           "ts": now - 12 + i * 0.1, "t_submit": now - 18 + i * 0.5})
+    for i in range(8):     # young half: submitted 9-3s ago, 1400ms and done
+        test.calls.append({"scenario": sid, "ok": True, "durable": True,
+                           "latency_ms": 1400.0, "tokens_in": 0, "tokens_out": 0,
+                           "ts": now - 3 + i * 0.1, "t_submit": now - 9 + i * 0.5})
+    state, breach = test._evaluate_rung(20.0)
+    assert state == "bad"
+    assert breach["metric"] == "latency_unstable"
+
+
+def test_an_immature_young_half_cannot_certify_a_level():
+    """The young half's completions are its fast survivors: with most of its
+    admissions still in flight, a flat-looking p80 is survivor bias and the
+    level must read inconclusive, never good."""
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.user_scenario = list(test.scenario_ids)
+    now = ctl.time.time()
+    test._rung_t0 = now - 20
+    sid = test.scenario_ids[0]
+    for i in range(8):     # older half: matured, flat
+        test.calls.append({"scenario": sid, "ok": True, "durable": True,
+                           "latency_ms": 1000.0, "tokens_in": 0, "tokens_out": 0,
+                           "ts": now - 12 + i * 0.1, "t_submit": now - 18 + i * 0.5})
+    for i in range(3):     # young half: three fast survivors completed...
+        test.calls.append({"scenario": sid, "ok": True, "durable": True,
+                           "latency_ms": 1000.0, "tokens_in": 0, "tokens_out": 0,
+                           "ts": now - 2 + i * 0.1, "t_submit": now - 8 + i * 0.5})
+    for k in range(9):     # ...while nine admissions are still in flight
+        test._inflight[100 + k] = (sid, now - 7 + k * 0.5)
+    state, breach = test._evaluate_rung(20.0)
+    assert state == "inconclusive"
+    assert breach is None

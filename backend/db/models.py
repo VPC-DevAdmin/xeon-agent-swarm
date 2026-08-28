@@ -221,8 +221,12 @@ class StepAttempt(Base):
     # tier_observed is what the router actually served. category/reasoning/
     # confidence are the router's classification trace; cache_hit flags a served
     # cache result (no model spend).
-    tier_requested: Mapped[str | None] = mapped_column(String(8))
-    tier_observed: Mapped[str | None] = mapped_column(String(8))
+    # 32, not 8: integrated-node runs record the served model's own name here
+    # (no router tier header exists), and Postgres enforces varchar lengths
+    # where SQLite never did — an overflow silently failed EVERY attempt write
+    # and zero-tolerance integrity correctly killed the runs that hit it.
+    tier_requested: Mapped[str | None] = mapped_column(String(32))
+    tier_observed: Mapped[str | None] = mapped_column(String(32))
     category: Mapped[str | None] = mapped_column(String(48))
     reasoning: Mapped[str | None] = mapped_column(Text)
     confidence: Mapped[float | None] = mapped_column(Double)
@@ -264,7 +268,7 @@ class Validation(Base):
         ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
     )
     level: Mapped[str] = mapped_column(String(12), nullable=False)  # mechanical|judge|frontier
-    validator_tier: Mapped[str | None] = mapped_column(String(8))   # tierN when level != mechanical
+    validator_tier: Mapped[str | None] = mapped_column(String(32))  # tierN when level != mechanical
     rubric_id: Mapped[str | None] = mapped_column(String(48))
     verdict: Mapped[str] = mapped_column(String(12), nullable=False)  # pass|fail|degraded
     score: Mapped[float | None] = mapped_column(Double)

@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 11
+version: 12
 
 scenarios:
   support_agent:
@@ -198,7 +198,7 @@ e2e_workflows:
     tools: [bench_record]                # 1 real record-keeping call per worker
     contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
-    budgets: {max_subagents: 5, max_tool_hops: 10}  # the FAILURE line for live-model runaways: calibration showed loops at 17-22 hops; a healthy unit uses 2-8
+    budgets: {max_subagents: 4, max_tool_hops: 2}  # PER-AGENT semantics: hop budget binds each worker (intent: 1 call + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack); the guards replan/clamp at these lines so a unit can never balloon past its declared size
     query: >-
       Using ONLY the field notes below (do not research further), write a
       one-page brief on CPU-only LLM inference with a clear recommendation.
@@ -219,7 +219,7 @@ e2e_workflows:
     tools: [bench_record]                # 1 real record-keeping call per worker
     contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
-    budgets: {max_subagents: 5, max_tool_hops: 10}  # the FAILURE line for live-model runaways: calibration showed loops at 17-22 hops; a healthy unit uses 2-8
+    budgets: {max_subagents: 4, max_tool_hops: 2}  # PER-AGENT semantics: hop budget binds each worker (intent: 1 call + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack); the guards replan/clamp at these lines so a unit can never balloon past its declared size
     query: >-
       Using ONLY the measurements below (do not research further), compare
       INT8, INT4, and FP8 quantization for a 30B-parameter model and recommend
@@ -238,7 +238,7 @@ e2e_workflows:
     tools: [bench_record]                # 1 real record-keeping call per worker
     contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
-    budgets: {max_subagents: 5, max_tool_hops: 10}  # the FAILURE line for live-model runaways: calibration showed loops at 17-22 hops; a healthy unit uses 2-8
+    budgets: {max_subagents: 4, max_tool_hops: 2}  # PER-AGENT semantics: hop budget binds each worker (intent: 1 call + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack); the guards replan/clamp at these lines so a unit can never balloon past its declared size
     query: >-
       Using ONLY the four items below (do not research further), compile a
       digest in exactly five bullet points, ordered by operational impact.

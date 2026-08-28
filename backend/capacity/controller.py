@@ -841,13 +841,22 @@ class CapacityTest:
             return done, censored
 
         h1, cens1 = _cohort(low, mid)
-        h2, _cens2 = _cohort(mid, now)
+        h2, cens2 = _cohort(mid, now)
         need = max(min_n, 2)      # a single-sample quantile is noise, not a trend
         if len(h1) < need or len(h2) < need:
             return "inconclusive", None
         maturity = len(h1) / max(1, len(h1) + cens1)
         if maturity < float(self.cfg["cohort_maturity"]):
             return "inconclusive", None          # slow work has not landed yet
+        # The YOUNG half must be mature too, before a GOOD verdict can stand.
+        # Its completed units are the fast survivors of whatever was admitted
+        # there, and on a level whose latency is climbing that survivor bias
+        # reads a drifting distribution as flat — the ramp then advances on
+        # the first misread and the level is never judged again. A BAD verdict
+        # may still fire from an immature young half, because survivors
+        # reading bad means the truth is at least that bad.
+        maturity2 = len(h2) / max(1, len(h2) + cens2)
+        h2_mature = maturity2 >= float(self.cfg["cohort_maturity"])
         tol = 1.0 + float(self.cfg["drift_tolerance"])
 
         # Oldest in-flight age must not trend upward. Completion-time sampling
@@ -881,6 +890,8 @@ class CapacityTest:
             return "bad", {"profile": "aggregate", "metric": "latency_unstable",
                             "value": round(p80_2, 1), "limit": round(p80_1 * tol, 1),
                             "baseline_ms": round(p80_1, 1)}
+        if not h2_mature:
+            return "inconclusive", None          # survivors look flat; wait
         # SECONDARY: the p95 tail only condemns a rung when it is outside
         # tolerance CONSISTENTLY (3 consecutive evaluations) — a persistent
         # tail divergence with a stable body is real; a single spike is not.
@@ -1035,7 +1046,7 @@ class CapacityTest:
                                     for c in self.calls if c["ok"]]
                         self._eval_window_s = max(
                             3 * interval,
-                            2.0 * statistics.median(rung1_ok) if rung1_ok else 0)
+                            3.0 * statistics.median(rung1_ok) if rung1_ok else 0)
                 else:
                     # The rung-1 hold must still honor the wall-clock ceiling —
                     # otherwise a dead backend parks the run here silently.
@@ -1066,18 +1077,28 @@ class CapacityTest:
             if (rung_state == "inconclusive"
                     and time.time() - self._rung_t0 > 3 * eval_window):
                 # The rung dwelled three full windows and some profile still
-                # could not produce min_samples — it has effectively stopped
-                # delivering work. That is a failure of the rung, not an
-                # unknown: name the starved profile and condemn the rung.
+                # could not produce min_samples. Starvation condemns only a
+                # profile that is IDLE — no unit of its in flight. A profile
+                # whose unit is still running is slow, not absent: at one
+                # session per type with minutes-long workflows, one straggler
+                # can empty a whole window, and condemning that reads a
+                # measurement-geometry artifact as instability. Slow-but-alive
+                # dwells, and a true stall is the work-aging rule's job.
+                inflight_types = {p for p, _t in self._inflight.values()}
                 starved = next(
                     (sid for sid in self.scenario_ids
-                     if self._scenario_window(
+                     if (not self.user_scenario or sid in self.user_scenario)
+                     and sid not in inflight_types
+                     and self._scenario_window(
                          sid, eval_window, admitted_since=self._rung_t0)["n"]
-                     < int(self.cfg["min_samples"])), self.scenario_ids[0])
-                rung_state = "bad"
-                breach = {"profile": starved, "metric": "no_samples",
-                          "value": 0.0,
-                          "limit": float(self.cfg["min_samples"])}
+                     < int(self.cfg["min_samples"])), None)
+                if starved is None:
+                    pass          # every short profile is in flight: dwell
+                else:
+                    rung_state = "bad"
+                    breach = {"profile": starved, "metric": "no_samples",
+                              "value": 0.0,
+                              "limit": float(self.cfg["min_samples"])}
             if rung_state == "good":
                 if at_boundary:
                     self.capacity_users = len(self.users)
@@ -1267,18 +1288,32 @@ class CapacityTest:
             self._rung_t0 = time.time()
 
     def _current_eval_window(self, interval: float) -> float:
-        """e2e SLO window sized to what workflows take NOW: 2x the median of
-        the most recent completed workflows (declared rule, same as the rung-1
-        derivation — just re-derived continuously so certification geometry
-        follows the workload as latency grows with load)."""
+        """e2e SLO window sized to what workflows take NOW, at THIS level.
+
+        3x the median, from the CURRENT rung's own completions. Both choices
+        are load-bearing. A global recent-completions median lags a level
+        transition, and a window sized by the previous faster era can fall
+        below the current latency, where no unit can be admitted and finish
+        inside one window and the cohort is unjudgeable forever. And 2x was
+        knife-edge by construction: the older half-window then equals one
+        median latency, so only faster-than-median units ever land in it,
+        starving the very cohort test the window exists to feed. 3x gives the
+        older half 1.5 medians of room."""
         if self.mode != "e2e":
             return 3 * interval
         import itertools
-        lats = [c["latency_ms"] / 1000.0
-                for c in itertools.islice(reversed(self.calls), 200) if c["ok"]]
-        if not lats:
+        rung_t0 = getattr(self, "_rung_t0", self.started_at)
+        rung = [c["latency_ms"] / 1000.0
+                for c in itertools.islice(reversed(self.calls), 400)
+                if c["ok"] and c.get("t_submit", c["ts"]) >= rung_t0]
+        if len(rung) < 3:
+            lats = [c["latency_ms"] / 1000.0
+                    for c in itertools.islice(reversed(self.calls), 200)
+                    if c["ok"]]
+            rung = lats or rung
+        if not rung:
             return self._eval_window_s or 3 * interval
-        win = max(3 * interval, 2.0 * statistics.median(lats))
+        win = max(3 * interval, 3.0 * statistics.median(rung))
         self._eval_window_s = win          # recorded in the repro block
         return win
 

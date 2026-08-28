@@ -244,8 +244,10 @@ async def record_attempt(
         tokens_out=tokens_out,
         model_id=model_id,
         latency_ms=latency_ms,
-        tier_requested=tier_requested,
-        tier_observed=tier_observed,
+        # Truncate rather than fail: a durable write must never be lost to a
+        # label longer than its column (Postgres enforces what SQLite ignored).
+        tier_requested=(tier_requested or None) and tier_requested[:32],
+        tier_observed=(tier_observed or None) and tier_observed[:32],
         category=category,
         reasoning=reasoning,
         confidence=confidence,
