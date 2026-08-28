@@ -213,9 +213,17 @@ class RepeatSet:
             return f"no usable number ({res.get('result_kind')})"
         intended = ("sustainable_capacity" if res.get("load_model") == "open"
                     else "service_capability")
-        if _metric_value(res, intended) is None:
-            return f"run did not produce its intended metric ({intended})"
-        return None
+        if _metric_value(res, intended) is not None:
+            return None
+        # A DEFINITIVE non-numeric capability finding is a sample: a level
+        # that failed with mature evidence, or a host whose ceiling sits
+        # below the conclusive cohort. Three such children agreeing publish
+        # as a reproducible finding. Only an indefinite run (stopped, no
+        # judgment reached) is not a sample.
+        if (intended == "service_capability"
+                and (res.get("capability") or {}).get("definitive")):
+            return None
+        return f"run did not produce its intended metric ({intended})"
 
     def _comparability_mismatch(self, res: dict) -> str | None:
         if not self.accepted:
@@ -254,7 +262,26 @@ class RepeatSet:
                         if self.accepted[0].get("load_model") == "open"
                         else "service_capability")
         metrics = aggregate(self.accepted) if complete else None
-        if complete and intended and (not metrics or
+        capability_outcome = None
+        if complete and intended == "service_capability":
+            statuses = [(r.get("capability") or {}).get("status")
+                        for r in self.accepted]
+            numeric_n = (metrics.get(intended) or {}).get("n") if metrics else 0
+            if numeric_n == self.runs:
+                pass                             # every child measured a number
+            elif len(set(statuses)) == 1 and statuses[0]:
+                # Unanimous non-numeric finding: publishable as the finding
+                # itself. Mixed outcomes are not a result of any kind.
+                capability_outcome = {"finding": statuses[0],
+                                      "agreement": f"{self.runs}/{self.runs}",
+                                      "highest_failed_users": [
+                                          (r.get("capability") or {}).get(
+                                              "highest_failed_users")
+                                          for r in self.accepted]}
+            else:
+                complete = False
+                metrics = None
+        elif complete and intended and (not metrics or
                 (metrics.get(intended) or {}).get("n") != self.runs):
             complete = False
             metrics = None
@@ -272,6 +299,7 @@ class RepeatSet:
             # Partial sets carry their child observations but publish no
             # median.  A complete set's intended metric always has n == runs.
             "metrics": metrics,
+            "capability_outcome": capability_outcome,
             "intended_metric": intended,
             "excluded": self.excluded,
             "child_run_ids": [r.get("history_id") for r in self.accepted
@@ -286,7 +314,8 @@ class RepeatSet:
         if not complete:
             self.result["incomplete_reason"] = (
                 "stopped by hand" if self.phase == "stopped"
-                else "ran out of retries before enough clean runs landed")
+                else "children disagreed or retries ran out before enough "
+                     "clean runs landed")
         self._dump()
 
     def _dump(self) -> None:

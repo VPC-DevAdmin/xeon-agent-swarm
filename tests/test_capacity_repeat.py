@@ -354,3 +354,59 @@ def test_a_cloud_set_honours_the_dollar_guard_the_user_typed(monkeypatch):
     assert started["max_cost_usd_total"] == 30.0
     assert started["max_cost_usd_per_run"] == 10.0
     assert plan["cfg"]["max_cost_usd"] == 10.0
+
+
+# ── definitive findings publish; predetermined negatives are named ───────────
+
+def _definitive(status, failed=None, **kw):
+    r = _result(**kw)
+    r["capability"] = {"users": None, "status": status, "definitive": True,
+                       "highest_failed_users": failed}
+    return r
+
+
+def test_three_agreeing_measured_negatives_publish_as_a_finding(
+        tmp_path, monkeypatch):
+    """A level that failed with mature evidence is a measurement. Three
+    children agreeing publish the negative instead of an incomplete set."""
+    rs = _run_set([_definitive("not met at tested levels", failed=6)
+                   for _ in range(3)], tmp_path, monkeypatch)
+    assert rs.result["status"] == "complete"
+    out = rs.result["capability_outcome"]
+    assert out["finding"] == "not met at tested levels"
+    assert out["agreement"] == "3/3"
+    assert out["highest_failed_users"] == [6, 6, 6]
+
+
+def test_evidence_limited_hosts_publish_the_constraint_not_a_negative(
+        tmp_path, monkeypatch):
+    """A host whose ceiling sits below the conclusive cohort did not fail —
+    the outcome was predetermined by sample economics, and the set says so."""
+    rs = _run_set([_definitive("evidence limited: host ceiling below the "
+                               "conclusive cohort") for _ in range(3)],
+                  tmp_path, monkeypatch)
+    assert rs.result["status"] == "complete"
+    assert "evidence limited" in rs.result["capability_outcome"]["finding"]
+
+
+def test_disagreeing_children_are_not_a_result(tmp_path, monkeypatch):
+    rs = _run_set([_definitive("not met at tested levels"),
+                   _definitive("evidence limited: host ceiling below the "
+                               "conclusive cohort"),
+                   _definitive("not met at tested levels")],
+                  tmp_path, monkeypatch)
+    assert rs.result["status"] == "incomplete"
+    assert rs.result["capability_outcome"] is None
+
+
+def test_an_indefinite_child_is_still_not_a_sample(tmp_path, monkeypatch):
+    r = _result()
+    r["capability"] = {"users": None, "status": "stopped before certification",
+                       "definitive": False}
+    rs = _run_set([r, _definitive("not met at tested levels"),
+                   _definitive("not met at tested levels"),
+                   _definitive("not met at tested levels")],
+                  tmp_path, monkeypatch)
+    assert rs.result["runs_excluded"] == 1
+    assert "did not produce its intended metric" in rs.result["excluded"][0]["reason"]
+    assert rs.result["status"] == "complete"

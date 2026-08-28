@@ -292,6 +292,7 @@ class CapacityTest:
         self.slo_capacity_tiles: int | None = None   #   3x-baseline latency budget (not the verdict)
         self._eval_window_s: float | None = None     # e2e SLO window, derived at rung 1
         self._p95_streak = 0                         # consecutive tail-outside evals
+        self._good_since: float | None = None        # first good of the current streak
         # Admission registry: work is measured from SUBMISSION, not only from
         # completion. Sampling completions alone hides the slowest and hung
         # units until they time out, so a level can read healthy while it is
@@ -820,9 +821,54 @@ class CapacityTest:
         # because judging a half whose slow units are still running measures
         # the survivors rather than the level.
         now = time.time()
+        # WORK AGING runs before every other gate, on RAW halves. It reads
+        # the sampler, not completions, and it exists for the level that has
+        # stopped completing work — the level that can never satisfy a
+        # completion gate, and whose exploding latencies inflate the margin
+        # until the trimmed span goes negative. Nothing downstream may stand
+        # between a collapsing level and this check.
+        raw_low = max(now - window_s, self._rung_t0)
+        raw_span = now - raw_low
+        recent_lat = [c["latency_ms"] for c in self._recent(now - window_s)
+                      if c.get("ok") and not c.get("invalid")]
+        tol = 1.0 + float(self.cfg["drift_tolerance"])
+        if raw_span >= 0.5 * window_s:
+            raw_mid = raw_low + raw_span / 2.0
+            ages1 = [smp.get("oldest_rung_inflight_s",
+                             smp.get("oldest_inflight_s"))
+                     for smp in self.samples
+                     if smp.get("oldest_rung_inflight_s",
+                                smp.get("oldest_inflight_s")) is not None
+                     and raw_low <= smp["ts"] < raw_mid]
+            ages2 = [smp.get("oldest_rung_inflight_s",
+                             smp.get("oldest_inflight_s"))
+                     for smp in self.samples
+                     if smp.get("oldest_rung_inflight_s",
+                                smp.get("oldest_inflight_s")) is not None
+                     and smp["ts"] >= raw_mid]
+            if len(ages1) >= 2 and len(ages2) >= 2:
+                a1, a2 = statistics.median(ages1), statistics.median(ages2)
+                floor_s = max(2.0, 1.25 * (_pct(recent_lat, 95) or 0) / 1000.0)
+                if a1 > 0 and a2 > max(a1 * tol, floor_s):
+                    return "bad", {"profile": "aggregate",
+                                    "metric": "work_aging",
+                                    "value": round(a2, 1),
+                                    "limit": round(max(a1 * tol, floor_s), 1),
+                                    "baseline_ms": round(a1 * 1000, 1)}
+
+        # ADMISSION MARGIN: only units admitted more than ~1.2x the p95
+        # latency ago are eligible for judgment. Without it the young half's
+        # tail always sits within one latency of now, its maturity can never
+        # clear the gate, and certification deadlocks at any level whose
+        # window is proportional to its latency — which is every e2e level by
+        # construction. With it, a steady level's young half is ~95% complete
+        # by definition, while a climbing level's lingering slow units still
+        # hold maturity down until drift or aging condemns.
+        margin_s = 1.2 * (_pct(recent_lat, 95) or 0) / 1000.0
+        high = now - margin_s
         low = max(now - window_s, self._rung_t0)
-        span = now - low
-        if span < 0.5 * window_s:
+        span = high - low
+        if span < 0.4 * window_s:
             return "inconclusive", None          # cohort too young to judge
         mid = low + span / 2.0
 
@@ -841,7 +887,7 @@ class CapacityTest:
             return done, censored
 
         h1, cens1 = _cohort(low, mid)
-        h2, cens2 = _cohort(mid, now)
+        h2, cens2 = _cohort(mid, high)
         need = max(min_n, 2)      # a single-sample quantile is noise, not a trend
         if len(h1) < need or len(h2) < need:
             return "inconclusive", None
@@ -857,29 +903,7 @@ class CapacityTest:
         # reading bad means the truth is at least that bad.
         maturity2 = len(h2) / max(1, len(h2) + cens2)
         h2_mature = maturity2 >= float(self.cfg["cohort_maturity"])
-        tol = 1.0 + float(self.cfg["drift_tolerance"])
 
-        # Oldest in-flight age must not trend upward. Completion-time sampling
-        # cannot see a unit that never completes, so a stalling level can hold
-        # its visible latency flat while its queue ages. The sampler records
-        # the age directly, and the two halves of the window are compared the
-        # same way the latency body is.
-        ages1 = [s.get("oldest_rung_inflight_s", s.get("oldest_inflight_s"))
-                 for s in self.samples
-                 if s.get("oldest_rung_inflight_s", s.get("oldest_inflight_s")) is not None
-                 and low <= s["ts"] < mid]
-        ages2 = [s.get("oldest_rung_inflight_s", s.get("oldest_inflight_s"))
-                 for s in self.samples
-                 if s.get("oldest_rung_inflight_s", s.get("oldest_inflight_s")) is not None
-                 and s["ts"] >= mid]
-        if len(ages1) >= 2 and len(ages2) >= 2:
-            a1, a2 = statistics.median(ages1), statistics.median(ages2)
-            floor_s = max(2.0, (_pct(h1, 80) or 0) / 1000.0)
-            if a1 > 0 and a2 > max(a1 * tol, floor_s):
-                return "bad", {"profile": "aggregate", "metric": "work_aging",
-                                "value": round(a2, 1),
-                                "limit": round(max(a1 * tol, floor_s), 1),
-                                "baseline_ms": round(a1 * 1000, 1)}
         # PRIMARY: p80 drift. The p95 of a half-window is decided by a
         # handful of tail samples, and batch-cohort waves made it oscillate
         # 3s<->10s at ~900 sessions — halving the ramp accelerator on noise.
@@ -1046,7 +1070,7 @@ class CapacityTest:
                                     for c in self.calls if c["ok"]]
                         self._eval_window_s = max(
                             3 * interval,
-                            3.0 * statistics.median(rung1_ok) if rung1_ok else 0)
+                            3.0 * _pct(rung1_ok, 95) if rung1_ok else 0)
                 else:
                     # The rung-1 hold must still honor the wall-clock ceiling —
                     # otherwise a dead backend parks the run here silently.
@@ -1100,7 +1124,26 @@ class CapacityTest:
                               "value": 0.0,
                               "limit": float(self.cfg["min_samples"])}
             if rung_state == "good":
-                if at_boundary:
+                # CONFIRMATION IS SYMMETRIC. Condemnation needs two bads a
+                # window apart; a single instant good let a level certify off
+                # its first window before a fresh climb was visible. A good
+                # now certifies only when a second good lands at least half a
+                # window after the first. An inconclusive in between is NO
+                # INFORMATION and keeps the streak — exactly as it keeps the
+                # bad record — and only a bad or a level change resets it.
+                # Confirmation applies to TILE mode, where levels are
+                # discrete certified plateaus. A custom mix adds a session
+                # every interval, so no confirmation window can fit between
+                # advances by construction — and custom mixes are declared
+                # non-comparable diagnostics, so the rigor lives where the
+                # comparability claim lives.
+                now_g = time.time()
+                if self._good_since is None:
+                    self._good_since = now_g
+                confirmed = (self.mix != "tile"
+                             or now_g - self._good_since >= 0.5 * eval_window)
+                self._rung_confirmed = confirmed
+                if at_boundary and confirmed:
                     self.capacity_users = len(self.users)
                     if self.mix == "tile":
                         self.capacity_tiles = len(self.users) // max(1, self.tile_size)
@@ -1110,6 +1153,7 @@ class CapacityTest:
                 # blip, not the boundary: breach describes what ENDED the run.
                 self.breach = None
             elif rung_state == "bad":
+                self._good_since = None
                 # Consecutive evaluations share most of their window, so a
                 # one-off transient (e.g. a step to a new stable plateau) can
                 # read bad twice in a row. Count a bad toward the verdict only
@@ -1126,6 +1170,9 @@ class CapacityTest:
                     self._accel_tiles = max(1, self._accel_tiles // 2)
                 self.breach = breach
             # inconclusive: neither certify nor condemn — hold judgment
+            # An inconclusive reading is no information and keeps the good
+            # streak, exactly as it keeps the bad record. Only a bad reading
+            # or a level change contradicts a good.
             self._record_level("ramp", stats, rung_state)
 
             # CPU/RAM are meaningful for real agent workflows and direct local
@@ -1233,7 +1280,11 @@ class CapacityTest:
 
             if rung_state == "bad":
                 continue                # never add load onto a failing level
-            if at_boundary and rung_state != "good":
+            if at_boundary and (rung_state != "good"
+                                or not getattr(self, "_rung_confirmed", True)):
+                # Advance and certification share ONE gate: a level that has
+                # not confirmed its good streak has not certified, and the
+                # ramp never climbs off an unconfirmed level.
                 # Steady-state-per-level: a level must CERTIFY before the ramp
                 # advances. Advancing on an inconclusive reading resets the
                 # cohort clock every interval, so no level ever accumulates
@@ -1286,6 +1337,7 @@ class CapacityTest:
                             or len(self.users) < int(self.cfg["max_users"])):
                         self._add_user()
             self._rung_t0 = time.time()
+            self._good_since = None       # a new level earns its own streak
 
     def _current_eval_window(self, interval: float) -> float:
         """e2e SLO window sized to what workflows take NOW, at THIS level.
@@ -1313,7 +1365,13 @@ class CapacityTest:
             rung = lats or rung
         if not rung:
             return self._eval_window_s or 3 * interval
-        win = max(3 * interval, 3.0 * statistics.median(rung))
+        # p95, not median: the admission margin is 1.2x p95, and on a level
+        # whose latency is climbing the median lags at roughly half the
+        # front while p95 tracks it — a median-based window then grows
+        # slower than the margin, the trimmed span collapses, and drift
+        # starves exactly when it is needed. Sizing window and margin in
+        # the same statistic keeps the judgeable span open at any slope.
+        win = max(3 * interval, 3.0 * (_pct(rung, 95) or 0))
         self._eval_window_s = win          # recorded in the repro block
         return win
 
@@ -1753,6 +1811,7 @@ class CapacityTest:
                             and not inconclusive_seen)
                 self.capability_detail = {
                     "status": "measured" if measured else "lower bound",
+                    "definitive": True,
                     "rung": self.assigned_rung,
                     "deadline_s": self.ladder.get(self.assigned_rung),
                     "weigh_in": self.weigh_in or None,
@@ -1780,14 +1839,40 @@ class CapacityTest:
             await self._set_capability_users(target)
             descent *= 2
 
+        # A run that ends without a pass carries one of THREE distinct
+        # findings, and the difference is what a reader is allowed to
+        # conclude. A level that FAILED with mature evidence is a measured
+        # negative. A run where no level could gather the required cohort is
+        # EVIDENCE-LIMITED: the host's ceiling sits below the minimum
+        # conclusive cohort, and saying "not met" there would publish an
+        # outcome predetermined by our own sample economics rather than
+        # measured. The benchmark states that constraint itself, with the
+        # floor and observed rates shown, so no reviewer discovers it for us.
+        # Both findings are DEFINITIVE for repeat sets; a hand-stop is not.
+        active_types = [sid for sid in self.scenario_ids
+                        if not self.user_scenario or sid in self.user_scenario]
+        floor = max(int(self.cfg["capability_min_samples"]),
+                    st.samples_for_bound(
+                        float(self.cfg["capability_target"]),
+                        st.familywise_z(len(active_types),
+                                        float(self.cfg["capability_confidence"]))))
+        if self._stop.is_set():
+            status, definitive = "stopped before certification", False
+        elif failed_level is not None:
+            status, definitive = "not met at tested levels", True
+        else:
+            status, definitive = ("evidence limited: host ceiling below the "
+                                  "conclusive cohort"), True
         self.capability_detail = {
-            "status": ("stopped before certification" if self._stop.is_set()
-                       else "not met at any tested level"),
+            "status": status,
+            "definitive": definitive,
             "rung": self.assigned_rung,
             "deadline_s": self.ladder.get(self.assigned_rung),
             "weigh_in": self.weigh_in or None,
             "service_class": self.cfg["service_class"],
             "last_tested_users": len(self.users),
+            "highest_failed_users": failed_level,
+            "required_samples_per_type": floor,
             "inconclusive_seen": inconclusive_seen,
             "per_type": self._capability_report(last_since)}
 
