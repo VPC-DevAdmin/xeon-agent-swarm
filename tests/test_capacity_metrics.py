@@ -575,16 +575,27 @@ def test_weigh_in_judges_on_the_worst_type():
     assert test.weigh_in["worst_median_s"] == 90.0
 
 
-def test_a_host_below_the_bottom_rung_is_unclassifiable():
-    """The ladder has a bottom. A host whose weigh-in fits no rung is unfit
-    for this workload, and that verdict is publishable rather than papered
-    over with an invented deadline."""
+def test_a_host_past_the_named_rungs_lands_on_an_extension_rung():
+    """CHARACTERIZATION: no host is excluded. Past the named rungs the ladder
+    extends by the declared doubling rule, so a 400s-median host lands on
+    queued_x2 (1200s) — a position on a pre-declared ladder, marked
+    provisional because the real groupings come later from this data."""
     ids = ctl.CapacityTest("e2e", [], _cfg(), mix="tile").scenario_ids
     test = _weighed({sid: 400_000.0 for sid in ids})   # 400s > 0.5 x 600s
-    assert asyncio.run(test._weigh_in()) is False
-    assert test.assigned_rung is None
-    assert test.verdict == "unclassifiable"
-    assert test.breach["metric"] == "weigh_in_median"
+    assert asyncio.run(test._weigh_in()) is True
+    assert test.assigned_rung == "queued_x2"
+    assert test._deadline_s("any") == 1200.0
+    assert test.weigh_in["provisional_rung"] is True
+
+
+def test_a_set_can_pin_a_provisional_extension_rung():
+    """The override path reconstructs extension rungs from the declared rule,
+    so a set pinned at queued_x4 certifies every child against 2400s."""
+    test = ctl.CapacityTest("e2e", [], _cfg(service_rung="queued_x4"), mix="tile")
+    assert asyncio.run(test._weigh_in()) is True
+    assert test.assigned_rung == "queued_x4"
+    assert test._deadline_s("any") == 2400.0
+    assert test.weigh_in["override"] is True
 
 
 def test_an_operator_override_is_used_but_never_hidden():

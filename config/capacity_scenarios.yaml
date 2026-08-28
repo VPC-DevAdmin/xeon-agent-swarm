@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 12
+version: 13
 
 scenarios:
   support_agent:
@@ -130,7 +130,14 @@ e2e_tile:
   digest: 1
 
 # The capability rung ladder: use-case responsiveness tiers, tightest first.
-# Deadlines are what the USE CASE tolerates. Provenance:
+# CHARACTERIZATION PHASE: the named rungs are provisional anchors, not final
+# categories — the real groupings will be defined from weigh-in data collected
+# across servers. Above the top named rung the ladder extends by DECLARED
+# RULE: each further rung doubles the previous deadline (queued_x2 = 1200 s,
+# queued_x4 = 2400 s, ...). The rule is part of this workload version, so a
+# host's rung is always a position on a pre-declared ladder, never a value
+# derived from the host — and no host is ever excluded: every weigh-in lands
+# on some rung. Provenance of the named anchors:
 #   conversational  30 s — a person is waiting in-line for the answer
 #   attended       120 s — a person started it and is still nearby
 #   queued         600 s — submitted into a queue, nobody is watching

@@ -53,7 +53,7 @@ def _run_set(results, tmp_path, monkeypatch, **over):
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
     queue = list(results)
 
-    def factory(seed):
+    def factory(seed, rung=None):
         res = queue.pop(0)
         return _FakeTest(res if isinstance(res, dict) else res[0],
                          phase="error" if not isinstance(res, dict) else "done")
@@ -221,7 +221,7 @@ def test_every_run_gets_its_own_seed(tmp_path, monkeypatch):
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
     seeds = []
 
-    def factory(seed):
+    def factory(seed, rung=None):
         seeds.append(seed)
         return _FakeTest(_result(capability=100 + len(seeds)))
 
@@ -233,7 +233,7 @@ def test_every_run_gets_its_own_seed(tmp_path, monkeypatch):
 
 def test_stopping_a_set_stops_the_run_underneath_it(tmp_path, monkeypatch):
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
-    rs = rpt.RepeatSet(lambda seed: _FakeTest(_result(capability=100)),
+    rs = rpt.RepeatSet(lambda seed, rung=None: _FakeTest(_result(capability=100)),
                        runs=3, seed=1, settle_s=0, quiet_timeout_s=0)
     child = _FakeTest(_result(capability=100))
     rs.current = child

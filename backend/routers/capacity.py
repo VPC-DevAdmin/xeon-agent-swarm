@@ -343,9 +343,11 @@ async def start_repeat(body: RepeatBody,
     if per_run_guard is not None:
         plan["cfg"]["max_cost_usd"] = per_run_guard
 
-    def factory(seed: int) -> CapacityTest:
+    def factory(seed: int, rung: str | None = None) -> CapacityTest:
         # The set owns _current so /status and /stop keep working per run.
         global _current
+        if rung:
+            plan["cfg"]["service_rung"] = rung     # set-pinned (recorded)
         _current = _build_test(plan, seed)
         return _current
 

@@ -138,6 +138,7 @@ class RepeatSet:
         self.ended_at: float | None = None
         self.current: ctl.CapacityTest | None = None
         self.accepted: list[dict] = []
+        self.pinned_rung: str | None = None
         self.excluded: list[dict] = []
         self.result: dict | None = None
         self._stop = asyncio.Event()
@@ -163,7 +164,13 @@ class RepeatSet:
                 attempt += 1
                 logger.info("repeat set: run %d/%d (seed %d)",
                             len(self.accepted) + 1, self.runs, seed)
-                test = self.factory(seed)
+                # The SET pins the rung: the first accepted child's weigh-in
+                # decides, and later children inherit it as a recorded set
+                # pin. A host near a rung boundary would otherwise flip rungs
+                # on weigh-in noise and shatter every set into disagreeing
+                # children. Each child's own weigh-in medians are still
+                # measured and recorded — they are the grouping study's data.
+                test = self.factory(seed, rung=self.pinned_rung)
                 self.current = test
                 try:
                     await test.run()
@@ -191,6 +198,8 @@ class RepeatSet:
                                           "history_id": res.get("history_id")})
                     break
 
+                if self.pinned_rung is None:
+                    self.pinned_rung = res.get("service_rung")
                 self.accepted.append(res)
                 await self._label_child(res, len(self.accepted))
                 self._dump()
@@ -305,6 +314,9 @@ class RepeatSet:
             "child_run_ids": [r.get("history_id") for r in self.accepted
                               if r.get("history_id")],
             "seeds": [(r.get("repro") or {}).get("seed") for r in self.accepted],
+            "pinned_rung": self.pinned_rung,
+            "weigh_in_medians": [((r.get("weigh_in") or {}).get("medians_s"))
+                                 for r in self.accepted],
             "comparability": comparability_key(self.accepted[0]) if self.accepted else None,
             "base_seed": self.seed,
             "started_at": self.started_at,

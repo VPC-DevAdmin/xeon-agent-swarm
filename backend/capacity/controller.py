@@ -95,7 +95,7 @@ RESULTS_DIR = Path("data/capacity")
 BOUNDARY_VERDICTS = frozenset({"unstable", "errors", "queue_divergence"})
 CENSORING_VERDICTS = frozenset({"cpu", "memory", "kv", "spend_guard", "budget",
                                 "capped", "timeout", "interference", "stopped",
-                                "generator_limit"})
+                                "generator_limit", "weigh_in_timeout"})
 INVALID_VERDICTS = frozenset({"workload_invalid", "harness_degraded"})
 
 # Unclassifiable is its own outcome: the host is unfit for every declared
@@ -114,6 +114,8 @@ CENSOR_REASON = {
     "stopped": "stopped by hand before a boundary appeared",
     "generator_limit": "the load generator could not deliver the offered rate "
                        "— a harness limit, not host capacity",
+    "weigh_in_timeout": "the weigh-in time cap expired before enough "
+                        "completions landed to measure the host",
 }
 
 # DB persistence of finished results (benchmark history). Module flag so unit
@@ -1690,9 +1692,21 @@ class CapacityTest:
         requested = str(self.cfg.get("service_rung") or "auto")
         if requested != "auto":
             if requested not in self.ladder:
-                self.error = f"unknown service rung: {requested}"
-                self.phase = "error"
-                return False
+                # A provisional extension rung (top_x2, top_x4, ...) is part
+                # of the declared ladder by rule — reconstruct its deadline
+                # from the doubling formula so a set can pin one.
+                top_name = list(self.ladder)[-1] if self.ladder else ""
+                if top_name and requested.startswith(f"{top_name}_x"):
+                    try:
+                        factor = int(requested.rsplit("_x", 1)[1])
+                    except ValueError:
+                        factor = 0
+                    if factor >= 2 and factor & (factor - 1) == 0:
+                        self.ladder[requested] = self.ladder[top_name] * factor
+                if requested not in self.ladder:
+                    self.error = f"unknown service rung: {requested}"
+                    self.phase = "error"
+                    return False
             self.assigned_rung = requested
             self.weigh_in = {"protocol": "operator override",
                              "override": True, "rung": requested,
@@ -1716,6 +1730,24 @@ class CapacityTest:
                 worst = max(medians.values())
                 rung = next((name for name, dl in self.ladder.items()
                              if worst <= margin * dl), None)
+                provisional = False
+                if rung is None and self.ladder:
+                    # CHARACTERIZATION: the ladder extends upward by the
+                    # declared doubling rule, so every host lands on a rung
+                    # and none is excluded. The rung is provisional — the
+                    # real groupings come from the weigh-in data these runs
+                    # collect — and the extension formula is workload policy
+                    # declared in advance, never a value derived from this
+                    # host: the host only picks its position on it.
+                    top_name = list(self.ladder)[-1]
+                    deadline = self.ladder[top_name]
+                    factor = 1
+                    while worst > margin * deadline:
+                        deadline *= 2.0
+                        factor *= 2
+                    rung = f"{top_name}_x{factor}"
+                    self.ladder[rung] = deadline
+                    provisional = True
                 self.weigh_in = {
                     "protocol": (f"median of {need} completions per type at "
                                  f"one tile, margin {margin}"),
@@ -1724,14 +1756,11 @@ class CapacityTest:
                     "eligible": [n for n, dl in self.ladder.items()
                                  if worst <= margin * dl],
                     "rung": rung,
+                    "provisional_rung": provisional,
                     "deadline_s": self.ladder.get(rung) if rung else None}
                 if rung is None:
-                    self.verdict = "unclassifiable"
-                    self.breach = {"profile": "aggregate",
-                                   "metric": "weigh_in_median",
-                                   "value": worst,
-                                   "limit": round(margin * max(
-                                       self.ladder.values(), default=0), 1)}
+                    self.error = "service ladder is empty"
+                    self.phase = "error"
                     return False
                 self.assigned_rung = rung
                 return True
@@ -1744,7 +1773,9 @@ class CapacityTest:
             except asyncio.TimeoutError:
                 pass
         if not self._stop.is_set():
-            self.verdict = "unclassifiable"
+            # Cap expiry means the host produced too few completions to weigh
+            # at all — an evidence statement, not a category exclusion.
+            self.verdict = "weigh_in_timeout"
             self.breach = {"profile": "aggregate", "metric": "weigh_in_timeout",
                            "value": round(float(spec["max_s"]), 1), "limit": 0}
             self.weigh_in = {"protocol": "expired before enough completions",
@@ -1761,13 +1792,8 @@ class CapacityTest:
             self.capability_detail = {"status": "not configured"}
             return
         if self.assigned_rung is None:
-            # The weigh-in ended the run: unclassifiable, stopped, or errored.
-            self.capability_detail = {
-                "status": ("unclassifiable — no rung's deadline covers this "
-                           "host's weigh-in median"
-                           if self.verdict == "unclassifiable"
-                           else "no rung assigned"),
-                "weigh_in": self.weigh_in or None}
+            self.capability_detail = {"status": "no rung assigned",
+                                      "weigh_in": self.weigh_in or None}
             return
         self.phase = "certifying"
         step = self.tile_size or max(1, int(self.cfg["step_users"]))
