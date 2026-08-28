@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 13
+version: 14
 
 scenarios:
   support_agent:
@@ -129,32 +129,35 @@ e2e_tile:
   comparison: 1
   digest: 1
 
-# The capability rung ladder: use-case responsiveness tiers, tightest first.
-# CHARACTERIZATION PHASE: the named rungs are provisional anchors, not final
-# categories — the real groupings will be defined from weigh-in data collected
-# across servers. Above the top named rung the ladder extends by DECLARED
-# RULE: each further rung doubles the previous deadline (queued_x2 = 1200 s,
-# queued_x4 = 2400 s, ...). The rule is part of this workload version, so a
-# host's rung is always a position on a pre-declared ladder, never a value
-# derived from the host — and no host is ever excluded: every weigh-in lands
-# on some rung. Provenance of the named anchors:
-#   conversational  30 s — a person is waiting in-line for the answer
-#   attended       120 s — a person started it and is still nearby
-#   queued         600 s — submitted into a queue, nobody is watching
-service_ladder:
-  conversational: 30
-  attended: 120
-  queued: 600
+# AGENT DEADLINE TIERS. The weigh-in measures a machine's median workflow
+# time at one tile, that median places it in a tier, and the tier's deadline
+# is what its agents are held to. Six tiers span every agent host we expect
+# to test; the last has no ceiling, so no system is ever excluded.
+#
+# Each tier's deadline is ~3x its median ceiling: a machine at the top of its
+# tier may degrade 3x under load before missing, and a slower machine gets
+# proportionately more time because slower work is work someone is waiting on
+# less urgently. Tier names describe the USE CASE the deadline serves.
+#
+# CHARACTERIZATION PHASE: these boundaries are a reasoned starting point, not
+# settled categories. dellr470 is the anchor system (see repro provenance);
+# boundaries will be revised in a later workload version once several servers
+# have been characterized, with the anchor lineage recorded.
+service_tiers:
+  - {name: conversational, max_median_s: 5,   deadline_s: 15}    # answer in-line
+  - {name: interactive,    max_median_s: 15,  deadline_s: 45}    # a person waiting
+  - {name: responsive,     max_median_s: 50,  deadline_s: 150}   # a person nearby
+  - {name: attended,       max_median_s: 150, deadline_s: 450}   # checked on
+  - {name: queued,         max_median_s: 400, deadline_s: 1200}  # submitted, not watched
+  - {name: background,                        deadline_s: 3600}  # catch-all, no ceiling
 
-# Weigh-in protocol (frozen with the workload): the pre-ramp eligibility
-# measurement that assigns a rung. Median of `samples_per_type` completions
-# per workflow type at one tile; a rung is eligible when the WORST type's
-# median is at or under margin x its deadline; the tightest eligible rung is
-# assigned. Expiry of max_s without enough completions, or no eligible rung,
-# reads unclassifiable.
+# Weigh-in protocol (frozen with the workload): median of `samples_per_type`
+# completions per workflow type at one tile. The WORST type's median places
+# the machine — one fast workflow must not carry a slow one into a deadline
+# it cannot meet. Expiry of max_s means too few completions landed to measure
+# the machine at all, which is an evidence statement, not an exclusion.
 weigh_in:
   samples_per_type: 4
-  margin: 0.5
   max_s: 1800
 
 # Open-loop offered-rate ramp (workflows per second), used by the capacity test.

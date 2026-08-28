@@ -39,21 +39,32 @@ def load_e2e_workflows() -> dict[str, dict]:
     return out
 
 
-def service_ladder() -> dict[str, float]:
-    """Capability rungs, tightest deadline first: {rung_name: deadline_s}.
+def service_tiers() -> list[dict]:
+    """Agent deadline tiers, fastest first.
 
-    Rungs are use-case policy frozen with the workload. The order matters:
-    the weigh-in assigns the first (tightest) rung the host is eligible for.
+    Each tier is {name, deadline_s, max_median_s?}. A machine's weigh-in
+    median places it in the first tier whose ceiling covers it; the final
+    tier carries no ceiling, so every machine lands somewhere.
     """
-    raw = _load_file().get("service_ladder") or {}
-    return dict(sorted(((str(k), float(v)) for k, v in raw.items()),
-                       key=lambda kv: kv[1]))
+    raw = _load_file().get("service_tiers") or []
+    out: list[dict] = []
+    for t in raw:
+        tier = {"name": str(t["name"]), "deadline_s": float(t["deadline_s"])}
+        if t.get("max_median_s") is not None:
+            tier["max_median_s"] = float(t["max_median_s"])
+        out.append(tier)
+    out.sort(key=lambda t: t["deadline_s"])
+    return out
+
+
+def service_ladder() -> dict[str, float]:
+    """{tier_name: deadline_s} view of the tiers, fastest first."""
+    return {t["name"]: t["deadline_s"] for t in service_tiers()}
 
 
 def weigh_in_spec() -> dict:
     raw = _load_file().get("weigh_in") or {}
     return {"samples_per_type": int(raw.get("samples_per_type", 4)),
-            "margin": float(raw.get("margin", 0.5)),
             "max_s": float(raw.get("max_s", 1800.0))}
 
 

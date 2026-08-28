@@ -119,7 +119,7 @@ def test_late_workflows_fail_capability_even_when_they_succeed():
     state, breach = test._capability_state(since)
     assert state == "bad"
     assert breach["profile"] == slow and breach["metric"] == "capability"
-    assert breach["value"] < 0.95 and breach["deadline_s"] == 30
+    assert breach["value"] < 0.95 and breach["deadline_s"] == 15
 
 
 def test_running_work_inside_its_deadline_counts_neither_way():
@@ -550,52 +550,49 @@ def _weighed(medians_ms: dict[str, float], **over):
     return test
 
 
-def test_weigh_in_assigns_the_tightest_eligible_rung():
-    """12s medians fit conversational (30s) at margin 0.5. The ladder hands
-    out the most demanding promise the host qualifies for, never a slacker
-    one."""
+def test_weigh_in_places_the_machine_in_its_tier():
+    """A 12s median lands in `interactive` (ceiling 15s), whose 45s deadline
+    gives it 3x its own speed as headroom."""
     test = _weighed({sid: 12_000.0 for sid in
                      ctl.CapacityTest("e2e", [], _cfg(), mix="tile").scenario_ids})
     assert asyncio.run(test._weigh_in()) is True
-    assert test.assigned_rung == "conversational"
-    assert test._deadline_s("any") == 30.0
+    assert test.assigned_rung == "interactive"
+    assert test._deadline_s("any") == 45.0
     assert test.weigh_in["override"] is False
 
 
-def test_weigh_in_judges_on_the_worst_type():
-    """One fast workflow must not carry a slow one into a promise it cannot
-    keep: two types at 12s and one at 90s land on the queued rung (600s),
-    because 90 > 0.5 x 120."""
+def test_weigh_in_places_on_the_worst_type():
+    """One fast workflow must not carry a slow one into a deadline it cannot
+    meet: two types at 12s and one at 90s place the machine by the 90s."""
     ids = ctl.CapacityTest("e2e", [], _cfg(), mix="tile").scenario_ids
     medians = {sid: 12_000.0 for sid in ids}
     medians[ids[0]] = 90_000.0
     test = _weighed(medians)
     assert asyncio.run(test._weigh_in()) is True
-    assert test.assigned_rung == "queued"
+    assert test.assigned_rung == "attended"      # 90s > 50s ceiling, <= 150s
     assert test.weigh_in["worst_median_s"] == 90.0
 
 
-def test_a_host_past_the_named_rungs_lands_on_an_extension_rung():
-    """CHARACTERIZATION: no host is excluded. Past the named rungs the ladder
-    extends by the declared doubling rule, so a 400s-median host lands on
-    queued_x2 (1200s) — a position on a pre-declared ladder, marked
-    provisional because the real groupings come later from this data."""
+def test_the_slowest_machines_land_in_the_open_ended_tier():
+    """NO MACHINE IS EXCLUDED. The last tier carries no ceiling, so even a
+    very slow host is placed and measured rather than rejected."""
     ids = ctl.CapacityTest("e2e", [], _cfg(), mix="tile").scenario_ids
-    test = _weighed({sid: 400_000.0 for sid in ids})   # 400s > 0.5 x 600s
+    test = _weighed({sid: 900_000.0 for sid in ids})   # 900s: past every ceiling
     assert asyncio.run(test._weigh_in()) is True
-    assert test.assigned_rung == "queued_x2"
-    assert test._deadline_s("any") == 1200.0
-    assert test.weigh_in["provisional_rung"] is True
+    assert test.assigned_rung == "background"
+    assert test._deadline_s("any") == 3600.0
 
 
-def test_a_set_can_pin_a_provisional_extension_rung():
-    """The override path reconstructs extension rungs from the declared rule,
-    so a set pinned at queued_x4 certifies every child against 2400s."""
-    test = ctl.CapacityTest("e2e", [], _cfg(service_rung="queued_x4"), mix="tile")
-    assert asyncio.run(test._weigh_in()) is True
-    assert test.assigned_rung == "queued_x4"
-    assert test._deadline_s("any") == 2400.0
-    assert test.weigh_in["override"] is True
+def test_every_tier_gives_at_least_3x_its_ceiling_as_deadline():
+    """The tier ladder's shape: a machine at the top of its tier may degrade
+    3x under load before missing its deadline."""
+    from backend.capacity.scenarios import service_tiers
+    tiers = service_tiers()
+    assert 5 <= len(tiers) <= 6
+    assert tiers[-1].get("max_median_s") is None      # catch-all, no exclusion
+    for t in tiers:
+        if t.get("max_median_s"):
+            assert t["deadline_s"] >= 3 * t["max_median_s"]
 
 
 def test_an_operator_override_is_used_but_never_hidden():
@@ -605,10 +602,10 @@ def test_an_operator_override_is_used_but_never_hidden():
     assert test.weigh_in["override"] is True
 
 
-def test_an_unknown_override_rung_is_an_error_not_a_guess():
+def test_an_unknown_override_tier_is_an_error_not_a_guess():
     test = ctl.CapacityTest("e2e", [], _cfg(service_rung="warp_speed"), mix="tile")
     assert asyncio.run(test._weigh_in()) is False
-    assert test.phase == "error" and "unknown service rung" in test.error
+    assert test.phase == "error" and "unknown service tier" in test.error
 
 
 def test_rung_overlays_report_every_rung_from_the_same_cohort():
@@ -622,12 +619,12 @@ def test_rung_overlays_report_every_rung_from_the_same_cohort():
     for sid in test.scenario_ids:
         _seed_cohort(test, sid, 20, since=since, latency_ms=60_000.0)  # 60s units
     overlays = test._rung_overlays(since)
-    assert set(overlays) == {"conversational", "attended", "queued"}
+    assert set(overlays) == set(test.ladder)          # every tier reported
     assert overlays["queued"]["certified"] is True
     sid = test.scenario_ids[0]
-    # 60s beats attended (120s) and queued, misses conversational (30s)
-    assert overlays["conversational"]["per_type"][sid]["observed"] == 0.0
-    assert overlays["attended"]["per_type"][sid]["observed"] == 1.0
+    # 60s units beat responsive (150s) and up, miss interactive (45s) and down
+    assert overlays["interactive"]["per_type"][sid]["observed"] == 0.0
+    assert overlays["responsive"]["per_type"][sid]["observed"] == 1.0
     assert overlays["queued"]["per_type"][sid]["observed"] == 1.0
 
 

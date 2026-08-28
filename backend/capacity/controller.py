@@ -312,8 +312,10 @@ class CapacityTest:
         self.capability_detail: dict = {}
         # The service ladder: use-case rungs frozen with the workload. The
         # weigh-in assigns one; everything deadline-shaped reads from it.
-        from backend.capacity.scenarios import service_ladder, weigh_in_spec
-        self.ladder: dict[str, float] = service_ladder()
+        from backend.capacity.scenarios import service_tiers, weigh_in_spec
+        self.tiers: list[dict] = service_tiers()
+        self.ladder: dict[str, float] = {t["name"]: t["deadline_s"]
+                                          for t in self.tiers}
         self.weigh_in_cfg: dict = weigh_in_spec()
         self.assigned_rung: str | None = None
         self.weigh_in: dict = {}
@@ -1673,18 +1675,18 @@ class CapacityTest:
         return state, breach, since
 
     async def _weigh_in(self) -> bool:
-        """Assign a ladder rung from a pre-ramp eligibility measurement.
+        """Place this machine in a deadline tier.
 
-        The ladder describes what the WORK tolerates; the weigh-in only
-        decides which rung this host is eligible to certify against. The
-        protocol is frozen with the workload: at one tile, wait for the
-        declared number of completions per type, take each type's median
-        latency, and assign the tightest rung whose deadline covers the
-        WORST type's median with the declared margin. The worst type decides
-        because one fast workflow must not carry a slow one into a promise
-        it cannot keep. No eligible rung, or the time cap expiring first,
-        reads unclassifiable — a publishable verdict about fitness, not an
-        error. Returns True when a rung is assigned.
+        The weigh-in exists to set a REASONABLE agent deadline for the
+        machine under test, not to gate it. The protocol is frozen with the
+        workload: at one tile, wait for the declared number of completions
+        per type, take each type's median, and place the machine in the
+        first tier whose median ceiling covers the WORST type's median. The
+        worst type decides because one fast workflow must not carry a slow
+        one into a deadline it cannot meet. The last tier has no ceiling, so
+        every machine lands somewhere and none is ever excluded. Only the
+        time cap expiring without enough completions stops a run here, and
+        that is an evidence statement rather than a category judgment.
 
         An operator override (service_rung != auto) skips the wait but is
         recorded as an override, so an overridden certification can never
@@ -1692,21 +1694,9 @@ class CapacityTest:
         requested = str(self.cfg.get("service_rung") or "auto")
         if requested != "auto":
             if requested not in self.ladder:
-                # A provisional extension rung (top_x2, top_x4, ...) is part
-                # of the declared ladder by rule — reconstruct its deadline
-                # from the doubling formula so a set can pin one.
-                top_name = list(self.ladder)[-1] if self.ladder else ""
-                if top_name and requested.startswith(f"{top_name}_x"):
-                    try:
-                        factor = int(requested.rsplit("_x", 1)[1])
-                    except ValueError:
-                        factor = 0
-                    if factor >= 2 and factor & (factor - 1) == 0:
-                        self.ladder[requested] = self.ladder[top_name] * factor
-                if requested not in self.ladder:
-                    self.error = f"unknown service rung: {requested}"
-                    self.phase = "error"
-                    return False
+                self.error = f"unknown service tier: {requested}"
+                self.phase = "error"
+                return False
             self.assigned_rung = requested
             self.weigh_in = {"protocol": "operator override",
                              "override": True, "rung": requested,
@@ -1714,7 +1704,6 @@ class CapacityTest:
             return True
         spec = self.weigh_in_cfg
         need = int(spec["samples_per_type"])
-        margin = float(spec["margin"])
         deadline_cap = time.time() + float(spec["max_s"])
         self.phase = "weigh_in"
         active = [sid for sid in self.scenario_ids
@@ -1728,41 +1717,26 @@ class CapacityTest:
                 medians = {sid: round(statistics.median(v), 1)
                            for sid, v in counts.items()}
                 worst = max(medians.values())
-                rung = next((name for name, dl in self.ladder.items()
-                             if worst <= margin * dl), None)
-                provisional = False
-                if rung is None and self.ladder:
-                    # CHARACTERIZATION: the ladder extends upward by the
-                    # declared doubling rule, so every host lands on a rung
-                    # and none is excluded. The rung is provisional — the
-                    # real groupings come from the weigh-in data these runs
-                    # collect — and the extension formula is workload policy
-                    # declared in advance, never a value derived from this
-                    # host: the host only picks its position on it.
-                    top_name = list(self.ladder)[-1]
-                    deadline = self.ladder[top_name]
-                    factor = 1
-                    while worst > margin * deadline:
-                        deadline *= 2.0
-                        factor *= 2
-                    rung = f"{top_name}_x{factor}"
-                    self.ladder[rung] = deadline
-                    provisional = True
-                self.weigh_in = {
-                    "protocol": (f"median of {need} completions per type at "
-                                 f"one tile, margin {margin}"),
-                    "override": False,
-                    "medians_s": medians, "worst_median_s": worst,
-                    "eligible": [n for n, dl in self.ladder.items()
-                                 if worst <= margin * dl],
-                    "rung": rung,
-                    "provisional_rung": provisional,
-                    "deadline_s": self.ladder.get(rung) if rung else None}
-                if rung is None:
-                    self.error = "service ladder is empty"
+                # The worst type's median places the machine in the first
+                # tier whose ceiling covers it. The last tier has no ceiling,
+                # so every machine lands somewhere.
+                tier = next((t for t in self.tiers
+                             if t.get("max_median_s") is None
+                             or worst <= t["max_median_s"]), None)
+                if tier is None:
+                    self.error = "no service tiers configured"
                     self.phase = "error"
                     return False
-                self.assigned_rung = rung
+                self.weigh_in = {
+                    "protocol": (f"worst-type median of {need} completions "
+                                 f"per type at one tile"),
+                    "override": False,
+                    "medians_s": medians, "worst_median_s": worst,
+                    "tier": tier["name"],
+                    "tier_ceiling_s": tier.get("max_median_s"),
+                    "rung": tier["name"],
+                    "deadline_s": tier["deadline_s"]}
+                self.assigned_rung = tier["name"]
                 return True
             # Poll at the run's own cadence: a coarse fixed poll silently
             # taxes short duration budgets on fast workloads.
