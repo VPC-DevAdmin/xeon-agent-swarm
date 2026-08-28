@@ -686,3 +686,64 @@ def test_an_immature_young_half_cannot_certify_a_level():
     state, breach = test._evaluate_rung(20.0)
     assert state == "inconclusive"
     assert breach is None
+
+
+# ── the machine profile ──────────────────────────────────────────────────────
+
+def test_a_fresh_machine_profile_is_reused_instead_of_remeasured(
+        tmp_path, monkeypatch):
+    """A weigh-in characterizes the MACHINE, not the run. Re-measuring before
+    every set costs ~20 minutes and re-rolls the draw's noise."""
+    from backend.capacity import machine_profile as mp
+    monkeypatch.setattr(mp, "PROFILE_PATH", tmp_path / "profiles.json")
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    fp = test._machine_fingerprint()
+    mp.record(fp, {sid: 220.0 for sid in test.scenario_ids},
+              commit="abc123", tiers=test.tiers)
+    assert asyncio.run(test._weigh_in()) is True
+    assert test.assigned_rung == "queued"
+    assert test.weigh_in["source"] == "machine_profile"
+    assert test.weigh_in["observation_count"] == 1
+
+
+def test_pooled_observations_steady_a_borderline_machine(tmp_path, monkeypatch):
+    """The anchor system landed on both sides of a boundary on different
+    nights. Pooling every observation is a steadier statement than any single
+    4-sample draw, and it only gets steadier."""
+    from backend.capacity import machine_profile as mp
+    monkeypatch.setattr(mp, "PROFILE_PATH", tmp_path / "profiles.json")
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    fp = test._machine_fingerprint()
+    for worst in (380.0, 410.0, 395.0):        # straddling the 400s ceiling
+        entry = mp.record(fp, {sid: worst for sid in test.scenario_ids},
+                          commit="c", tiers=test.tiers)
+    assert entry["observation_count"] == 3
+    assert entry["pooled_worst_median_s"] == 395.0     # median, not last draw
+    assert entry["tier"] == "queued"
+    assert entry["observed_range_s"] == [380.0, 410.0]
+
+
+def test_a_changed_machine_gets_a_new_fingerprint(tmp_path, monkeypatch):
+    """A stale characterization must never follow a machine that is no longer
+    the same machine."""
+    from backend.capacity import machine_profile as mp
+    base = dict(benchmark_target="integrated_node", inference_backend="local",
+                benchmark_version=14, model="m",
+                engine={"context_length": 32768}, host={"cpu_count": 64})
+    fp = mp.fingerprint(**base)
+    assert mp.fingerprint(**{**base, "benchmark_version": 15}) != fp
+    assert mp.fingerprint(**{**base, "model": "other"}) != fp
+    assert mp.fingerprint(**{**base, "engine": {"context_length": 8192}}) != fp
+    assert mp.fingerprint(**{**base, "host": {"cpu_count": 32}}) != fp
+
+
+def test_force_weigh_in_re_measures(tmp_path, monkeypatch):
+    from backend.capacity import machine_profile as mp
+    monkeypatch.setattr(mp, "PROFILE_PATH", tmp_path / "profiles.json")
+    test = ctl.CapacityTest("e2e", [], _cfg(force_weigh_in=True), mix="tile")
+    mp.record(test._machine_fingerprint(),
+              {sid: 220.0 for sid in test.scenario_ids},
+              commit="abc", tiers=test.tiers)
+    test._stop.set()               # measure path would wait; stop immediately
+    assert asyncio.run(test._weigh_in()) is False
+    assert test.weigh_in.get("source") != "machine_profile"

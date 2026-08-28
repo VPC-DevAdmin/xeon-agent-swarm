@@ -78,6 +78,7 @@ from backend.capacity.client import LOCAL_BASE
 from backend.capacity.models import public_endpoint
 from backend.capacity import stats as st
 from backend.capacity import repro as repro_mod
+from backend.capacity import machine_profile as mprofile
 
 RESULTS_DIR = Path("data/capacity")
 
@@ -158,6 +159,8 @@ DEFAULTS = dict(
     capability_min_samples=0,    # optional operator floor; statistical floor is derived
     # Capacity: the open-loop metric. Offered rate steps upward; a level fails
     # when the lower bound on backlog growth is above zero twice over.
+    weigh_in_reuse_days=14.0,    # reuse a machine profile this fresh
+    force_weigh_in=False,        # re-measure even when a profile exists
     load_model="closed",         # closed | open
     arrival_hold_s=45.0,
     arrival_step_factor=1.4,
@@ -1674,6 +1677,16 @@ class CapacityTest:
                 break
         return state, breach, since
 
+    def _machine_fingerprint(self) -> str:
+        return mprofile.fingerprint(
+            benchmark_target=self.benchmark_target,
+            inference_backend=self.inference_backend,
+            benchmark_version=_scen_version(),
+            model=(self._engine_info or {}).get("served_model_name")
+                  or self._backend_model,
+            engine=self._engine_info,
+            host=repro_mod.host_info())
+
     async def _weigh_in(self) -> bool:
         """Place this machine in a deadline tier.
 
@@ -1691,6 +1704,40 @@ class CapacityTest:
         An operator override (service_rung != auto) skips the wait but is
         recorded as an override, so an overridden certification can never
         pass as an earned one."""
+        # A machine's speed is a property of the MACHINE. If this exact
+        # configuration has been characterized recently, reuse it: the tier
+        # comes from POOLED observations (steadier than any single draw) and
+        # the run records that it reused rather than measured. Change the
+        # workload, model, engine geometry, or hardware and the fingerprint
+        # changes with it, so a stale profile cannot follow a machine that is
+        # no longer the same machine.
+        fp = self._machine_fingerprint()
+        if (str(self.cfg.get("service_rung") or "auto") == "auto"
+                and not bool(self.cfg.get("force_weigh_in"))):
+            cached = mprofile.lookup(fp, ttl_days=float(
+                self.cfg.get("weigh_in_reuse_days") or
+                mprofile.DEFAULT_TTL_DAYS))
+            if cached and cached.get("tier") in self.ladder:
+                self.assigned_rung = cached["tier"]
+                self.weigh_in = {
+                    "protocol": (f"reused machine profile, pooled median of "
+                                 f"{cached['observation_count']} weigh-ins"),
+                    "source": "machine_profile", "override": False,
+                    "fingerprint": fp,
+                    "profile_age_days": cached.get("age_days"),
+                    "observation_count": cached.get("observation_count"),
+                    "worst_median_s": cached.get("pooled_worst_median_s"),
+                    "pooled_worst_median_s": cached.get("pooled_worst_median_s"),
+                    "observed_range_s": cached.get("observed_range_s"),
+                    "tier": cached["tier"],
+                    "rung": cached["tier"],
+                    "deadline_s": self.ladder[cached["tier"]]}
+                logging.getLogger(__name__).info(
+                    "weigh-in reused: %s (pooled %.1fs, %d obs)",
+                    cached["tier"], cached.get("pooled_worst_median_s") or 0,
+                    cached.get("observation_count") or 0)
+                return True
+
         requested = str(self.cfg.get("service_rung") or "auto")
         if requested != "auto":
             if requested not in self.ladder:
@@ -1727,16 +1774,29 @@ class CapacityTest:
                     self.error = "no service tiers configured"
                     self.phase = "error"
                     return False
+                # Record the observation and re-place from POOLED data, so
+                # every future run on this machine starts from a steadier
+                # characterization than this single draw.
+                entry = mprofile.record(fp, medians, tiers=self.tiers,
+                                        commit=repro_mod.git_commit())
+                pooled_tier = entry.get("tier") or tier["name"]
                 self.weigh_in = {
                     "protocol": (f"worst-type median of {need} completions "
                                  f"per type at one tile"),
-                    "override": False,
+                    "source": "measured", "override": False,
+                    "fingerprint": fp,
                     "medians_s": medians, "worst_median_s": worst,
-                    "tier": tier["name"],
-                    "tier_ceiling_s": tier.get("max_median_s"),
-                    "rung": tier["name"],
-                    "deadline_s": tier["deadline_s"]}
-                self.assigned_rung = tier["name"]
+                    "this_draw_tier": tier["name"],
+                    "pooled_worst_median_s": entry.get("pooled_worst_median_s"),
+                    "observation_count": entry.get("observation_count"),
+                    "observed_range_s": entry.get("observed_range_s"),
+                    "tier": pooled_tier,
+                    "tier_ceiling_s": next(
+                        (t.get("max_median_s") for t in self.tiers
+                         if t["name"] == pooled_tier), None),
+                    "rung": pooled_tier,
+                    "deadline_s": self.ladder[pooled_tier]}
+                self.assigned_rung = pooled_tier
                 return True
             # Poll at the run's own cadence: a coarse fixed poll silently
             # taxes short duration budgets on fast workloads.
