@@ -209,17 +209,44 @@ def _proc_jiffies(pid: int) -> int | None:
         return None
 
 
-def find_pids(cmdline_substr: str) -> list[int]:
-    """Best-effort pid scan by /proc cmdline substring (e.g. the engine)."""
+def find_pids(pattern: str) -> list[int]:
+    """Pids whose /proc cmdline OR comm contains the pattern.
+
+    comm matters as much as cmdline: a process that renames itself keeps a
+    cmdline that no longer describes how it was launched. SGLang's scheduler
+    — the process that does the actual inference work, measured at 6269% CPU
+    on a 128-core host — renames to 'sglang::scheduler' and was invisible to
+    a cmdline-only scan for 'sglang.launch_server'. Its ~49% of the host
+    landed in the residual bucket, one CPU-target crossing away from being
+    reported as other tenants interfering with the benchmark.
+    """
+    needle = pattern.encode()
     out = []
     for d in glob.glob("/proc/[0-9]*"):
         try:
             with open(f"{d}/cmdline", "rb") as f:
-                if cmdline_substr.encode() in f.read():
-                    out.append(int(d.rsplit("/", 1)[1]))
+                hit = needle in f.read()
+            if not hit:
+                with open(f"{d}/comm", "rb") as f:
+                    hit = needle in f.read()
+            if hit:
+                out.append(int(d.rsplit("/", 1)[1]))
         except (OSError, ValueError):
             continue
     return out
+
+
+def process_tree_pids(pattern: str) -> list[int]:
+    """Every pid matching the pattern, plus all their descendants.
+
+    Belt and braces for multi-process engines: match catches renamed
+    workers, descent catches workers that match nothing at all.
+    """
+    seed = find_pids(pattern)
+    out: set[int] = set(seed)
+    for pid in seed:
+        out.update(descendant_pids(pid))
+    return sorted(out)
 
 
 def descendant_pids(pid: int) -> list[int]:

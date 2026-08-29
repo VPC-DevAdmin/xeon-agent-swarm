@@ -747,3 +747,85 @@ def test_force_weigh_in_re_measures(tmp_path, monkeypatch):
     test._stop.set()               # measure path would wait; stop immediately
     assert asyncio.run(test._weigh_in()) is False
     assert test.weigh_in.get("source") != "machine_profile"
+
+
+# ── CPU attribution ──────────────────────────────────────────────────────────
+
+def test_find_pids_matches_renamed_processes(tmp_path, monkeypatch):
+    """A process that renames itself keeps a cmdline that no longer describes
+    how it was launched. SGLang's scheduler does exactly this, and matching
+    cmdline alone hid ~49% of the host in the residual bucket."""
+    from backend.capacity import telemetry as tel
+    root = tmp_path / "proc"
+    for pid, cmdline, comm in (("100", "python -m sglang.launch_server", "python3"),
+                               ("200", "sglang::scheduler", "sglang::schedul"),
+                               ("300", "nginx -g daemon off", "nginx")):
+        d = root / pid
+        d.mkdir(parents=True)
+        (d / "cmdline").write_bytes(cmdline.encode())
+        (d / "comm").write_bytes(comm.encode())
+    monkeypatch.setattr(tel.glob, "glob", lambda pat: [str(p) for p in root.iterdir()])
+    found = set(tel.find_pids("sglang"))
+    assert found == {100, 200}          # launcher by cmdline, scheduler by comm
+    assert 300 not in found
+
+
+def test_process_tree_pids_descends_to_unmatched_workers(tmp_path, monkeypatch):
+    """Belt and braces: matching catches renamed workers, descent catches
+    workers whose name matches nothing at all. The residual bucket decides
+    whether a resource verdict means anything, so our own engine must never
+    land in it — a saturating run would be reported as other tenants
+    interfering with the benchmark."""
+    from backend.capacity import telemetry as tel
+    monkeypatch.setattr(tel, "find_pids", lambda pattern: [100])
+    monkeypatch.setattr(tel, "descendant_pids",
+                        lambda pid: [100, 200, 300] if pid == 100 else [pid])
+    assert tel.process_tree_pids("sglang") == [100, 200, 300]
+
+
+# ── arrival-schedule calibration ─────────────────────────────────────────────
+
+def test_the_rate_search_is_aimed_at_the_measured_machine():
+    """The shipped schedule opens at 2/s. A CPU-inference node services
+    ~0.01/s, so an uncalibrated search starts ~180x above the drain rate:
+    every level diverges and the fit gets no points below the knee."""
+    test = ctl.CapacityTest("e2e", [], _cfg(load_model="open"), mix="tile")
+    test.weigh_in = {"pooled_worst_median_s": 290.0}
+    cal = test._calibrate_arrival_schedule()
+    tile = test.tile_size or 1
+    service = tile / 290.0
+    assert cal["estimated_service_rate"] == round(service, 5)
+    # opens below the service rate so the proportional segment gets points
+    assert cal["start_rate"] < service
+    # and caps far above it, so a machine that scales past one tile is not
+    # capped before its own knee
+    assert cal["max_rate"] > 10 * service
+    assert "290s median" in cal["basis"]
+
+
+def test_calibration_can_be_switched_off():
+    """An operator who wants the declared schedule keeps it."""
+    test = ctl.CapacityTest("e2e", [], _cfg(load_model="open",
+                                            arrival_calibrated=False),
+                            mix="tile")
+    test.weigh_in = {"pooled_worst_median_s": 290.0}
+    assert test._calibrate_arrival_schedule() is None
+
+
+def test_calibration_needs_a_measurement_and_never_guesses():
+    """With no median from any source there is nothing to aim at, and the
+    declared schedule stands rather than being invented."""
+    test = ctl.CapacityTest("e2e", [], _cfg(load_model="open"), mix="tile")
+    test.weigh_in = {}
+    assert test._calibrate_arrival_schedule() is None
+
+
+def test_calibration_falls_back_to_observed_completions():
+    """Without a weigh-in the run's own completions carry the estimate."""
+    test = ctl.CapacityTest("e2e", [], _cfg(load_model="open"), mix="tile")
+    test.weigh_in = {}
+    for sid in test.scenario_ids:
+        _seed_cohort(test, sid, 6, latency_ms=200_000.0)
+    cal = test._calibrate_arrival_schedule()
+    assert cal is not None
+    assert cal["estimated_service_rate"] == round((test.tile_size or 1) / 200.0, 5)

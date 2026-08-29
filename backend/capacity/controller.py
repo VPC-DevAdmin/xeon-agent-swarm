@@ -72,7 +72,7 @@ from backend.capacity.scenarios import (load_scenarios, load_tile, tile_sessions
 from backend.capacity.e2e import E2ERunner
 from backend.capacity.telemetry import (ProcessCpuSampler, SystemSampler,
                                         descendant_pids, find_pids,
-                                        mem_slope_mb_per_user,
+                                        mem_slope_mb_per_user, process_tree_pids,
                                          sample_bandwidth_gbs, sample_kv_pct)
 from backend.capacity.client import LOCAL_BASE
 from backend.capacity.models import public_endpoint
@@ -165,7 +165,8 @@ DEFAULTS = dict(
     arrival_hold_s=45.0,
     arrival_step_factor=1.4,
     arrival_refine_utilization=0.95,  # reduce step size as clean rate falls behind arrivals
-    arrival_start_rate=2.0,
+    arrival_start_rate=2.0,      # overridden by calibration unless disabled
+    arrival_calibrated=True,     # aim the rate search at the measured machine
     arrival_max_rate=4000.0,
     max_backlog=20000,
     min_samples=3,         # completed calls per profile per interval to certify a rung
@@ -334,6 +335,7 @@ class CapacityTest:
         self.rate_levels: list[dict] = []            # one record per offered rate
         self.capacity_wps: float | None = None
         self.capacity_detail: dict = {}
+        self.arrival_calibration: dict | None = None
         self.failure_onset: dict | None = None
         self._harness_start: dict = {}
         self.started_at = time.time()
@@ -630,7 +632,10 @@ class CapacityTest:
             pass
         if self.inference_backend == "local":
             if self._engine_pids is None:
-                self._engine_pids = find_pids("sglang.launch_server")
+                # Rescan until the engine's real compute processes are found:
+                # they appear after the launcher and rename themselves, so a
+                # single early scan catches only the idle parent.
+                self._engine_pids = process_tree_pids("sglang") or None
             if self._engine_pids:
                 groups["engine"] = self._engine_pids
         return groups
@@ -2178,9 +2183,59 @@ class CapacityTest:
             "resource_breach": resource_breach,
         }
 
+    def _calibrate_arrival_schedule(self) -> dict | None:
+        """Point the rate search at this machine's actual service rate.
+
+        The shipped schedule (2/s to 4000/s) was set for mock-backed runs.
+        A CPU-inference node services ~0.011 workflows/second, so that
+        schedule opens 180x above the machine's drain rate: every level
+        diverges instantly and the breakpoint fit has no points beneath the
+        knee to fit against.
+
+        Deriving the SEARCH RANGE from a known machine speed is not the
+        circularity the deadlines rule forbids. A deadline is the grading
+        bar, so taking it from the box under test corrupts the grade. An
+        arrival schedule only decides where to look — like the starting
+        bounds of a binary search, it changes how fast the knee is found,
+        never where the knee is. The calibration and its basis are recorded
+        with the result so a reader can see the search was aimed, not tuned.
+        """
+        if not self.cfg.get("arrival_calibrated", True):
+            return None
+        median_s = None
+        wi = self.weigh_in or {}
+        for key in ("pooled_worst_median_s", "worst_median_s"):
+            if wi.get(key):
+                median_s = float(wi[key])
+                break
+        if not median_s:
+            lats = [c["latency_ms"] / 1000.0 for c in self.calls if c.get("ok")]
+            median_s = statistics.median(lats) if lats else None
+        if not median_s or median_s <= 0:
+            return None
+        # One tile's throughput is the anchor: sessions divided by how long
+        # each takes. Open below it so the fit gets points on the
+        # proportional segment, and cap far above so a machine that scales
+        # past one tile is not capped before its own knee.
+        tile = max(1, self.tile_size or len(self.users) or 1)
+        service_rate = tile / median_s
+        return {"start_rate": max(1e-4, round(0.25 * service_rate, 5)),
+                "max_rate": round(20.0 * service_rate, 4),
+                "basis": (f"one tile ({tile} sessions) at a {median_s:.0f}s "
+                          f"median = {service_rate:.4f} workflows/s"),
+                "estimated_service_rate": round(service_rate, 5)}
+
     async def _rate_ramp(self) -> None:
         """Step the offered rate until the backlog diverges or a limit stops us."""
         self.phase = "ramping"
+        cal = self._calibrate_arrival_schedule()
+        if cal:
+            self.cfg["arrival_start_rate"] = cal["start_rate"]
+            self.cfg["arrival_max_rate"] = cal["max_rate"]
+            self.arrival_calibration = cal
+            logging.getLogger(__name__).info(
+                "arrival schedule calibrated: %.5f/s to %.4f/s (%s)",
+                cal["start_rate"], cal["max_rate"], cal["basis"])
         rate = float(self.cfg["arrival_start_rate"])
         resource_streak: dict[str, int] = defaultdict(int)
         self._tasks.append(asyncio.create_task(self._arrival_loop()))
@@ -2483,6 +2538,7 @@ class CapacityTest:
             } if (self.capability_detail or self.capability_users) else None,
             "sustainable_capacity": self.capacity_detail or None,
             "capacity_workflows_per_s": self.capacity_wps,
+            "arrival_calibration": self.arrival_calibration,
             "failure_onset": self.failure_onset,
             "load_model": str(self.cfg["load_model"]),
             "service_class": str(self.cfg["service_class"]),
