@@ -410,3 +410,24 @@ def test_an_indefinite_child_is_still_not_a_sample(tmp_path, monkeypatch):
     assert rs.result["runs_excluded"] == 1
     assert "did not produce its intended metric" in rs.result["excluded"][0]["reason"]
     assert rs.result["status"] == "complete"
+
+
+def test_a_definitive_finding_counts_even_without_a_stability_number(
+        tmp_path, monkeypatch):
+    """Overnight set, child 3: same definitive evidence-limited finding as
+    its siblings, excluded because its ramp broke before certifying any
+    stability level, so result_kind read inconclusive. Whether a finding
+    counts must never be a coin flip on an unrelated diagnostic."""
+    r = _result(kind="inconclusive", verdict="errors")
+    r["capability"] = {"users": None, "definitive": True,
+                       "status": "evidence limited: host ceiling below the "
+                                 "conclusive cohort"}
+    rs = _run_set([r,
+                   _definitive("evidence limited: host ceiling below the "
+                               "conclusive cohort"),
+                   _definitive("evidence limited: host ceiling below the "
+                               "conclusive cohort")],
+                  tmp_path, monkeypatch)
+    assert rs.result["status"] == "complete"
+    assert rs.result["runs_excluded"] == 0
+    assert rs.result["capability_outcome"]["agreement"] == "3/3"

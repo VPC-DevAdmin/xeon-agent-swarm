@@ -218,19 +218,23 @@ class RepeatSet:
         if res.get("publication_eligible") is False:
             return (res.get("publication_exclusion")
                     or "run is not eligible for a published repeat set")
-        if res.get("result_kind") in ("inconclusive", "invalid"):
-            return f"no usable number ({res.get('result_kind')})"
         intended = ("sustainable_capacity" if res.get("load_model") == "open"
                     else "service_capability")
-        if _metric_value(res, intended) is not None:
-            return None
-        # A DEFINITIVE non-numeric capability finding is a sample: a level
-        # that failed with mature evidence, or a host whose ceiling sits
-        # below the conclusive cohort. Three such children agreeing publish
-        # as a reproducible finding. Only an indefinite run (stopped, no
-        # judgment reached) is not a sample.
+        # A DEFINITIVE non-numeric capability finding is a sample, and it is
+        # judged BEFORE the no-number gate: result_kind is derived from
+        # whether any number exists, and a child whose ramp broke without
+        # certifying a stability level has none — yet its capability finding
+        # can be identical to its siblings'. The overnight set proved it:
+        # child 3 reached the same definitive "evidence limited" finding as
+        # children 1 and 2 and was excluded because tile 1 happened not to
+        # certify. Whether a finding counts must never be a coin flip on an
+        # unrelated diagnostic.
         if (intended == "service_capability"
                 and (res.get("capability") or {}).get("definitive")):
+            return None
+        if res.get("result_kind") in ("inconclusive", "invalid"):
+            return f"no usable number ({res.get('result_kind')})"
+        if _metric_value(res, intended) is not None:
             return None
         return f"run did not produce its intended metric ({intended})"
 
