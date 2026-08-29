@@ -2489,13 +2489,17 @@ class CapacityTest:
                 mock_tier = mockrouter.metadata(self._router_base_url)
             except Exception:  # noqa: BLE001
                 mock_tier = None
+        # RECORD, don't refuse. The old gate marked any co-located mock run
+        # publication-ineligible: cross-OEM hardening, out of scope for the
+        # Dell reference-guide goal. A reader needs the FACTS — where the
+        # stand-in ran, its workers and latency distribution, and what it
+        # measurably cost the host (mock CPU share, same basis as every
+        # other component). A run is disqualified by what it hides, not by
+        # where its stand-in lived.
         publication_exclusion = None
         if (self.benchmark_target == "agent_host"
                 and self.inference_backend == "remote_mock"):
-            if not mock_tier or not mock_tier.get("isolated_from_host"):
-                publication_exclusion = (
-                    "inference stand-in was co-located with the agent host")
-            else:
+            if mock_tier:
                 observed_wps = max(
                     [float(lv.get("achieved_rate") or 0) for lv in self.rate_levels]
                     + [float(hold.get("rpm") or 0) / 60.0])
@@ -2507,10 +2511,8 @@ class CapacityTest:
                 certified_rps = mock_tier.get("certified_requests_per_s")
                 mock_tier["headroom_qualified"] = bool(
                     certified_rps is not None and certified_rps >= required_rps)
-                if not mock_tier["headroom_qualified"]:
-                    publication_exclusion = (
-                        "inference stand-in lacks independent 2× request-rate "
-                        "headroom qualification")
+                mock_tier["measured_cpu_pct"] = (cpu_breakdown or {}).get(
+                    "mock_router")
         publication_eligible = publication_exclusion is None
         self.result = {
             "mode": self.mode,

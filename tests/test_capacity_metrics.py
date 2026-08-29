@@ -829,3 +829,23 @@ def test_calibration_falls_back_to_observed_completions():
     cal = test._calibrate_arrival_schedule()
     assert cal is not None
     assert cal["estimated_service_rate"] == round((test.tile_size or 1) / 200.0, 5)
+
+
+def test_a_colocated_mock_is_recorded_not_refused(tmp_path, monkeypatch):
+    """The reference-guide posture: a run is disqualified by what it hides,
+    not by where its stand-in lived. Co-located mock runs stay publication
+    eligible, with the stand-in's location, headroom math, and measured CPU
+    share recorded for the reader."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile",
+                            benchmark_target="agent_host",
+                            inference_backend="remote_mock",
+                            e2e_router={"base_url": "http://127.0.0.1:8901/v1"})
+    test.ended_at = ctl.time.time()
+    test._finalize()
+    r = test.result
+    assert r["publication_eligible"] is True
+    assert r["publication_exclusion"] is None
+    mt = (r.get("repro") or {}).get("mock_tier") or {}
+    assert mt.get("loopback") is True            # the fact, stated
+    assert "measured_cpu_pct" in mt              # and what it cost the host
