@@ -348,6 +348,7 @@ class CapacityTest:
         # was refused whole for it, which punished the evidence for the
         # wreckage.
         self._collapse_windows: list[list[float]] = []
+        self._evidence = None
         self.started_at = time.time()
         self.ended_at: float | None = None
         self.error: str | None = None
@@ -412,6 +413,26 @@ class CapacityTest:
                     "snapshot_error": f"{type(exc).__name__}: {exc}"}
             if self.inference_backend == "local":
                 self._engine_info = await repro_mod.engine_info(LOCAL_BASE)
+            # Evidence ledger: judgment is post-processable, so every unit,
+            # level, and sample streams to disk as it happens. The in-run
+            # verdict steers the ramp; the ledger is what gets re-judged
+            # when the rules evolve, without re-running the load.
+            from backend.capacity.evidence import EvidenceWriter
+            _stamp = time.strftime("%Y%m%d-%H%M%S",
+                                   time.gmtime(self.started_at))
+            self._evidence = EvidenceWriter(
+                RESULTS_DIR / f"evidence-{_stamp}-{self.mode}.jsonl.gz")
+            self._evidence.write("header", {
+                "started_at": self.started_at, "seed": self.seed,
+                "mode": self.mode, "mix": self.mix,
+                "benchmark_target": self.benchmark_target,
+                "inference_backend": self.inference_backend,
+                "capability_target": float(
+                    self.cfg.get("capability_target") or 0.95),
+                "capability_confidence": float(
+                    self.cfg.get("capability_confidence") or 0.95),
+                "slo_err": float(self.cfg.get("slo_err") or 0.05),
+            })
             sampler_task = asyncio.create_task(self._sample_loop())
             # A dead sampler must be LOUD: its exception is otherwise trapped
             # unobserved in the task while the run reports empty telemetry
@@ -693,6 +714,11 @@ class CapacityTest:
                     s["kv_pct"] = await sample_kv_pct(LOCAL_BASE)
                     kv_misses = 0 if s["kv_pct"] is not None else kv_misses + 1
             self.samples.append(s)
+            if self._evidence:
+                self._evidence.write("sample", {
+                    k: s.get(k) for k in
+                    ("ts", "users", "in_flight", "p95_ms", "err_rate",
+                     "rpm", "cpu_pct", "cpu_by", "oldest_inflight_s")})
             await asyncio.sleep(self.cfg["sample_interval_s"])
 
     def _admit(self, sid: str) -> int:
@@ -977,6 +1003,7 @@ class CapacityTest:
 
     def _record_level(self, phase: str, stats: dict, slo_state: str) -> None:
         row = {
+            "ts": round(time.time(), 3),
             "phase": phase,
             "users": len(self.users),
             "tiles": (len(self.users) // self.tile_size if self.tile_size else None),
@@ -991,6 +1018,8 @@ class CapacityTest:
             "cumulative_cost_usd": round(self.cost_usd, 6),
             "projected_cost_per_hour": stats.get("cost_per_hour", 0.0),
         }
+        if self._evidence:
+            self._evidence.write("level", row)
         if (self.capacity_levels and self.capacity_levels[-1]["phase"] == phase
                 and self.capacity_levels[-1]["users"] == len(self.users)):
             self.capacity_levels[-1] = row
@@ -2113,6 +2142,8 @@ class CapacityTest:
 
     def _tally_call(self, rec: dict) -> None:
         """Append a finished unit and keep the running tallies current."""
+        if self._evidence:
+            self._evidence.unit(rec)
         self.calls.append(rec)
         self.completed_requests += 1
         t = self._scen_tally[rec.get("scenario", "?")]
@@ -2741,9 +2772,44 @@ class CapacityTest:
                                    else "suffix disabled (calibration)"),
             },
         }
+        # Close the evidence ledger and judge it. The ledger is the durable
+        # authority: the live verdict above steered the ramp, but the
+        # post-judgment is recomputable, versioned, and revisable over
+        # time without re-running the test.
+        if self._evidence:
+            try:
+                for w in self._collapse_windows:
+                    self._evidence.write("window", {"a": w[0], "b": w[1]})
+                dl = (self._deadline_s(self.scenario_ids[0])
+                      if (self.mode == "e2e" and self.scenario_ids) else None)
+                self._evidence.write("footer", {
+                    "ended_at": self.ended_at,
+                    "live_verdict": self.verdict,
+                    "deadline_s": dl,
+                    "harness_ok": (self.harness.get("ok")
+                                   if isinstance(self.harness, dict)
+                                   else None),
+                })
+                info = self._evidence.close()
+                if info:
+                    self.result["evidence"] = info
+            except Exception as exc:  # noqa: BLE001
+                self.result["evidence"] = {
+                    "error": f"{type(exc).__name__}: {exc}"}
         try:
             RESULTS_DIR.mkdir(parents=True, exist_ok=True)
             stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime(self.started_at))
+            ev_path = (self.result.get("evidence") or {}).get("path")
+            if ev_path:
+                try:
+                    from backend.capacity import judge as judge_mod
+                    judgment = judge_mod.judge_evidence(ev_path)
+                    self.result["post_judgment"] = judge_mod.summarize(judgment)
+                    (RESULTS_DIR / f"judgment-{stamp}-{self.mode}.json"
+                     ).write_text(json.dumps(judgment, indent=1))
+                except Exception as exc:  # noqa: BLE001
+                    self.result["post_judgment"] = {
+                        "error": f"{type(exc).__name__}: {exc}"}
             (RESULTS_DIR / f"capacity-{stamp}-{self.mode}.json").write_text(
                 json.dumps(self.result, indent=1))
         except OSError:
