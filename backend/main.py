@@ -772,7 +772,8 @@ async def internal_counters(request: Request):
         raise HTTPException(403, "internal endpoint")
     from backend.repositories import persistence
     return {"persist_failures": persistence.failure_count(),
-            "callback_failures": wp.callback_failures}
+            "callback_failures": wp.callback_failures,
+            "callback_failure_times": list(wp.callback_failure_times)}
 
 
 @app.post("/internal/complete")

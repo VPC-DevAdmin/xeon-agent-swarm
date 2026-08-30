@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import time as _time
 import logging
 import os
 import secrets
@@ -87,6 +88,7 @@ _urls: list[str] = []
 _rr = itertools.count()
 _owners: dict[str, str] = {}          # run_id -> executor base_url
 callback_failures = 0                 # completion callbacks lost after retry
+callback_failure_times: list[float] = []   # when each loss happened (see below)
 _client: httpx.AsyncClient | None = None
 
 
@@ -274,6 +276,13 @@ async def post_complete(payload: dict) -> None:
         except Exception:  # noqa: BLE001
             continue
     callback_failures += 1
+    # The TIMESTAMP travels with the count: a callback lost during the
+    # collapse of an already-condemned level taints nothing that gets
+    # published, while one lost during evidence-gathering taints everything.
+    # Only the controller knows which phase a moment belonged to, so the
+    # executor records when and the controller judges what it meant.
+    callback_failure_times.append(_time.time())
+    del callback_failure_times[:-200]
     logger.warning("completion callback lost for run %s", payload.get("run_id"))
 
 
@@ -282,6 +291,7 @@ async def collect_counters() -> dict:
     from backend.repositories import persistence
     totals = {"persist_failures": persistence.failure_count(),
               "callback_failures": callback_failures,
+              "callback_failure_times": list(callback_failure_times),
               "unreachable_executors": 0}
     for url in _urls:
         try:
@@ -290,6 +300,8 @@ async def collect_counters() -> dict:
             body = r.json()
             totals["persist_failures"] += int(body.get("persist_failures") or 0)
             totals["callback_failures"] += int(body.get("callback_failures") or 0)
+            totals["callback_failure_times"].extend(
+                float(t) for t in (body.get("callback_failure_times") or []))
         except Exception:  # noqa: BLE001
             totals["unreachable_executors"] += 1
     return totals

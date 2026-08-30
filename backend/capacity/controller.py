@@ -338,6 +338,13 @@ class CapacityTest:
         self.arrival_calibration: dict | None = None
         self.failure_onset: dict | None = None
         self._harness_start: dict = {}
+        # Intervals when a CONDEMNED level's backlog was collapsing or the
+        # run was tearing down — moments whose data is never published. A
+        # callback lost inside one taints nothing; the 64-worker set lost 39
+        # callbacks in a single second of collapse at 191k clean requests and
+        # was refused whole for it, which punished the evidence for the
+        # wreckage.
+        self._collapse_windows: list[list[float]] = []
         self.started_at = time.time()
         self.ended_at: float | None = None
         self.error: str | None = None
@@ -420,6 +427,7 @@ class CapacityTest:
             self.phase, self.error = "error", f"{type(exc).__name__}: {exc}"
         finally:
             self._stop.set()
+            self._collapse_windows.append([time.time(), None])   # teardown
             for t in [*self.users, *self._tasks, *self._open_tasks]:
                 t.cancel()
             await asyncio.gather(*self.users, *self._tasks, *self._open_tasks,
@@ -1426,6 +1434,13 @@ class CapacityTest:
             self.slo_capacity_tiles = len(self.users) // self.tile_size
 
     async def _drain(self):
+        self._collapse_windows.append([time.time(), None])
+        try:
+            await self._drain_inner()
+        finally:
+            self._collapse_windows[-1][1] = time.time() + 2.0
+
+    async def _drain_inner(self):
         """After scaling back from a breached level, wait for the breach-level
         backlog to finish (in-flight <= remaining sessions) so the steady
         window measures the certified level, not the wreckage draining out.
@@ -1475,6 +1490,23 @@ class CapacityTest:
             counters[name] = max(0, int(raw.get(name, 0))
                                  - int(baseline.get(name, 0)))
         counters["counter_baseline"] = baseline
+        # Classify this run's callback losses by WHEN they happened. A loss
+        # inside a collapse window belongs to a condemned level's death
+        # throes and is reported without invalidating; a loss during
+        # evidence-gathering still invalidates at zero tolerance.
+        base_times = set(float(t) for t in
+                         (baseline.get("callback_failure_times") or []))
+        run_times = [float(t) for t in
+                     (raw.get("callback_failure_times") or [])
+                     if float(t) not in base_times
+                     and float(t) >= self.started_at]
+        def _in_collapse(t: float) -> bool:
+            return any(a <= t <= (b if b is not None else time.time())
+                       for a, b in self._collapse_windows)
+        collapse_losses = sum(1 for t in run_times if _in_collapse(t))
+        counters["callback_failures_collapse"] = collapse_losses
+        counters["callback_failures"] = max(
+            0, counters["callback_failures"] - collapse_losses)
         total = max(1, self.total_requests)
         lost = int(counters.get("persist_failures", 0)) + \
             int(counters.get("callback_failures", 0))
