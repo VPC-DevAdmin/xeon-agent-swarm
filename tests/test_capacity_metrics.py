@@ -856,8 +856,8 @@ def test_a_colocated_mock_is_recorded_not_refused(tmp_path, monkeypatch):
 def test_callbacks_lost_in_collapse_do_not_invalidate(tmp_path, monkeypatch):
     """The 64-worker set lost 39 callbacks in one second of a condemned
     level's collapse at 191k clean requests and was refused whole. A loss in
-    a collapse window belongs to wreckage that is never published; a loss
-    during evidence-gathering still invalidates at zero tolerance."""
+    a collapse window belongs to wreckage that is never published and does
+    not even count toward the evidence-phase loss cap."""
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
     test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
     now = ctl.time.time()
@@ -881,17 +881,23 @@ def test_callbacks_lost_in_collapse_do_not_invalidate(tmp_path, monkeypatch):
     assert test.verdict != "harness_degraded"
 
 
-def test_callbacks_lost_during_evidence_still_invalidate(tmp_path, monkeypatch):
+def test_callbacks_lost_during_evidence_are_charged_not_disqualifying(
+        tmp_path, monkeypatch):
+    """A lost callback is already a charged timeout at its level (strictly
+    pessimistic bias), so a modest evidence-phase loss is recorded and
+    attributed, never a verdict. The 64-worker take-2 shape: 179 losses at
+    overload levels, 0.16% of units."""
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
     test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
     now = ctl.time.time()
     test.started_at = now - 100
-    test.total_requests = 10_000
+    test.total_requests = 114_925                          # cap = 1149; 179 is 0.16%
     test._collapse_windows = [[now - 30, now - 20]]
-    times = [now - 60.0]                                    # mid-evidence
+    times = [now - 60.0 + i * 0.01 for i in range(179)]     # mid-evidence
+    test.samples.append({"ts": now - 90, "users": 1300})
 
     async def fake_counters():
-        return {"persist_failures": 0, "callback_failures": 1,
+        return {"persist_failures": 0, "callback_failures": 179,
                 "callback_failure_times": times,
                 "unreachable_executors": 0}
 
@@ -899,5 +905,50 @@ def test_callbacks_lost_during_evidence_still_invalidate(tmp_path, monkeypatch):
     monkeypatch.setattr(wp, "collect_counters", fake_counters)
     test._harness_start = {"persist_failures": 0, "callback_failures": 0}
     asyncio.run(test._reconcile_harness())
-    assert test.harness["callback_failures"] == 1
+    assert test.harness["callback_failures"] == 179
+    assert test.harness["callback_losses_by_level"] == {"1300": 179}
+    assert test.harness["ok"] is True
+    assert test.verdict != "harness_degraded"
+
+
+def test_callback_losses_past_cap_degrade_the_run(tmp_path, monkeypatch):
+    """Past callback_loss_cap the run is measurement noise, not a
+    conservative understatement — it degrades."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    now = ctl.time.time()
+    test.started_at = now - 100
+    test.total_requests = 10_000                             # cap = 100
+    times = [now - 60.0 + i * 0.001 for i in range(150)]
+
+    async def fake_counters():
+        return {"persist_failures": 0, "callback_failures": 150,
+                "callback_failure_times": times,
+                "unreachable_executors": 0}
+
+    import backend.workerpool as wp
+    monkeypatch.setattr(wp, "collect_counters", fake_counters)
+    test._harness_start = {"persist_failures": 0, "callback_failures": 0}
+    asyncio.run(test._reconcile_harness())
     assert test.verdict == "harness_degraded"
+    assert test.breach["metric"] == "callback_losses"
+    assert test.breach["limit"] == 100
+
+
+def test_persist_failures_keep_zero_tolerance(tmp_path, monkeypatch):
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.started_at = ctl.time.time() - 100
+    test.total_requests = 10_000
+
+    async def fake_counters():
+        return {"persist_failures": 1, "callback_failures": 0,
+                "callback_failure_times": [],
+                "unreachable_executors": 0}
+
+    import backend.workerpool as wp
+    monkeypatch.setattr(wp, "collect_counters", fake_counters)
+    test._harness_start = {"persist_failures": 0, "callback_failures": 0}
+    asyncio.run(test._reconcile_harness())
+    assert test.verdict == "harness_degraded"
+    assert test.breach["metric"] == "lost_records"

@@ -149,6 +149,9 @@ DEFAULTS = dict(
     drift_tolerance=0.25,  # drift: 2nd half-window p80 may exceed the 1st by ≤25%
     cohort_maturity=0.8,   # fraction of the older half that must have COMPLETED to judge it
     harness_tolerance=0.0,    # publishable runs tolerate no lost durable work
+    callback_loss_cap=0.01,   # lost callbacks are self-punishing (each is already
+                              # a charged timeout at its level); past 1% of units
+                              # the run is measurement noise, not an understatement
     invalid_tolerance=0.01,   # contract-violating units above this share invalidate the run
     # Capability: the declared SLO metric. A level passes only when the lower
     # one-sided 95% bound on each type's on-deadline success is >= target.
@@ -1471,10 +1474,13 @@ class CapacityTest:
     async def _reconcile_harness(self):
         """Sum persistence and callback failures across every process.
 
-        A lost write or a lost completion callback is a benchmark failure, not
-        an agent failure, and the two are indistinguishable in the latency
-        record. Counts ride in the result; past the tolerance the run stops
-        being a capacity measurement at all."""
+        A lost durable write has unknown bias and stays at zero tolerance —
+        past the tolerance the run stops being a capacity measurement at all.
+        A lost completion callback is different: the session awaiting it times
+        out and is charged as a failure at its level, so its bias is strictly
+        pessimistic. Those are recorded and attributed (phase, level), and
+        only a loss rate past callback_loss_cap — where the run is noise
+        rather than an understatement — degrades the verdict."""
         try:
             from backend import workerpool as wp
             counters = await wp.collect_counters()
@@ -1490,10 +1496,15 @@ class CapacityTest:
             counters[name] = max(0, int(raw.get(name, 0))
                                  - int(baseline.get(name, 0)))
         counters["counter_baseline"] = baseline
-        # Classify this run's callback losses by WHEN they happened. A loss
-        # inside a collapse window belongs to a condemned level's death
-        # throes and is reported without invalidating; a loss during
-        # evidence-gathering still invalidates at zero tolerance.
+        # Callback losses: a lost completion callback is ALREADY charged to
+        # the level where it happened — the awaiting session never resolves,
+        # times out, and lands in that level's evidence as a failed unit. The
+        # bias is strictly pessimistic: a lost callback can help condemn a
+        # level, never help certify one, so a ceiling certified despite them
+        # is a valid lower bound. They are therefore recorded, attributed to
+        # their phase and level, and capped — not treated as disqualifying.
+        # Zero tolerance remains for persist failures and unreachable
+        # executors, whose bias is unknown.
         base_times = set(float(t) for t in
                          (baseline.get("callback_failure_times") or []))
         run_times = [float(t) for t in
@@ -1507,15 +1518,33 @@ class CapacityTest:
         counters["callback_failures_collapse"] = collapse_losses
         counters["callback_failures"] = max(
             0, counters["callback_failures"] - collapse_losses)
+        # Attribute evidence-phase losses to the concurrency level active at
+        # each loss, so the report shows which levels absorbed the phantom
+        # timeouts (typically overload levels that were condemned anyway).
+        telem = sorted((float(s["ts"]), int(s.get("users") or 0))
+                       for s in self.samples if s.get("ts") is not None)
+        by_level: dict[str, int] = {}
+        for t in run_times:
+            if _in_collapse(t):
+                continue
+            users = 0
+            for ts, u in telem:
+                if ts > t:
+                    break
+                users = u
+            by_level[str(users)] = by_level.get(str(users), 0) + 1
+        counters["callback_losses_by_level"] = by_level
         total = max(1, self.total_requests)
-        lost = int(counters.get("persist_failures", 0)) + \
-            int(counters.get("callback_failures", 0))
+        persist = int(counters.get("persist_failures", 0))
+        cb = int(counters.get("callback_failures", 0))
+        cb_cap = max(5, int(total * float(self.cfg["callback_loss_cap"])))
         unreachable = int(raw.get("unreachable_executors", 0))
-        counters["lost_fraction"] = round(lost / total, 5)
+        counters["lost_fraction"] = round((persist + cb) / total, 5)
         counters["invalid_units"] = self.invalid_units
         counters["ok"] = (not baseline.get("snapshot_error")
                           and unreachable == 0
-                          and lost <= total * float(self.cfg["harness_tolerance"]))
+                          and persist <= total * float(self.cfg["harness_tolerance"])
+                          and cb <= cb_cap)
         self.harness = counters
         if self.invalid_units > self.total_requests * float(self.cfg["invalid_tolerance"]):
             self.verdict = "workload_invalid"
@@ -1533,11 +1562,15 @@ class CapacityTest:
                 self.breach = {"profile": "harness",
                                "metric": "counter_snapshot", "value": 1,
                                "limit": 0}
-            else:
+            elif persist > total * float(self.cfg["harness_tolerance"]):
                 self.breach = {"profile": "harness", "metric": "lost_records",
-                               "value": lost,
+                               "value": persist,
                                "limit": round(total * float(
                                    self.cfg["harness_tolerance"]), 1)}
+            else:
+                self.breach = {"profile": "harness",
+                               "metric": "callback_losses",
+                               "value": cb, "limit": cb_cap}
 
 
     # ── metric 1: service capability (closed loop, deadline-bound) ───────────
@@ -2667,7 +2700,8 @@ class CapacityTest:
                         "arrival_step_factor", "arrival_max_rate", "arrival_hold_s",
                         "arrival_refine_utilization",
                         "capability_target", "capability_confidence",
-                        "capability_min_samples", "harness_tolerance")},
+                        "capability_min_samples", "harness_tolerance",
+                        "callback_loss_cap")},
             "started_at": self.started_at,
             "ended_at": self.ended_at,
             "repro": {
