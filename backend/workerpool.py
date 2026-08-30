@@ -105,13 +105,42 @@ def _http() -> httpx.AsyncClient:
     return _client
 
 
+def _free_ports(base: int, count: int, avoid: set[int]) -> list[int]:
+    """The first `count` bindable ports from `base`, skipping occupied ones.
+
+    A widened pool walks into other tenants: at 96 workers the naive
+    base+i range crossed the voice demo's gateway on 8080 and a neighbour
+    on 8083, those executors died at bind with nothing logged, and the
+    pool silently ran 94-strong until run-level integrity refused the
+    result. Probe first, skip what is taken, and say so.
+    """
+    import socket
+    out: list[int] = []
+    candidate = base
+    while len(out) < count and candidate < base + 10 * count:
+        if candidate not in avoid:
+            try:
+                with socket.socket() as s_:
+                    s_.bind(("127.0.0.1", candidate))
+                out.append(candidate)
+            except OSError:
+                logger.warning("executor port %d is taken by another "
+                               "process — skipping it", candidate)
+        candidate += 1
+    if len(out) < count:
+        raise RuntimeError(f"could not find {count} free executor ports "
+                           f"from {base}")
+    return out
+
+
 async def start_pool() -> None:
     """Spawn the executor processes and wait until each answers /health."""
     n = worker_count()
     tok = internal_token()
     port = int(os.getenv("PORT", "8010"))
+    ports = _free_ports(BASE_PORT, n, avoid={port})
     for i in range(n):
-        wport = BASE_PORT + i
+        wport = ports[i]
         env = {
             **os.environ,
             "XEON_ROLE": "worker",
@@ -140,7 +169,11 @@ async def start_pool() -> None:
         if pending:
             await asyncio.sleep(0.5)
     if pending:
-        logger.warning("executor(s) not healthy after 30s: %s", sorted(pending))
+        # A pool that is not the pool it claims to be must be LOUD: run-level
+        # integrity will refuse every result until this is fixed, so the
+        # operator should hear it at startup, not at reconciliation.
+        logger.error("executor(s) not healthy after 30s (results will be "
+                     "refused by harness integrity): %s", sorted(pending))
     logger.info("executor pool up: %d process(es) at %s", len(_urls), _urls)
 
 
