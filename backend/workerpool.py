@@ -89,22 +89,28 @@ _rr = itertools.count()
 _owners: dict[str, str] = {}          # run_id -> executor base_url
 callback_failures = 0                 # completion callbacks lost after retry
 callback_failure_times: list[float] = []   # when each loss happened (see below)
-_client: httpx.AsyncClient | None = None
+_clients: dict[str, httpx.AsyncClient] = {}
 
 
-def _http() -> httpx.AsyncClient:
-    global _client
-    if _client is None:
-        # Sized for the control plane's burst profile: a large AIMD batch can
-        # launch hundreds of dispatches in the same instant, and 48 executors
-        # push completion callbacks + event batches concurrently. httpx's
-        # default 100-connection cap made dispatches fail in bursts at 1,242
-        # sessions (the finale's stop) — a client limit, not a system one.
-        _client = httpx.AsyncClient(
+def _http(url: str) -> httpx.AsyncClient:
+    # One client PER ORIGIN, not one shared pool. httpcore rescans its whole
+    # connection list on every request event, so a single 2,000-connection
+    # pool cost ~half the control plane's event loop at the boundary (py-spy,
+    # 2026-08-30): _assign_requests_to_connections and its is_idle/has_expired
+    # probes were 45-50% of all samples at 1,167 sessions. Sharding by origin
+    # keeps each scan at pool size, and per-origin limits still clear the
+    # burst profile: an AIMD batch fans out across every executor, so no
+    # single origin sees more than its share of a burst. (The old shared
+    # 100-connection default failed dispatches at 1,242 sessions; the
+    # per-origin cap below is sized well above one origin's share of that.)
+    origin = url.split("/", 3)[2] if "//" in url else url
+    client = _clients.get(origin)
+    if client is None:
+        client = _clients[origin] = httpx.AsyncClient(
             timeout=30.0,
-            limits=httpx.Limits(max_connections=2000,
-                                max_keepalive_connections=256))
-    return _client
+            limits=httpx.Limits(max_connections=128,
+                                max_keepalive_connections=64))
+    return client
 
 
 def _free_ports(base: int, count: int, avoid: set[int]) -> list[int]:
@@ -163,7 +169,7 @@ async def start_pool() -> None:
     while pending and asyncio.get_event_loop().time() < deadline:
         for url in list(pending):
             try:
-                r = await _http().get(f"{url}/health")
+                r = await _http(url).get(f"{url}/health")
                 if r.status_code == 200:
                     pending.discard(url)
             except Exception:
@@ -217,7 +223,7 @@ async def dispatch_run(url: str, payload: dict) -> None:
         if delay:
             await asyncio.sleep(delay)
         try:
-            r = await _http().post(f"{url}/internal/run", json=payload,
+            r = await _http(url).post(f"{url}/internal/run", json=payload,
                                    headers={"X-Internal-Token": internal_token()})
             r.raise_for_status()
             return
@@ -239,7 +245,7 @@ async def _event_flush_loop():
             continue
         batch, _event_buf[:] = _event_buf[:], []
         try:
-            await _http().post(f"{control_url()}/internal/events_batch",
+            await _http(control_url()).post(f"{control_url()}/internal/events_batch",
                                json={"events": batch},
                                headers={"X-Internal-Token": internal_token()})
         except Exception:
@@ -270,7 +276,7 @@ async def post_complete(payload: dict) -> None:
         if delay:
             await asyncio.sleep(delay)
         try:
-            await _http().post(f"{control_url()}/internal/complete", json=payload,
+            await _http(control_url()).post(f"{control_url()}/internal/complete", json=payload,
                                headers={"X-Internal-Token": internal_token()})
             return
         except Exception:  # noqa: BLE001
@@ -295,7 +301,7 @@ async def collect_counters() -> dict:
               "unreachable_executors": 0}
     for url in _urls:
         try:
-            r = await _http().get(f"{url}/internal/counters",
+            r = await _http(url).get(f"{url}/internal/counters",
                                   headers={"X-Internal-Token": internal_token()})
             body = r.json()
             totals["persist_failures"] += int(body.get("persist_failures") or 0)
@@ -308,7 +314,7 @@ async def collect_counters() -> dict:
 
 
 async def proxy_post(url: str, path: str, body: dict | None = None) -> dict:
-    r = await _http().post(f"{url}{path}", json=body or {},
+    r = await _http(url).post(f"{url}{path}", json=body or {},
                            headers={"X-Internal-Token": internal_token()})
     r.raise_for_status()
     return r.json()
