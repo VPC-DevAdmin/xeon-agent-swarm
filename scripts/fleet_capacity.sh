@@ -17,11 +17,28 @@ BASE_DB_URL=${DATABASE_URL%/*}      # strip the db name, keep creds/host/port
 PG_PORT=$(echo "$DATABASE_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
 PIDS=()
 
+# One PG container per instance: the shared container held 459 of 500
+# connections at 4x28 (each instance's executor pools want ~113) and put
+# every instance behind one parser and one WAL. Isolation makes the
+# database part of each instance's own measured system.
+PGPASS=$(echo "$DATABASE_URL" | sed -E 's|.*//[^:]+:([^@]+)@.*|\1|')
 for i in $(seq 1 "$K"); do
-  docker exec xeon-pg psql -U xeon -d postgres -tc \
-    "SELECT 1 FROM pg_database WHERE datname='orchestrator_f$i'" | grep -q 1 ||
-    docker exec xeon-pg psql -U xeon -d postgres -c \
-      "CREATE DATABASE orchestrator_f$i OWNER xeon"
+  if ! docker ps -q -f "name=^xeon-pg-f$i\$" | grep -q .; then
+    docker rm -f "xeon-pg-f$i" >/dev/null 2>&1 || true
+    docker run -d --name "xeon-pg-f$i" -p "127.0.0.1:$((5440 + i)):5432" \
+      -e POSTGRES_USER=xeon -e "POSTGRES_PASSWORD=$PGPASS" \
+      -e "POSTGRES_DB=orchestrator_f$i" \
+      -v "xeon_pg_f$i:/var/lib/postgresql/data" \
+      postgres:16-alpine -c max_connections=300 >/dev/null
+    echo "pg container xeon-pg-f$i on :$((5440 + i))"
+  fi
+done
+for i in $(seq 1 "$K"); do
+  for _ in $(seq 1 30); do
+    docker exec "xeon-pg-f$i" pg_isready -U xeon >/dev/null 2>&1 && break
+    sleep 2
+  done
+  docker exec "xeon-pg-f$i" pg_isready -U xeon >/dev/null || { echo "pg f$i NOT ready"; exit 1; }
 done
 
 for i in $(seq 1 "$K"); do
@@ -30,7 +47,7 @@ for i in $(seq 1 "$K"); do
   env PORT=$PORT \
       ADL_WORKERS=$W \
       ADL_WORKER_BASE_PORT=$((9000 + i * 300)) \
-      DATABASE_URL="$BASE_DB_URL/orchestrator_f$i" \
+      DATABASE_URL="postgresql+asyncpg://xeon:$PGPASS@127.0.0.1:$((5440 + i))/orchestrator_f$i" \
       CAPACITY_AGENT_HOST_MOCK_BASE_URL="http://127.0.0.1:$((8920 + i))/v1" \
       CAPACITY_RESULTS_DIR="data/capacity/fleet$i" \
       CAPACITY_FLEET=1 \
@@ -56,7 +73,7 @@ sleep 20   # executor pools
 for i in $(seq 1 "$K"); do
   PORT=$((8100 + i * 10))
   curl -s -X POST "localhost:$PORT/capacity/start" -H 'Content-Type: application/json' \
-    -d "{\"seed\":$((SEED + i)),\"benchmark_target\":\"agent_host\",\"inference_backend\":\"remote_mock\",\"mix\":\"tile\"}"
+    -d "{\"seed\":$((SEED + i)),\"benchmark_target\":\"agent_host\",\"inference_backend\":\"remote_mock\",\"mix\":\"tile\",\"service_rung\":\"conversational\"}"
   echo " <- instance $i started"
 done
 
