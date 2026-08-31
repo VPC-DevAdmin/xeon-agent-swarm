@@ -974,3 +974,29 @@ def test_deadline_anchor_condemns_a_boiling_level():
     state, breach = test._evaluate_rung(20.0)
     assert state == "bad"
     assert breach["metric"] == "deadline_p95"
+
+
+def test_fleet_mode_replaces_drift_with_the_deadline_anchor(monkeypatch):
+    """Under CAPACITY_FLEET=1 with deadlines configured, the relative p80
+    drift test yields: a fleet instance was condemned at p95 6.3s against a
+    drift limit of 1.56s while the 15s deadline had miles of room. The
+    absolute anchor still condemns a level whose p95 breaches the deadline."""
+    monkeypatch.setenv("CAPACITY_FLEET", "1")
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.user_scenario = list(test.scenario_ids)
+    test.ladder = {"conversational": 15.0}
+    test.assigned_rung = "conversational"
+    now = ctl.time.time()
+    test._rung_t0 = now - 20
+    for sid in test.scenario_ids:
+        for i in range(8):     # older half: flat 1000ms
+            test.calls.append({"scenario": sid, "ok": True, "durable": True,
+                               "latency_ms": 1000.0, "tokens_in": 0, "tokens_out": 0,
+                               "ts": now - 12 + i * 0.1, "t_submit": now - 18 + i * 0.5})
+        for i in range(8):     # young half: 6000ms drift, still << deadline
+            test.calls.append({"scenario": sid, "ok": True, "durable": True,
+                               "latency_ms": 6000.0, "tokens_in": 0, "tokens_out": 0,
+                               "ts": now - 3 + i * 0.1, "t_submit": now - 9 + i * 0.5})
+    state, breach = test._evaluate_rung(20.0)
+    assert state == "good"
+    assert breach is None

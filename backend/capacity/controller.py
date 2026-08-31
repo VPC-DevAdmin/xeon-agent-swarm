@@ -987,8 +987,19 @@ class CapacityTest:
         # handful of tail samples, and batch-cohort waves made it oscillate
         # 3s<->10s at ~900 sessions — halving the ramp accelerator on noise.
         # p80 tracks the body of the distribution and decides the ramp.
+        # FLEET MODE: relative drift steps aside and the absolute deadline
+        # anchor governs latency alone. Drift limits are multiples of a
+        # baseline drawn in the run's quietest moments, and on a shared box
+        # the slowest-ramping instance sets its baseline in silence and is
+        # then judged against its siblings' noise: a fleet instance was
+        # condemned at 174 sessions with p95 6.3s against a "limit" of
+        # 1.56s while the actual promise, the 15s deadline, had miles of
+        # room. Error rate, work aging, and the deadline anchor still
+        # condemn; only the self-referential latency comparisons yield.
+        anchored = (os.getenv("CAPACITY_FLEET") == "1"
+                    and self.deadlines_configured())
         p80_1, p80_2 = _pct(h1, 80), _pct(h2, 80)
-        if p80_1 and p80_2 and p80_2 > p80_1 * tol:
+        if not anchored and p80_1 and p80_2 and p80_2 > p80_1 * tol:
             self._p95_streak = 0
             return "bad", {"profile": "aggregate", "metric": "latency_unstable",
                             "value": round(p80_2, 1), "limit": round(p80_1 * tol, 1),
@@ -999,7 +1010,7 @@ class CapacityTest:
         # tolerance CONSISTENTLY (3 consecutive evaluations) — a persistent
         # tail divergence with a stable body is real; a single spike is not.
         p95_1, p95_2 = _pct(h1, 95), _pct(h2, 95)
-        if p95_1 and p95_2 and p95_2 > p95_1 * tol:
+        if not anchored and p95_1 and p95_2 and p95_2 > p95_1 * tol:
             self._p95_streak += 1
             if self._p95_streak >= 3:
                 return "bad", {"profile": "aggregate", "metric": "tail_unstable",
