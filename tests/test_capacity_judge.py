@@ -119,3 +119,23 @@ def test_judge_is_deterministic(tmp_path):
     b = judge.judge_evidence(path)
     assert a == b
     assert a["judge_version"] == judge.JUDGE_VERSION
+
+
+def test_single_failure_at_thin_level_does_not_block(tmp_path):
+    """post-2: one spurious failure in a thin ramp level (the fleet's 13
+    DB-read hiccups) is insufficient evidence, not refutation. The level
+    goes silent and higher levels still certify."""
+    sids = ("research_brief", "comparison", "digest")
+    thin_blip = {s: _perfect(80) for s in sids}
+    thin_blip["digest"] = _perfect(79) + [(0.0, False)]   # 79/80, one hiccup
+    thick = {s: _perfect(90) for s in sids}
+    path = _ledger(tmp_path / "ev.jsonl.gz", [
+        (295, 100.0, thin_blip),
+        (654, 200.0, thick),
+    ])
+    j = judge.judge_evidence(path)
+    assert j["first_failing_level"] is None
+    assert j["capability_users"] == 654
+    by_users = {row["users"]: row for row in j["levels"]}
+    assert by_users[295]["pass"] is False
+    assert by_users[295]["fail"] is False

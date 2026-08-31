@@ -57,6 +57,23 @@ def wilson_lower(successes: int, n: int, z: float = Z95) -> float:
     return max(0.0, centre - margin)
 
 
+def wilson_upper(successes: int, n: int, z: float = Z95) -> float:
+    """Upper one-sided confidence bound on a success probability (Wilson).
+
+    The refutation bound: a level is confidently BAD only when even this
+    optimistic bound sits below the target. One failure in a thin sample
+    drags the lower bound under the target while the upper bound stays
+    high - that is insufficient evidence, not proof of failure."""
+    if n <= 0:
+        return 1.0
+    successes = max(0, min(successes, n))
+    p = successes / n
+    denom = 1.0 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    margin = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return min(1.0, centre + margin)
+
+
 def samples_for_bound(target: float = 0.95, z: float = Z95) -> int:
     """Clean observations needed to certify `target` with zero failures."""
     n = 1

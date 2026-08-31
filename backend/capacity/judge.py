@@ -23,6 +23,16 @@ post-1 rules (why they exist):
   * Certification is blocked upward by the first failing level: the
     capability figure is the highest passing level below it. Levels
     with too little evidence neither pass nor block.
+
+post-2 (supersedes post-1's failure rule):
+  * A level FAILS only when its Wilson UPPER bound sits below the
+    target - the evidence must refute passing, not merely fail to
+    prove it. post-1 treated one failure in a thin level as a
+    confident failure: 13 spurious DB-read hiccups across a fleet run
+    turned isolated single failures at thin ramp levels into blocking
+    walls and crushed a healthy 654-session instance to 258. Passing
+    still requires the lower bound to clear the target; between the
+    two bounds is silence.
 """
 from __future__ import annotations
 
@@ -36,7 +46,7 @@ from backend.capacity.evidence import read_evidence
 
 logger = logging.getLogger(__name__)
 
-JUDGE_VERSION = "post-1"
+JUDGE_VERSION = "post-2"
 
 
 def _level_at(times: list[float], values: list[int], t: float | None) -> int:
@@ -90,22 +100,20 @@ def judge_evidence(path: str | Path) -> dict:
         per = by_level[lvl]
         per_type = {}
         bounds = []
-        judgeable = True
+        uppers = []
         for sid in sids:
             xs = per.get(sid, [])
             n, wins = len(xs), sum(xs)
             bound = round(st.wilson_lower(wins, n, z), 4) if n else 0.0
-            per_type[sid] = {"decided": n, "on_time": wins, "bound": bound}
+            upper = round(st.wilson_upper(wins, n, z), 4) if n else 1.0
+            per_type[sid] = {"decided": n, "on_time": wins, "bound": bound,
+                             "upper": upper}
             bounds.append(bound)
-            # Too little evidence to certify OR condemn: a perfect record
-            # whose bound cannot reach the target at this n is silence,
-            # not failure.
-            if n and wins == n and bound < target:
-                judgeable = False
-            if n == 0:
-                judgeable = False
+            uppers.append(upper)
         passing = bool(bounds) and min(bounds) >= target
-        failing = judgeable and not passing
+        # Refutation, not absence of proof: some type's on-time rate is
+        # confidently below the target even under the optimistic bound.
+        failing = bool(uppers) and min(uppers) < target
         levels_out.append({"users": lvl, "per_type": per_type,
                            "joint_bound": min(bounds) if bounds else 0.0,
                            "pass": passing,
