@@ -776,6 +776,26 @@ async def internal_counters(request: Request):
             "callback_failure_times": list(wp.callback_failure_times)}
 
 
+@app.post("/internal/complete_batch")
+async def internal_complete_batch(request: Request):
+    """Batched completion callbacks (see workerpool.post_complete)."""
+    from backend import workerpool as wp
+    if not wp.check_token(request.headers.get("X-Internal-Token")):
+        raise HTTPException(403, "internal endpoint")
+    body = await request.json()
+    items = body.get("items") or []
+    for item in items:
+        run_id = item.get("run_id")
+        fut = _run_outcomes.get(run_id)
+        if fut is not None and not fut.done():
+            fut.set_result(item)
+        else:
+            _early_outcomes[run_id] = item
+            while len(_early_outcomes) > 10000:
+                _early_outcomes.pop(next(iter(_early_outcomes)))
+    return {"accepted": len(items)}
+
+
 @app.post("/internal/complete")
 async def internal_complete(request: Request):
     from backend import workerpool as wp

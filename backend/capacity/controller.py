@@ -80,7 +80,7 @@ from backend.capacity import stats as st
 from backend.capacity import repro as repro_mod
 from backend.capacity import machine_profile as mprofile
 
-RESULTS_DIR = Path("data/capacity")
+RESULTS_DIR = Path(os.getenv("CAPACITY_RESULTS_DIR", "data/capacity"))
 
 # How a run ENDED decides what its numbers MEAN.
 #
@@ -662,6 +662,20 @@ class CapacityTest:
                 groups["mock_router"] = descendant_pids(mockrouter._proc.pid)
         except Exception:  # noqa: BLE001
             pass
+        # Fleet mode: sibling orchestrator instances on the same host are
+        # part of the measured system, not background interference. Without
+        # this, a 4-instance fleet reads 3/4 of its own burn as "other" and
+        # every instance condemns the box as interference the moment the
+        # host works hard — which is the fleet's entire purpose.
+        if os.getenv("CAPACITY_FLEET") == "1":
+            own = set(groups["control"]) | set(groups.get("executors") or [])
+            for g in groups.values():
+                own.update(g)
+            sib: list[int] = []
+            for pid in find_pids("backend.main:app") + find_pids("mockrouter"):
+                if pid not in own:
+                    sib.extend(descendant_pids(pid))
+            groups["siblings"] = sorted(set(sib) - own)
         if self.inference_backend == "local":
             if self._engine_pids is None:
                 # Rescan until the engine's real compute processes are found:

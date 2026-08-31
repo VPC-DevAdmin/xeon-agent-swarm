@@ -264,32 +264,58 @@ async def forward_event(run_id: str, event_json: dict) -> None:
     _event_buf.append({"run_id": run_id, "event": event_json})
 
 
+_complete_buf: list[dict] = []
+_complete_flusher = None
+_COMPLETE_FLUSH_S = 0.1
+
+
+async def _complete_flush_loop():
+    """Flush buffered completions as batches. Unlike events, completions are
+    NOT best-effort: a batch that cannot be delivered after retries is
+    counted, item by item, with timestamps (see post_complete)."""
+    global callback_failures, _complete_buf
+    while True:
+        await asyncio.sleep(_COMPLETE_FLUSH_S)
+        if not _complete_buf:
+            continue
+        batch, _complete_buf[:] = _complete_buf[:], []
+        delivered = False
+        for delay in (0.0, 0.2, 1.0):
+            if delay:
+                await asyncio.sleep(delay)
+            try:
+                await _http(control_url()).post(
+                    f"{control_url()}/internal/complete_batch",
+                    json={"items": batch},
+                    headers={"X-Internal-Token": internal_token()})
+                delivered = True
+                break
+            except Exception:  # noqa: BLE001
+                continue
+        if not delivered:
+            callback_failures += len(batch)
+            now = _time.time()
+            # The TIMESTAMP travels with the count: the controller judges
+            # what a loss at that moment meant (evidence vs collapse), and
+            # each lost completion is already a charged timeout at its level.
+            callback_failure_times.extend([now] * len(batch))
+            del callback_failure_times[:-200]
+            logger.warning("completion batch of %d lost", len(batch))
+
+
 async def post_complete(payload: dict) -> None:
     """Executor -> control: a dispatched run reached a terminal state. Carries
     the full outcome so the benchmark never has to poll the database.
 
-    Retried, and counted when it fails for good: a lost callback would appear
-    to the benchmark as a workflow that never finished, which is a harness
-    failure wearing an agent failure's clothes."""
-    global callback_failures
-    for delay in (0.0, 0.2, 1.0):
-        if delay:
-            await asyncio.sleep(delay)
-        try:
-            await _http(control_url()).post(f"{control_url()}/internal/complete", json=payload,
-                               headers={"X-Internal-Token": internal_token()})
-            return
-        except Exception:  # noqa: BLE001
-            continue
-    callback_failures += 1
-    # The TIMESTAMP travels with the count: a callback lost during the
-    # collapse of an already-condemned level taints nothing that gets
-    # published, while one lost during evidence-gathering taints everything.
-    # Only the controller knows which phase a moment belonged to, so the
-    # executor records when and the controller judges what it meant.
-    callback_failure_times.append(_time.time())
-    del callback_failure_times[:-200]
-    logger.warning("completion callback lost for run %s", payload.get("run_id"))
+    Buffered and flushed in 100ms batches (the relay's core pays per HTTP
+    request, and per-unit completion POSTs were part of its diet at the
+    2,100-session wall). Delivery is still accounted: a batch lost after
+    retries counts every item as a callback failure with its timestamp."""
+    global _complete_flusher
+    if _complete_flusher is None or _complete_flusher.done():
+        _complete_flusher = asyncio.get_event_loop().create_task(
+            _complete_flush_loop())
+    _complete_buf.append(payload)
 
 
 async def collect_counters() -> dict:
