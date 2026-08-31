@@ -231,11 +231,12 @@ repomix-output.xml
 
 # Runtime SQLite store (orchestrator.db, checkpoints, test DBs) — root only;
 # a bare "data/" would also swallow source dirs like frontend/src/data/
-/data/
+# (/data/* rather than /data/ so the capacity exception below can work:
+# git never descends into a fully ignored directory)
+/data/*
 # ...except benchmark results, judgments, and evidence ledgers: the ledgers
 # are the raw record that lets verdicts be re-judged without re-running load
 !/data/capacity/
-!/data/capacity/**
 
 # Local env overrides (vite)
 *.local
