@@ -874,6 +874,22 @@ class CapacityTest:
                 return "bad", {"profile": sid, "metric": "error_rate",
                                 "value": s["err_rate"],
                                 "limit": float(self.cfg["slo_err"])}
+            # STEERING ANCHOR: the rung deadline is an absolute bound the
+            # drift test cannot see. Drift compares a window to itself, so a
+            # ramp that adds delay slowly enough boils past any deadline
+            # while every window reads "good" (observed three times: one run
+            # reached p95 160s against a 15s deadline; a fleet's instances
+            # each overshot their walls by 500+ sessions and stalled each
+            # other for an hour). A level whose window p95 breaches the
+            # deadline can never certify capability there, so climbing
+            # higher only buys refuted evidence. The ledger judge remains
+            # the authority on the published verdict.
+            dl = self._deadline_s(sid) if self.mode == "e2e" else None
+            if (dl is not None and s["n"] >= min_n
+                    and s["p95_ms"] and s["p95_ms"] > dl * 1000.0):
+                return "bad", {"profile": sid, "metric": "deadline_p95",
+                               "value": round(s["p95_ms"], 1),
+                               "limit": dl * 1000.0}
             if s["n"] < min_n:
                 state = "inconclusive"
         # Trend test over ADMISSION COHORTS. Two rules make the comparison

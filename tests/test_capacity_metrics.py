@@ -952,3 +952,25 @@ def test_persist_failures_keep_zero_tolerance(tmp_path, monkeypatch):
     asyncio.run(test._reconcile_harness())
     assert test.verdict == "harness_degraded"
     assert test.breach["metric"] == "lost_records"
+
+
+def test_deadline_anchor_condemns_a_boiling_level():
+    """Steering anchor: a window whose p95 breaches the rung deadline is bad
+    NOW, even with zero errors and no within-window drift. Three runs boiled
+    past their walls because drift compares a window only to itself."""
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    test.user_scenario = list(test.scenario_ids)
+    now = ctl.time.time()
+    test._rung_t0 = now - 20
+    sid = test.scenario_ids[0]
+    test.ladder = {"conversational": 15.0}
+    test.assigned_rung = "conversational"
+    dl = 15.0
+    for i in range(8):
+        test.calls.append({"scenario": sid, "ok": True, "durable": True,
+                           "latency_ms": dl * 1000.0 * 4, "tokens_in": 0,
+                           "tokens_out": 0,
+                           "ts": now - 12 + i * 0.1, "t_submit": now - 18 + i * 0.5})
+    state, breach = test._evaluate_rung(20.0)
+    assert state == "bad"
+    assert breach["metric"] == "deadline_p95"
