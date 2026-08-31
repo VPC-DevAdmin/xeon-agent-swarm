@@ -1,0 +1,27 @@
+{
+ "kind": "repeat_set",
+ "status": "incomplete",
+ "runs_requested": 3,
+ "runs_accepted": 0,
+ "runs_excluded": 1,
+ "censored": false,
+ "censor_reasons": [],
+ "metrics": null,
+ "intended_metric": null,
+ "excluded": [
+  {
+   "seed": 859185,
+   "verdict": "harness_degraded",
+   "reason": "harness_degraded: the run failed its own integrity check",
+   "history_id": "01a044e1-2229-7f45-ae1e-9b01be08cb4c"
+  }
+ ],
+ "child_run_ids": [],
+ "seeds": [],
+ "comparability": null,
+ "base_seed": 859185,
+ "started_at": 1787859185.352737,
+ "ended_at": 1787862000.177393,
+ "duration_s": 2814.8,
+ "incomplete_reason": "stopped by hand"
+}

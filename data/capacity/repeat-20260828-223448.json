@@ -1,0 +1,30 @@
+{
+ "kind": "repeat_set",
+ "status": "incomplete",
+ "runs_requested": 3,
+ "runs_accepted": 0,
+ "runs_excluded": 1,
+ "censored": false,
+ "censor_reasons": [],
+ "metrics": null,
+ "capability_outcome": null,
+ "intended_metric": null,
+ "excluded": [
+  {
+   "seed": 956488,
+   "verdict": null,
+   "reason": "no usable number (inconclusive)",
+   "history_id": "01a04a94-b52c-7adc-a43b-1ea31570bb89"
+  }
+ ],
+ "child_run_ids": [],
+ "seeds": [],
+ "pinned_rung": null,
+ "weigh_in_medians": [],
+ "comparability": null,
+ "base_seed": 956488,
+ "started_at": 1787956488.1510172,
+ "ended_at": 1787957654.8355412,
+ "duration_s": 1166.7,
+ "incomplete_reason": "stopped by hand"
+}

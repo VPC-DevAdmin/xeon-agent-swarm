@@ -1,0 +1,34 @@
+{
+ "kind": "repeat_set",
+ "status": "incomplete",
+ "runs_requested": 3,
+ "runs_accepted": 0,
+ "runs_excluded": 2,
+ "censored": false,
+ "censor_reasons": [],
+ "metrics": null,
+ "capability_outcome": null,
+ "intended_metric": null,
+ "excluded": [
+  {
+   "seed": 949937,
+   "verdict": "unclassifiable",
+   "reason": "no usable number (inconclusive)",
+   "history_id": "01a04a32-73b7-7b3c-9635-c119b452562f"
+  },
+  {
+   "seed": 949938,
+   "verdict": "stopped",
+   "reason": "no usable number (inconclusive)",
+   "history_id": "01a04a43-6e71-7e83-9e25-4b39f9144b40"
+  }
+ ],
+ "child_run_ids": [],
+ "seeds": [],
+ "comparability": null,
+ "base_seed": 949937,
+ "started_at": 1787949937.8974257,
+ "ended_at": 1787952328.310076,
+ "duration_s": 2390.4,
+ "incomplete_reason": "stopped by hand"
+}

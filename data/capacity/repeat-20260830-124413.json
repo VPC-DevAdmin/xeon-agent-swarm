@@ -1,0 +1,52 @@
+{
+ "kind": "repeat_set",
+ "status": "incomplete",
+ "runs_requested": 3,
+ "runs_accepted": 3,
+ "runs_excluded": 0,
+ "censored": false,
+ "censor_reasons": [],
+ "metrics": null,
+ "capability_outcome": null,
+ "intended_metric": "service_capability",
+ "excluded": [],
+ "child_run_ids": [
+  "01a052e4-2ce4-789b-a030-823c33b304f1",
+  "01a05348-8677-7f72-b926-bb16689db140",
+  "01a0534c-613d-7f61-bc62-011087e8277c"
+ ],
+ "seeds": [
+  20689,
+  20690,
+  20691
+ ],
+ "pinned_rung": "conversational",
+ "weigh_in_medians": [
+  null,
+  null,
+  null
+ ],
+ "comparability": {
+  "benchmark_target": "agent_host",
+  "inference_backend": "remote_mock",
+  "mix": "tile",
+  "load_model": "closed",
+  "service_class": "interactive",
+  "service_rung": "conversational",
+  "scenario_fingerprint": "707df7892478",
+  "benchmark_version": 14,
+  "git_commit": "bad7519",
+  "cpu_model": "Intel(R) Xeon(R) 6761P",
+  "cpu_count": 128,
+  "mem_total_gb": 1007.1,
+  "numa_nodes": 1,
+  "orchestrator_workers": 48,
+  "database": "postgresql+asyncpg",
+  "prompt_corpus": "seeded trace-id suffix v2"
+ },
+ "base_seed": 20689,
+ "started_at": 1788093853.0307124,
+ "ended_at": 1788103909.7326088,
+ "duration_s": 10056.7,
+ "incomplete_reason": "children disagreed or retries ran out before enough clean runs landed"
+}

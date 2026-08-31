@@ -1,0 +1,39 @@
+{
+ "kind": "repeat_set",
+ "status": "incomplete",
+ "runs_requested": 3,
+ "runs_accepted": 0,
+ "runs_excluded": 3,
+ "censored": false,
+ "censor_reasons": [],
+ "metrics": null,
+ "intended_metric": null,
+ "excluded": [
+  {
+   "seed": 865358,
+   "verdict": "harness_degraded",
+   "reason": "harness_degraded: the run failed its own integrity check",
+   "history_id": "01a04564-a7b4-7477-acda-010553965e85"
+  },
+  {
+   "seed": 865359,
+   "verdict": "harness_degraded",
+   "reason": "harness_degraded: the run failed its own integrity check",
+   "history_id": "01a045b5-6b28-7f5c-9796-1fd90af37175"
+  },
+  {
+   "seed": 865360,
+   "verdict": "harness_degraded",
+   "reason": "harness_degraded: the run failed its own integrity check",
+   "history_id": "01a045bb-34a6-78f6-971a-83dc9109c393"
+  }
+ ],
+ "child_run_ids": [],
+ "seeds": [],
+ "comparability": null,
+ "base_seed": 865358,
+ "started_at": 1787865358.5398843,
+ "ended_at": 1787876291.755888,
+ "duration_s": 10933.2,
+ "incomplete_reason": "stopped by hand"
+}

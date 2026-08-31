@@ -1,0 +1,33 @@
+{
+ "kind": "repeat_set",
+ "status": "incomplete",
+ "runs_requested": 3,
+ "runs_accepted": 0,
+ "runs_excluded": 2,
+ "censored": false,
+ "censor_reasons": [],
+ "metrics": null,
+ "intended_metric": null,
+ "excluded": [
+  {
+   "seed": 878584,
+   "verdict": "unstable",
+   "reason": "no usable number (inconclusive)",
+   "history_id": "01a04653-f921-7377-bf5b-3f2b6d2e6eb1"
+  },
+  {
+   "seed": 878585,
+   "verdict": "stopped",
+   "reason": "no usable number (inconclusive)",
+   "history_id": "01a04657-34de-7786-bca0-1113be326a31"
+  }
+ ],
+ "child_run_ids": [],
+ "seeds": [],
+ "comparability": null,
+ "base_seed": 878584,
+ "started_at": 1787878584.2664614,
+ "ended_at": 1787886515.4281278,
+ "duration_s": 7931.2,
+ "incomplete_reason": "stopped by hand"
+}

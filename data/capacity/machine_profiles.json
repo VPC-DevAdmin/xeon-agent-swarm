@@ -1,0 +1,147 @@
+{
+ "target=integrated_node|backend=local|workload=v14|model=qwen3_30b_a3b|ctx=32768|maxtot=131072|quant=fp8|cpu=Intel(R) Xeon(R) 6761P|cores=128|mem=1007.1|workers=48": {
+  "observations": [
+   {
+    "at": 1787957639.6793766,
+    "commit": "58719a3",
+    "medians_s": {
+     "research_brief": 290.0,
+     "comparison": 250.3,
+     "digest": 201.2
+    },
+    "worst_median_s": 290.0
+   }
+  ],
+  "updated_at": 1787957639.6794152,
+  "pooled_worst_median_s": 290.0,
+  "observation_count": 1,
+  "observed_range_s": [
+   290.0,
+   290.0
+  ],
+  "tier": "queued",
+  "deadline_s": 1200.0
+ },
+ "target=agent_host|backend=remote_mock|workload=v14|model=mock-tier-router|ctx=-|maxtot=-|quant=-|cpu=Intel(R) Xeon(R) 6761P|cores=128|mem=1007.1|workers=48": {
+  "observations": [
+   {
+    "at": 1788020725.6600525,
+    "commit": "361d2b9",
+    "medians_s": {
+     "research_brief": 4.7,
+     "comparison": 4.3,
+     "digest": 4.4
+    },
+    "worst_median_s": 4.7
+   }
+  ],
+  "updated_at": 1788020725.6600919,
+  "pooled_worst_median_s": 4.7,
+  "observation_count": 1,
+  "observed_range_s": [
+   4.7,
+   4.7
+  ],
+  "tier": "conversational",
+  "deadline_s": 15.0
+ },
+ "target=agent_host|backend=remote_mock|workload=v14|model=mock-tier-router|ctx=-|maxtot=-|quant=-|cpu=Intel(R) Xeon(R) 6761P|cores=128|mem=1007.1|workers=96": {
+  "observations": [
+   {
+    "at": 1788052145.8742008,
+    "commit": "361d2b9",
+    "medians_s": {
+     "research_brief": 4.4,
+     "comparison": 4.6,
+     "digest": 4.5
+    },
+    "worst_median_s": 4.6
+   }
+  ],
+  "updated_at": 1788052145.8742366,
+  "pooled_worst_median_s": 4.6,
+  "observation_count": 1,
+  "observed_range_s": [
+   4.6,
+   4.6
+  ],
+  "tier": "conversational",
+  "deadline_s": 15.0
+ },
+ "target=agent_host|backend=remote_mock|workload=v14|model=mock-tier-router|ctx=-|maxtot=-|quant=-|cpu=Intel(R) Xeon(R) 6761P|cores=128|mem=1007.1|workers=64": {
+  "observations": [
+   {
+    "at": 1788058727.6822512,
+    "commit": "9b8fba3",
+    "medians_s": {
+     "research_brief": 4.4,
+     "comparison": 4.5,
+     "digest": 4.5
+    },
+    "worst_median_s": 4.5
+   }
+  ],
+  "updated_at": 1788058727.6822848,
+  "pooled_worst_median_s": 4.5,
+  "observation_count": 1,
+  "observed_range_s": [
+   4.5,
+   4.5
+  ],
+  "tier": "conversational",
+  "deadline_s": 15.0
+ },
+ "target=agent_host|backend=remote_mock|workload=v14|model=mock-tier-router|ctx=-|maxtot=-|quant=-|cpu=Intel(R) Xeon(R) 6761P|cores=128|mem=1007.1|workers=28": {
+  "observations": [
+   {
+    "at": 1788179206.720811,
+    "commit": "1b80b6b",
+    "medians_s": {
+     "research_brief": 5.1,
+     "comparison": 5.2,
+     "digest": 5.3
+    },
+    "worst_median_s": 5.3
+   },
+   {
+    "at": 1788179207.4800458,
+    "commit": "1b80b6b",
+    "medians_s": {
+     "research_brief": 5.3,
+     "comparison": 5.4,
+     "digest": 5.3
+    },
+    "worst_median_s": 5.4
+   },
+   {
+    "at": 1788179209.5839233,
+    "commit": "1b80b6b",
+    "medians_s": {
+     "research_brief": 5.3,
+     "comparison": 5.1,
+     "digest": 5.3
+    },
+    "worst_median_s": 5.3
+   },
+   {
+    "at": 1788179210.539029,
+    "commit": "1b80b6b",
+    "medians_s": {
+     "research_brief": 5.2,
+     "comparison": 5.2,
+     "digest": 5.3
+    },
+    "worst_median_s": 5.3
+   }
+  ],
+  "updated_at": 1788179210.5390568,
+  "pooled_worst_median_s": 5.3,
+  "observation_count": 4,
+  "observed_range_s": [
+   5.3,
+   5.4
+  ],
+  "tier": "interactive",
+  "deadline_s": 45.0
+ }
+}

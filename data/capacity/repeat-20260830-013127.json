@@ -1,0 +1,78 @@
+{
+ "kind": "repeat_set",
+ "status": "complete",
+ "runs_requested": 3,
+ "runs_accepted": 3,
+ "runs_excluded": 0,
+ "censored": false,
+ "censor_reasons": [],
+ "metrics": {
+  "service_capability": {
+   "unit": "sessions",
+   "n": 3,
+   "median": 855,
+   "min": 627,
+   "max": 858,
+   "values": [
+    858,
+    627,
+    855
+   ],
+   "spread_pct": 27.0
+  },
+  "stability_ceiling": {
+   "unit": "sessions",
+   "n": 3,
+   "median": 855,
+   "min": 627,
+   "max": 858,
+   "values": [
+    858,
+    627,
+    855
+   ],
+   "spread_pct": 27.0
+  }
+ },
+ "capability_outcome": null,
+ "intended_metric": "service_capability",
+ "excluded": [],
+ "child_run_ids": [
+  "01a0505d-b492-7471-b77d-f1dba4452e67",
+  "01a0506b-cd75-751a-91dc-59c62b3ad44e",
+  "01a05079-6c1e-78bc-8119-a1466834dfb0"
+ ],
+ "seeds": [
+  53487,
+  53488,
+  53489
+ ],
+ "pinned_rung": "conversational",
+ "weigh_in_medians": [
+  null,
+  null,
+  null
+ ],
+ "comparability": {
+  "benchmark_target": "agent_host",
+  "inference_backend": "remote_mock",
+  "mix": "tile",
+  "load_model": "closed",
+  "service_class": "interactive",
+  "service_rung": "conversational",
+  "scenario_fingerprint": "707df7892478",
+  "benchmark_version": 14,
+  "git_commit": "9b8fba3",
+  "cpu_model": "Intel(R) Xeon(R) 6761P",
+  "cpu_count": 128,
+  "mem_total_gb": 1007.1,
+  "numa_nodes": 1,
+  "orchestrator_workers": 96,
+  "database": "postgresql+asyncpg",
+  "prompt_corpus": "seeded trace-id suffix v2"
+ },
+ "base_seed": 53487,
+ "started_at": 1788053487.1291382,
+ "ended_at": 1788056529.985231,
+ "duration_s": 3042.9
+}

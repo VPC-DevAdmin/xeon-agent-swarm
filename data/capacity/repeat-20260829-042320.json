@@ -1,0 +1,62 @@
+{
+ "kind": "repeat_set",
+ "status": "incomplete",
+ "runs_requested": 3,
+ "runs_accepted": 2,
+ "runs_excluded": 2,
+ "censored": false,
+ "censor_reasons": [],
+ "metrics": null,
+ "capability_outcome": null,
+ "intended_metric": "service_capability",
+ "excluded": [
+  {
+   "seed": 977402,
+   "verdict": "errors",
+   "reason": "no usable number (inconclusive)",
+   "history_id": "01a04d91-688c-70c7-ad8c-1e11c72d699c"
+  },
+  {
+   "seed": 977403,
+   "verdict": null,
+   "reason": "no usable number (inconclusive)",
+   "history_id": "01a04d96-ab3b-7a6c-b209-fb44fca53c24"
+  }
+ ],
+ "child_run_ids": [
+  "01a04c3d-1f9e-75d6-a210-2d854ce589e7",
+  "01a04d05-6797-74f6-853c-72bfc4b5aabd"
+ ],
+ "seeds": [
+  977400,
+  977401
+ ],
+ "pinned_rung": "queued",
+ "weigh_in_medians": [
+  null,
+  null
+ ],
+ "comparability": {
+  "benchmark_target": "integrated_node",
+  "inference_backend": "local",
+  "mix": "tile",
+  "load_model": "closed",
+  "service_class": "interactive",
+  "service_rung": "queued",
+  "scenario_fingerprint": "707df7892478",
+  "benchmark_version": 14,
+  "git_commit": "58719a3",
+  "cpu_model": "Intel(R) Xeon(R) 6761P",
+  "cpu_count": 128,
+  "mem_total_gb": 1007.1,
+  "numa_nodes": 1,
+  "orchestrator_workers": 48,
+  "database": "postgresql+asyncpg",
+  "prompt_corpus": "seeded trace-id suffix v2"
+ },
+ "base_seed": 977400,
+ "started_at": 1787977400.7428222,
+ "ended_at": 1788008115.007761,
+ "duration_s": 30714.3,
+ "incomplete_reason": "stopped by hand"
+}
