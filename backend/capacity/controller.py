@@ -2371,7 +2371,21 @@ class CapacityTest:
         recent = [c["latency_ms"] / 1000.0 for c in self._recent(time.time() - 2 * base)
                   if c.get("ok") and c.get("latency_ms") is not None]
         median_s = statistics.median(recent) if recent else 0.0
-        return max(base / 2.0, median_s), max(base, 2.0 * median_s)
+        # Bootstrap floor: before anything completes, the oldest in-flight
+        # age is the only latency evidence there is, and it is a lower
+        # bound. The settle must outlast the pipeline fill - in-flight
+        # climbs toward rate x latency for one full latency after every
+        # step, and judging backlog growth during the fill reads the fill
+        # itself as divergence (it condemned four healthy instances at
+        # 2/s inside 2.1 minutes under 30-60s model waits). Capped so an
+        # overloaded level's ancient stragglers cannot balloon the window
+        # and stall condemnation.
+        oldest = 0.0
+        if self._inflight:
+            now = time.time()
+            oldest = max(now - ts for _sid, ts in self._inflight.values())
+        lat = max(median_s, min(oldest, 120.0))
+        return max(base / 2.0, 1.5 * lat), max(base, 2.0 * lat)
 
     async def _measure_open_level(self, rate: float, *, confirm: bool = False
                                   ) -> dict | None:

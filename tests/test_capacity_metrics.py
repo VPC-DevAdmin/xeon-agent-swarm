@@ -1000,3 +1000,19 @@ def test_fleet_mode_replaces_drift_with_the_deadline_anchor(monkeypatch):
     state, breach = test._evaluate_rung(20.0)
     assert state == "good"
     assert breach is None
+
+
+def test_open_window_geometry_bootstraps_from_inflight_age():
+    """Before first completion, window geometry must stretch with the oldest
+    in-flight unit: judging backlog growth during the pipeline fill reads
+    the fill itself as divergence."""
+    test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
+    now = ctl.time.time()
+    test._inflight[1] = ("digest", now - 40.0)     # oldest unit 40s in flight
+    settle, measure = test._open_window_geometry()
+    assert settle >= 1.4 * 40.0
+    assert measure >= 2.0 * 40.0 * 0.95
+    # and the overload cap: ancient stragglers cannot balloon it unboundedly
+    test._inflight[2] = ("digest", now - 500.0)
+    settle2, measure2 = test._open_window_geometry()
+    assert settle2 <= 1.5 * 120.0 + 1
