@@ -48,7 +48,17 @@ done
 # anything already serving - a zero-latency mock from a previous run then
 # silently replaces the configured serving tier. Clear the fleet mock ports
 # before launch (the main service's mock on 8901 is untouched).
-pkill -f "mock_router:app --host 127.0.0.1 --port 892" 2>/dev/null || true
+pkill -9 -f "mock_router:app --host 127.0.0.1 --port 892" 2>/dev/null || true
+sleep 1
+# Verify the mock ports actually freed - a zombie that survives SIGKILL
+# (or a socket in a wedged state) must fail the launch loudly, not let
+# an instance start against a stale mock.
+for i in $(seq 1 "$K"); do
+  MP=$((8920 + i))
+  if ss -tln 2>/dev/null | grep -q ":$MP "; then
+    echo "mock port $MP still held after kill - aborting"; exit 1
+  fi
+done
 # Same hygiene for stale INSTANCES and their orphaned executors: a survivor
 # on an instance port swallows the new start request with old env, and the
 # new instance dies on bind. Graceful first, then hard.
