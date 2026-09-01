@@ -2235,7 +2235,14 @@ class CapacityTest:
                 pass
             now = time.monotonic()
             rate = max(0.01, self.offered_rate)
-            due = min(due + (now - last) * rate, 0.5 * rate)
+            # Clamp floor of two: at 2/s the old clamp (0.5 x rate = one
+            # arrival) sat exactly at the fire threshold, so steady state
+            # RODE the clamp and every tick's jitter shed the fraction
+            # above it - a systematic 7% shortfall that failed four
+            # instances at 93% of a 2/s schedule. Two pending arrivals is
+            # not a burst; replaying long stalls still is, and stays
+            # clamped.
+            due = min(due + (now - last) * rate, max(0.5 * rate, 2.0))
             last = now
             while due >= 1.0 and not self._stop.is_set():
                 due -= 1.0
