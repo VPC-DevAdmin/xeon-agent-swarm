@@ -32,8 +32,12 @@ which predates several deliberate revisions and must not be cited:
   back to back with think time; session count is the capability metric. An
   *agent* in prose means a session. A *subagent* is one worker inside a
   workflow (about three in flight per session).
-- **Known gap.** The open-loop (independently scheduled arrivals) throughput
-  measurement has not been run at workload v14 in agent-host mode. Until it
-  is, throughput-derived sizing is labeled Derived or Projected; the
-  closed-loop completion rate is not the same claim as sustainable
-  throughput under open-loop arrivals.
+- **Throughput, measured.** The open-loop measurement ran at workload v15
+  (context-weighted archetypes): a four-instance fleet sustained 453.6
+  workflows/s box-wide, terminated by the cpu verdict at 90% host with all
+  128 threads over 85% busy. The sweep judge (rule sweep-1) post-processes
+  any ledger into rate windows with per-tier on-time bounds and backlog
+  checks, so one sweep answers every deadline policy. Open loop is the
+  primary throughput measurement; the closed loop's remaining role is the
+  residency photograph. Sizing from the measured rate is Derived, no longer
+  Projected.
