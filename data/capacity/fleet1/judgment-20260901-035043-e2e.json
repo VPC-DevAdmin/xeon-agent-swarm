@@ -1,0 +1,1157 @@
+{
+ "judge_version": "post-2",
+ "deadline_s": 15.0,
+ "confidence": 0.95,
+ "target": 0.95,
+ "capability_users": 1138,
+ "first_failing_level": 1167,
+ "levels_judged": 44,
+ "units_judged": 52322,
+ "levels": [
+  {
+   "users": 3,
+   "per_type": {
+    "comparison": {
+     "decided": 7,
+     "on_time": 7,
+     "bound": 0.6072,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 7,
+     "on_time": 7,
+     "bound": 0.6072,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 7,
+     "on_time": 7,
+     "bound": 0.6072,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.6072,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 6,
+   "per_type": {
+    "comparison": {
+     "decided": 15,
+     "on_time": 15,
+     "bound": 0.7681,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 14,
+     "on_time": 14,
+     "bound": 0.7556,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 16,
+     "on_time": 16,
+     "bound": 0.7794,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.7556,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 8,
+   "per_type": {
+    "comparison": {
+     "decided": 3,
+     "on_time": 3,
+     "bound": 0.3985,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 4,
+     "on_time": 4,
+     "bound": 0.469,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 3,
+     "on_time": 3,
+     "bound": 0.3985,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.3985,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 12,
+   "per_type": {
+    "comparison": {
+     "decided": 35,
+     "on_time": 35,
+     "bound": 0.8854,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 35,
+     "on_time": 35,
+     "bound": 0.8854,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 36,
+     "on_time": 36,
+     "bound": 0.8883,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.8854,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 15,
+   "per_type": {
+    "comparison": {
+     "decided": 7,
+     "on_time": 7,
+     "bound": 0.6072,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 6,
+     "on_time": 6,
+     "bound": 0.5699,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 7,
+     "on_time": 7,
+     "bound": 0.6072,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.5699,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 23,
+   "per_type": {
+    "comparison": {
+     "decided": 6,
+     "on_time": 6,
+     "bound": 0.5699,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 7,
+     "on_time": 7,
+     "bound": 0.6072,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 6,
+     "on_time": 6,
+     "bound": 0.5699,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.5699,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 24,
+   "per_type": {
+    "comparison": {
+     "decided": 74,
+     "on_time": 74,
+     "bound": 0.9423,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 74,
+     "on_time": 74,
+     "bound": 0.9423,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 75,
+     "on_time": 75,
+     "bound": 0.9431,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9423,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 31,
+   "per_type": {
+    "comparison": {
+     "decided": 12,
+     "on_time": 12,
+     "bound": 0.726,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 11,
+     "on_time": 11,
+     "bound": 0.7084,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 12,
+     "on_time": 12,
+     "bound": 0.726,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.7084,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 41,
+   "per_type": {
+    "comparison": {
+     "decided": 14,
+     "on_time": 14,
+     "bound": 0.7556,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 14,
+     "on_time": 14,
+     "bound": 0.7556,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 13,
+     "on_time": 13,
+     "bound": 0.7416,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.7416,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 48,
+   "per_type": {
+    "comparison": {
+     "decided": 121,
+     "on_time": 121,
+     "bound": 0.9639,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 121,
+     "on_time": 121,
+     "bound": 0.9639,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 126,
+     "on_time": 126,
+     "bound": 0.9653,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9639,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 51,
+   "per_type": {
+    "comparison": {
+     "decided": 19,
+     "on_time": 19,
+     "bound": 0.8075,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 19,
+     "on_time": 19,
+     "bound": 0.8075,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 20,
+     "on_time": 20,
+     "bound": 0.8154,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.8075,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 61,
+   "per_type": {
+    "comparison": {
+     "decided": 22,
+     "on_time": 22,
+     "bound": 0.8293,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 19,
+     "on_time": 19,
+     "bound": 0.8075,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 22,
+     "on_time": 22,
+     "bound": 0.8293,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.8075,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 71,
+   "per_type": {
+    "comparison": {
+     "decided": 21,
+     "on_time": 21,
+     "bound": 0.8226,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 21,
+     "on_time": 21,
+     "bound": 0.8226,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 22,
+     "on_time": 22,
+     "bound": 0.8293,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.8226,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 72,
+   "per_type": {
+    "comparison": {
+     "decided": 189,
+     "on_time": 189,
+     "bound": 0.9766,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 186,
+     "on_time": 186,
+     "bound": 0.9762,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 191,
+     "on_time": 191,
+     "bound": 0.9768,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9762,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 82,
+   "per_type": {
+    "comparison": {
+     "decided": 29,
+     "on_time": 29,
+     "bound": 0.8649,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 26,
+     "on_time": 26,
+     "bound": 0.8517,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 29,
+     "on_time": 29,
+     "bound": 0.8649,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.8517,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 92,
+   "per_type": {
+    "comparison": {
+     "decided": 30,
+     "on_time": 30,
+     "bound": 0.8688,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 30,
+     "on_time": 30,
+     "bound": 0.8688,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 30,
+     "on_time": 30,
+     "bound": 0.8688,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.8688,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 96,
+   "per_type": {
+    "comparison": {
+     "decided": 244,
+     "on_time": 244,
+     "bound": 0.9818,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 238,
+     "on_time": 238,
+     "bound": 0.9813,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 250,
+     "on_time": 250,
+     "bound": 0.9822,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9813,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 111,
+   "per_type": {
+    "comparison": {
+     "decided": 36,
+     "on_time": 36,
+     "bound": 0.8883,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 31,
+     "on_time": 31,
+     "bound": 0.8725,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 39,
+     "on_time": 39,
+     "bound": 0.896,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.8725,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 126,
+   "per_type": {
+    "comparison": {
+     "decided": 33,
+     "on_time": 33,
+     "bound": 0.8793,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 34,
+     "on_time": 34,
+     "bound": 0.8825,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 30,
+     "on_time": 30,
+     "bound": 0.8688,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.8688,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 132,
+   "per_type": {
+    "comparison": {
+     "decided": 325,
+     "on_time": 325,
+     "bound": 0.9863,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 315,
+     "on_time": 315,
+     "bound": 0.9858,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 336,
+     "on_time": 336,
+     "bound": 0.9867,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9858,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 152,
+   "per_type": {
+    "comparison": {
+     "decided": 32,
+     "on_time": 32,
+     "bound": 0.876,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 34,
+     "on_time": 34,
+     "bound": 0.8825,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 37,
+     "on_time": 37,
+     "bound": 0.891,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.876,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 171,
+   "per_type": {
+    "comparison": {
+     "decided": 55,
+     "on_time": 55,
+     "bound": 0.9239,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 55,
+     "on_time": 55,
+     "bound": 0.9239,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 55,
+     "on_time": 55,
+     "bound": 0.9239,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9239,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 180,
+   "per_type": {
+    "comparison": {
+     "decided": 274,
+     "on_time": 274,
+     "bound": 0.9837,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 268,
+     "on_time": 268,
+     "bound": 0.9834,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 295,
+     "on_time": 295,
+     "bound": 0.9849,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9834,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 206,
+   "per_type": {
+    "comparison": {
+     "decided": 9,
+     "on_time": 9,
+     "bound": 0.6653,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 9,
+     "on_time": 9,
+     "bound": 0.6653,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 18,
+     "on_time": 18,
+     "bound": 0.799,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.6653,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 233,
+   "per_type": {
+    "comparison": {
+     "decided": 77,
+     "on_time": 77,
+     "bound": 0.9445,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 78,
+     "on_time": 78,
+     "bound": 0.9451,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 78,
+     "on_time": 78,
+     "bound": 0.9451,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9445,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 246,
+   "per_type": {
+    "comparison": {
+     "decided": 343,
+     "on_time": 343,
+     "bound": 0.987,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 343,
+     "on_time": 343,
+     "bound": 0.987,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 347,
+     "on_time": 347,
+     "bound": 0.9871,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.987,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 279,
+   "per_type": {
+    "comparison": {
+     "decided": 11,
+     "on_time": 11,
+     "bound": 0.7084,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 11,
+     "on_time": 11,
+     "bound": 0.7084,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 23,
+     "on_time": 23,
+     "bound": 0.8355,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.7084,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 313,
+   "per_type": {
+    "comparison": {
+     "decided": 107,
+     "on_time": 107,
+     "bound": 0.9594,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 106,
+     "on_time": 106,
+     "bound": 0.959,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 106,
+     "on_time": 106,
+     "bound": 0.959,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.959,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 336,
+   "per_type": {
+    "comparison": {
+     "decided": 477,
+     "on_time": 477,
+     "bound": 0.9906,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 471,
+     "on_time": 471,
+     "bound": 0.9905,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 482,
+     "on_time": 482,
+     "bound": 0.9907,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9905,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 378,
+   "per_type": {
+    "comparison": {
+     "decided": 16,
+     "on_time": 16,
+     "bound": 0.7794,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 15,
+     "on_time": 15,
+     "bound": 0.7681,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 16,
+     "on_time": 16,
+     "bound": 0.7794,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.7681,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 425,
+   "per_type": {
+    "comparison": {
+     "decided": 147,
+     "on_time": 147,
+     "bound": 0.9701,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 147,
+     "on_time": 147,
+     "bound": 0.9701,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 147,
+     "on_time": 147,
+     "bound": 0.9701,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9701,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 459,
+   "per_type": {
+    "comparison": {
+     "decided": 635,
+     "on_time": 635,
+     "bound": 0.9929,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 635,
+     "on_time": 635,
+     "bound": 0.9929,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 636,
+     "on_time": 636,
+     "bound": 0.9929,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9929,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 511,
+   "per_type": {
+    "comparison": {
+     "decided": 21,
+     "on_time": 21,
+     "bound": 0.8226,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 21,
+     "on_time": 21,
+     "bound": 0.8226,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 21,
+     "on_time": 21,
+     "bound": 0.8226,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.8226,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 574,
+   "per_type": {
+    "comparison": {
+     "decided": 201,
+     "on_time": 201,
+     "bound": 0.978,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 200,
+     "on_time": 200,
+     "bound": 0.9779,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 200,
+     "on_time": 200,
+     "bound": 0.9779,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9779,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 624,
+   "per_type": {
+    "comparison": {
+     "decided": 8,
+     "on_time": 8,
+     "bound": 0.6385,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 9,
+     "on_time": 9,
+     "bound": 0.6653,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 9,
+     "on_time": 9,
+     "bound": 0.6653,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.6385,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 627,
+   "per_type": {
+    "comparison": {
+     "decided": 8801,
+     "on_time": 8801,
+     "bound": 0.9995,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 8801,
+     "on_time": 8801,
+     "bound": 0.9995,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 8839,
+     "on_time": 8839,
+     "bound": 0.9995,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9995,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 693,
+   "per_type": {
+    "comparison": {
+     "decided": 106,
+     "on_time": 106,
+     "bound": 0.959,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 105,
+     "on_time": 105,
+     "bound": 0.9587,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 77,
+     "on_time": 77,
+     "bound": 0.9445,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9445,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 773,
+   "per_type": {
+    "comparison": {
+     "decided": 179,
+     "on_time": 179,
+     "bound": 0.9753,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 174,
+     "on_time": 174,
+     "bound": 0.9746,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 209,
+     "on_time": 209,
+     "bound": 0.9788,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9746,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 836,
+   "per_type": {
+    "comparison": {
+     "decided": 106,
+     "on_time": 106,
+     "bound": 0.959,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 111,
+     "on_time": 111,
+     "bound": 0.9608,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 76,
+     "on_time": 76,
+     "bound": 0.9438,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9438,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 855,
+   "per_type": {
+    "comparison": {
+     "decided": 2134,
+     "on_time": 2134,
+     "bound": 0.9979,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 2106,
+     "on_time": 2106,
+     "bound": 0.9979,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 2132,
+     "on_time": 2132,
+     "bound": 0.9979,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9979,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 921,
+   "per_type": {
+    "comparison": {
+     "decided": 109,
+     "on_time": 109,
+     "bound": 0.9601,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 96,
+     "on_time": 96,
+     "bound": 0.955,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 96,
+     "on_time": 96,
+     "bound": 0.955,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.955,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 1028,
+   "per_type": {
+    "comparison": {
+     "decided": 36,
+     "on_time": 36,
+     "bound": 0.8883,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 37,
+     "on_time": 37,
+     "bound": 0.891,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 39,
+     "on_time": 39,
+     "bound": 0.896,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.8883,
+   "pass": false,
+   "fail": false
+  },
+  {
+   "users": 1138,
+   "per_type": {
+    "comparison": {
+     "decided": 365,
+     "on_time": 365,
+     "bound": 0.9877,
+     "upper": 1.0
+    },
+    "digest": {
+     "decided": 360,
+     "on_time": 360,
+     "bound": 0.9876,
+     "upper": 1.0
+    },
+    "research_brief": {
+     "decided": 364,
+     "on_time": 364,
+     "bound": 0.9877,
+     "upper": 1.0
+    }
+   },
+   "joint_bound": 0.9876,
+   "pass": true,
+   "fail": false
+  },
+  {
+   "users": 1167,
+   "per_type": {
+    "comparison": {
+     "decided": 1952,
+     "on_time": 1744,
+     "bound": 0.8777,
+     "upper": 0.9074
+    },
+    "digest": {
+     "decided": 1939,
+     "on_time": 1695,
+     "bound": 0.8573,
+     "upper": 0.8893
+    },
+    "research_brief": {
+     "decided": 1964,
+     "on_time": 1744,
+     "bound": 0.8719,
+     "upper": 0.9022
+    }
+   },
+   "joint_bound": 0.8573,
+   "pass": false,
+   "fail": true
+  }
+ ],
+ "notes": []
+}
