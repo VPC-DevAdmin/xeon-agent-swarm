@@ -2433,7 +2433,12 @@ class CapacityTest:
             "rejected": self.rejected - rejected_at_start,
             "control_cpu_pct": (round(statistics.median(ctl_cpu), 1)
                                   if ctl_cpu else None),
-            "generator_ok": (arrivals + 1) / span >= 0.95 * rate,
+            # 95% relative, with a three-arrival absolute grace: at 2/s a
+            # two-second scheduling hiccup is 4% of the window and failed
+            # four healthy instances at their FIRST level, while at 100/s
+            # the grace is invisible. The generator's job is to be honest
+            # about sustained shortfall, not to flunk quantization noise.
+            "generator_ok": (arrivals + 1 + 3) / span >= 0.95 * rate,
             "resource_verdict": resource_verdict,
             "resource_breach": resource_breach,
         }
