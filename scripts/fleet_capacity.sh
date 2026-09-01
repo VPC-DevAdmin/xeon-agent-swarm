@@ -5,11 +5,14 @@
 # fleet's summed capability is the BOX's number, with per-instance integrity
 # and post-judgment intact.
 #
-# Usage: fleet_capacity.sh <instances> <workers-per-instance> <seed>
+# Usage: fleet_capacity.sh <instances> <workers-per-instance> <seed> [closed|open]
 set -euo pipefail
 K=${1:?instances}
 W=${2:?workers per instance}
 SEED=${3:?seed}
+LOAD=${4:-closed}
+EXTRA=""
+[ "$LOAD" = "open" ] && EXTRA=',\"load_model\":\"open\"'
 R=$HOME/work/repos/xeon-agent-swarm
 cd "$R"
 set -a; source .env.adl; set +a
@@ -73,7 +76,7 @@ sleep 20   # executor pools
 for i in $(seq 1 "$K"); do
   PORT=$((8100 + i * 10))
   curl -s -X POST "localhost:$PORT/capacity/start" -H 'Content-Type: application/json' \
-    -d "{\"seed\":$((SEED + i)),\"benchmark_target\":\"agent_host\",\"inference_backend\":\"remote_mock\",\"mix\":\"tile\",\"service_rung\":\"conversational\"}"
+    -d "{\"seed\":$((SEED + i)),\"benchmark_target\":\"agent_host\",\"inference_backend\":\"remote_mock\",\"mix\":\"tile\",\"service_rung\":\"conversational\"$EXTRA}"
   echo " <- instance $i started"
 done
 
