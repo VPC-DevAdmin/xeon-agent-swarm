@@ -48,29 +48,31 @@ done
 # anything already serving - a zero-latency mock from a previous run then
 # silently replaces the configured serving tier. Clear the fleet mock ports
 # before launch (the main service's mock on 8901 is untouched).
-pkill -9 -f "mock_router:app --host 127.0.0.1 --port 892" 2>/dev/null || true
-sleep 1
-# Verify the mock ports actually freed - a zombie that survives SIGKILL
-# (or a socket in a wedged state) must fail the launch loudly, not let
-# an instance start against a stale mock.
-for i in $(seq 1 "$K"); do
-  MP=$((8920 + i))
-  if ss -tln 2>/dev/null | grep -q ":$MP "; then
-    echo "mock port $MP still held after kill - aborting"; exit 1
+# Kill stale listeners BY PORT OWNERSHIP: uvicorn worker processes do not
+# carry the app in their cmdline, so a name-based pkill kills the master
+# and orphans workers that keep holding the socket - the zombie that broke
+# two takes. ss names every pid on the socket; kill them all, verify free.
+free_port() {
+  local P=$1
+  for _ in 1 2 3; do
+    local pids
+    pids=$(ss -tlnp 2>/dev/null | grep ":$P " | grep -oE "pid=[0-9]+" | cut -d= -f2 | sort -u | tr "\n" " " || true)
+    [ -z "${pids// /}" ] && return 0
+    kill -9 $pids 2>/dev/null || true
+    sleep 1
+  done
+  if ss -tln 2>/dev/null | grep -q ":$P "; then
+    echo "port $P still held after kill - aborting"; exit 1
   fi
+}
+for i in $(seq 1 "$K"); do
+  free_port $((8920 + i))
 done
 # Same hygiene for stale INSTANCES and their orphaned executors: a survivor
 # on an instance port swallows the new start request with old env, and the
 # new instance dies on bind. Graceful first, then hard.
 for i in $(seq 1 "$K"); do
-  P=$((8100 + i * 10))
-  pid=$(ss -tlnp 2>/dev/null | grep ":$P " | grep -o "pid=[0-9]*" | head -1 | cut -d= -f2 || true)
-  if [ -n "$pid" ]; then
-    echo "killing stale listener $pid on :$P"
-    kill "$pid" 2>/dev/null || true
-    sleep 2
-    kill -9 "$pid" 2>/dev/null || true
-  fi
+  free_port $((8100 + i * 10))
 done
 pkill -f "backend.main:app --host 127.0.0.1 --port 93" 2>/dev/null || true
 sleep 1
