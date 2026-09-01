@@ -224,6 +224,22 @@ _SUBTASKS: list[tuple[str, str]] = [
 ]
 
 
+_SECTION_RE = re.compile(
+    r"### SECTION ([A-Z]) ###\n(.*?)(?=\n### SECTION [A-Z] ###|\Z)", re.S)
+_ROLE_SECTION = {"research": 0, "analysis": 1, "writing": 2}
+
+
+def _worker_slice(obj: str, role: str) -> str | None:
+    """The worker's assigned retrieval section, when the objective carries a
+    sectioned corpus (workload v15 realistic slicing: the planner reads the
+    whole retrieval once, each worker carries only its slice)."""
+    idx = _ROLE_SECTION.get(role)
+    if idx is None:
+        return None
+    found = _SECTION_RE.findall(obj)
+    return found[idx][1].strip() if idx < len(found) else None
+
+
 def _plan_text(obj: str) -> str:
     return ("1. Research the topic: gather key facts, numbers, and sources for "
             f"'{obj[:120]}'.\n"
@@ -510,8 +526,12 @@ async def chat_completions(request: Request):
         done = _tool_result_count(messages, "task")
         if done < len(script):
             role, desc_tpl = script[done]
+            desc = desc_tpl.format(obj=obj[:300])
+            piece = _worker_slice(obj, role)
+            if piece:
+                desc += "\n\nUse ONLY this retrieved context:\n" + piece
             tc = _tool_call("task", {"subagent_type": role,
-                                     "description": desc_tpl.format(obj=obj[:300])})
+                                     "description": desc})
             return _completion(tier=tier, category="general", seed=seed,
                                messages=messages, tool_calls=[tc])
         return _completion(tier=tier, category="general", seed=seed,

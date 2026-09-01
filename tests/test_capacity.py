@@ -404,10 +404,14 @@ def test_vary_keys_are_deterministic_per_seed():
 def _fake_submit(latency_s=0.05, ok=True, llm_calls=10):
     """Test double for a completed workflow. The trace matches the declared
     workload contract (the bundled planner's exact shape), so units are valid
-    unless a test deliberately breaks the contract."""
+    unless a test deliberately breaks the contract. tokens_in models the v15
+    context weight: the planner reads the whole prompt and the workers
+    re-carry their slices, roughly doubling the prompt's own tokens."""
     async def submit(query, opts=None):
         await asyncio.sleep(latency_s)
-        return {"ok": ok, "tokens_in": 5200, "tokens_out": 1400,
+        return {"ok": ok,
+                "tokens_in": max(5200, int(len(query) / 4 * 2)),
+                "tokens_out": 1400,
                 "error": None if ok else "status=failed",
                 "trace": {"llm_calls": llm_calls, "steps": 3,
                           "validations": 7, "task_count": 3, "tool_calls": 3}}

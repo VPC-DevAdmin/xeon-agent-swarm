@@ -604,6 +604,63 @@ class CapacityTest:
             except asyncio.TimeoutError:
                 pass
 
+    _CORPUS_WORDS = ("throughput latency quantization bandwidth cache tensor "
+                     "batch prefill decode scheduler memory socket thread kernel "
+                     "affinity numa buffer queue token weight gradient checkpoint "
+                     "shard replica pipeline attention context window layer head "
+                     "embedding vocabulary sampling temperature logit softmax "
+                     "epoch dataset benchmark baseline regression profile "
+                     "allocator fragmentation contention saturation backlog "
+                     "deadline percentile median variance capacity ceiling").split()
+
+    def _retrieval_sections(self, sid: str, profile: dict) -> list[str]:
+        """Seeded synthetic retrieval corpus, one body per section, built once
+        per (run, workflow type) and cached. The CONTENT is inert filler; what
+        the benchmark measures is the BYTES the host must carry, assemble,
+        relay, and hold per unit — which is what RAG-scale context costs an
+        orchestration host. Roughly 0.75 words per token."""
+        import random as _random
+        cached = getattr(self, "_corpus_cache", None)
+        if cached is None:
+            cached = self._corpus_cache = {}
+        if sid not in cached:
+            sections = max(1, int(profile.get("sections") or 3))
+            words_per = max(1, int(int(profile.get("tokens_in") or 0)
+                                   / sections * 0.75))
+            rng = _random.Random(f"corpus:{self.seed}:{sid}")
+            bodies = []
+            for _ in range(sections):
+                words = [self._CORPUS_WORDS[rng.randrange(
+                    len(self._CORPUS_WORDS))] for _ in range(words_per)]
+                for j in range(60, len(words), 61):
+                    words[j] = words[j] + "."
+                bodies.append(" ".join(words))
+            cached[sid] = bodies
+        return cached[sid]
+
+    def _with_corpus(self, base: str, wf: dict, sid: str, sequence: int) -> str:
+        """Append the retrieval corpus to a unit's prompt, per-unit salted.
+
+        The planner reads the whole corpus once; the stand-in's scripted plan
+        hands each worker ONLY its section (realistic slicing), so a worker's
+        context carries its slice rather than the full retrieval. The salt
+        varies per unit so a prefix cache cannot deduplicate the corpus
+        across units on a real model tier."""
+        profile = wf.get("context_profile") or {}
+        if not profile.get("tokens_in"):
+            return base
+        salt = hashlib.sha256(
+            f"corpus:{self.seed}:{sid}:{sequence}".encode()).hexdigest()[:16]
+        bodies = self._retrieval_sections(sid, profile)
+        parts = [base, "", "Retrieved context follows in labeled sections. "
+                 "Each worker uses ONLY its assigned section."]
+        for i, body in enumerate(bodies):
+            label = chr(ord("A") + i)
+            parts.append(f"### SECTION {label} ###")
+            parts.append(f"[retrieval-salt {salt}-{label}]")
+            parts.append(body)
+        return "\n".join(parts)
+
     def _workflow_query(self, wf: dict, sid: str, sequence: int) -> str:
         """Deterministically vary otherwise identical e2e prompts.
 
@@ -612,7 +669,7 @@ class CapacityTest:
         cannot turn a benchmark into a repeated-prefix cache test, while the
         same seed reproduces the exact same corpus.
         """
-        base = str(wf.get("query") or "")
+        base = self._with_corpus(str(wf.get("query") or ""), wf, sid, sequence)
         # Calibration escape hatch: the suffix is under investigation as a
         # planner perturbation on live models. Turning it off is recorded in
         # the run's prompt_corpus so an unsuffixed run can never masquerade
@@ -778,7 +835,7 @@ class CapacityTest:
             self.invalid_units += 1
             return
         for field, bounds in spec.items():
-            value = trace.get(field)
+            value = trace.get(field, rec.get(field))
             if value is None:
                 rec["ok"] = False
                 rec["invalid"] = True

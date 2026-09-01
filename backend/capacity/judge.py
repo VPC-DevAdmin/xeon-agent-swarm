@@ -143,6 +143,110 @@ def judge_evidence(path: str | Path) -> dict:
     }
 
 
+SWEEP_VERSION = "sweep-1"
+
+
+def _pct(xs: list[float], q: float) -> float | None:
+    if not xs:
+        return None
+    xs = sorted(xs)
+    k = max(0, min(len(xs) - 1, int(round(q / 100.0 * (len(xs) - 1)))))
+    return xs[k]
+
+
+def sweep(path: str | Path, window_s: float = 30.0,
+          think_s: float = 3.0, target: float = 0.95,
+          confidence: float = 0.95) -> dict:
+    """Rate-sweep post-processing: the latency-versus-load curve, and the
+    sustainable rate and derived session capacity for EVERY service tier,
+    from one ledger.
+
+    Arrivals are bucketed into fixed windows. A window qualifies for a tier
+    when every workflow type's on-time fraction against that tier's deadline
+    clears the joint Wilson bound AND completions keep up with arrivals
+    (no backlog growth). A tier's sustainable rate is the highest window
+    rate confirmed by a second qualifying window within 10%. Sessions
+    follow as rate x (median latency at that rate + think time). Works on
+    open-loop ledgers directly; on closed-loop ledgers the windows are the
+    observed operating points rather than a controlled sweep."""
+    from backend.capacity.scenarios import service_ladder
+    ev = read_evidence(path)
+    units = sorted((float(u["sub"]), float(u["end"]) if u.get("end") else None,
+                    u.get("sid") or "?", bool(u.get("ok")),
+                    float(u["lat"]) if u.get("lat") is not None else None)
+                   for u in ev["units"] if u.get("sub"))
+    if not units:
+        return {"sweep_version": SWEEP_VERSION, "windows": [], "tiers": {}}
+    sids = sorted({u[2] for u in units})
+    z = st.familywise_z(max(1, len(sids)), confidence)
+    ladder = service_ladder()
+    t0 = units[0][0]
+    t1 = max(u[0] for u in units)
+    ends = sorted(u[1] for u in units if u[1] is not None)
+
+    windows = []
+    t = t0
+    while t < t1:
+        hi = t + window_s
+        win = [u for u in units if t <= u[0] < hi]
+        if len(win) >= 3 * len(sids):
+            arrival_rate = len(win) / window_s
+            completions = bisect.bisect_left(ends, hi) - bisect.bisect_left(ends, t)
+            lats = [u[4] for u in win if u[3] and u[4] is not None]
+            row = {"t": round(t - t0, 1),
+                   "rate": round(arrival_rate, 2),
+                   "completion_rate": round(completions / window_s, 2),
+                   "p50_ms": _pct(lats, 50), "p95_ms": _pct(lats, 95),
+                   "tiers_ok": {}}
+            keeps_up = completions >= 0.95 * len(win)
+            for tier, dl in ladder.items():
+                if dl is None:
+                    continue
+                bounds = []
+                for sid in sids:
+                    xs = [u for u in win if u[2] == sid]
+                    wins_ = sum(1 for u in xs
+                                if u[3] and u[4] is not None
+                                and u[4] <= float(dl) * 1000.0)
+                    bounds.append(st.wilson_lower(wins_, len(xs), z)
+                                  if xs else 0.0)
+                row["tiers_ok"][tier] = bool(bounds and min(bounds) >= target
+                                             and keeps_up)
+            windows.append(row)
+        t = hi
+
+    tiers_out = {}
+    for tier, dl in ladder.items():
+        if dl is None:
+            continue
+        ok_rows = [w for w in windows if w["tiers_ok"].get(tier)]
+        best = None
+        for w in sorted(ok_rows, key=lambda w: -w["rate"]):
+            near = [v for v in ok_rows
+                    if v is not w and abs(v["rate"] - w["rate"]) <= 0.1 * w["rate"]]
+            if near:
+                best = w
+                break
+        if best is None:
+            tiers_out[tier] = {"sustainable_rate": None, "confirmed": False}
+            continue
+        band = [v for v in ok_rows
+                if abs(v["rate"] - best["rate"]) <= 0.1 * best["rate"]]
+        med_lat = _pct([v["p50_ms"] for v in band if v["p50_ms"]], 50) or 0.0
+        tiers_out[tier] = {
+            "sustainable_rate": best["rate"],
+            "confirmed": True,
+            "p95_ms_at_rate": best["p95_ms"],
+            "deadline_s": float(dl),
+            "derived_sessions": int(best["rate"]
+                                    * (med_lat / 1000.0 + think_s)),
+        }
+
+    return {"sweep_version": SWEEP_VERSION, "window_s": window_s,
+            "think_s": think_s, "units": len(units),
+            "windows": windows, "tiers": tiers_out}
+
+
 def summarize(judgment: dict) -> dict:
     """The compact slice that rides inside a run result."""
     return {k: judgment[k] for k in
@@ -156,7 +260,17 @@ def main() -> None:  # pragma: no cover — thin CLI
         description="Re-judge a capacity evidence ledger.")
     ap.add_argument("evidence", help="path to evidence-*.jsonl.gz")
     ap.add_argument("-o", "--out", help="write full judgment JSON here")
+    ap.add_argument("--sweep", action="store_true",
+                    help="rate-sweep post-processing instead of the "
+                         "capability judgment")
     args = ap.parse_args()
+    if args.sweep:
+        s = sweep(args.evidence)
+        if args.out:
+            Path(args.out).write_text(json.dumps(s, indent=1))
+        print(json.dumps({k: s[k] for k in
+                          ("sweep_version", "units", "tiers")}, indent=1))
+        return
     j = judge_evidence(args.evidence)
     if args.out:
         Path(args.out).write_text(json.dumps(j, indent=1))

@@ -139,3 +139,52 @@ def test_single_failure_at_thin_level_does_not_block(tmp_path):
     by_users = {row["users"]: row for row in j["levels"]}
     assert by_users[295]["pass"] is False
     assert by_users[295]["fail"] is False
+
+
+def _sweep_ledger(path, phases):
+    """phases: [(rate_per_s, duration_s, lat_s), ...] one type per third."""
+    rows = [{"k": "header", "seed": 1, "mode": "e2e"}]
+    sids = ("research_brief", "comparison", "digest")
+    t = 1000.0
+    for rate, dur, lat_s in phases:
+        n = int(rate * dur)
+        for i in range(n):
+            sub = t + i / rate
+            rows.append({"k": "unit", "sid": sids[i % 3], "ok": True,
+                         "lat": lat_s * 1000.0, "sub": sub,
+                         "end": sub + lat_s, "r": rate})
+        t += dur
+    rows.append({"k": "footer", "deadline_s": 15.0})
+    _write(path, rows)
+    return path
+
+
+def test_sweep_finds_the_sustainable_rate_per_tier(tmp_path):
+    """Three offered rates: healthy fast, healthy slow (inside 45s but past
+    15s), and collapsing. The conversational tier's sustainable rate is the
+    first phase's; the interactive tier also sustains the second."""
+    path = _sweep_ledger(tmp_path / "ev.jsonl.gz", [
+        (20.0, 120, 3.0),     # 20/s, 3s latency: fine for every tier
+        (40.0, 120, 30.0),    # 40/s, 30s latency: misses 15s, inside 45s
+        (80.0, 120, 200.0),   # collapse: misses everything
+    ])
+    s = judge.sweep(path, window_s=30.0)
+    conv = s["tiers"]["conversational"]
+    inter = s["tiers"]["interactive"]
+    assert conv["confirmed"] and abs(conv["sustainable_rate"] - 20.0) < 2.0
+    assert inter["confirmed"] and abs(inter["sustainable_rate"] - 40.0) < 4.0
+    # derived sessions: rate x (latency + think)
+    assert abs(conv["derived_sessions"] - 20 * (3 + 3)) <= 20
+    assert abs(inter["derived_sessions"] - 40 * (30 + 3)) <= 140
+
+
+def test_sweep_requires_two_confirming_windows(tmp_path):
+    """A single 15-second spike at a high rate is not sustainable."""
+    path = _sweep_ledger(tmp_path / "ev.jsonl.gz", [
+        (10.0, 120, 3.0),
+        (100.0, 15, 3.0),     # one half-window burst
+    ])
+    s = judge.sweep(path, window_s=30.0)
+    conv = s["tiers"]["conversational"]
+    assert conv["confirmed"]
+    assert conv["sustainable_rate"] < 50.0

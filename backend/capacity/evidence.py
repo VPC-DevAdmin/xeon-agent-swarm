@@ -64,6 +64,8 @@ class EvidenceWriter:
             "lat": rec.get("latency_ms"),
             "sub": rec.get("t_submit"),
             "end": rec.get("ts"),
+            **({"r": rec.get("offered_rate")}
+               if rec.get("offered_rate") is not None else {}),
             **({"err": str(rec.get("error"))[:120]} if rec.get("error")
                else {}),
         })

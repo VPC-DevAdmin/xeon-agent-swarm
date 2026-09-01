@@ -35,6 +35,10 @@ def load_e2e_workflows() -> dict[str, dict]:
                     # deterministic backends, `contract_live` to a real planner.
                     "contract": dict(w.get("contract") or {}) or None,
                     "contract_live": dict(w.get("contract_live") or {}) or None,
+                    # v15: per-archetype retrieval-context weight. The corpus
+                    # is generated seeded at submit time; the profile declares
+                    # its size and section count (see controller._with_corpus).
+                    "context_profile": dict(w.get("context_profile") or {}) or None,
                     }
     return out
 
