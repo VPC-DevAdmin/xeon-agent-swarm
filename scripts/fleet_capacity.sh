@@ -44,6 +44,13 @@ for i in $(seq 1 "$K"); do
   docker exec "xeon-pg-f$i" pg_isready -U xeon >/dev/null || { echo "pg f$i NOT ready"; exit 1; }
 done
 
+# Stale mock routers survive instance kills and ensure_mock_router reuses
+# anything already serving - a zero-latency mock from a previous run then
+# silently replaces the configured serving tier. Clear the fleet mock ports
+# before launch (the main service's mock on 8901 is untouched).
+pkill -f "mock_router:app --host 127.0.0.1 --port 892" 2>/dev/null || true
+sleep 1
+
 for i in $(seq 1 "$K"); do
   PORT=$((8100 + i * 10))
   mkdir -p "data/capacity/fleet$i"
