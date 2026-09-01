@@ -54,7 +54,7 @@ pkill -f "mock_router:app --host 127.0.0.1 --port 892" 2>/dev/null || true
 # new instance dies on bind. Graceful first, then hard.
 for i in $(seq 1 "$K"); do
   P=$((8100 + i * 10))
-  pid=$(ss -tlnp 2>/dev/null | grep ":$P " | grep -o "pid=[0-9]*" | head -1 | cut -d= -f2)
+  pid=$(ss -tlnp 2>/dev/null | grep ":$P " | grep -o "pid=[0-9]*" | head -1 | cut -d= -f2 || true)
   if [ -n "$pid" ]; then
     echo "killing stale listener $pid on :$P"
     kill "$pid" 2>/dev/null || true
