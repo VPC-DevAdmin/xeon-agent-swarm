@@ -219,6 +219,16 @@ async def _prepare(body: StartBody) -> dict:
         # needed to certify a rung. The workload ramp has no artificial cap.
         if target == "agent_host" and inference_backend == "remote_mock":
             default_interval = 10.0          # mock workflows finish in seconds
+            # A modeled serving tier turns instant stand-in calls into real
+            # multi-second waits: the heaviest archetype legitimately runs
+            # 300+ seconds, and the instant-era 300s ceiling then times out
+            # every healthy researcher (observed: zero of 20,000+ completed).
+            # Same remedy as the integrated node below.
+            import os as _os
+            if any(float(_os.getenv(k, "0") or 0) > 0 for k in (
+                    "CAPACITY_MODEL_TTFT_MS", "CAPACITY_MODEL_DECODE_TPS",
+                    "CAPACITY_MODEL_PREFILL_TPS")):
+                cfg["e2e_timeout_s"] = 900.0
         elif target == "integrated_node":
             # Real workflows on local CPU inference run minutes each; a 300s
             # ceiling times out healthy runs and a 30s cadence outruns them.
