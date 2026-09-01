@@ -49,6 +49,20 @@ done
 # silently replaces the configured serving tier. Clear the fleet mock ports
 # before launch (the main service's mock on 8901 is untouched).
 pkill -f "mock_router:app --host 127.0.0.1 --port 892" 2>/dev/null || true
+# Same hygiene for stale INSTANCES and their orphaned executors: a survivor
+# on an instance port swallows the new start request with old env, and the
+# new instance dies on bind. Graceful first, then hard.
+for i in $(seq 1 "$K"); do
+  P=$((8100 + i * 10))
+  pid=$(ss -tlnp 2>/dev/null | grep ":$P " | grep -o "pid=[0-9]*" | head -1 | cut -d= -f2)
+  if [ -n "$pid" ]; then
+    echo "killing stale listener $pid on :$P"
+    kill "$pid" 2>/dev/null || true
+    sleep 2
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+done
+pkill -f "backend.main:app --host 127.0.0.1 --port 93" 2>/dev/null || true
 sleep 1
 
 for i in $(seq 1 "$K"); do
