@@ -725,14 +725,7 @@ class CapacityTest:
         # every instance condemns the box as interference the moment the
         # host works hard — which is the fleet's entire purpose.
         if os.getenv("CAPACITY_FLEET") == "1":
-            own = set(groups["control"]) | set(groups.get("executors") or [])
-            for g in groups.values():
-                own.update(g)
-            sib: list[int] = []
-            for pid in find_pids("backend.main:app") + find_pids("mockrouter"):
-                if pid not in own:
-                    sib.extend(descendant_pids(pid))
-            groups["siblings"] = sorted(set(sib) - own)
+            groups["siblings"] = self._sibling_pids(groups)
         if self.inference_backend == "local":
             if self._engine_pids is None:
                 # Rescan until the engine's real compute processes are found:
@@ -742,6 +735,63 @@ class CapacityTest:
             if self._engine_pids:
                 groups["engine"] = self._engine_pids
         return groups
+
+    def _sibling_pids(self, groups: dict[str, list[int]]) -> list[int]:
+        """Sibling orchestrator and mock pids, cached, refreshed off-loop.
+
+        The first version called find_pids twice plus descendant_pids per
+        match, every telemetry sample, synchronously on the event loop:
+        roughly 66k /proc reads per sample on a busy box. In closed-loop
+        fleet runs that stall wore the mask of a ~4-second latency step on
+        every unit (the long-open fleet-latency item); in the open loop it
+        starved the arrival generator below its very first level, because
+        each stall overran the generator's burst clamp and the discarded
+        arrivals read as generator failure. The scan now runs in a worker
+        thread at most every 30 seconds with ONE process-table pass, and
+        samples read whichever snapshot is current."""
+        import glob as _glob
+        import threading
+        own: set[int] = set()
+        for g in groups.values():
+            own.update(g)
+        if getattr(self, "_sibling_cache", None) is None:
+            self._sibling_cache = (0.0, [], False)
+        ts, pids, refreshing = self._sibling_cache
+        if time.time() - ts > 30.0 and not refreshing:
+            self._sibling_cache = (ts, pids, True)
+
+            def _refresh():
+                try:
+                    roots = [p for p in find_pids("backend.main:app")
+                             + find_pids("mockrouter") if p not in own]
+                    kids: dict[int, list[int]] = {}
+                    for path in _glob.glob("/proc/[0-9]*/status"):
+                        try:
+                            child = int(path.split("/")[2])
+                            with open(path) as f:
+                                for line in f:
+                                    if line.startswith("PPid:"):
+                                        kids.setdefault(
+                                            int(line.split()[1]),
+                                            []).append(child)
+                                        break
+                        except (OSError, ValueError, IndexError):
+                            continue
+                    out: set[int] = set()
+                    stack = list(roots)
+                    while stack:
+                        cur = stack.pop()
+                        if cur in out:
+                            continue
+                        out.add(cur)
+                        stack.extend(kids.get(cur, []))
+                    self._sibling_cache = (time.time(),
+                                           sorted(out - own), False)
+                except Exception:  # noqa: BLE001 — attribution is best-effort
+                    self._sibling_cache = (time.time(), pids, False)
+
+            threading.Thread(target=_refresh, daemon=True).start()
+        return self._sibling_cache[1]
 
     async def _sample_loop(self):
         # Bandwidth/KV are local-mode readings; stop attempting after repeated
