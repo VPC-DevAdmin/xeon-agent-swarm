@@ -426,7 +426,41 @@ def _usage(messages: list[dict], completion_text: str) -> dict:
             "total_tokens": prompt_tokens + completion_tokens}
 
 
-def _completion(*, tier: str, category: str, seed: str, messages: list[dict],
+def _serving_profile() -> dict | None:
+    """The modeled serving tier, or None for the zero-latency stand-in.
+
+    Per-call wait = TTFT + output_tokens/decode + input_tokens/prefill,
+    computed from the ACTUAL request and response payloads, so a heavy
+    researcher planner call waits several times longer than a judge
+    verdict without any per-role table. Three numbers define the tier and
+    ride the run's provenance; seeded jitter (+/-20%) decoheres arrivals."""
+    try:
+        ttft = float(os.environ.get("CAPACITY_MODEL_TTFT_MS", "0") or 0)
+        decode = float(os.environ.get("CAPACITY_MODEL_DECODE_TPS", "0") or 0)
+        prefill = float(os.environ.get("CAPACITY_MODEL_PREFILL_TPS", "0") or 0)
+    except ValueError:
+        return None
+    if decode <= 0 and prefill <= 0 and ttft <= 0:
+        return None
+    return {"ttft_ms": ttft, "decode_tps": decode, "prefill_tps": prefill}
+
+
+def _model_wait_s(messages: list[dict], completion_text: str, seed: str) -> float:
+    prof = _serving_profile()
+    if not prof:
+        return 0.0
+    tokens_in = sum(len(_text(m.get("content"))) for m in messages) / 4.0
+    tokens_out = max(1.0, len(completion_text) / 4.0)
+    wait = prof["ttft_ms"] / 1000.0
+    if prof["decode_tps"] > 0:
+        wait += tokens_out / prof["decode_tps"]
+    if prof["prefill_tps"] > 0:
+        wait += tokens_in / prof["prefill_tps"]
+    jitter = 0.8 + 0.4 * ((_hash(seed + completion_text[:40]) % 1000) / 1000.0)
+    return wait * jitter
+
+
+async def _completion(*, tier: str, category: str, seed: str, messages: list[dict],
                 content: str | None = None, tool_calls: list[dict] | None = None) -> JSONResponse:
     message: dict = {"role": "assistant", "content": content}
     finish_reason = "stop"
@@ -435,6 +469,9 @@ def _completion(*, tier: str, category: str, seed: str, messages: list[dict],
         message["tool_calls"] = tool_calls
         finish_reason = "tool_calls"
         completion_text = json.dumps(tool_calls)
+    wait = _model_wait_s(messages, completion_text, seed)
+    if wait > 0:
+        await asyncio.sleep(wait)
     body = {
         "id": f"chatcmpl-mock-{int(time.time() * 1000)}-{_hash(seed) % 10_000}",
         "object": "chat.completion",
@@ -506,13 +543,13 @@ async def chat_completions(request: Request):
     # (a) judge / grader call — answer with the verdict JSON validation_judge parses.
     if _JUDGE_MARKER in system:
         content = json.dumps({"verdict": "pass", "score": 0.92, "critique": ""})
-        return _completion(tier=tier, category="general", seed=seed,
+        return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, content=content)
 
     # (b) plan-approval gate: submit_plan available and not yet answered.
     if "submit_plan" in tools and _tool_result_count(messages, "submit_plan") == 0:
         tc = _tool_call("submit_plan", {"plan": _plan_text(obj)})
-        return _completion(tier=tier, category="general", seed=seed,
+        return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, tool_calls=[tc])
 
     # (c) main agent: sequential delegation loop, then synthesis. When tools are
@@ -532,9 +569,9 @@ async def chat_completions(request: Request):
                 desc += "\n\nUse ONLY this retrieved context:\n" + piece
             tc = _tool_call("task", {"subagent_type": role,
                                      "description": desc})
-            return _completion(tier=tier, category="general", seed=seed,
+            return await _completion(tier=tier, category="general", seed=seed,
                                messages=messages, tool_calls=[tc])
-        return _completion(tier=tier, category="general", seed=seed,
+        return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, content=_synthesis_text(obj))
 
     # (c2) tool_user subagent: actually invoke the granted tool, then report its result.
@@ -542,7 +579,7 @@ async def chat_completions(request: Request):
         tool_id = _granted_tool(body)
         if tool_id and not _tool_results_present(messages):
             tc = _tool_call(tool_id, _tool_call_args(tool_id, obj))
-            return _completion(tier=tier, category="general", seed=seed,
+            return await _completion(tier=tier, category="general", seed=seed,
                                messages=messages, tool_calls=[tc])
         # tool has run (its result is in the thread) — report it on-contract for L0.
         content = json.dumps({
@@ -550,12 +587,12 @@ async def chat_completions(request: Request):
                        "(see the tool output above)."),
             "confidence": 0.8,
         })
-        return _completion(tier=tier, category="general", seed=seed,
+        return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, content=content)
 
     # Budget-stop partial synthesis (no tools, distinctive system prompt): prose answer.
     if _PARTIAL_SYNTH_MARKER in system:
-        return _completion(tier=tier, category="writing", seed=seed,
+        return await _completion(tier=tier, category="writing", seed=seed,
                            messages=messages, content=_synthesis_text(obj))
 
     # (d0) benchmark record-keeping exercise: a worker granted bench_record
@@ -564,13 +601,13 @@ async def chat_completions(request: Request):
     # agent-host capacity runs.
     if "bench_record" in tools and not _tool_results_present(messages):
         tc = _tool_call("bench_record", {"key": (obj or "record")[:40]})
-        return _completion(tier=tier, category="general", seed=seed,
+        return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, tool_calls=[tc])
 
     # (d) worker subagent: detect role from the system prompt, return canned content
     # that passes validate_l0. Workers never emit tool calls.
     role = next((r for r, marker in _ROLE_MARKERS if marker in system), "general-purpose")
-    return _completion(tier=tier, category=_CATEGORY.get(role, "general"), seed=seed,
+    return await _completion(tier=tier, category=_CATEGORY.get(role, "general"), seed=seed,
                        messages=messages, content=_worker_content(role, obj))
 
 

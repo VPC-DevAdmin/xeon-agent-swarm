@@ -59,6 +59,11 @@ def metadata(base_url: str | None) -> dict | None:
         "workers": int(os.getenv("MOCK_ROUTER_WORKERS", "4")),
         "latency_ms": float(os.getenv("MOCK_LATENCY_MS", "0") or 0),
         "latency_sigma_ms": float(os.getenv("MOCK_LATENCY_SIGMA_MS", "0") or 0),
+        # The modeled serving tier: per-call wait = ttft + out/decode +
+        # in/prefill, computed from actual payloads (zero = instant stand-in).
+        "model_ttft_ms": float(os.getenv("CAPACITY_MODEL_TTFT_MS", "0") or 0),
+        "model_decode_tps": float(os.getenv("CAPACITY_MODEL_DECODE_TPS", "0") or 0),
+        "model_prefill_tps": float(os.getenv("CAPACITY_MODEL_PREFILL_TPS", "0") or 0),
         # Supplied only after an independent endpoint diagnostic.  Agent-host
         # results require twice the observed model-call demand as headroom.
         "certified_requests_per_s": float(certified) if certified else None,

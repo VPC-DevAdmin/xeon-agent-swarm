@@ -1929,10 +1929,21 @@ class CapacityTest:
             benchmark_target=self.benchmark_target,
             inference_backend=self.inference_backend,
             benchmark_version=_scen_version(),
-            model=(self._engine_info or {}).get("served_model_name")
-                  or self._backend_model,
+            model=((self._engine_info or {}).get("served_model_name")
+                   or self._backend_model
+                   or "") + self._serving_tier_tag(),
             engine=self._engine_info,
             host=repro_mod.host_info())
+
+    @staticmethod
+    def _serving_tier_tag() -> str:
+        """Modeled model-serving tier, as a fingerprint suffix. A machine
+        weighed in against an instant stand-in must not lend its profile to
+        a run modeling two-second model calls: the medians differ tenfold."""
+        vals = tuple(os.getenv(k, "0") or "0" for k in
+                     ("CAPACITY_MODEL_TTFT_MS", "CAPACITY_MODEL_DECODE_TPS",
+                      "CAPACITY_MODEL_PREFILL_TPS"))
+        return "" if vals == ("0", "0", "0") else "|svc=" + ",".join(vals)
 
     async def _weigh_in(self) -> bool:
         """Place this machine in a deadline tier.

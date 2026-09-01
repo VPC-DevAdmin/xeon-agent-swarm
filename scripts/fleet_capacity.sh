@@ -54,6 +54,9 @@ for i in $(seq 1 "$K"); do
       CAPACITY_AGENT_HOST_MOCK_BASE_URL="http://127.0.0.1:$((8920 + i))/v1" \
       CAPACITY_RESULTS_DIR="data/capacity/fleet$i" \
       CAPACITY_FLEET=1 \
+      CAPACITY_MODEL_TTFT_MS="${CAPACITY_MODEL_TTFT_MS:-0}" \
+      CAPACITY_MODEL_DECODE_TPS="${CAPACITY_MODEL_DECODE_TPS:-0}" \
+      CAPACITY_MODEL_PREFILL_TPS="${CAPACITY_MODEL_PREFILL_TPS:-0}" \
       SCHEDULER_ENABLED=0 \
       nohup .venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 \
         --port $PORT --log-level warning \

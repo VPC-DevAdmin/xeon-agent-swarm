@@ -80,3 +80,43 @@ def test_contract_tokens_in_reads_from_the_record():
                       "validations": 7, "tool_calls": 3}}
     test._check_contract("research_brief", rec2)
     assert rec2.get("invalid") is None and rec2["ok"] is True
+
+
+def test_model_wait_scales_with_payload(monkeypatch):
+    """The modeled serving tier waits per the actual payload: a 24k-token
+    planner call waits several times longer than a judge verdict, from the
+    same three tier parameters."""
+    mr = _mock_router()
+    monkeypatch.setenv("CAPACITY_MODEL_TTFT_MS", "500")
+    monkeypatch.setenv("CAPACITY_MODEL_DECODE_TPS", "100")
+    monkeypatch.setenv("CAPACITY_MODEL_PREFILL_TPS", "8000")
+    heavy = [{"role": "user", "content": "x" * 96_000}]     # ~24k tokens in
+    light = [{"role": "user", "content": "x" * 2_000}]      # ~500 tokens in
+    out = "y" * 800                                          # ~200 tokens out
+    wh = mr._model_wait_s(heavy, out, "s1")
+    wl = mr._model_wait_s(light, out, "s1")
+    # heavy ~ 0.5 + 2 + 3 = 5.5s +/-20%; light ~ 0.5 + 2 + 0.06 = 2.56s
+    assert 4.4 <= wh <= 6.6
+    assert 2.0 <= wl <= 3.1
+    assert wh > wl * 1.7
+
+
+def test_model_wait_defaults_to_zero(monkeypatch):
+    mr = _mock_router()
+    for k in ("CAPACITY_MODEL_TTFT_MS", "CAPACITY_MODEL_DECODE_TPS",
+              "CAPACITY_MODEL_PREFILL_TPS"):
+        monkeypatch.delenv(k, raising=False)
+    assert mr._model_wait_s([{"role": "user", "content": "x" * 9000}],
+                            "y" * 900, "s") == 0.0
+
+
+def test_serving_tier_changes_the_machine_fingerprint(monkeypatch):
+    a = ctl.CapacityTest("e2e", [], _cfg(seed=1), mix="tile")
+    for k in ("CAPACITY_MODEL_TTFT_MS", "CAPACITY_MODEL_DECODE_TPS",
+              "CAPACITY_MODEL_PREFILL_TPS"):
+        monkeypatch.delenv(k, raising=False)
+    fp_instant = a._machine_fingerprint()
+    monkeypatch.setenv("CAPACITY_MODEL_TTFT_MS", "500")
+    monkeypatch.setenv("CAPACITY_MODEL_DECODE_TPS", "100")
+    monkeypatch.setenv("CAPACITY_MODEL_PREFILL_TPS", "8000")
+    assert a._machine_fingerprint() != fp_instant
