@@ -12,7 +12,7 @@ W=${2:?workers per instance}
 SEED=${3:?seed}
 LOAD=${4:-closed}
 EXTRA=""
-[ "$LOAD" = "open" ] && EXTRA=',"load_model":"open"'
+[ "$LOAD" = "open" ] && EXTRA=',"load_model":"open","sweep":true,"arrival_start_rate":4,"arrival_step_factor":2.0,"arrival_max_rate":1000'
 R=$HOME/work/repos/xeon-agent-swarm
 cd "$R"
 set -a; source .env.adl; set +a

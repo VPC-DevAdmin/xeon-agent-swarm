@@ -1016,3 +1016,39 @@ def test_open_window_geometry_bootstraps_from_inflight_age():
     test._inflight[2] = ("digest", now - 500.0)
     settle2, measure2 = test._open_window_geometry()
     assert settle2 <= 1.5 * 120.0 + 1
+
+
+def _sweep_cfg(**over):
+    cfg = _cfg(load_model="open", sweep_schedule=True, arrival_start_rate=2.0,
+               arrival_step_factor=2.0, arrival_max_rate=8.0,
+               arrival_hold_s=0.2, max_backlog=100,
+               harness_tolerance=0.0, callback_loss_cap=0.01)
+    cfg.update(over)
+    return cfg
+
+
+def test_sweep_schedule_walks_rates_and_ends_capped(tmp_path, monkeypatch):
+    """Dumb generator: no in-run knee-finding - the schedule walks to its
+    cap and the run ends as a censored lower bound for the offline judge."""
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _sweep_cfg(), mix="tile")
+    monkeypatch.setattr(test, "_resource_observation",
+                        lambda since: (None, None))
+    asyncio.run(test._sweep_schedule())
+    assert test.verdict == "capped"
+    rates = [L["offered_rate"] for L in test.rate_levels]
+    assert rates == [2.0, 4.0, 8.0]
+
+
+def test_sweep_schedule_stops_on_sustained_resource_saturation(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
+    test = ctl.CapacityTest("e2e", [], _sweep_cfg(arrival_max_rate=64.0),
+                            mix="tile")
+    monkeypatch.setattr(test, "_resource_observation",
+                        lambda since: ("cpu", {"profile": "host",
+                                               "metric": "cpu_pct",
+                                               "value": 91.0, "limit": 90.0}))
+    asyncio.run(test._sweep_schedule())
+    assert test.verdict == "cpu"
+    assert len(test.rate_levels) == 2       # two consecutive levels required

@@ -2506,9 +2506,79 @@ class CapacityTest:
                           f"median = {service_rate:.4f} workflows/s"),
                 "estimated_service_rate": round(service_rate, 5)}
 
+    def _slowest_latency_s(self) -> float:
+        """Best current estimate of the slowest unit, for level dwell:
+        the max completed latency seen, or the oldest unit still in
+        flight, whichever is larger. Capped so a wedged straggler cannot
+        stretch levels without bound."""
+        seen = max((c["latency_ms"] / 1000.0 for c in self.calls
+                    if c.get("latency_ms") is not None), default=0.0)
+        oldest = 0.0
+        if self._inflight:
+            now = time.time()
+            oldest = max(now - ts for _sid, ts in self._inflight.values())
+        return min(max(seen, oldest), 480.0)
+
+    async def _sweep_schedule(self) -> None:
+        """Dumb generator, smart judge: walk the rate schedule on a clock.
+
+        No in-run knee-finding. Every judgment that decides the published
+        result - per-tier on-time bounds, backlog growth, the sustainable
+        rate - happens OFFLINE in the sweep judge over the evidence ledger,
+        where the rules are versioned and revisable. The run keeps only the
+        stops that protect the box and the schedule: resource saturation
+        (two consecutive levels), the bounded queue rejecting, and the end
+        of the schedule. Level dwell stretches to 1.5x the slowest unit
+        seen so far, so every level contains steady-state windows for the
+        offline judge to find."""
+        self.phase = "ramping"
+        rate = float(self.cfg["arrival_start_rate"])
+        factor = float(self.cfg["arrival_step_factor"])
+        cap = float(self.cfg["arrival_max_rate"])
+        streak: dict[str, int] = defaultdict(int)
+        self._tasks.append(asyncio.create_task(self._arrival_loop()))
+        while not self._stop.is_set() and rate <= cap:
+            self.offered_rate = rate
+            dwell = max(float(self.cfg["arrival_hold_s"]),
+                        1.5 * self._slowest_latency_s())
+            since = time.time()
+            arrivals0, rejected0 = self._arrivals, self.rejected
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=dwell)
+                return
+            except asyncio.TimeoutError:
+                pass
+            span = max(1e-6, time.time() - since)
+            window = self._recent(since)
+            self.rate_levels.append({
+                "offered_rate": round(rate, 3),
+                "achieved_rate": round((self._arrivals - arrivals0) / span, 2),
+                "completed": len([c for c in window if c.get("ok")]),
+                "rejected": self.rejected - rejected0,
+                "dwell_s": round(span, 1),
+                "in_flight": len(self._inflight),
+            })
+            rv, breach = self._resource_observation(since)
+            for name in ("cpu", "memory", "kv", "interference"):
+                streak[name] = streak[name] + 1 if rv == name else 0
+            if rv and streak[rv] >= 2:
+                self.verdict, self.breach = rv, breach
+                return
+            if self.rejected - rejected0 > 0:
+                self.verdict = "capped"
+                self.breach = {"profile": "harness", "metric": "max_backlog",
+                               "value": len(self._inflight),
+                               "limit": int(self.cfg["max_backlog"])}
+                return
+            rate *= factor
+        if not self.verdict:
+            self.verdict = "capped"
+
     async def _rate_ramp(self) -> None:
         """Step the offered rate until the backlog diverges or a limit stops us."""
         self.phase = "ramping"
+        if self.cfg.get("sweep_schedule"):
+            return await self._sweep_schedule()
         cal = self._calibrate_arrival_schedule()
         if cal:
             self.cfg["arrival_start_rate"] = cal["start_rate"]
