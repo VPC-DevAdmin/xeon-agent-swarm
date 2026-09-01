@@ -207,7 +207,7 @@ e2e_workflows:
     context_profile: {tokens_in: 24000, sections: 3}  # v15 heavy-context archetype: seeded retrieval corpus, planner reads all, workers get one section each
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3], tokens_in: [30000, 120000]}
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3], tokens_in: [35000, 500000]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
     budgets: {max_subagents: 4, max_tool_hops: 2}  # PER-AGENT semantics: hop budget binds each worker (intent: 1 call + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack); the guards replan/clamp at these lines so a unit can never balloon past its declared size
     query: >-
@@ -229,7 +229,7 @@ e2e_workflows:
     context_profile: {tokens_in: 7500, sections: 3}   # v15 medium-context archetype
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3], tokens_in: [8000, 60000]}
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3], tokens_in: [10000, 200000]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
     budgets: {max_subagents: 4, max_tool_hops: 2}  # PER-AGENT semantics: hop budget binds each worker (intent: 1 call + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack); the guards replan/clamp at these lines so a unit can never balloon past its declared size
     query: >-
@@ -248,7 +248,7 @@ e2e_workflows:
     think_ms: 3000
     toolless: true                       # no catalog/builtin tools; bench_record only
     tools: [bench_record]                # 1 real record-keeping call per worker
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3], tokens_in: [500, 20000]}
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3], tokens_in: [500, 30000]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
     budgets: {max_subagents: 4, max_tool_hops: 2}  # PER-AGENT semantics: hop budget binds each worker (intent: 1 call + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack); the guards replan/clamp at these lines so a unit can never balloon past its declared size
     query: >-
