@@ -409,12 +409,18 @@ def _fake_submit(latency_s=0.05, ok=True, llm_calls=10):
     re-carry their slices, roughly doubling the prompt's own tokens."""
     async def submit(query, opts=None):
         await asyncio.sleep(latency_s)
+        # v16: the researcher retrieves (3 extra worker turns, 3 extra tool
+        # calls); the double mirrors the per-type contract it is judged by.
+        researcher = query.startswith("Using ONLY the field notes")
+        calls = 13 if researcher else llm_calls
+        tools = 6 if researcher else 3
+        tin = max(21_000 if researcher else 5200, int(len(query) / 4 * 2))
         return {"ok": ok,
-                "tokens_in": max(5200, int(len(query) / 4 * 2)),
+                "tokens_in": tin,
                 "tokens_out": 1400,
                 "error": None if ok else "status=failed",
-                "trace": {"llm_calls": llm_calls, "steps": 3,
-                          "validations": 7, "task_count": 3, "tool_calls": 3}}
+                "trace": {"llm_calls": calls, "steps": 3,
+                          "validations": 7, "task_count": 3, "tool_calls": tools}}
     return submit
 
 

@@ -204,3 +204,32 @@ def build_bench_tool() -> StructuredTool:
                     "nothing new.",
         args_schema=_BenchRecordArgs,
     )
+
+
+class _BenchRetrieveArgs(BaseModel):
+    query: str = Field(description="search query for the document store")
+
+
+def build_bench_retrieve_tool() -> StructuredTool:
+    """Real on-box retrieval (workload v16): sparse search + fusion +
+    rerank + packing over the seeded corpus store, with the large vector
+    index modeled as an off-box call. The packed chunks return into the
+    worker's context with chunk-id citations."""
+    async def _call(query: str) -> str:
+        from backend.capacity import retrieval
+        r = await retrieval.retrieve(query)
+        return (f"[bench_retrieve] {len(r['chunks'])} chunks retrieved in "
+                f"{r['elapsed_ms']}ms for '{query[:60]}'.\n\n"
+                + r["packed"]
+                + "\n\nRETRIEVAL COMPLETE. Use ONLY the chunks above; cite "
+                  "them by their [chunk-N] ids. Do not retrieve again for "
+                  "this subtask.")
+
+    return StructuredTool.from_function(
+        coroutine=_call, name="bench_retrieve",
+        description="Search the document store and retrieve the most "
+                    "relevant chunks for a query (benchmark retrieval "
+                    "tool). Call EXACTLY ONCE per subtask, before "
+                    "bench_record.",
+        args_schema=_BenchRetrieveArgs,
+    )

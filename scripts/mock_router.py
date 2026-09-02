@@ -50,6 +50,7 @@ import itertools
 import json
 import os
 import re
+import zlib
 import time
 
 from fastapi import FastAPI, Request
@@ -595,11 +596,21 @@ async def chat_completions(request: Request):
         return await _completion(tier=tier, category="writing", seed=seed,
                            messages=messages, content=_synthesis_text(obj))
 
-    # (d0) benchmark record-keeping exercise: a worker granted bench_record
-    # makes exactly ONE real tool call (dispatch + durable write + payload
-    # back into context) before answering — deterministic tool load for
-    # agent-host capacity runs.
-    if "bench_record" in tools and not _tool_results_present(messages):
+    # (d0) benchmark tool exercise, in sequence: a worker granted
+    # bench_retrieve performs real on-box retrieval FIRST (workload v16 -
+    # the retrieved chunks become its working context), then the durable
+    # bench_record call, then its answer. A worker granted only
+    # bench_record keeps the v14/v15 single-call shape.
+    if ("bench_retrieve" in tools
+            and _tool_result_count(messages, "bench_retrieve") == 0):
+        topic = zlib.crc32(f"{obj[:80]}|{seed}".encode()) % 2000
+        tc = _tool_call("bench_retrieve",
+                        {"query": f"topic{topic} " + " ".join(
+                            re.findall(r"[a-z]+", obj.lower())[:6])})
+        return await _completion(tier=tier, category="general", seed=seed,
+                           messages=messages, tool_calls=[tc])
+    if ("bench_record" in tools
+            and _tool_result_count(messages, "bench_record") == 0):
         tc = _tool_call("bench_record", {"key": (obj or "record")[:40]})
         return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, tool_calls=[tc])

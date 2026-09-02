@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 15
+version: 16
 
 scenarios:
   support_agent:
@@ -204,10 +204,13 @@ e2e_workflows:
   research_brief:
     name: "Research brief (e2e)"
     think_ms: 3000
-    context_profile: {tokens_in: 24000, sections: 3}  # v15 heavy-context archetype: seeded retrieval corpus, planner reads all, workers get one section each
+    # v16: the researcher EARNS its context - each worker performs real
+    # on-box retrieval (sparse search + fusion + rerank + packing over the
+    # seeded corpus store; dense vector search modeled off-box) instead of
+    # receiving a pre-baked corpus in the prompt.
     toolless: true                       # no catalog/builtin tools; bench_record only
-    tools: [bench_record]                # 1 real record-keeping call per worker
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3], tokens_in: [35000, 500000]}
+    tools: [bench_retrieve, bench_record]  # per worker: 1 real retrieval + 1 record call
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [20000, 500000]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
     budgets: {max_subagents: 4, max_tool_hops: 2}  # PER-AGENT semantics: hop budget binds each worker (intent: 1 call + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack); the guards replan/clamp at these lines so a unit can never balloon past its declared size
     query: >-

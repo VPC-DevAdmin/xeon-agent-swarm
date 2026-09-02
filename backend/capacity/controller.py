@@ -726,6 +726,10 @@ class CapacityTest:
         # host works hard — which is the fleet's entire purpose.
         if os.getenv("CAPACITY_FLEET") == "1":
             groups["siblings"] = self._sibling_pids(groups)
+        if os.getenv("CAPACITY_EMBED_URL") or os.getenv("CAPACITY_RERANK_URL"):
+            extra = getattr(self, "_sibling_cache", None)
+            if extra and isinstance(extra[1], dict):
+                groups["retrieval"] = extra[1].get("retrieval", [])
         if self.inference_backend == "local":
             if self._engine_pids is None:
                 # Rescan until the engine's real compute processes are found:
@@ -755,10 +759,12 @@ class CapacityTest:
         for g in groups.values():
             own.update(g)
         if getattr(self, "_sibling_cache", None) is None:
-            self._sibling_cache = (0.0, [], False)
-        ts, pids, refreshing = self._sibling_cache
+            self._sibling_cache = (0.0, {"siblings": [], "retrieval": []},
+                                   False)
+        ts, cached, refreshing = self._sibling_cache
+        pids = cached.get("siblings", []) if isinstance(cached, dict) else []
         if time.time() - ts > 30.0 and not refreshing:
-            self._sibling_cache = (ts, pids, True)
+            self._sibling_cache = (ts, cached, True)
 
             def _refresh():
                 try:
@@ -785,13 +791,28 @@ class CapacityTest:
                             continue
                         out.add(cur)
                         stack.extend(kids.get(cur, []))
+                    # The retrieval stack (TEI embedder/reranker) is its own
+                    # attribution group so the report can say what share of
+                    # the box was retrieval compute.
+                    ret: set[int] = set()
+                    stack = [p for p in find_pids("text-embeddings")
+                             if p not in own]
+                    while stack:
+                        cur = stack.pop()
+                        if cur in ret:
+                            continue
+                        ret.add(cur)
+                        stack.extend(kids.get(cur, []))
                     self._sibling_cache = (time.time(),
-                                           sorted(out - own), False)
+                                           {"siblings": sorted(out - own - ret),
+                                            "retrieval": sorted(ret - own)},
+                                           False)
                 except Exception:  # noqa: BLE001 — attribution is best-effort
-                    self._sibling_cache = (time.time(), pids, False)
+                    self._sibling_cache = (time.time(), cached, False)
 
             threading.Thread(target=_refresh, daemon=True).start()
-        return self._sibling_cache[1]
+        latest = self._sibling_cache[1]
+        return latest.get("siblings", []) if isinstance(latest, dict) else []
 
     async def _sample_loop(self):
         # Bandwidth/KV are local-mode readings; stop attempting after repeated

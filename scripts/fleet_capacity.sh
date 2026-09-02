@@ -68,6 +68,10 @@ free_port() {
 for i in $(seq 1 "$K"); do
   free_port $((8920 + i))
 done
+
+# v16: retrieval stack (TEI embedder + reranker containers, corpus store)
+# provisioned before any executor needs it.
+"$R/scripts/provision_retrieval.sh"
 # Same hygiene for stale INSTANCES and their orphaned executors: a survivor
 # on an instance port swallows the new start request with old env, and the
 # new instance dies on bind. Graceful first, then hard.
@@ -90,6 +94,8 @@ for i in $(seq 1 "$K"); do
       CAPACITY_MODEL_TTFT_MS="${CAPACITY_MODEL_TTFT_MS:-0}" \
       CAPACITY_MODEL_DECODE_TPS="${CAPACITY_MODEL_DECODE_TPS:-0}" \
       CAPACITY_MODEL_PREFILL_TPS="${CAPACITY_MODEL_PREFILL_TPS:-0}" \
+      CAPACITY_EMBED_URL="${CAPACITY_EMBED_URL:-http://127.0.0.1:8880}" \
+      CAPACITY_RERANK_URL="${CAPACITY_RERANK_URL:-http://127.0.0.1:8881}" \
       SCHEDULER_ENABLED=0 \
       nohup .venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 \
         --port $PORT --log-level warning \

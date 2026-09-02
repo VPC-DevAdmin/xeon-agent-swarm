@@ -20,15 +20,17 @@ def _mock_router():
     return mod
 
 
-def test_researcher_prompt_carries_a_seeded_sectioned_corpus():
+def test_comparison_prompt_carries_a_seeded_sectioned_corpus():
+    """v16: the RESEARCHER earns its context via retrieval; the comparison
+    remains the prompt-carried medium archetype."""
     test = ctl.CapacityTest("e2e", [], _cfg(seed=42), mix="tile")
-    wf = test.scenarios["research_brief"]
-    q1 = test._workflow_query(wf, "research_brief", 1)
-    q2 = test._workflow_query(wf, "research_brief", 2)
+    wf = test.scenarios["comparison"]
+    q1 = test._workflow_query(wf, "comparison", 1)
+    q2 = test._workflow_query(wf, "comparison", 2)
     assert q1.count("### SECTION") == 3
-    # sized to the profile: ~24k tokens at ~0.75 words/token
+    # sized to the profile: ~7.5k tokens at ~0.75 words/token
     words = len(q1.split())
-    assert 12_000 < words < 30_000
+    assert 3_000 < words < 9_000
     # same run, same type: identical corpus bodies, different unit salt
     assert q1.split("[retrieval-salt")[0].split("### SECTION")[1][:200] \
         == q2.split("[retrieval-salt")[0].split("### SECTION")[1][:200]
@@ -49,9 +51,9 @@ def test_digest_prompt_stays_light():
 def test_corpus_is_deterministic_across_instances_with_same_seed():
     a = ctl.CapacityTest("e2e", [], _cfg(seed=7), mix="tile")
     b = ctl.CapacityTest("e2e", [], _cfg(seed=7), mix="tile")
-    wf = a.scenarios["research_brief"]
-    assert a._workflow_query(wf, "research_brief", 3) \
-        == b._workflow_query(wf, "research_brief", 3)
+    wf = a.scenarios["comparison"]
+    assert a._workflow_query(wf, "comparison", 3) \
+        == b._workflow_query(wf, "comparison", 3)
 
 
 def test_mock_planner_hands_each_worker_only_its_section():
@@ -71,13 +73,13 @@ def test_mock_planner_hands_each_worker_only_its_section():
 def test_contract_tokens_in_reads_from_the_record():
     test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
     rec = {"ok": True, "tokens_in": 100,
-           "trace": {"task_count": 3, "steps": 3, "llm_calls": 10,
-                     "validations": 7, "tool_calls": 3}}
+           "trace": {"task_count": 3, "steps": 3, "llm_calls": 13,
+                     "validations": 7, "tool_calls": 6}}
     test._check_contract("research_brief", rec)
     assert rec.get("invalid") is True          # 100 << the 30k floor
     rec2 = {"ok": True, "tokens_in": 55_000,
-            "trace": {"task_count": 3, "steps": 3, "llm_calls": 10,
-                      "validations": 7, "tool_calls": 3}}
+            "trace": {"task_count": 3, "steps": 3, "llm_calls": 13,
+                      "validations": 7, "tool_calls": 6}}
     test._check_contract("research_brief", rec2)
     assert rec2.get("invalid") is None and rec2["ok"] is True
 
