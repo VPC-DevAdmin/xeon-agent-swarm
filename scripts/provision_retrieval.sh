@@ -17,20 +17,20 @@ start_tei() {
   fi
   docker rm -f "$name" >/dev/null 2>&1 || true
   docker run -d --name "$name" -p "127.0.0.1:$port:80" \
+    --cpuset-cpus "$4" -e OMP_NUM_THREADS="$5" -e RAYON_NUM_THREADS="$5" \
+    -e MKL_NUM_THREADS="$5" \
     -v "$VOL:/data" "$IMG" --model-id "$model" >/dev/null
   echo "started $name ($model) on :$port"
 }
 
-start_tei tei-embed 8880 sentence-transformers/all-MiniLM-L6-v2
-start_tei tei-rerank 8881 cross-encoder/ms-marco-MiniLM-L-6-v2
-
-# The retrieval tier is SIZED, like any deployed service: unbounded TEI
-# claimed half the host at 25 workflows/s and starved the orchestrator
-# (98.7% cpu verdict at the second rate level). Bounded, it queues at its
-# own allocation and the measurement shows a sized retrieval tier's knee.
-docker update --cpus 8 tei-embed >/dev/null
-docker update --cpus 32 tei-rerank >/dev/null
-echo "retrieval allocations: embed 8 cpus, rerank 32 cpus"
+# The retrieval tier is SIZED like any deployed service - but by CPUSET,
+# not quota: a --cpus quota with 128 visible cores made TEI spawn 128
+# threads that burned the quota instantly each scheduling period and then
+# slept (throttle-thrash: milliseconds became 30-second ReadTimeouts).
+# Pinned cores + matching thread limits give it honest, steady capacity.
+start_tei tei-embed 8880 sentence-transformers/all-MiniLM-L6-v2 "120-127" 8
+start_tei tei-rerank 8881 cross-encoder/ms-marco-MiniLM-L-6-v2 "88-119" 32
+echo "retrieval allocations: embed cpus 120-127, rerank cpus 88-119"
 
 for port in 8880 8881; do
   for _ in $(seq 1 120); do

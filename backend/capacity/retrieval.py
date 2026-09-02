@@ -255,11 +255,14 @@ async def cross_rerank(query: str, candidates: list[int],
     url = os.getenv("CAPACITY_RERANK_URL")
     if not url:
         return None
-    # Depth 32: production-typical, and exactly one TEI batch. Depth 50
-    # cost the reranker ~49% of a 128-thread host at 25 workflows/s.
+    # Two-stage rerank, standard practice: the cheap lexical scorer
+    # prefilters the fused list to 16, and the cross-encoder spends its
+    # cycles only on those. Depth 50 cost ~49% of a 128-thread host at 25
+    # workflows/s; 16 pairs is one half-batch and a quarter of the demand.
+    prefiltered = lexical_rerank(query, candidates, top=16)
     con = _con()
     ids, texts = [], []
-    for cid in candidates[:32]:
+    for cid in prefiltered[:16]:
         row = con.execute("SELECT body FROM chunks WHERE id=?",
                           (cid,)).fetchone()
         if row:
