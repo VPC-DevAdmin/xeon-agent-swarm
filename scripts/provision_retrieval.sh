@@ -33,5 +33,5 @@ for port in 8880 8881; do
   echo "TEI :$port healthy"
 done
 
-"$R/.venv/bin/python" -c "from backend.capacity import retrieval; print('corpus:', retrieval.ensure_corpus())"
+(cd "$R" && .venv/bin/python -c "from backend.capacity import retrieval; print('corpus:', retrieval.ensure_corpus())")
 echo "RETRIEVAL PROVISIONED"
