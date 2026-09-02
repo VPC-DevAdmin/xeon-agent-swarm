@@ -209,8 +209,31 @@ def _http():
     global _http_client
     if _http_client is None:
         import httpx
-        _http_client = httpx.AsyncClient(timeout=20.0)
+        _http_client = httpx.AsyncClient(timeout=30.0)
     return _http_client
+
+
+async def _post_backpressure(url: str, payload: dict):
+    """POST to a sized model service, treating 429/503 as backpressure.
+
+    A bounded tier SHEDS when its queue fills; the correct client behavior
+    is to wait and retry, so tier saturation shows up as retrieval LATENCY
+    in the ledger (the honest, judgeable signal) rather than as 18,500
+    failed workflows (observed when 429 was treated as fatal). Backoff is
+    capped; a tier that stays saturated past the cap is a real failure."""
+    delay = 0.25
+    waited = 0.0
+    while True:
+        r = await _http().post(url, json=payload)
+        if r.status_code not in (429, 503):
+            r.raise_for_status()
+            return r
+        if waited >= 120.0:
+            r.raise_for_status()
+        sleep_for = min(delay, 120.0 - waited) * (0.8 + 0.4 * random.random())
+        await asyncio.sleep(sleep_for)
+        waited += sleep_for
+        delay = min(delay * 2, 10.0)
 
 
 async def embed_query(query: str) -> list[float] | None:
@@ -220,8 +243,7 @@ async def embed_query(query: str) -> list[float] | None:
     url = os.getenv("CAPACITY_EMBED_URL")
     if not url:
         return None
-    r = await _http().post(f"{url}/embed", json={"inputs": [query]})
-    r.raise_for_status()
+    r = await _post_backpressure(f"{url}/embed", {"inputs": [query]})
     return r.json()[0]
 
 
@@ -248,11 +270,10 @@ async def cross_rerank(query: str, candidates: list[int],
     # TEI caps client batches at 32; score in slices and merge.
     scored: list[tuple[float, int]] = []
     for start in range(0, len(texts), 32):
-        r = await _http().post(
+        r = await _post_backpressure(
             f"{url}/rerank",
-            json={"query": query, "texts": texts[start:start + 32],
-                  "truncate": True})
-        r.raise_for_status()
+            {"query": query, "texts": texts[start:start + 32],
+             "truncate": True})
         for item in r.json():
             scored.append((float(item["score"]), ids[start + item["index"]]))
     scored.sort(reverse=True)
