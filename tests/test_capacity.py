@@ -442,9 +442,11 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
     assert set(r["per_scenario"]) == {"research_brief", "comparison", "digest"}
     assert r["verdict"] == "capped" and (r["capacity_tiles"] or 0) >= 1
     assert r["workflows_per_hour"] is not None and r["workflows_per_hour"] > 0
-    for row in r["per_scenario"].values():
+    for sid, row in r["per_scenario"].items():
         assert row["calls"] > 0 and row["errors"] == 0
-        assert row["trace"]["llm_calls"] == 10                 # measured, not assumed
+        # measured, not assumed: v16 researcher retrieves (3 extra turns)
+        assert row["trace"]["llm_calls"] == (13 if sid == "research_brief"
+                                             else 10)
         assert row["trace"]["validations"] == 7
     assert r["repro"]["seed"] == 42
 
