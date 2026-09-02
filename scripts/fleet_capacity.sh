@@ -12,7 +12,15 @@ W=${2:?workers per instance}
 SEED=${3:?seed}
 LOAD=${4:-closed}
 EXTRA=""
-[ "$LOAD" = "open" ] && EXTRA=',"load_model":"open","sweep":true,"arrival_start_rate":4,"arrival_step_factor":2.0,"arrival_max_rate":1000'
+# PLATEAU_RATE holds ONE fixed rate for PLATEAU_HOLD seconds (plateau
+# protocol, for workloads whose latency rivals level dwell: cohorts must
+# complete under the rate that admitted them, which a doubling climb
+# cannot guarantee). Without it, the doubling sweep schedule applies.
+if [ -n "${PLATEAU_RATE:-}" ]; then
+  EXTRA=',"load_model":"open","sweep":true,"arrival_start_rate":'"$PLATEAU_RATE"',"arrival_step_factor":2.0,"arrival_max_rate":'"$PLATEAU_RATE"',"arrival_hold_s":'"${PLATEAU_HOLD:-600}"
+elif [ "$LOAD" = "open" ]; then
+  EXTRA=',"load_model":"open","sweep":true,"arrival_start_rate":4,"arrival_step_factor":2.0,"arrival_max_rate":1000'
+fi
 R=$HOME/work/repos/xeon-agent-swarm
 cd "$R"
 set -a; source .env.adl; set +a
