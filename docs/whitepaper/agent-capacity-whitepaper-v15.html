@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>50,000 AI Agents on One CPU Server | Dell Technologies</title>
+  <meta name="description" content="One Dell PowerEdge R470 held 50,000+ live agent sessions at 280 workflows per second, with model calls waiting like real API calls.">
+  <style>
+    :root {
+      --navy: #061b2c;
+      --navy-2: #0a2a43;
+      --blue: #0672ce;
+      --blue-2: #0d92d3;
+      --cyan: #16b7c9;
+      --teal: #0b7c84;
+      --green: #2f7d32;
+      --green-bg: #edf7ed;
+      --red: #9b3b2e;
+      --red-bg: #fbefec;
+      --ink: #1d2c3b;
+      --muted: #5d6875;
+      --line: #d9e0e5;
+      --soft: #f4f7f9;
+      --white: #ffffff;
+      --max: 1120px;
+      --prose: 820px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--white);
+      font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.62;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { color: #004f91; }
+    .mono { font-family: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(6, 27, 44, .96);
+      border-bottom: 1px solid rgba(255,255,255,.12);
+      backdrop-filter: blur(10px);
+    }
+    .topbar-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      min-height: 58px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand {
+      color: var(--white);
+      font-weight: 650;
+      letter-spacing: .02em;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .brand span { color: var(--cyan); }
+    nav { display: flex; gap: 18px; flex-wrap: wrap; justify-content: flex-end; }
+    nav a { color: rgba(255,255,255,.78); font-size: 13px; text-decoration: none; }
+    nav a:hover { color: var(--white); }
+
+    .hero {
+      color: var(--white);
+      background:
+        radial-gradient(circle at 82% 12%, rgba(22,183,201,.24), transparent 30%),
+        linear-gradient(135deg, var(--navy), var(--navy-2));
+      padding: 82px 24px 66px;
+      overflow: hidden;
+    }
+    .hero-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(280px, .75fr);
+      gap: 52px;
+      align-items: center;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 28px; height: 2px; background: var(--cyan); }
+    h1 {
+      margin: 18px 0 18px;
+      max-width: 840px;
+      font-size: clamp(42px, 6vw, 70px);
+      line-height: 1.02;
+      letter-spacing: -.035em;
+      font-weight: 320;
+    }
+    h1 strong { color: #bfeef4; font-weight: 620; }
+    .hero-copy { max-width: 760px; color: rgba(255,255,255,.82); font-size: 19px; }
+    .hero-copy p { margin: 0 0 12px; }
+    .author { color: #b8c6d1; font-size: 13px; font-weight: 600; letter-spacing: .03em; }
+    .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+    .chip {
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.07);
+      border-radius: 999px;
+      padding: 7px 12px;
+      color: rgba(255,255,255,.9);
+      font-size: 12.5px;
+    }
+    .system-card {
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.07);
+      border-radius: 18px;
+      padding: 26px;
+      box-shadow: 0 24px 70px rgba(0,0,0,.22);
+    }
+    .system-card .kicker { color: var(--cyan); font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+    .system-card h2 { margin: 8px 0 2px; color: var(--white); font-size: 23px; font-weight: 600; }
+    .system-card p { margin: 0; color: rgba(255,255,255,.68); font-size: 14px; }
+    .system-card dl { margin: 24px 0 0; display: grid; grid-template-columns: 1fr auto; gap: 10px 18px; font-size: 13px; }
+    .system-card dt { color: rgba(255,255,255,.62); }
+    .system-card dd { margin: 0; color: var(--white); font-weight: 600; text-align: right; }
+
+    .summary {
+      max-width: var(--max);
+      margin: -28px auto 0;
+      padding: 0 24px;
+      position: relative;
+      z-index: 2;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 18px 54px rgba(15,38,58,.11);
+      overflow: hidden;
+    }
+    .summary-card { padding: 25px 28px 24px; }
+    .summary-card + .summary-card { border-left: 1px solid var(--line); }
+    .summary-card .label { color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+    .summary-card .number { margin: 4px 0 2px; color: var(--blue); font-size: 36px; line-height: 1.15; font-weight: 660; letter-spacing: -.025em; }
+    .summary-card p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+
+    main { max-width: var(--max); margin: 0 auto; padding: 34px 24px 90px; }
+    section { padding: 68px 0 12px; scroll-margin-top: 66px; }
+    .section-head { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 26px; }
+    .section-number { color: var(--blue); font-size: 13px; font-weight: 750; padding-top: 8px; }
+    h2 { margin: 0; color: var(--ink); font-size: clamp(28px, 4vw, 42px); line-height: 1.12; letter-spacing: -.025em; font-weight: 580; }
+    h3 { margin: 28px 0 10px; color: var(--ink); font-size: 21px; line-height: 1.25; font-weight: 650; }
+    .rule { display: block; width: 56px; height: 3px; margin-top: 16px; background: linear-gradient(90deg, var(--blue), var(--cyan)); border-radius: 2px; }
+    .prose { max-width: var(--prose); margin-left: 60px; }
+    .prose p { margin: 0 0 16px; }
+    .lead { font-size: 20px; line-height: 1.52; color: #2b3b49; }
+    .note {
+      margin: 24px 0;
+      padding: 17px 20px;
+      border-left: 4px solid var(--blue);
+      background: #eef6fc;
+      border-radius: 0 9px 9px 0;
+      color: #334a5e;
+      font-size: 14px;
+    }
+
+    .workflow {
+      margin: 34px 0 28px 60px;
+      padding: 26px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      border-radius: 15px;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: 1fr 36px 1fr 36px 1.5fr 36px 1fr 36px 1fr;
+      align-items: stretch;
+      gap: 4px;
+    }
+    .flow-node {
+      min-height: 112px;
+      padding: 16px 13px;
+      border: 1px solid #cad5dd;
+      background: var(--white);
+      border-radius: 11px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
+    }
+    .flow-node strong { color: var(--blue); font-size: 14px; }
+    .flow-node span { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+    .flow-node.workers { background: #eaf6f7; border-color: #a9d8dc; }
+    .arrow { align-self: center; color: #6d7c89; text-align: center; font-size: 21px; }
+    .workflow figcaption { margin-top: 16px; color: var(--muted); font-size: 12.5px; }
+
+    .table-wrap { margin: 28px 0 28px 60px; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--white); }
+    th { padding: 13px 15px; background: #eaf1f6; color: #31495d; text-align: left; font-size: 11.5px; letter-spacing: .045em; text-transform: uppercase; }
+    td { padding: 14px 15px; border-top: 1px solid var(--line); vertical-align: top; }
+    tbody tr:nth-child(even) { background: #fafcfd; }
+    td strong { color: var(--ink); }
+
+    .packing {
+      margin: 32px 0 28px 60px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1.3fr);
+      gap: 18px;
+      align-items: center;
+    }
+    .tile-card, .host-card {
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      padding: 24px;
+      background: var(--white);
+      box-shadow: 0 8px 28px rgba(24,55,77,.07);
+    }
+    .tile-card h3, .host-card h3 { margin: 0 0 14px; font-size: 18px; }
+    .agent-pill { margin: 8px 0; padding: 9px 11px; background: #edf5fb; border-radius: 8px; color: #24465f; font-size: 13px; }
+    .host-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; }
+    .instance { padding: 12px; border: 1px solid #b8d7ea; background: #f0f8fd; border-radius: 9px; font-size: 12.5px; color: #284b64; }
+    .packing-arrow { color: var(--blue); text-align: center; font-size: 28px; }
+
+    .capacity-figure {
+      margin: 32px 0 28px 60px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      padding: 28px;
+      background: var(--soft);
+    }
+    .capacity-figure h3 { margin: 0 0 6px; }
+    .capacity-figure .sub { margin: 0 0 24px; color: var(--muted); font-size: 13px; }
+    .capacity-row { display: grid; grid-template-columns: 155px 1fr 90px; gap: 14px; align-items: center; margin: 14px 0; }
+    .capacity-row .name { font-size: 13px; font-weight: 650; }
+    .bar-track { height: 36px; border-radius: 8px; background: #dfe6ea; overflow: hidden; }
+    .bar { height: 100%; display: flex; align-items: center; padding-left: 12px; color: var(--white); font-size: 12px; font-weight: 650; }
+    .bar.pass { width: 71.4%; background: linear-gradient(90deg, var(--teal), #3d9a78); }
+    .bar.stop { width: 100%; background: linear-gradient(90deg, #c46555, var(--red)); }
+    .capacity-row .value { text-align: right; font-size: 15px; font-weight: 700; }
+    .pass-text { color: var(--green); }
+    .stop-text { color: var(--red); }
+    .capacity-figure figcaption { margin-top: 20px; color: var(--muted); font-size: 12.5px; }
+
+    .result-grid { margin: 30px 0 28px 60px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .result-card { padding: 22px; border: 1px solid var(--line); border-radius: 13px; background: var(--white); }
+    .result-card .type { color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+    .result-card .value { margin: 4px 0; color: var(--blue); font-size: 29px; font-weight: 680; letter-spacing: -.02em; }
+    .result-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+    .boundary-grid { margin: 28px 0 28px 60px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .boundary-card { padding: 23px; border-radius: 13px; }
+    .boundary-card.measured { background: var(--green-bg); border: 1px solid #b9dab9; }
+    .boundary-card.excluded { background: #f5f6f7; border: 1px solid var(--line); }
+    .boundary-card h3 { margin: 0 0 12px; font-size: 18px; }
+    .boundary-card ul { margin: 0; padding-left: 20px; }
+    .boundary-card li { margin: 7px 0; font-size: 13.5px; }
+
+    .spec-grid { margin: 28px 0 28px 60px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .spec-card { padding: 22px; border: 1px solid var(--line); border-radius: 13px; background: var(--soft); }
+    .spec-card h3 { margin: 0 0 12px; font-size: 17px; }
+    .spec-card dl { margin: 0; display: grid; grid-template-columns: 140px 1fr; gap: 8px 14px; font-size: 13px; }
+    .spec-card dt { color: var(--muted); }
+    .spec-card dd { margin: 0; color: var(--ink); font-weight: 560; overflow-wrap: anywhere; }
+
+    .references { max-width: var(--prose); margin: 30px 0 0 60px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .references h3 { margin-top: 0; }
+    .reference { display: grid; grid-template-columns: 34px 1fr; gap: 8px; margin: 10px 0; color: var(--muted); font-size: 12.5px; }
+    .reference .n { color: var(--blue); font-weight: 700; }
+
+    footer { color: rgba(255,255,255,.78); background: var(--navy); padding: 32px 24px; }
+    .footer-inner { max-width: var(--max); margin: 0 auto; }
+    .footer-brand { color: var(--white); font-weight: 650; }
+    .legal { margin-top: 10px; font-size: 11.5px; line-height: 1.5; }
+
+    @media (max-width: 860px) {
+      nav { display: none; }
+      .hero-inner { grid-template-columns: 1fr; }
+      .system-card { max-width: 520px; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .summary-card + .summary-card { border-left: 0; border-top: 1px solid var(--line); }
+      .prose, .workflow, .table-wrap, .packing, .capacity-figure, .result-grid, .boundary-grid, .spec-grid, .references { margin-left: 0; }
+      .flow { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); }
+      .packing { grid-template-columns: 1fr; }
+      .packing-arrow { transform: rotate(90deg); }
+      .result-grid, .boundary-grid, .spec-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .hero { padding-top: 56px; }
+      .section-head { grid-template-columns: 32px minmax(0, 1fr); gap: 8px; }
+      .prose { margin-left: 40px; }
+      .capacity-row { grid-template-columns: 1fr; gap: 6px; }
+      .capacity-row .value { text-align: left; }
+      .spec-card dl { grid-template-columns: 1fr; gap: 2px; }
+    }
+    @media print {
+      .topbar { position: static; }
+      nav { display: none; }
+      .hero { background: var(--navy); print-color-adjust: exact; }
+      .summary { margin-top: 18px; }
+      section { break-inside: avoid; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top">Dell <span>Technologies</span></a>
+      <nav aria-label="White paper sections">
+        <a href="#finding">Finding</a>
+        <a href="#definition">Agent definition</a>
+        <a href="#packing">Packing</a>
+        <a href="#results">Results</a>
+        <a href="#boundary">Boundary</a>
+        <a href="#reproducibility">Reproducibility</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="hero" id="top">
+    <div class="hero-inner">
+      <div>
+        <span class="eyebrow">White paper</span>
+        <h1><strong>50,000+ AI agents</strong> held live on one CPU server</h1>
+        <div class="hero-copy">
+          <p>One Dell&trade; PowerEdge&trade; R470 sustained 280 complete agent workflows per second while holding more than 50,000 agent sessions in flight at once. Every model call in every workflow waited like a real API call, with the wait computed from the tokens it actually carried.</p>
+          <p>The CPU ran the orchestration tier: prompt handling, tool dispatch, validation, persistence, and control-plane work. The processor reached 94% before the benchmark stopped, so the figure is the hardware's answer, not the software's.</p>
+        </div>
+        <p class="author">Authored by Vector Path Consulting</p>
+        <div class="chips">
+          <span class="chip">Workload version 15</span>
+          <span class="chip">Four orchestration instances</span>
+          <span class="chip">Modeled API-class model waits</span>
+          <span class="chip">Single Intel&reg; Xeon&reg; 6761P processor</span>
+        </div>
+      </div>
+      <aside class="system-card" aria-label="System under test">
+        <div class="kicker">System under test</div>
+        <h2>Dell PowerEdge R470</h2>
+        <p>Single-socket 1U server used as an agent orchestration host</p>
+        <dl>
+          <dt>Processor</dt><dd>Xeon 6761P</dd>
+          <dt>CPU cores</dt><dd>64</dd>
+          <dt>Hardware threads</dt><dd>128</dd>
+          <dt>Memory</dt><dd>1 TB DDR5</dd>
+          <dt>Accelerator</dt><dd>None</dd>
+        </dl>
+      </aside>
+    </div>
+  </div>
+
+  <div class="summary" aria-label="Benchmark summary">
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="label">Measured sustained rate</div>
+        <div class="number">280.4/s</div>
+        <p>Complete workflows sustained across four instances, with realistic model-call waits, before the host saturated.</p>
+      </div>
+      <div class="summary-card">
+        <div class="label">Agents in residence</div>
+        <div class="number">53,600</div>
+        <p>Sessions served at the sustained rate; the server measurably carried up to 80,000 workflows in flight at its peak.</p>
+      </div>
+      <div class="summary-card">
+        <div class="label">Service promise held</div>
+        <div class="number">&le;20 min</div>
+        <p>Queued-tier deadline: at least 95% of every workflow type on time at 95% confidence, jointly.</p>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <section id="finding">
+      <div class="section-head">
+        <span class="section-number">01</span>
+        <h2>The server held 50,000 agents while completing 280 workflows per second<span class="rule"></span></h2>
+      </div>
+      <div class="prose">
+        <p class="lead">The four-instance fleet sustained 280.4 complete workflows per second while completions kept pace with arrivals and every model call waited like a real API call. At that rate the server carried about 53,600 agent sessions simultaneously, and every workflow type stayed inside the queued-tier promise: at least 95% finishing within 20 minutes, at 95% confidence, for all three types jointly.</p>
+        <p>The schedule kept doubling the offered rate until the server itself called time: host CPU held at about 94% while the bounded queue reached its 20,000-per-instance safety cap with roughly 80,000 workflows in flight across the box. The benchmark therefore reports 280.4 workflows per second as the demonstrated sustainable rate, judged offline from the per-unit evidence records.</p>
+        <p>The session count follows from the rate and the cycle: at 280.4 workflows per second, with workflows running half a minute to several minutes plus a three-second pause, about 53,600 sessions are being served at any moment. Holding sessions is what agents mostly do while models think, and holding them is not free: with instant model responses the same server processed 453.6 workflows per second, so carrying fifty thousand live workflow states costs roughly a third of the orchestration rate. Both facts are measured; the pair is the honest sizing picture.</p>
+      </div>
+    </section>
+
+    <section id="definition">
+      <div class="section-head">
+        <span class="section-number">02</span>
+        <h2>One agent repeatedly completes a defined workflow<span class="rule"></span></h2>
+      </div>
+      <div class="prose">
+        <p class="lead">An agent session represents one user or process that submits a job, receives the result, pauses for three seconds, and submits another job. A workflow is one completed job. The benchmark keeps every workflow within a fixed work contract so higher load does not quietly reduce the work performed.</p>
+        <p>Each workflow uses a planner, three specialist workers, synthesis, validation, and durable records. One completed unit contains three subtasks, ten model interactions, seven validation checks, and three tool records. Temporary workers are subagents inside the workflow and do not count as separate sessions.</p>
+        <p><strong>Every one of the ten model interactions waits like a real API call.</strong> The stand-in that answers them computes each call's wait from the tokens it actually carries, using three published serving-tier parameters: time to first token (500 ms), generation speed (100 tokens per second), and prompt-reading speed (8,000 tokens per second). The planner waits longest because it re-reads the whole accumulated conversation on every turn, several seconds a call and growing. Workers wait a few seconds for their assigned slice. Verifier calls wait the least, about a second, because verdicts are short. Nothing is hand-assigned per stage; each wait falls out of the payload, exactly as it would against a production model tier. Tool calls carry their own separate cost: a real durable database write plus 50 to 150 ms of simulated backend latency.</p>
+      </div>
+
+      <figure class="workflow">
+        <div class="flow" aria-label="Workflow from task arrival through durable result">
+          <div class="flow-node"><strong>Task</strong><span>One fixed-size job arrives</span></div>
+          <div class="arrow" aria-hidden="true">&rarr;</div>
+          <div class="flow-node"><strong>Planner</strong><span>Creates three specialist assignments</span></div>
+          <div class="arrow" aria-hidden="true">&rarr;</div>
+          <div class="flow-node workers"><strong>Three workers</strong><span>Read assigned context, call the record tool, and draft their sections</span></div>
+          <div class="arrow" aria-hidden="true">&rarr;</div>
+          <div class="flow-node"><strong>Synthesis</strong><span>Combines the worker results</span></div>
+          <div class="arrow" aria-hidden="true">&rarr;</div>
+          <div class="flow-node"><strong>Checked result</strong><span>Validations and records are complete</span></div>
+        </div>
+        <figcaption>Every workflow follows the same structural contract, and every model interaction in it waits per its payload. The three workflow types differ mainly in the amount of source context they carry, which is why their total times differ so much.</figcaption>
+      </figure>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Workflow</th><th>Job performed</th><th>Context profile</th><th>Fixed work</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Research brief</strong></td><td>Builds a recommendation from a large source packet</td><td>Heavy, about 24,000 input tokens of seeded retrieval; ~5 minutes per workflow under the modeled tier</td><td>3 subtasks, 10 model interactions, 7 validations, 3 tool records</td></tr>
+            <tr><td><strong>Comparison</strong></td><td>Compares technical options and recommends one</td><td>Medium, about 7,500 input tokens; ~2.5 minutes per workflow</td><td>3 subtasks, 10 model interactions, 7 validations, 3 tool records</td></tr>
+            <tr><td><strong>Digest</strong></td><td>Ranks short operational items and writes a digest</td><td>Light, compact source prompt; ~30 seconds per workflow</td><td>3 subtasks, 10 model interactions, 7 validations, 3 tool records</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="packing">
+      <div class="section-head">
+        <span class="section-number">03</span>
+        <h2>The benchmark packed three workflow types across four instances<span class="rule"></span></h2>
+      </div>
+      <div class="prose">
+        <p class="lead">One load unit contains one research brief, one comparison, and one digest. Adding complete units preserves the same mix at every rate. The approach resembles adding equal groups of marbles to a jar until the jar can no longer accept them at the required pace.</p>
+        <p>Four complete orchestration instances shared the server. Each instance had one control process, 28 executor processes, one database, and one deterministic model-response router. Splitting the control work across four instances kept one process from limiting the entire server.</p>
+      </div>
+
+      <div class="packing" aria-label="One workload tile replicated across four orchestration instances">
+        <div class="tile-card">
+          <h3>One workload tile</h3>
+          <div class="agent-pill">1 research brief</div>
+          <div class="agent-pill">1 technical comparison</div>
+          <div class="agent-pill">1 operational digest</div>
+        </div>
+        <div class="packing-arrow" aria-hidden="true">&rarr;</div>
+        <div class="host-card">
+          <h3>One server</h3>
+          <div class="host-grid">
+            <div class="instance"><strong>Instance 1</strong><br>28 executors</div>
+            <div class="instance"><strong>Instance 2</strong><br>28 executors</div>
+            <div class="instance"><strong>Instance 3</strong><br>28 executors</div>
+            <div class="instance"><strong>Instance 4</strong><br>28 executors</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>The load generator scheduled new workflows independently of earlier completions, doubling the offered rate level by level, with each level held for at least one and a half times the slowest workflow seen so far - several minutes once the research briefs appeared. A rate counted only when completed work kept pace with new arrivals and every workflow type met its deadline.</p>
+        <p>All of that judging happens after the run, from the per-unit evidence records; the run itself keeps only the stops that protect the server. The reader needs to know that all three workflow types had to pass together, and that a saturated processor or an overflowing queue ended the search.</p>
+      </div>
+    </section>
+
+    <section id="results">
+      <div class="section-head">
+        <span class="section-number">04</span>
+        <h2>The demonstrated rate remained responsive until the next load step<span class="rule"></span></h2>
+      </div>
+
+      <figure class="capacity-figure">
+        <h3>Box-wide workflow rate</h3>
+        <p class="sub">The doubling ramp leaves the exact boundary between the last sustained rate and the level that overwhelmed the queue.</p>
+        <div class="capacity-row">
+          <div class="name">Sustained level</div>
+          <div class="bar-track"><div class="bar pass">Completions kept pace</div></div>
+          <div class="value pass-text">280.4/s</div>
+        </div>
+        <div class="capacity-row">
+          <div class="name">Next offered level</div>
+          <div class="bar-track"><div class="bar stop">94% CPU, queue hit its cap</div></div>
+          <div class="value stop-text">~560/s</div>
+        </div>
+        <figcaption>The server demonstrated 280.4 complete workflows per second with realistic model waits. The schedule's later levels drove the processor to 94% and filled the bounded queue to its 80,000-workflow safety cap.</figcaption>
+      </figure>
+
+      <div class="result-grid">
+        <div class="result-card">
+          <div class="type">Measured</div>
+          <div class="value">280.4 workflows/s</div>
+          <p>Combined confirmed rate across the four orchestration instances, with per-call model waits.</p>
+        </div>
+        <div class="result-card">
+          <div class="type">Calculated</div>
+          <div class="value">1.0 million/hour</div>
+          <p>The demonstrated per-second rate expressed over one hour.</p>
+        </div>
+        <div class="result-card">
+          <div class="type">Calculated</div>
+          <div class="value">53,604 sessions</div>
+          <p>Rate multiplied by measured workflow time plus the pause; the server measurably held up to 80,000 in flight.</p>
+        </div>
+        <div class="result-card">
+          <div class="type">Measured</div>
+          <div class="value">405,330 workflows</div>
+          <p>Valid workflows completed across the four-instance sweep with zero contract violations.</p>
+        </div>
+      </div>
+
+      <div class="prose">
+        <p>At the demonstrated rate, the four instances sustained nearly identical confirmed rates of about 70.1 workflows per second each. The 95th-percentile workflow time at that rate was about 8.8 minutes, comfortably inside the 20-minute queued-tier promise.</p>
+        <p>Past the sustained rate, arrivals outran completions: the processor held near 94% while the bounded queue climbed to its safety cap of 20,000 workflows per instance. The host reached a hardware boundary - most of the box was spent executing workflows and carrying the resident state of tens of thousands more.</p>
+      </div>
+    </section>
+
+    <section id="meaning">
+      <div class="section-head">
+        <span class="section-number">05</span>
+        <h2>The result measures orchestration capacity<span class="rule"></span></h2>
+      </div>
+      <div class="prose">
+        <p class="lead">The CPU performed the work around model calls - building prompts, dispatching subagents, routing requests, validating outputs, writing durable records, relaying events, enforcing budgets - and carried the live state of every waiting session. The benchmark measures the agent host under realistic model timing rather than model generation itself.</p>
+        <p>A deterministic stand-in returned the planner, worker, synthesis, and judge responses through the production request path, with each response delayed per its payload as described in section 2. Two useful totals fall out of the records: a completed workflow moved about 107,000 prompt tokens and 16,000 generated tokens through its ten calls, so at the sustained rate the model tier behind this host would be absorbing about 30 million prompt tokens and generating about 4.6 million tokens every second - roughly 46,000 concurrent generation streams, which is consistent with the 50,000-session residency. Sizing the inference tier for that demand is the companion question to this paper.</p>
+        <p>One finding is new and only a realistic run could produce it: residency is not free. With instant model responses this same server processed 453.6 workflows per second; carrying fifty thousand live workflow states cost roughly a third of that rate. Sizing from workflow rate alone, without accounting for resident-session state, overestimates a busy agent host.</p>
+      </div>
+    </section>
+
+    <section id="boundary">
+      <div class="section-head">
+        <span class="section-number">06</span>
+        <h2>The capacity figure applies to a defined test boundary<span class="rule"></span></h2>
+      </div>
+      <div class="prose">
+        <p class="lead">The benchmark establishes a practical starting point for this server and orchestration stack. The result does not predict every production agent workload. Prompt size, model latency, tool behavior, validation policy, persistence, and operating headroom can all move the boundary.</p>
+      </div>
+
+      <div class="boundary-grid">
+        <div class="boundary-card measured">
+          <h3>Included in the measurement</h3>
+          <ul>
+            <li>One Dell PowerEdge R470 with one Xeon 6761P processor</li>
+            <li>Four complete orchestration instances with 28 executors each</li>
+            <li>Version-15 mix of heavy, medium, and light context workflows</li>
+            <li>Planning, three workers, synthesis, validation, and durable tool records</li>
+            <li>Modeled API-class model waits, computed per call from actual payloads (500 ms first token, 100 tokens/s generation, 8,000 tokens/s prompt reading)</li>
+            <li>Controlled tool latency and durable tool records</li>
+          </ul>
+        </div>
+        <div class="boundary-card excluded">
+          <h3>Outside the measurement</h3>
+          <ul>
+            <li>Real model generation quality, provider throttling, and network jitter (latency is modeled; provider capacity is not)</li>
+            <li>Production third-party tool services</li>
+            <li>Multi-node coordination and failover</li>
+            <li>Long-duration soak and recovery after overload</li>
+            <li>The exact maximum between the sustained 280.4 and the next offered level</li>
+          </ul>
+        </div>
+      </div>
+      <div class="prose">
+        <p class="note"><strong>How to use the result.</strong> Treat 280.4 workflows per second and roughly 50,000 resident sessions as the demonstrated capacity for context-heavy agents at API-class model speeds, and 453.6 workflows per second as the orchestration-only ceiling with instant responses. Apply production headroom, then validate the intended model and tool mix before deployment.</p>
+      </div>
+    </section>
+
+    <section id="reproducibility">
+      <div class="section-head">
+        <span class="section-number">07</span>
+        <h2>The result can be traced to versioned evidence<span class="rule"></span></h2>
+      </div>
+      <div class="prose">
+        <p class="lead">Every submitted workflow produced an evidence record with its type, arrival time, completion time, outcome, offered rate, and host telemetry. The versioned sweep judge can recompute the demonstrated rate and session equivalent from those records.</p>
+      </div>
+
+      <div class="spec-grid">
+        <div class="spec-card">
+          <h3>System and software</h3>
+          <dl>
+            <dt>Server</dt><dd>Dell PowerEdge R470</dd>
+            <dt>Processor</dt><dd>Intel Xeon 6761P, 64 cores and 128 threads</dd>
+            <dt>Memory</dt><dd>1 TB DDR5</dd>
+            <dt>Runtime</dt><dd>Ubuntu, Linux 6.8, Python 3.12.13</dd>
+            <dt>Database</dt><dd>PostgreSQL 16, one database per instance</dd>
+          </dl>
+        </div>
+        <div class="spec-card">
+          <h3>Benchmark record</h3>
+          <dl>
+            <dt>Workload</dt><dd>Version 15</dd>
+            <dt>Fingerprint</dt><dd class="mono">602e784ec7c8</dd>
+            <dt>Run code</dt><dd><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/commit/95aeac9">95aeac9</a></dd>
+            <dt>Evidence commit</dt><dd><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/commit/593d691">593d691</a></dd>
+            <dt>Rate judge</dt><dd class="mono">sweep-1</dd>
+            <dt>Serving model</dt><dd class="mono">ttft 500ms / decode 100 tps / prefill 8000 tps</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="references">
+        <h3>References</h3>
+        <div class="reference"><span class="n">[1]</span><span><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/blob/cbe9134/docs/benchmark-methodology.md">Agent capacity benchmark methodology</a>. Definitions, evidence rules, workload boundaries, and throughput result.</span></div>
+        <div class="reference"><span class="n">[2]</span><span><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/blob/cbe9134/config/capacity_scenarios.yaml">Version-15 workload definition</a>. Workflow mix, context profiles, work contracts, and arrival schedule.</span></div>
+        <div class="reference"><span class="n">[3]</span><span><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/tree/a3af8ad/data/capacity">Versioned evidence ledgers and run results</a>. Four-instance open-loop sweep with modeled serving waits, September 2, 2026.</span></div>
+        <div class="reference"><span class="n">[4]</span><span><a href="https://www.dell.com/en-us/shop/dell-poweredge-servers/poweredge-r470-rack-server/spd/poweredge-r470">Dell PowerEdge R470</a> and <a href="https://www.intel.com/content/www/us/en/products/details/processors/xeon.html">Intel Xeon 6 processors</a>.</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-brand">Dell Technologies</div>
+      <div class="legal">&copy; 2026 Dell Inc. or its subsidiaries. All rights reserved. Dell Technologies, Dell, and other trademarks are trademarks of Dell Inc. or its subsidiaries. Intel, the Intel logo, and Xeon are trademarks of Intel Corporation or its subsidiaries. Other trademarks may be trademarks of their respective owners. Results are based on testing of a specific configuration. Individual results will vary.</div>
+    </div>
+  </footer>
+</body>
+</html>
