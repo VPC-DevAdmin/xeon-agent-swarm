@@ -24,6 +24,14 @@ start_tei() {
 start_tei tei-embed 8880 sentence-transformers/all-MiniLM-L6-v2
 start_tei tei-rerank 8881 cross-encoder/ms-marco-MiniLM-L-6-v2
 
+# The retrieval tier is SIZED, like any deployed service: unbounded TEI
+# claimed half the host at 25 workflows/s and starved the orchestrator
+# (98.7% cpu verdict at the second rate level). Bounded, it queues at its
+# own allocation and the measurement shows a sized retrieval tier's knee.
+docker update --cpus 8 tei-embed >/dev/null
+docker update --cpus 32 tei-rerank >/dev/null
+echo "retrieval allocations: embed 8 cpus, rerank 32 cpus"
+
 for port in 8880 8881; do
   for _ in $(seq 1 120); do
     curl -sf "localhost:$port/health" >/dev/null 2>&1 && break

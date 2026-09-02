@@ -168,7 +168,7 @@ def lexical_rerank(query: str, candidates: list[int],
     terms = set(re.findall(r"[a-z0-9]+", query.lower()))
     scored = []
     con = _con()
-    for cid in candidates[:50]:
+    for cid in candidates[:32]:
         row = con.execute("SELECT body FROM chunks WHERE id=?",
                           (cid,)).fetchone()
         if not row:
@@ -233,9 +233,11 @@ async def cross_rerank(query: str, candidates: list[int],
     url = os.getenv("CAPACITY_RERANK_URL")
     if not url:
         return None
+    # Depth 32: production-typical, and exactly one TEI batch. Depth 50
+    # cost the reranker ~49% of a 128-thread host at 25 workflows/s.
     con = _con()
     ids, texts = [], []
-    for cid in candidates[:50]:
+    for cid in candidates[:32]:
         row = con.execute("SELECT body FROM chunks WHERE id=?",
                           (cid,)).fetchone()
         if row:
