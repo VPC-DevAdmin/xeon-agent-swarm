@@ -143,7 +143,7 @@ def judge_evidence(path: str | Path) -> dict:
     }
 
 
-SWEEP_VERSION = "sweep-1"
+SWEEP_VERSION = "sweep-2"
 
 
 def _pct(xs: list[float], q: float) -> float | None:
@@ -182,6 +182,7 @@ def sweep(path: str | Path, window_s: float = 30.0,
     ladder = service_ladder()
     t0 = units[0][0]
     t1 = max(u[0] for u in units)
+    subs = [u[0] for u in units]
     ends = sorted(u[1] for u in units if u[1] is not None)
 
     windows = []
@@ -193,12 +194,27 @@ def sweep(path: str | Path, window_s: float = 30.0,
             arrival_rate = len(win) / window_s
             completions = bisect.bisect_left(ends, hi) - bisect.bisect_left(ends, t)
             lats = [u[4] for u in win if u[3] and u[4] is not None]
+            # Steady state is judged by BACKLOG GROWTH, not same-window
+            # completion matching: with long workflows, completions in a
+            # window answer the PREVIOUS window's arrivals, so a climbing
+            # schedule always shows a same-window deficit equal to one
+            # latency of growth (sweep-1 failed every window of a healthy
+            # run this way). Backlog delta - arrivals to date minus
+            # completions to date, changed across this window - measures
+            # keeping-up directly, at any latency.
+            arrived_before = bisect.bisect_left(subs, t)
+            arrived_by_end = bisect.bisect_left(subs, hi)
+            done_before = bisect.bisect_left(ends, t)
+            done_by_end = bisect.bisect_left(ends, hi)
+            backlog_delta = ((arrived_by_end - done_by_end)
+                             - (arrived_before - done_before))
             row = {"t": round(t - t0, 1),
                    "rate": round(arrival_rate, 2),
                    "completion_rate": round(completions / window_s, 2),
+                   "backlog_delta": backlog_delta,
                    "p50_ms": _pct(lats, 50), "p95_ms": _pct(lats, 95),
                    "tiers_ok": {}}
-            keeps_up = completions >= 0.95 * len(win)
+            keeps_up = backlog_delta <= max(5, int(0.05 * len(win)))
             for tier, dl in ladder.items():
                 if dl is None:
                     continue
