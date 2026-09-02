@@ -243,11 +243,18 @@ async def cross_rerank(query: str, candidates: list[int],
             texts.append(row[0])
     if not texts:
         return []
-    r = await _http().post(f"{url}/rerank",
-                           json={"query": query, "texts": texts})
-    r.raise_for_status()
-    ranked = sorted(r.json(), key=lambda x: -x["score"])
-    return [ids[item["index"]] for item in ranked[:top]]
+    # TEI caps client batches at 32; score in slices and merge.
+    scored: list[tuple[float, int]] = []
+    for start in range(0, len(texts), 32):
+        r = await _http().post(
+            f"{url}/rerank",
+            json={"query": query, "texts": texts[start:start + 32],
+                  "truncate": True})
+        r.raise_for_status()
+        for item in r.json():
+            scored.append((float(item["score"]), ids[start + item["index"]]))
+    scored.sort(reverse=True)
+    return [cid for _s, cid in scored[:top]]
 
 
 async def retrieve(query: str, *, budget_words: int = 6000) -> dict:
