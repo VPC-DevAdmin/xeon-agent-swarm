@@ -72,18 +72,33 @@ deliberate revisions and must not be cited:
   (share of packed chunks from the query's seeded topic) per retrieval as
   evidence that the pipeline is doing what a production pipeline does, and
   no verdict depends on it.
-- **The retrieval tier is sized and admission-controlled.** The embedder
-  and reranker are pinned to cpusets (8 and 32 cores) with matching thread
-  limits, not CPU quotas (quotas on a 128-core host throttle-thrash: a
-  128-thread process burns its quota in milliseconds and sleeps). The
-  reranker is quantized to INT8 and served through ONNX Runtime, where the
-  int8 GEMMs use the Xeon's AMX/VNNI units: 1,544 pairs/s at saturation on
-  the 32-core pin versus 530 for the FP32 TEI container. Each executor
-  admits at most two reranker calls at a time
+- **The retrieval tier is sized by physical core and admission-controlled.**
+  The box is 64 physical cores with two SMT threads each and an irregular
+  sibling map, so allocations are derived from the topology, never written
+  as logical ranges (a range such as "56-127" handed the reranker eight
+  whole cores plus 48 half-cores whose siblings ran executors). The
+  reranker is quantized to INT8 and served through ONNX Runtime with
+  dynamic batching (one inference thread per process, up to 128 pairs per
+  run), where the int8 GEMMs use the Xeon's AMX/VNNI units; its measured
+  cost is about one physical core per three rerank calls per second
+  (16 pairs of ~125 tokens) whatever the worker/thread split, and two
+  runtime threads on one core's siblings halve each other, so the runtime
+  gets one thread per physical core. The reference allocation is 40 cores
+  for the reranker, 4 for the embedder, and the remaining 20 whole cores
+  for the orchestrator instances, executors, stand-ins, and databases,
+  which are pinned there so nothing shares AMX units with the tier. Pinning
+  is by cpuset, not quota (quotas on a 128-thread host throttle-thrash).
+  Each executor admits at most four reranker calls at a time
   (CAPACITY_RERANK_CONCURRENCY) and backs off exponentially on 429/503, so
-  a saturated tier produces queueing, which the judge sees as latency, not
+  a saturated tier produces queueing that the judge sees as latency, not
   errors. The tier's CPU is attributed to the box totals like every other
-  component.
+  component, following process trees.
+- **Retrieval stage timings and the generator's receipt are evidence.**
+  Every executor flushes per-stage retrieval percentiles (embed and rerank
+  gate wait and call, fuse, pack) every 30 s, and every ledger sample
+  carries the arrival generator's own receipt (arrivals shed by its stall
+  clamp, ticks fired late). A plateau whose achieved arrival rate is under
+  95% of the offered rate is generator-limited and sustains no tier.
 - **Context is re-carried, not cached.** Each model call re-sends its full
   context and the serving model charges prefill for all of it. A deployed
   serving tier with prompt caching would charge less for the repeated
