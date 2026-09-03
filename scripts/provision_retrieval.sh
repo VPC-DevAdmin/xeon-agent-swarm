@@ -13,16 +13,62 @@ VOL=xeon-agent-swarm_tei_data
 RERANK_SRC=cross-encoder/ms-marco-MiniLM-L-6-v2
 MODEL_ROOT=${XEON_MODEL_ROOT:-$R/data/local-models}
 INT8_DIR=$MODEL_ROOT/ms-marco-int8
-# Allocation, v16.1 series 7102 -> 7103: at 32 cores the reranker pin ran
-# flat out (26.5% of host = 34 cores of retrieval) at 32 workflows/s with
-# the HOST at 45%, so the allocation, not the box, set the knee. Retrieval
-# costs ~1.06 cores per workflow/s and the rest of the box ~0.75, so 72
-# reranker cores + 8 embedder cores balance against the remaining 48 near
-# 60-65 workflows/s, where the host itself saturates.
-RERANK_CPUS=${RERANK_CPUS:-56-127}
-RERANK_WORKERS=${RERANK_WORKERS:-9}
+# Allocation is by WHOLE PHYSICAL CORE, read from the topology. The box is
+# 64 cores x 2 SMT threads with an irregular sibling map (cpu0<->72,
+# cpu56<->120), and a cpuset written as a logical range ("56-127") handed
+# the reranker 8 whole cores plus 48 half-cores whose siblings ran
+# executors. Measured on whole cores (series 7104 and the placement
+# benchmarks): the INT8 reranker costs ~1 physical core per 3 rerank
+# calls/s (16 pairs, ~125 tokens each) however workers and threads are
+# split, and two runtime threads on one core's SMT siblings halve each
+# other, so the runtime gets ONE thread per physical core (the first
+# sibling of each) and the second siblings stay idle. The rest of the box
+# measured ~0.4 logical cpu per workflow/s; with retrieval at 1.33 rerank
+# calls per workflow, 40 reranker cores (~90 workflows/s) and 20 cores for
+# everything else (~100 workflows/s) meet where the host itself is full.
+RERANK_PHYS_CORES=${RERANK_PHYS_CORES:-40}
+EMBED_PHYS_CORES=${EMBED_PHYS_CORES:-4}
+RERANK_WORKERS=${RERANK_WORKERS:-5}
 RERANK_THREADS=${RERANK_THREADS:-8}
-EMBED_CPUS=${EMBED_CPUS:-48-55}
+phys_cpuset() {  # $1 = how many physical cores, $2 = skip this many from the top, $3 = first|all siblings
+  python3 - "$1" "$2" "$3" <<'PY'
+import sys, glob
+n, skip, which = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
+cores = {}
+for p in glob.glob("/sys/devices/system/cpu/cpu[0-9]*/topology/core_id"):
+    cpu = int(p.split("/")[5][3:]); cid = int(open(p).read())
+    cores.setdefault(cid, set()).add(cpu)
+order = sorted(cores)
+chosen = order[len(order) - skip - n: len(order) - skip]
+if which == "first":
+    print(",".join(str(min(cores[cid])) for cid in chosen))
+else:
+    print(",".join(str(c) for cid in chosen for c in sorted(cores[cid])))
+PY
+}
+RERANK_CPUS=${RERANK_CPUS:-$(phys_cpuset "$RERANK_PHYS_CORES" 0 first)}
+RERANK_CPUS_ALL=$(phys_cpuset "$RERANK_PHYS_CORES" 0 all)
+EMBED_CPUS=${EMBED_CPUS:-$(phys_cpuset "$EMBED_PHYS_CORES" "$RERANK_PHYS_CORES" all)}
+# Everything else (instances, executors, mocks, databases) gets the
+# remaining whole cores, published for the fleet script to pin to, so no
+# executor shares a physical core - and its AMX units - with the tier.
+REST_CPUS=${REST_CPUS:-$(python3 - "$RERANK_CPUS_ALL" "$EMBED_CPUS" <<'PY'
+import sys, os
+taken = set()
+for arg in sys.argv[1:]:
+    for part in arg.split(","):
+        if "-" in part:
+            a, b = part.split("-"); taken.update(range(int(a), int(b) + 1))
+        elif part:
+            taken.add(int(part))
+ncpu = os.cpu_count() or 128
+print(",".join(str(c) for c in range(ncpu) if c not in taken))
+PY
+)}
+mkdir -p "$R/data/capacity/retrieval"
+printf 'RERANK_CPUS=%s\nEMBED_CPUS=%s\nREST_CPUS=%s\nRERANK_WORKERS=%s\nRERANK_THREADS=%s\n' \
+  "$RERANK_CPUS" "$EMBED_CPUS" "$REST_CPUS" "$RERANK_WORKERS" "$RERANK_THREADS" \
+  > "$R/data/capacity/retrieval/allocation.env"
 
 start_tei() {
   local name=$1 port=$2 model=$3

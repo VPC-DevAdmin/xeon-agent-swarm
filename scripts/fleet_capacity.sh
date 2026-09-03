@@ -80,6 +80,15 @@ done
 # v16: retrieval stack (TEI embedder + reranker containers, corpus store)
 # provisioned before any executor needs it.
 "$R/scripts/provision_retrieval.sh"
+# The tier publishes the box's remaining whole cores; instances and their
+# executors are pinned there so the tier's cores are its own.
+REST_CPUS=""
+if [ -f "$R/data/capacity/retrieval/allocation.env" ]; then
+  REST_CPUS=$(grep ^REST_CPUS= "$R/data/capacity/retrieval/allocation.env" | cut -d= -f2)
+fi
+PIN=""
+[ -n "$REST_CPUS" ] && PIN="taskset -c $REST_CPUS"
+echo "instances pinned to: ${REST_CPUS:-all cpus}"
 # Same hygiene for stale INSTANCES and their orphaned executors: a survivor
 # on an instance port swallows the new start request with old env, and the
 # new instance dies on bind. Graceful first, then hard.
@@ -105,7 +114,7 @@ for i in $(seq 1 "$K"); do
       CAPACITY_EMBED_URL="${CAPACITY_EMBED_URL:-http://127.0.0.1:8880}" \
       CAPACITY_RERANK_URL="${CAPACITY_RERANK_URL:-http://127.0.0.1:8881}" \
       SCHEDULER_ENABLED=0 \
-      nohup .venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 \
+      nohup $PIN .venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 \
         --port $PORT --log-level warning \
         > "data/capacity/fleet$i/instance.log" 2>&1 &
   PIDS+=($!)

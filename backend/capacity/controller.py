@@ -862,13 +862,19 @@ class CapacityTest:
                 if kv_misses < 3:
                     s["kv_pct"] = await sample_kv_pct(LOCAL_BASE)
                     kv_misses = 0 if s["kv_pct"] is not None else kv_misses + 1
+            # The generator's receipt rides every sample: arrivals shed by
+            # the stall clamp, ticks that fired >100 ms late, worst tick.
+            s["gen_shed"] = round(getattr(self, "_gen_shed", 0.0), 2)
+            s["gen_late_ticks"] = getattr(self, "_gen_late_ticks", 0)
+            s["gen_late_max"] = round(getattr(self, "_gen_late_max", 0.0), 3)
             self.samples.append(s)
             if self._evidence:
                 self._evidence.write("sample", {
                     k: s.get(k) for k in
                     ("ts", "users", "in_flight", "p95_ms", "err_rate",
                      "rpm", "cpu_pct", "cpu_by", "oldest_inflight_s",
-                     "mem_gb", "mem_pct")})
+                     "mem_gb", "mem_pct", "gen_shed", "gen_late_ticks",
+                     "gen_late_max")})
             await asyncio.sleep(self.cfg["sample_interval_s"])
 
     def _admit(self, sid: str) -> int:
@@ -2253,6 +2259,9 @@ class CapacityTest:
         bounded queue refusing it is the host's problem, not the generator's."""
         TICK = 0.02
         idx = 0
+        self._gen_late_max = 0.0
+        self._gen_late_ticks = 0
+        self._gen_shed = 0.0
         rotation = self.tile_assignment or self.scenario_ids
         last = time.monotonic()
         due = 0.0
@@ -2271,7 +2280,17 @@ class CapacityTest:
             # instances at 93% of a 2/s schedule. Two pending arrivals is
             # not a burst; replaying long stalls still is, and stays
             # clamped.
-            due = min(due + (now - last) * rate, max(0.5 * rate, 2.0))
+            # The generator's own receipt: how late each tick fired and
+            # how many arrivals the clamp shed, sampled into the ledger,
+            # so a shortfall can be read as loop stalls rather than guessed.
+            tick_late = (now - last) - TICK
+            if tick_late > self._gen_late_max:
+                self._gen_late_max = tick_late
+            if tick_late > 0.1:
+                self._gen_late_ticks += 1
+            unclamped = due + (now - last) * rate
+            due = min(unclamped, max(0.5 * rate, 2.0))
+            self._gen_shed += unclamped - due
             last = now
             while due >= 1.0 and not self._stop.is_set():
                 due -= 1.0

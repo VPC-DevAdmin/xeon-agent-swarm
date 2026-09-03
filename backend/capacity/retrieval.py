@@ -219,8 +219,11 @@ def _gate() -> asyncio.Semaphore:
     demand and turns the knee into a cliff of failures."""
     global _tier_gate
     if _tier_gate is None:
+        # 4 per executor (448 box-wide against a 9 x 96 server queue):
+        # at 2 the gate itself queued retrievals for 40 s at 20
+        # workflows/s per instance while the tier answered in 3 s.
         _tier_gate = asyncio.Semaphore(
-            int(os.getenv("CAPACITY_RERANK_CONCURRENCY", "2") or 2))
+            int(os.getenv("CAPACITY_RERANK_CONCURRENCY", "4") or 4))
     return _tier_gate
 
 
