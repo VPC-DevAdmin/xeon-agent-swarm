@@ -1,8 +1,8 @@
 # Agent capacity benchmark methodology
 
 The methodology of record is the living document maintained alongside the
-benchmark, currently at workload version 16.1 with offline judge rules
-post-2 (capability) and sweep-2 (throughput). It supersedes the archived v8
+benchmark, currently at workload version 17 with offline judge rules post-2
+(capability), sweep-2 (rate windows), and plateau-1 (held rates). It supersedes the archived v8
 text (docs/archive/benchmark-methodology-v8.md), which predates several
 deliberate revisions and must not be cited:
 
@@ -65,6 +65,51 @@ deliberate revisions and must not be cited:
   ms-marco-MiniLM-L-6-v2 on ONNX Runtime), and packing of the winners with
   [chunk-N] citations into the worker's context. Workers cite the chunk
   ids they were given, so grounding is checkable.
+- **Workload v17: execution joins retrieval, and the tile widens to the
+  long tail.** Two archetypes are added. The *data analyst* (heavy
+  execution) runs a sandboxed data job in each of its three workers and
+  records (13 calls, 7 validations, 6 tool calls). The *task agent*
+  (short-lived) plans ONE general-purpose worker that writes one record
+  and answers: 4 calls, 3 validations, 1 tool call, about 10 s; it stands
+  for the triggers, routing, and extraction agents that are most of a
+  deployment, and it is weighted twice in the tile as a declared
+  assumption. The *comparison* gains one light job in its analysis
+  worker (12 calls, 5 tool calls). Execution therefore appears in graded
+  amounts (analyst 3 heavy, comparison 1 light, others none) exactly as
+  retrieval does (3 / 1 / 0), so every cost term is identifiable from the
+  plateau data and the certified rate is reported with a per-component
+  cost table (scripts/cost_table.py) and the tile weights as an input.
+- **The sandbox is a real, bounded tool.** A job is a fresh isolated
+  interpreter (python -I -S) under prlimit CPU, address-space, and file
+  limits, with no network (a network namespace via sudo unshare, the
+  isolation mode fingerprinted), single-threaded math, a seeded
+  deterministic dataset, and a few hundred characters of results back
+  into the worker's context. The job is an analyst's tool run over one
+  day of payment events: join, bucket, sort-based per-merchant
+  percentiles, rolling load, tail quantiles, z-scored anomalies, a second
+  pass. Two declared sizes, calibrated on the reference Xeon and
+  re-measured under load: light ~0.3 core-seconds (450k rows), heavy
+  ~1.4 core-seconds (3.3M rows), interpreter start included. It is not a
+  drain: it is representative work with a stated size, the same standard
+  as rerank depth.
+- **Capacity and service level are different numbers, reported
+  together.** The cliff is where arrivals outrun completions (backlog
+  growth, generator receipt), and it does not depend on any deadline; a
+  tier's certified rate is the last plateau under that tier's line on
+  the same curve. Every plateau is published with its per-type p95, the
+  tier verdicts, and the backlog verdict, and the cliff is measured with
+  a failed level above it, so choosing a lenient tier cannot inflate a
+  claim past the cliff and the reader sees the knee their own deadline
+  crosses. Residency is derived by Little's law at any stable point;
+  the closed-loop "residency photograph" remains an optional
+  confirmation.
+- **Sandbox CPU is charged from reaped-children time.** Jobs live about
+  1.5 s, shorter than any process scan; their CPU is the executors'
+  cutime+cstime delta, attributed fleet-wide as the "sandbox" group.
+  Units cancelled at a run's stop are written as censored ledger rows
+  (admitted, unfinished; pending or late by age), and weigh-in units are
+  excluded from a plateau's cohort; both were found as 5-8% receipt
+  shortfalls on 300 s plateaus and fixed in the ledger, not the judge.
 - **Retrieval quality is a diagnostic, not a gate.** Capacity is
   invariant to relevance: reranking 16 relevant chunks costs exactly what
   reranking 16 irrelevant ones costs, and the rest of the workflow is
