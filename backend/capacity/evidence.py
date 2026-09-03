@@ -90,12 +90,27 @@ def read_evidence(path: str | Path) -> dict:
     """Load a ledger into {header, units, levels, samples, windows, footer}."""
     out: dict = {"header": None, "units": [], "levels": [], "samples": [],
                  "windows": [], "footer": None}
+    # A ledger copied while its instance was still flushing (or killed
+    # mid-write) ends without the gzip trailer; everything before the
+    # break is intact evidence, so read to the break and say so.
+    out["truncated"] = False
     with gzip.open(path, "rt") as fh:
-        for line in fh:
+        while True:
+            try:
+                line = fh.readline()
+            except (EOFError, OSError):
+                out["truncated"] = True
+                break
+            if not line:
+                break
             line = line.strip()
             if not line:
                 continue
-            row = json.loads(line)
+            try:
+                row = json.loads(line)
+            except ValueError:
+                out["truncated"] = True
+                break
             kind = row.pop("k", None)
             if kind == "unit":
                 out["units"].append(row)

@@ -26,6 +26,7 @@ echo "series seed=$SEED rates=${RATES[*]} hold=$PLATEAU_HOLD K=$K W=$W -> $OUT"
 for rate in "${RATES[@]}"; do
   echo "=== rate $rate/s per instance ($(date +%H:%M:%S))"
   PLATEAU_RATE=$rate scripts/fleet_capacity.sh "$K" "$W" "$SEED" open > "$OUT/rate-$rate.log" 2>&1
+  sleep 8   # instances flush and close their ledgers after the stop signal
   for i in $(seq 1 "$K"); do
     f=$(ls -t "data/capacity/fleet$i"/capacity-*.json 2>/dev/null | head -1)
     e=$(ls -t "data/capacity/fleet$i"/evidence-*.jsonl.gz 2>/dev/null | head -1)

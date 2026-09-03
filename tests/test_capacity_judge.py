@@ -252,3 +252,19 @@ def test_plateau_censors_a_generator_that_fell_behind(tmp_path):
     assert lagging["generator_ok"] is False and lagging["sustained_tiers"] == []
     honest = judge.plateau([ledger(tmp_path / "ok.jsonl.gz", 4.0, 3.95)])
     assert honest["generator_ok"] is True and "interactive" in honest["sustained_tiers"]
+
+
+def test_read_evidence_survives_a_truncated_ledger(tmp_path):
+    import gzip, json
+    from backend.capacity.evidence import read_evidence
+    p = tmp_path / "t.jsonl.gz"
+    with gzip.open(p, "wt") as fh:
+        fh.write(json.dumps({"k": "header"}) + "\n")
+        for i in range(200):
+            fh.write(json.dumps({"k": "unit", "sid": "a", "ok": True, "lat": 1.0,
+                                 "sub": 1000.0 + i, "end": 1001.0 + i}) + "\n")
+    raw = p.read_bytes()
+    p.write_bytes(raw[: len(raw) - 40])          # lose the trailer and a tail
+    ev = read_evidence(p)
+    assert ev["truncated"] is True
+    assert ev["header"] is not None and 150 < len(ev["units"]) <= 200

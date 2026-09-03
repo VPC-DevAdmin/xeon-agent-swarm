@@ -713,10 +713,15 @@ class CapacityTest:
             groups["executors"] = [p.pid for p in wp._procs if p.poll() is None]
         except Exception:  # noqa: BLE001
             groups["executors"] = []
+        # The mock router's process tree, the sibling instances (fleet
+        # mode) and the retrieval tier all come from ONE cached /proc scan
+        # refreshed every 30 s in a thread (_sibling_pids); descendant_pids
+        # per sample walked all of /proc on the event loop.
+        cached = self._sibling_pids(groups)
         try:
             from backend.capacity import mockrouter
             if mockrouter._proc is not None and mockrouter._proc.poll() is None:
-                groups["mock_router"] = descendant_pids(mockrouter._proc.pid)
+                groups["mock_router"] = cached.get("mock_router") or [mockrouter._proc.pid]
         except Exception:  # noqa: BLE001
             pass
         # Fleet mode: sibling orchestrator instances on the same host are
@@ -725,11 +730,9 @@ class CapacityTest:
         # every instance condemns the box as interference the moment the
         # host works hard — which is the fleet's entire purpose.
         if os.getenv("CAPACITY_FLEET") == "1":
-            groups["siblings"] = self._sibling_pids(groups)
+            groups["siblings"] = cached.get("siblings", [])
         if os.getenv("CAPACITY_EMBED_URL") or os.getenv("CAPACITY_RERANK_URL"):
-            extra = getattr(self, "_sibling_cache", None)
-            if extra and isinstance(extra[1], dict):
-                groups["retrieval"] = extra[1].get("retrieval", [])
+            groups["retrieval"] = cached.get("retrieval", [])
         if self.inference_backend == "local":
             if self._engine_pids is None:
                 # Rescan until the engine's real compute processes are found:
@@ -740,7 +743,7 @@ class CapacityTest:
                 groups["engine"] = self._engine_pids
         return groups
 
-    def _sibling_pids(self, groups: dict[str, list[int]]) -> list[int]:
+    def _sibling_pids(self, groups: dict[str, list[int]]) -> dict[str, list[int]]:
         """Sibling orchestrator and mock pids, cached, refreshed off-loop.
 
         The first version called find_pids twice plus descendant_pids per
@@ -759,10 +762,16 @@ class CapacityTest:
         for g in groups.values():
             own.update(g)
         if getattr(self, "_sibling_cache", None) is None:
-            self._sibling_cache = (0.0, {"siblings": [], "retrieval": []},
-                                   False)
+            self._sibling_cache = (0.0, {"siblings": [], "retrieval": [],
+                                         "mock_router": []}, False)
         ts, cached, refreshing = self._sibling_cache
-        pids = cached.get("siblings", []) if isinstance(cached, dict) else []
+        mock_pid = None
+        try:
+            from backend.capacity import mockrouter
+            if mockrouter._proc is not None and mockrouter._proc.poll() is None:
+                mock_pid = mockrouter._proc.pid
+        except Exception:  # noqa: BLE001
+            pass
         if time.time() - ts > 30.0 and not refreshing:
             self._sibling_cache = (ts, cached, True)
 
@@ -810,16 +819,26 @@ class CapacityTest:
                             continue
                         ret.add(cur)
                         stack.extend(kids.get(cur, []))
+                    mock: set[int] = set()
+                    if mock_pid is not None:
+                        stack = [mock_pid]
+                        while stack:
+                            cur = stack.pop()
+                            if cur in mock:
+                                continue
+                            mock.add(cur)
+                            stack.extend(kids.get(cur, []))
                     self._sibling_cache = (time.time(),
-                                           {"siblings": sorted(out - own - ret),
-                                            "retrieval": sorted(ret - own)},
+                                           {"siblings": sorted(out - own - ret - mock),
+                                            "retrieval": sorted(ret - own),
+                                            "mock_router": sorted(mock)},
                                            False)
                 except Exception:  # noqa: BLE001 — attribution is best-effort
                     self._sibling_cache = (time.time(), cached, False)
 
             threading.Thread(target=_refresh, daemon=True).start()
         latest = self._sibling_cache[1]
-        return latest.get("siblings", []) if isinstance(latest, dict) else []
+        return latest if isinstance(latest, dict) else {}
 
     async def _sample_loop(self):
         # Bandwidth/KV are local-mode readings; stop attempting after repeated
@@ -834,7 +853,11 @@ class CapacityTest:
             # processes, the inference engine, or everything else. Same basis
             # as cpu_pct, so components stack under the host line.
             try:
-                by = proc_cpu.sample(self._cpu_groups())
+                # /proc reads for ~150 pids and the group discovery run in a
+                # worker thread: on the loop they stalled the arrival
+                # generator by up to 2.3 s per sample at 20 workflows/s
+                # (series 7105: gen_late_ticks 158, 121 arrivals shed).
+                by = await asyncio.to_thread(proc_cpu.sample, self._cpu_groups())
                 if by is not None and s.get("cpu_pct") is not None:
                     by["other"] = round(max(0.0, s["cpu_pct"] - sum(by.values())), 1)
                     s["cpu_by"] = by
