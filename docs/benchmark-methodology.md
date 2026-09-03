@@ -1,199 +1,320 @@
 # Agent capacity benchmark methodology
 
-The methodology of record is the living document maintained alongside the
-benchmark, currently at workload version 17 with offline judge rules post-2
-(capability), sweep-2 (rate windows), and plateau-1 (held rates). It supersedes the archived v8
-text (docs/archive/benchmark-methodology-v8.md), which predates several
-deliberate revisions and must not be cited:
+This is the methodology of record for the agent-host capacity benchmark.
+It describes the benchmark as it runs today: the five workflow archetypes
+and why each exists, the tile they form, how the server is packed, how load
+is offered, how the latency knee and the capacity cliff are found, how
+verdicts are computed from evidence, and what the published numbers mean.
+Everything a result claims can be recomputed from the versioned ledgers in
+`data/capacity/` with the versioned judge in `backend/capacity/judge.py`.
 
-- **Record-not-refuse for the inference stand-in.** A co-located (loopback)
-  stand-in no longer disqualifies a run. Every result instead records the
-  stand-in's location, worker count, latency distribution, request-rate
-  headroom arithmetic, and its measured share of host CPU on the same
-  attribution basis as every other component, so a reader weighs the cost
-  rather than trusting an eligibility rule.
-- **The serving tier is modeled, not instantaneous.** Every model call
-  waits as a remote serving tier would: time to first token plus output
-  tokens at a decode rate plus input tokens at a prefill rate, computed
-  from the actual payload of that call (CAPACITY_MODEL_TTFT_MS=500,
-  DECODE_TPS=100, PREFILL_TPS=8000; +/-20% jitter). A planner call reading
-  24k tokens waits several times longer than a validator verdict. The
-  three parameters are part of the machine fingerprint, so results under
-  different serving assumptions never mix.
-- **Evidence ledgers and post-processable judgment.** Every run streams a
-  per-unit ledger (submit/completion times, outcome, level, offered rate,
-  telemetry samples including host CPU, resident memory in GB and percent,
-  and per-group CPU attribution). Verdicts are recomputed from the ledger
-  by a versioned offline judge (backend/capacity/judge.py); the in-run
-  judge only steers. Rule changes are applied to history by re-judging
-  stored ledgers, never by re-running load. Ledgers, judgments, and results
-  are versioned in data/capacity/.
-- **The deadline anchor and the confidence claim, stated precisely.** A
-  certified level's claim is: each workflow type's on-time fraction is at
-  least 95%, at 95% confidence jointly across types (Wilson lower bound,
-  Bonferroni-split alpha), over the units that level decided. A level fails
-  only when the Wilson upper bound refutes the target. The bound covers one
-  level; selecting the best of many tested levels and run-to-run variation
-  are covered by the repeat series (three runs per certified baseline), not
-  by the within-level bound.
-- **Throughput by plateau, judged by backlog.** The open-loop driver is a
-  dumb generator: it holds a fixed arrival rate for a fixed dwell and never
-  reacts to what it sees except for safety stops (resource streak, backlog
-  cap). A rate is judged in 30 s windows by the sweep-2 rule: every
-  workflow type's on-time fraction against a tier deadline clears the joint
-  Wilson bound AND the backlog does not grow (arrivals-to-date minus
-  completions-to-date changes by at most max(5, 5% of the window's
-  arrivals)). Same-window completion matching was abandoned (sweep-1)
-  because, with 30-160 s workflows, a window's completions answer the
-  previous window's arrivals. Because workflow latency rivals level dwell,
-  rates are run as separate plateaus (one rate per instance start), so
-  every cohort completes under the rate that admitted it, and the
-  latency-versus-rate curve is read across plateaus.
-- **Workload v16.1: the orchestrator earns its context on the box.** Three
-  archetypes, tiled equally. The *researcher* (heavy) makes 13 model calls,
-  7 validations, and 6 tool calls: each of its three workers runs a real
-  retrieval (bench_retrieve) and then a durable record write
-  (bench_record). The *comparison* (medium) makes 11 calls, 7 validations,
-  4 tool calls: its research worker retrieves once, every worker records.
-  The *digest* (light) makes 10 calls, 7 validations, 3 tool calls: records
-  only. Contracts are enforced per unit; a unit outside its contract is
-  invalid, never silently counted. Retrieval is real work on the host: BM25
-  over a 120,000-chunk seeded corpus (SQLite FTS5), reciprocal-rank fusion
-  with a modeled off-box dense index (a large vector database stays off
-  the box; its 15 ms answer is modeled), a lexical prefilter to 16
-  candidates, a cross-encoder rerank of those 16 on the box (INT8
-  ms-marco-MiniLM-L-6-v2 on ONNX Runtime), and packing of the winners with
-  [chunk-N] citations into the worker's context. Workers cite the chunk
-  ids they were given, so grounding is checkable.
-- **Workload v17: execution joins retrieval, and the tile widens to the
-  long tail.** Two archetypes are added. The *data analyst* (heavy
-  execution) runs a sandboxed data job in each of its three workers and
-  records (13 calls, 7 validations, 6 tool calls). The *task agent*
-  (short-lived) plans ONE general-purpose worker that writes one record
-  and answers: 4 calls, 3 validations, 1 tool call, about 10 s; it stands
-  for the triggers, routing, and extraction agents that are most of a
-  deployment, and it is weighted twice in the tile as a declared
-  assumption. The *comparison* gains one light job in its analysis
-  worker (12 calls, 5 tool calls). Execution therefore appears in graded
-  amounts (analyst 3 heavy, comparison 1 light, others none) exactly as
-  retrieval does (3 / 1 / 0), so every cost term is identifiable from the
-  plateau data and the certified rate is reported with a per-component
-  cost table (scripts/cost_table.py) and the tile weights as an input.
-- **The sandbox is a real, bounded tool.** A job is a fresh isolated
-  interpreter (python -I -S) under prlimit CPU, address-space, and file
-  limits, with no network (a network namespace via sudo unshare, the
-  isolation mode fingerprinted), single-threaded math, a seeded
-  deterministic dataset, and a few hundred characters of results back
-  into the worker's context. The job is an analyst's tool run over one
-  day of payment events: join, bucket, sort-based per-merchant
-  percentiles, rolling load, tail quantiles, z-scored anomalies, a second
-  pass. Two declared sizes, calibrated on the reference Xeon and
-  re-measured under load: light ~0.3 core-seconds (450k rows), heavy
-  ~1.4 core-seconds (3.3M rows), interpreter start included. It is not a
-  drain: it is representative work with a stated size, the same standard
-  as rerank depth.
-- **Capacity and service level are different numbers, reported
-  together.** The cliff is where arrivals outrun completions (backlog
-  growth, generator receipt), and it does not depend on any deadline; a
-  tier's certified rate is the last plateau under that tier's line on
-  the same curve. Every plateau is published with its per-type p95, the
-  tier verdicts, and the backlog verdict, and the cliff is measured with
-  a failed level above it, so choosing a lenient tier cannot inflate a
-  claim past the cliff and the reader sees the knee their own deadline
-  crosses. Residency is derived by Little's law at any stable point;
-  the closed-loop "residency photograph" remains an optional
-  confirmation.
-- **Sandbox CPU is charged from reaped-children time.** Jobs live about
-  1.5 s, shorter than any process scan; their CPU is the executors'
-  cutime+cstime delta, attributed fleet-wide as the "sandbox" group.
-  Units cancelled at a run's stop are written as censored ledger rows
-  (admitted, unfinished; pending or late by age), and weigh-in units are
-  excluded from a plateau's cohort; both were found as 5-8% receipt
-  shortfalls on 300 s plateaus and fixed in the ledger, not the judge.
-- **Retrieval quality is a diagnostic, not a gate.** Capacity is
-  invariant to relevance: reranking 16 relevant chunks costs exactly what
-  reranking 16 irrelevant ones costs, and the rest of the workflow is
-  fixed by contract. The pipeline therefore reports an in-topic fraction
-  (share of packed chunks from the query's seeded topic) per retrieval as
-  evidence that the pipeline is doing what a production pipeline does, and
-  no verdict depends on it.
-- **The retrieval tier is sized by physical core and admission-controlled.**
-  The box is 64 physical cores with two SMT threads each and an irregular
-  sibling map, so allocations are derived from the topology, never written
-  as logical ranges (a range such as "56-127" handed the reranker eight
-  whole cores plus 48 half-cores whose siblings ran executors). The
-  reranker is quantized to INT8 and served through ONNX Runtime with
-  dynamic batching (one inference thread per process, up to 128 pairs per
-  run), where the int8 GEMMs use the Xeon's AMX/VNNI units; its measured
-  cost is about one physical core per three rerank calls per second
-  (16 pairs of ~125 tokens) whatever the worker/thread split, and two
-  runtime threads on one core's siblings halve each other, so the runtime
-  gets one thread per physical core. The reference allocation is 40 cores
-  for the reranker, 4 for the embedder, and the remaining 20 whole cores
-  for the orchestrator instances, executors, stand-ins, and databases,
-  which are pinned there so nothing shares AMX units with the tier. Pinning
-  is by cpuset, not quota (quotas on a 128-thread host throttle-thrash).
-  Each executor admits at most four reranker calls at a time
-  (CAPACITY_RERANK_CONCURRENCY) and backs off exponentially on 429/503, so
-  a saturated tier produces queueing that the judge sees as latency, not
-  errors. The tier's CPU is attributed to the box totals like every other
-  component, following process trees.
-- **Retrieval stage timings and the generator's receipt are evidence.**
-  Every executor flushes per-stage retrieval percentiles (embed and rerank
-  gate wait and call, fuse, pack) every 30 s, and every ledger sample
-  carries the arrival generator's own receipt (arrivals shed by its stall
-  clamp, ticks fired late). A plateau whose achieved arrival rate is under
-  95% of the offered rate is generator-limited and sustains no tier.
-- **Rerank depth is a declared dial with a measured law.** The reference
-  workload scores 16 candidates per retrieval (40 fused, keyword-prefiltered
-  to 16, 12 kept). The tier's ceiling is a pair budget, ~1,300-1,400 scored
-  pairs/s on 40 cores at any depth, so the sustainable rate is about
-  1,300 / (1.33 calls x depth). Checked at one seed with 5-minute holds
-  (series 7601, 7602): depth 32 held 32 workflows/s at the edge (researcher
-  p95 85 s, zero failures) and not 40; depth 48 held 20 and not 28; the
-  certified 62.7 at depth 16 sits on the same line. CAPACITY_RERANK_DEPTH
-  is part of the machine fingerprint, so depths never mix.
-- **Context is re-carried, not cached.** Each model call re-sends its full
-  context and the serving model charges prefill for all of it. A deployed
-  serving tier with prompt caching would charge less for the repeated
-  prefix; the benchmark keeps the pessimistic accounting because the
-  orchestrator's cost (the thing being measured) does not change with the
-  serving tier's cache policy.
-- **Accounting defects are counted, never hidden.** The stream adapter
-  logs and counts any subagent message it cannot attribute to a delegation
-  (metrics.unbound_msgs); a lost tool hop shows up as a contract miss on
-  that unit, which the harness records as invalid rather than as success
-  or failure.
-- **Host power management is part of the fingerprint.** The reference box
-  ramps idle cores from 500-2,500 MHz to 3,900 MHz under load with no OS
-  frequency governor exposed (firmware-managed), so a call that lands on
-  idle cores pays a ramp of tens of milliseconds. At the operating points
-  that matter (the knee) the cores are saturated and hot; at light load
-  the ramp is inside the reported latency. A BIOS system profile of
-  "Performance" would remove it and must be recorded when used.
-- **Vocabulary.** A *workflow* is one fixed-size unit of agent work of one
-  archetype (contract above). A *session* is a closed-loop driver that
-  runs workflows back to back with think time; session count is the
-  capability metric. An *agent* in prose means a session. A *subagent* is
-  one worker inside a workflow (about three in flight per session).
-  *Resident* workflows at a rate are rate x (median latency + think time)
-  by Little's law.
-- **Throughput, measured (v16.1 certified set, 2026-09-03).** Three plateau
-  series (seeds 7201, 7301, 7401) on the four-instance fleet with the tier
-  at 40+4 cores, ten-minute holds at 4/8/12/14/16 workflows/s per
-  instance, judged by plateau-1 from the ledgers (data/capacity/set-
-  20260903-061731/summary.json). Highest plateau every series sustains:
-  62.7 workflows/s box-wide (range 62.69-62.86), every tier from
-  interactive (45 s) downward, zero failures in 109,383 admitted units at
-  that level; researcher p50/p95 34/40 s, comparison 29/33 s, digest
-  28/29 s; 2,035 resident sessions (range 2,026-2,038); host 61% of
-  logical threads, which understates the box: sampled per hardware thread
-  (scripts/core_occupancy.py, seed 7501), 90% of the 64 physical cores
-  were occupied - reranker cores 99% (one thread per core by design),
-  embedder 80%, the other twenty 72% - and the reranker ran at 91% of its
-  measured ceiling (84 of ~92 rerank calls/s). The next offered level, 18/s per
-  instance, run under the same three seeds, is not sustained: researcher
-  82/189 s, comparison 43/122 s, no tier's bound holds, and the fleet
-  delivered 60.8 of 72 offered workflows/s (combined summary in
-  data/capacity/set-v16.1-certified/, evidence commit 88e3d34). Open loop is the primary throughput measurement; sizing from
-  the measured rate is Derived, no longer Projected.
+## 1. What the benchmark measures
+
+An **agent host** is the server that runs everything around the language
+model: planning, dispatching workers, retrieving and packing context,
+executing tools, validating outputs, writing durable records, carrying the
+state of every session in flight. The model itself is elsewhere (a serving
+tier reached over an API). The benchmark asks how much of that work one
+server sustains, and reports three numbers from one curve:
+
+- **Capacity** (the cliff): the highest offered rate at which completions
+  keep pace with arrivals. Past it the backlog grows without bound whatever
+  deadline anyone chooses, so no service-level choice can inflate a claim
+  beyond it.
+- **Certified service level** (the knee crossings): for each deadline tier,
+  the highest plateau at which at least 95% of every workflow type finishes
+  inside the tier's deadline, at 95% confidence jointly across types, while
+  capacity also holds. A tier's certified rate is where the latency curve
+  crosses that tier's line.
+- **Resident sessions**: how many agents the server is carrying at a rate,
+  by Little's law (rate x median workflow time plus a 3 s think time). It is
+  derived at any stable operating point; a closed-loop confirmation run at
+  the certified point ("residency photograph") remains available.
+
+Every number is published with the whole curve behind it: each plateau's
+per-type latency, its tier verdicts, its backlog verdict, and the failed
+level above the last good one.
+
+## 2. The workload: five archetypes and a tile
+
+A benchmark unit must be the same size on every repetition, so each
+archetype declares a **contract** (subtasks, model calls, validations, tool
+calls, an input-token floor) and every completed unit is held to it; a unit
+outside its contract is invalid, never counted as a success or a failure.
+The five archetypes differ in which kinds of work they contain, in graded
+amounts, so that each cost term in the system is identifiable from the data.
+
+| Archetype | Role it represents | Workers | Retrievals | Sandboxed jobs | Records | Contract (calls / validations / tools) | Tokens moved per workflow | What it isolates |
+|---|---|---|---|---|---|---|---|---|
+| Research brief | a RAG researcher: gathers sources, drafts a recommendation | 3 | 3 | 0 | 3 | 13 / 7 / 6 | ~35,000 | retrieval cost per call |
+| Comparison | an analyst with sources and a computation | 3 | 1 | 1 light | 3 | 12 / 7 / 5 | ~26,000 | the light job, and the mixed case |
+| Digest | a summarizer over given material | 3 | 0 | 0 | 3 | 10 / 7 / 3 | ~20,000 | pure three-worker orchestration (the control) |
+| Data analyst | a pipeline agent over data | 3 | 0 | 3 heavy | 3 | 13 / 7 / 6 | ~24,000 | the heavy job |
+| Task agent | a trigger, triage, or routing agent: born, does one thing, dies | 1 | 0 | 0 | 1 | 4 / 3 / 1 | ~7,000 | per-agent lifecycle cost (planner plus synthesis, little between) |
+
+Why these five: each is a role an enterprise actually deploys, and each
+differs from every other in at least one component count. Retrieval appears
+3 / 1 / 0 times across the researcher, comparison, and digest; execution
+appears 3 heavy / 1 light / 0 across the analyst, comparison, and the rest;
+the digest carries orchestration alone; the task agent carries the fixed
+per-agent cost with almost nothing else. The comparison deliberately carries
+two components so the mixed case exists in the data. Five roles is already
+a lot for a reader; a sixth would not add an identifiable term.
+
+**The tile** is the unit of load: one research brief, one comparison, one
+digest, one data analyst, and two task agents (six sessions). The task
+agent is weighted twice because short-lived agents are most of a
+deployment. That weight is a declared assumption; the per-component cost
+table (section 8) lets a reader rescale to any mix. At the reference mix a
+workflow moves about 20,000 tokens through the model tier and generates
+about 1,300.
+
+Every workflow runs the production orchestrator end to end: a planner
+delegates the declared subtasks to specialist workers (one, for the task
+agent), each worker calls its tools and drafts its section, a synthesis
+step combines the results, mechanical and judge validations run on every
+step and on the synthesis, and steps, attempts, validations, and tool
+records are written durably. Prompts are self-contained; no third-party
+service participates in a measured run.
+
+### The serving tier is modeled per call
+
+No model call is instantaneous. A deterministic stand-in answers every call
+through the production request path and waits as a remote serving tier
+would: 500 ms to first token, plus output tokens at 100 per second, plus
+input tokens at 8,000 per second, computed from the actual payload of that
+call with 20% seeded jitter. A planner re-reading 30,000 tokens waits
+several seconds; a validator returning a verdict waits about one. The
+three parameters are part of the machine fingerprint. Each call re-sends
+its whole context and is charged prefill for all of it; a serving tier
+with prompt caching would charge less, and the benchmark keeps the
+pessimistic accounting because the host's cost, the quantity measured,
+does not change with the tier's cache policy.
+
+### Retrieval is real work on the server
+
+A worker that retrieves calls a tool that runs BM25 keyword search over a
+seeded 120,000-passage store (SQLite FTS5, 2,000 topics, built once per
+server), fuses that ranking by reciprocal rank with the answer of a vector
+index (modeled as a 15 ms off-server call, because a large vector database
+is its own system in any deployment), prefilters to sixteen candidates with
+a keyword scorer, scores those sixteen with an INT8 cross-encoder
+(ms-marco-MiniLM-L-6-v2) on the processor's AMX units, and packs about
+6,000 words of winning passages into the worker's context with `[chunk-N]`
+citations. Workers cite the passage ids they were given, so grounding is
+checkable by construction. Rerank depth (sixteen) is a declared parameter
+in the fingerprint; its cost law is in section 8. Retrieval quality is
+reported as an in-topic fraction and never judged: capacity is invariant to
+relevance, since reranking sixteen relevant passages costs what reranking
+sixteen irrelevant ones costs.
+
+### Execution is a real, bounded sandbox
+
+A worker that executes calls a tool that runs one job in a fresh, isolated
+interpreter (`python -I -S`) under CPU-time, address-space, and file-size
+limits, with no network (a network namespace via `sudo unshare -n`; the
+isolation mode is fingerprinted), single-threaded math, a seeded
+deterministic dataset, and a few hundred characters of results returned
+into the worker's context. The job is the shape of an analyst's tool run
+over one day of payment events: generate the event table, join it to a
+merchant table, bucket by merchant and minute, sort-based per-merchant
+percentiles, a rolling load window, tail quantiles, z-scored anomaly
+ranking against a category baseline, and a second pass over the flagged
+merchants. Two declared sizes, calibrated on the reference server and
+re-measured under load: light, 450,000 rows, about 0.3 core-seconds;
+heavy, 3.3 million rows, about 1.4 core-seconds, interpreter start
+included. It is representative work with a stated size, not a drain.
+
+### The record tool
+
+Every worker writes one durable audit row through the batched writer and
+waits for its commit, then waits 50 to 150 ms derived from a checksum of
+its argument, and receives about 400 characters of seeded text into its
+context. A write that never landed fails the tool.
+
+## 3. How the server is packed
+
+Four complete orchestration instances share the server, each with one
+control process, 28 executor processes, its own PostgreSQL database, and
+its own deterministic model stand-in. Beside them runs the retrieval tier
+the workflows call: an embedder and the reranker, served through ONNX
+Runtime with dynamic batching (one inference thread per process, up to 128
+pairs per run).
+
+Cores are allocated by **whole physical core, read from the topology**. The
+reference server has 64 cores with two SMT threads each and an irregular
+sibling map, so allocations are never written as logical ranges. The
+reranker's runtime gets one thread per physical core (the first sibling);
+two runtime threads on one core's siblings were measured to halve each
+other. The reference allocation is 14 cores for the reranker, 2 for the
+embedder, and the remaining 48 for the four instances, their executors,
+stand-ins, and databases, which are pinned there so nothing shares AMX
+units with the tier. Pinning is by cpuset, not quota: a CPU quota on a
+128-thread host lets a many-threaded process burn its allowance in
+milliseconds and sleep for the rest of the period.
+
+The allocation is set from measured costs so that both sides of the server
+saturate near the same rate, which is what makes the server, rather than
+an allocation, the limit. The sizing arithmetic is in section 8.
+
+Each executor admits at most four reranker calls at a time and backs off
+exponentially on a 429 or 503, so a saturated tier produces queueing the
+judge sees as latency, never errors.
+
+## 4. How load is offered: plateaus
+
+The load generator is open loop and deliberately dumb: it submits
+workflows on a fixed arrival schedule that ignores completions, holds one
+rate for the whole run, and reacts to nothing except two safety stops (a
+host resource streak and a backlog cap of 20,000 outstanding workflows,
+past which it records rejections rather than growing without limit).
+Arrivals follow the tile rotation, so the mix is identical at every rate.
+
+Rates are run as separate **plateaus**, one rate per fleet start, because
+workflow latency (10 to 40 s unloaded, minutes under load) rivals any
+level's dwell: a cohort admitted at one rate would otherwise finish under
+the next. Holding one rate for ten minutes lets every cohort complete
+under the rate that admitted it, and the latency-versus-rate curve is read
+across plateaus. Exploration uses five-minute holds to find the region;
+certification uses ten-minute holds under three seeds that differ by 100.
+
+The generator keeps its own receipt in every ledger sample: arrivals shed
+by its stall clamp and ticks fired late. A plateau whose achieved arrival
+rate is under 95% of the offered rate is generator-limited and certifies
+nothing.
+
+## 5. Finding the knee and the cliff
+
+The search has three stages, all producing evidence for the same judge.
+
+1. **Exploration.** Short plateaus at a spread of rates (for example 2, 4,
+   6, 8 per instance) until latency rises and then the backlog grows. This
+   locates the band between the last flat plateau and the first collapsing
+   one, and its stage timings say which component queues first.
+2. **Certification.** Ten-minute plateaus under three seeds at the rates
+   that bracket the band, judged offline. A tier's certified rate is the
+   highest plateau every series sustains for that tier.
+3. **The cliff.** One or two plateaus above the last keeping-up rate under
+   the same seeds, so the capacity claim is a measured level with a failed
+   level above it, the same standard as the certified rows.
+
+On the reference server the curve has two distinct features. The **knee**
+is where response time starts rising while completions still keep pace,
+because some resource queues: the retrieval-carrying archetypes' 95th
+percentile leaves the interactive line first. The **cliff** is where
+arrivals outrun completions and every archetype's latency explodes,
+including the ones that need neither retrieval nor execution, because CPU
+is starved everywhere. A lenient deadline can certify a higher rate inside
+the band between the two; nothing can certify past the cliff.
+
+## 6. Judging from evidence
+
+Every run streams a per-unit **ledger** as it happens: each workflow's
+type, admit time, completion time, outcome, and offered rate; every
+telemetry sample (host CPU, memory, per-group CPU attribution, the
+generator's receipt); and a footer with the run's counters. Units still in
+flight when the run stops are written as censored rows (admitted, not
+finished). Weigh-in units admitted before the generator starts carry no
+offered rate and are excluded from a plateau's cohort.
+
+The **plateau judge** (rule `plateau-1`) reads one held rate from the
+fleet's ledgers, pooled:
+
+- The cohort is every generator-admitted unit after a warm-up of 1.5 times
+  the slowest completed latency (so the queue has filled to its steady
+  depth) and before the last arrival.
+- For each deadline tier, each workflow type's on-time fraction takes a
+  Wilson lower bound at a Bonferroni-split confidence (95% jointly across
+  types); the tier is sustained when every type's bound clears 95%.
+  Censored units count as pending while younger than the tier's deadline
+  and as late once older.
+- Capacity holds when the backlog (arrivals to date minus completions to
+  date) grows by at most five units or 5% of the cohort across the
+  cohort's span, and the generator delivered at least 95% of the offered
+  rate.
+- Resident sessions are rate x (median latency + 3 s think).
+
+A unit succeeds only if it completed inside its contract; a workflow
+running longer than the patience ceiling (900 s under the modeled tier) is
+a counted failure. The certified figure for a tier is the median across
+the three series of the highest plateau every series sustains, with the
+range reported. Rule changes are applied to history by re-judging stored
+ledgers, never by re-running load.
+
+**Deadline tiers.** Six declared tiers, each named for the use case its
+deadline serves: conversational 15 s, interactive 45 s, responsive 150 s,
+attended 450 s, queued 1,200 s, background 3,600 s. Every plateau is
+judged against all six; the paper reports the tiers a reader is likely to
+size against and prints the whole curve.
+
+## 7. Attribution and what "utilization" means
+
+A sampler reads `/proc` every two seconds and attributes CPU to groups on
+the whole-host basis: the control process, the executors, the sibling
+instances, the model stand-ins, the retrieval tier (following process
+trees), the sandboxed jobs, and a residual. Sandboxed jobs live about
+1.5 s, shorter than any process scan, so their CPU is charged from the
+executors' reaped-children time (`cutime + cstime`), fleet-wide. Heavy
+`/proc` work runs off the event loop so the sampler cannot stall the
+generator.
+
+Utilization is reported by **physical core**, sampled per hardware thread
+with a core counted as busy as its busier sibling, alongside the
+hardware-thread figure a monitoring tool would show. The two differ
+because the reranker deliberately leaves each of its cores' second threads
+idle, and because single-threaded sandbox jobs occupy cores one thread at
+a time. The reranker's attributed share is reserved capacity (its runtime
+threads spin on their cores whatever the load); its consumed cost is
+demand over its measured pair budget.
+
+Host power management is part of the fingerprint: the reference server
+manages CPU frequency in firmware with no OS governor exposed, idles cores
+at 500 to 2,500 MHz, and reaches about 3.9 GHz under load, so light-load
+latencies include a ramp of tens of milliseconds.
+
+## 8. Cost laws: the sizing tools
+
+Each component's cost is measured on the fleet so the certified rate can
+be rescaled to a different mix, depth, or job size.
+
+- **Reranker.** The tier's ceiling is a pair budget: about 35 scored pairs
+  per physical core per second (sixteen-pair calls of about 125 tokens),
+  whatever the process and thread split. Sustainable rate scales inversely
+  with candidates per call; checked at depths 16, 32, and 48 on a 40-core
+  allocation, the measured edges sit on the line within a few percent.
+- **Sandbox.** About 0.82 core-seconds per tile-weighted workflow at the
+  reference mix (three heavy jobs at ~1.4 core-seconds per analyst, one
+  light at ~0.3 per comparison, over six workflows).
+- **Orchestration.** A roughly fixed floor of about 17 hardware threads
+  across the four instances (executors, control, stand-ins, databases),
+  nearly independent of rate, plus a small per-workflow marginal cost.
+- **Allocation.** Cores are divided so that the tier's pair budget and the
+  executors' side reach saturation near the same rate; with the reference
+  mix that is 14 + 2 cores for the tier and 48 for everything else.
+
+`scripts/cost_table.py` produces the per-component table from any series;
+`scripts/plateau_set_summary.py` produces the certified set summary.
+
+## 9. Reproducibility record
+
+Each result carries the seed, the software commit, the workload definition
+(`config/capacity_scenarios.yaml`), the serving-tier parameters, rerank
+depth, sandbox isolation mode, the core allocation (`allocation.env`),
+the process topology, the host profile, and the ledger's SHA-256. Ledgers,
+judgments, set summaries, and per-core samples are committed under
+`data/capacity/`. Two results compare only when their fingerprints match.
+
+## 10. Known limits
+
+- The serving tier is modeled per payload and does not queue; inference-side
+  saturation is outside the measurement, and the three serving parameters
+  are an assumption recorded in the fingerprint.
+- The vector index is modeled (15 ms); the keyword index, fusion, rerank,
+  and packing are real. Retrieval quality is a diagnostic, not a gate.
+- The tile weights, rerank depth, and job sizes are declared inputs. Their
+  cost laws are published so results can be rescaled, but a published rate
+  is for the declared mix.
+- Runs cover a single host; multi-node coordination, failover, long soaks,
+  and recovery after overload are not measured.
+- Depths other than sixteen and job sizes other than the two declared are
+  checked at one seed, not certified.
