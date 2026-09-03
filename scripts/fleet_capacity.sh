@@ -135,7 +135,7 @@ sleep 20   # executor pools
 for i in $(seq 1 "$K"); do
   PORT=$((8100 + i * 10))
   curl -s -X POST "localhost:$PORT/capacity/start" -H 'Content-Type: application/json' \
-    -d "{\"seed\":$((SEED + i)),\"benchmark_target\":\"agent_host\",\"inference_backend\":\"remote_mock\",\"mix\":\"tile\",\"service_rung\":\"conversational\"$EXTRA}"
+    -d "{\"seed\":$((SEED + i)),\"benchmark_target\":\"agent_host\",\"inference_backend\":\"remote_mock\",\"mix\":\"${FLEET_MIX:-tile}\",\"scenarios\":${FLEET_SCENARIOS:-[]},\"service_rung\":\"conversational\"$EXTRA}"
   echo " <- instance $i started"
 done
 
