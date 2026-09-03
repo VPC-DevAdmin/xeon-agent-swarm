@@ -1,0 +1,29 @@
+#!/bin/bash
+# A certified plateau SET: three plateau series under seeds that differ by
+# 100, each series one fleet run per rate, ten-minute holds. Evidence goes
+# to data/capacity/series-<seed>-<stamp>/ per series; the set's summary
+# (plateau-1 judgments per rate per series, medians across series) is
+# written by scripts/plateau_set_summary.py into data/capacity/set-<stamp>/.
+#
+# Usage: plateau_set.sh <base-seed> <rates...>      e.g. plateau_set.sh 7200 4 8 12 16
+set -uo pipefail
+BASE=${1:?base seed}; shift
+RATES=("$@"); [ ${#RATES[@]} -eq 0 ] && { echo "rates required"; exit 1; }
+R=$HOME/work/repos/xeon-agent-swarm
+cd "$R"
+export PLATEAU_HOLD=${PLATEAU_HOLD:-600}
+STAMP=$(date +%Y%m%d-%H%M%S)
+SET=data/capacity/set-$STAMP
+mkdir -p "$SET"
+echo "set $SET: seeds $((BASE+1)) $((BASE+101)) $((BASE+201)), rates ${RATES[*]}, hold $PLATEAU_HOLD s" | tee "$SET/set.log"
+for k in 1 101 201; do
+  seed=$((BASE + k))
+  echo "=== series seed $seed ($(date +%H:%M:%S))" | tee -a "$SET/set.log"
+  scripts/plateau_series.sh "$seed" "${RATES[@]}" > "$SET/series-$seed.log" 2>&1
+  d=$(grep "SERIES DONE" "$SET/series-$seed.log" | awk '{print $3}')
+  echo "$d" >> "$SET/series-dirs.txt"
+  echo "  -> $d" | tee -a "$SET/set.log"
+  sleep 60   # cool-down between series, as the repeat-set rule requires
+done
+PYTHONPATH=. .venv/bin/python scripts/plateau_set_summary.py "$SET" 2>&1 | grep -v Warning | tee -a "$SET/set.log"
+echo "SET DONE $SET" | tee -a "$SET/set.log"
