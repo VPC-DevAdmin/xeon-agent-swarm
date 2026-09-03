@@ -135,6 +135,8 @@ deliberate revisions and must not be cited:
   28/29 s; 2,035 resident sessions (range 2,026-2,038); host 61% of
   logical threads with the reranker's 40 physical cores saturated and its
   second SMT siblings idle by design. The next offered level, 18/s per
-  instance, is not sustained (researcher median roughly triples, backlog
-  grows). Open loop is the primary throughput measurement; sizing from
+  instance, run under the same three seeds, is not sustained: researcher
+  82/189 s, comparison 43/122 s, no tier's bound holds, and the fleet
+  delivered 60.8 of 72 offered workflows/s (combined summary in
+  data/capacity/set-v16.1-certified/, evidence commit 88e3d34). Open loop is the primary throughput measurement; sizing from
   the measured rate is Derived, no longer Projected.

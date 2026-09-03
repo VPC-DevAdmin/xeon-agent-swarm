@@ -488,7 +488,7 @@
             <tr><td>12/s</td><td>47.4/s</td><td>33 / 35 s</td><td>29 / 30 s</td><td>28 / 29 s</td><td>1,529</td><td>50%</td><td class="pass-text">interactive and every longer tier</td></tr>
             <tr><td>14/s</td><td>55.3/s</td><td>33 / 35 s</td><td>29 / 30 s</td><td>28 / 29 s</td><td>1,783</td><td>52%</td><td class="pass-text">interactive and every longer tier</td></tr>
             <tr><td><strong>16/s</strong></td><td><strong>62.7/s</strong></td><td>34 / 40 s</td><td>29 / 33 s</td><td>28 / 29 s</td><td><strong>2,035</strong></td><td>61%</td><td class="pass-text"><strong>certified: interactive and every longer tier</strong></td></tr>
-            <tr><td>18/s</td><td>NEXT_LEVEL_ACHIEVED</td><td>NEXT_LEVEL_RESEARCH</td><td>NEXT_LEVEL_COMPARISON</td><td>NEXT_LEVEL_DIGEST</td><td>NEXT_LEVEL_RESIDENT</td><td>NEXT_LEVEL_CPU</td><td class="stop-text">NEXT_LEVEL_VERDICT</td></tr>
+            <tr><td>18/s</td><td>60.8/s of 72 offered</td><td>82 / 189 s</td><td>43 / 122 s</td><td>29 / 46 s</td><td>not steady</td><td>69%</td><td class="stop-text">not sustained: no tier holds, generator at 84% of schedule</td></tr>
           </tbody>
         </table>
       </div>
@@ -517,7 +517,7 @@
       </div>
 
       <div class="prose">
-        <p>Workflow times did not move from the lightest plateau to the certified one: the research brief's median went from 34 to 34 seconds and its 95th percentile from 35 to 40. That flatness is what a sized system looks like below its limit. The step to 18 per instance is where the tier ran out.</p>
+        <p>Workflow times did not move from the lightest plateau to the certified one: the research brief's median stayed at 34 seconds and its 95th percentile went from 35 to 40. That flatness is what a sized system looks like below its limit. The step to 18 per instance, run under the same three seeds, is where the tier ran out: the research brief's median went to 82 seconds and its 95th percentile to 189, the comparison's to 43 and 122, no tier's bound held, and the fleet delivered only 60.8 workflows per second against the 72 offered. A certified level with a failed level one step above it is a measured boundary, not a lower bound.</p>
       </div>
     </section>
 
@@ -598,7 +598,7 @@
           <dl>
             <dt>Workload</dt><dd>Version 16.1</dd>
             <dt>Run code</dt><dd><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/commit/a9d37fa">a9d37fa</a></dd>
-            <dt>Evidence commit</dt><dd><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/commit/a1f699e">a1f699e</a></dd>
+            <dt>Evidence commit</dt><dd><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/commit/88e3d34">88e3d34</a></dd>
             <dt>Series</dt><dd class="mono">seeds 7201, 7301, 7401</dd>
             <dt>Judge</dt><dd class="mono">plateau-1</dd>
             <dt>Serving model</dt><dd class="mono">ttft 500ms / decode 100 tps / prefill 8000 tps</dd>
@@ -611,7 +611,7 @@
         <h3>References</h3>
         <div class="reference"><span class="n">[1]</span><span><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/blob/a9d37fa/docs/benchmark-methodology.md">Agent capacity benchmark methodology</a>. Definitions, evidence rules, the retrieval tier, and the plateau protocol.</span></div>
         <div class="reference"><span class="n">[2]</span><span><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/blob/a9d37fa/config/capacity_scenarios.yaml">Version-16.1 workload definition</a>. Workflow mix, retrieval policy, and work contracts.</span></div>
-        <div class="reference"><span class="n">[3]</span><span><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/tree/a1f699e/data/capacity">Versioned evidence ledgers, run results, and set summary</a>. Three-series plateau set, September 3, 2026.</span></div>
+        <div class="reference"><span class="n">[3]</span><span><a href="https://github.com/VPC-DevAdmin/xeon-agent-swarm/tree/88e3d34/data/capacity">Versioned evidence ledgers, run results, and set summary</a>. Three-series plateau set, September 3, 2026.</span></div>
         <div class="reference"><span class="n">[4]</span><span><a href="https://www.dell.com/en-us/shop/dell-poweredge-servers/poweredge-r470-rack-server/spd/poweredge-r470">Dell PowerEdge R470</a> and <a href="https://www.intel.com/content/www/us/en/products/details/processors/xeon.html">Intel Xeon 6 processors</a>.</span></div>
       </div>
     </section>
