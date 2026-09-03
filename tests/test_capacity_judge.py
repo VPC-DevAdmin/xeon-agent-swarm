@@ -188,3 +188,41 @@ def test_sweep_requires_two_confirming_windows(tmp_path):
     conv = s["tiers"]["conversational"]
     assert conv["confirmed"]
     assert conv["sustainable_rate"] < 50.0
+
+
+def test_plateau_judges_one_held_rate_as_a_cohort(tmp_path):
+    """A flat, on-time plateau at 2/s: sweep-2's 30 s windows cannot certify
+    it (20 units per type per window bound below the target), the plateau
+    rule pools the whole steady cohort and can. Two ledgers pool."""
+    import gzip, json
+    from backend.capacity import judge
+
+    def ledger(path, seed):
+        rows = [{"k": "header", "capability_target": 0.95,
+                 "capability_confidence": 0.95}]
+        sids = ["research_brief", "comparison", "digest"]
+        t = 1000.0 + seed
+        for i in range(600):                       # 300 s at 2/s
+            sid = sids[i % 3]
+            lat = 30000.0 + (i % 7) * 500.0
+            rows.append({"k": "unit", "sid": sid, "ok": True, "lat": lat,
+                         "sub": t, "end": t + lat / 1000.0})
+            t += 0.5
+        rows.append({"k": "footer"})
+        with gzip.open(path, "wt") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+        return path
+
+    a = ledger(tmp_path / "a.jsonl.gz", 0)
+    b = ledger(tmp_path / "b.jsonl.gz", 0.25)
+    s = judge.sweep(a)
+    assert not any(v.get("sustainable_rate") for v in s["tiers"].values())
+    p = judge.plateau([a, b])
+    assert p["units"] == 1200 and p["ledgers"] == 2
+    assert 3.6 <= p["rate"] <= 4.1                 # two 2/s ledgers pooled
+    assert p["keeps_up"] is True
+    assert "interactive" in p["sustained_tiers"]   # 45 s deadline, 30-33 s latency
+    assert "conversational" not in p["sustained_tiers"]
+    # Little's law: ~4/s x (31.5 s median + 3 s think) ~ 138 resident
+    assert 120 <= p["resident_sessions"] <= 150

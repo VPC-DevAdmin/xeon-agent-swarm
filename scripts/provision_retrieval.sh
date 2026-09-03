@@ -92,7 +92,7 @@ start_ort_reranker() {
   # setsid -f: fully detached (own session, reparented to init) so this
   # script - and the fleet script that calls it - returns immediately.
   (cd "$R" && TOKENIZERS_PARALLELISM=false RERANK_SPIN=1 \
-      RERANK_THREADS="$RERANK_THREADS" RERANK_MAX_QUEUE=16 \
+      RERANK_THREADS="$RERANK_THREADS" RERANK_MAX_QUEUE=${RERANK_MAX_QUEUE:-96} \
       RERANK_MODEL_DIR="$INT8_DIR" \
       setsid -f taskset -c "$RERANK_CPUS" .venv/bin/uvicorn scripts.ort_rerank_server:app \
         --workers "$RERANK_WORKERS" --port 8881 --host 127.0.0.1 --log-level warning \

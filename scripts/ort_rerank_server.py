@@ -36,9 +36,24 @@ MODEL_DIR = os.getenv("RERANK_MODEL_DIR", "/data/local/ms-marco-int8")
 THREADS = int(os.getenv("RERANK_THREADS", "8") or 8)
 MAX_LEN = int(os.getenv("RERANK_MAX_LEN", "256") or 256)
 MAX_BATCH = int(os.getenv("RERANK_MAX_BATCH", "32") or 32)
-MAX_QUEUE = int(os.getenv("RERANK_MAX_QUEUE", "16") or 16)
+# Queue depth per worker process. Sized to the admission control upstream
+# (2 calls per executor x 112 executors = 224 in flight box-wide): a queue
+# of 16 refused a third of a saturating fleet's calls with the cores at
+# 55%, and refusals that outlive the client's 120 s backoff are failed
+# workflows. Queueing here is bounded by the executors' admission gates,
+# so a deep queue cannot run away; 429 now means genuine overload.
+MAX_QUEUE = int(os.getenv("RERANK_MAX_QUEUE", "96") or 96)
 
 app = FastAPI(title="ort-rerank")
+
+
+@app.on_event("startup")
+async def _widen_threadpool() -> None:
+    # Sync endpoints run on anyio's thread pool (default 40 tokens per
+    # process); the pool must hold the whole queue or requests wait
+    # invisibly in front of it.
+    import anyio
+    anyio.to_thread.current_default_thread_limiter().total_tokens = MAX_QUEUE + 16
 
 _tok = Tokenizer.from_file(os.path.join(MODEL_DIR, "tokenizer.json"))
 _tok.enable_truncation(MAX_LEN)

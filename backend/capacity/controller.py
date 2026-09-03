@@ -794,8 +794,15 @@ class CapacityTest:
                     # The retrieval stack (TEI embedder/reranker) is its own
                     # attribution group so the report can say what share of
                     # the box was retrieval compute.
+                    # Roots: the TEI containers and the ONNX Runtime
+                    # reranker's master, whose workers are multiprocessing
+                    # spawn children with a generic cmdline - only the
+                    # process tree finds them (a cmdline match alone put
+                    # ~20% of the host, the reranker's real burn, in
+                    # "other" during series 7101).
                     ret: set[int] = set()
                     stack = [p for p in find_pids("text-embeddings")
+                             + find_pids("ort_rerank_server")
                              if p not in own]
                     while stack:
                         cur = stack.pop()

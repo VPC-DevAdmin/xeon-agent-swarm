@@ -37,6 +37,7 @@ post-2 (supersedes post-1's failure rule):
 from __future__ import annotations
 
 import bisect
+import collections
 import json
 import logging
 from pathlib import Path
@@ -263,6 +264,92 @@ def sweep(path: str | Path, window_s: float = 30.0,
             "windows": windows, "tiers": tiers_out}
 
 
+PLATEAU_VERSION = "plateau-1"
+
+
+def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
+            confidence: float = 0.95, warmup_x: float = 1.5) -> dict:
+    """Plateau post-processing: judge ONE held rate from one or more ledgers
+    (the instances of a fleet run at the same rate, pooled).
+
+    Why not sweep-2's 30-second windows: at 2 workflows/s an instance
+    admits 60 units per window, 20 per type, and the joint Wilson bound on
+    20 of 20 is 0.83 - a perfectly on-time plateau is unjudgeable window
+    by window. A plateau is one operating point, so it is judged as one
+    cohort: every unit admitted after warm-up (warmup_x times the slowest
+    completed latency, so the queue has filled to its steady depth) and
+    before the last arrival. Per-type on-time fractions against each tier
+    deadline take the joint Wilson bound over that whole cohort; steady
+    state is backlog growth across the cohort span (arrivals-to-date minus
+    completions-to-date at the end of the span versus its start), within
+    max(5, 5% of cohort arrivals). Sessions resident = rate x (median
+    latency + think), Little's law."""
+    from backend.capacity.scenarios import service_ladder
+    units = []
+    per_ledger = []
+    for path in paths:
+        ev = read_evidence(path)
+        us = [(float(u["sub"]), float(u["end"]) if u.get("end") else None,
+               u.get("sid") or "?", bool(u.get("ok")),
+               float(u["lat"]) if u.get("lat") is not None else None,
+               (u.get("err") or "")[:40])
+              for u in ev["units"] if u.get("sub")]
+        units.extend(us)
+        per_ledger.append(len(us))
+    if not units:
+        return {"plateau_version": PLATEAU_VERSION, "units": 0}
+    units.sort()
+    sids = sorted({u[2] for u in units})
+    z = st.familywise_z(max(1, len(sids)), confidence)
+    ladder = service_ladder()
+    t0, t_last = units[0][0], units[-1][0]
+    slowest = max((u[4] for u in units if u[3] and u[4]), default=0.0) / 1000.0
+    start = t0 + min(warmup_x * slowest, 0.5 * (t_last - t0))
+    cohort = [u for u in units if start <= u[0] <= t_last]
+    span = max(1e-9, t_last - start)
+    rate = len(cohort) / span
+    subs = [u[0] for u in units]
+    ends = sorted(u[1] for u in units if u[1] is not None)
+    backlog_start = bisect.bisect_left(subs, start) - bisect.bisect_left(ends, start)
+    backlog_end = bisect.bisect_right(subs, t_last) - bisect.bisect_left(ends, t_last)
+    backlog_delta = backlog_end - backlog_start
+    keeps_up = backlog_delta <= max(5, int(0.05 * len(cohort)))
+    per_type = {}
+    for sid in sids:
+        xs = [u for u in cohort if u[2] == sid]
+        lats = sorted(u[4] for u in xs if u[3] and u[4] is not None)
+        failed = collections.Counter(u[5] for u in xs if not u[3])
+        per_type[sid] = {"n": len(xs), "ok": len(lats),
+                         "p50_ms": _pct(lats, 50), "p95_ms": _pct(lats, 95),
+                         "failed": dict(failed)}
+    tiers = {}
+    for tier, dl in ladder.items():
+        if dl is None:
+            continue
+        bounds = {}
+        for sid in sids:
+            xs = [u for u in cohort if u[2] == sid]
+            wins = sum(1 for u in xs if u[3] and u[4] is not None
+                       and u[4] <= float(dl) * 1000.0)
+            bounds[sid] = round(st.wilson_lower(wins, len(xs), z), 4) if xs else 0.0
+        ok = bool(bounds) and min(bounds.values()) >= target and keeps_up
+        tiers[tier] = {"deadline_s": float(dl), "bounds": bounds,
+                       "on_time_and_steady": ok}
+    all_lats = sorted(u[4] for u in cohort if u[3] and u[4] is not None)
+    med = (_pct(all_lats, 50) or 0.0) / 1000.0
+    return {"plateau_version": PLATEAU_VERSION, "ledgers": len(paths),
+            "units": len(units), "units_per_ledger": per_ledger,
+            "cohort_units": len(cohort), "warmup_s": round(start - t0, 1),
+            "span_s": round(span, 1), "rate": round(rate, 3),
+            "backlog_start": backlog_start, "backlog_end": backlog_end,
+            "backlog_delta": backlog_delta, "keeps_up": keeps_up,
+            "per_type": per_type, "tiers": tiers,
+            "sustained_tiers": [t for t, v in tiers.items()
+                                if v["on_time_and_steady"]],
+            "resident_sessions": int(rate * (med + think_s)),
+            "think_s": think_s}
+
+
 def summarize(judgment: dict) -> dict:
     """The compact slice that rides inside a run result."""
     return {k: judgment[k] for k in
@@ -279,7 +366,16 @@ def main() -> None:  # pragma: no cover — thin CLI
     ap.add_argument("--sweep", action="store_true",
                     help="rate-sweep post-processing instead of the "
                          "capability judgment")
+    ap.add_argument("--plateau", nargs="*", metavar="LEDGER",
+                    help="judge one held rate from these ledgers (pooled) "
+                         "plus the positional one")
     args = ap.parse_args()
+    if args.plateau is not None:
+        p = plateau([args.evidence, *args.plateau])
+        if args.out:
+            Path(args.out).write_text(json.dumps(p, indent=1))
+        print(json.dumps(p, indent=1))
+        return
     if args.sweep:
         s = sweep(args.evidence)
         if args.out:
