@@ -237,6 +237,9 @@ repomix-output.xml
 # ...except benchmark results, judgments, and evidence ledgers: the ledgers
 # are the raw record that lets verdicts be re-judged without re-running load
 !/data/capacity/
+# ...but never the corpus fixtures: 100MB rebuildable stores
+data/capacity/**/retrieval/
+/data/capacity/retrieval/
 
 # Local env overrides (vite)
 *.local

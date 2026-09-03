@@ -32,8 +32,10 @@ CORPUS_VERSION = "v2"
 CHUNKS = int(os.getenv("CAPACITY_CORPUS_CHUNKS", "120000"))
 TOPICS = 2000
 WORDS_PER_CHUNK = 70
-CORPUS_DIR = Path(os.getenv("CAPACITY_RESULTS_DIR", "data/capacity")).parent \
-    / "capacity" / "retrieval"
+# A FIXED location, independent of per-instance results dirs: deriving it
+# from CAPACITY_RESULTS_DIR made each fleet instance resolve a different
+# path and rebuild its own 100MB copy of the fixture.
+CORPUS_DIR = Path(os.getenv("CAPACITY_CORPUS_DIR", "data/capacity/retrieval"))
 
 _WORDS = ("throughput latency quantization bandwidth cache tensor batch "
           "prefill decode scheduler memory socket thread kernel affinity "
