@@ -483,7 +483,11 @@ async def _completion(*, tier: str, category: str, seed: str, messages: list[dic
         "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
         "usage": _usage(messages, completion_text),
     }
-    return JSONResponse(body, headers=_headers(tier, category, seed))
+    hdrs = _headers(tier, category, seed)
+    # The modeled wait rides the response so a probe can split router
+    # latency into "waited as modeled" and "queued behind the box".
+    hdrs["x-mock-wait-s"] = f"{wait:.3f}"
+    return JSONResponse(body, headers=hdrs)
 
 
 def _error(status: int, message: str, param: str | None = None,
