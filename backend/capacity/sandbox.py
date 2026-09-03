@@ -70,10 +70,15 @@ def _command(size: str, seed: int) -> list[str]:
         site = os.path.dirname(os.path.dirname(numpy.__file__))
     except ImportError:
         site = next((p for p in sys.path if p.endswith("site-packages")), "")
-    inner = [sys.executable, "-I", "-S", str(JOB_SCRIPT), size, str(seed), site,
+    # Thread caps travel INSIDE the command: sudo resets the environment, and
+    # without them OpenBLAS spawns a thread per CPU at import (128 here) and
+    # numpy fails to load under the process limit.
+    inner = ["env", "OPENBLAS_NUM_THREADS=1", "OMP_NUM_THREADS=1",
+             "MKL_NUM_THREADS=1", "PYTHONHASHSEED=0",
+             sys.executable, "-I", "-S", str(JOB_SCRIPT), size, str(seed), site,
              str(SIZES[size])]
     limits = ["prlimit", f"--cpu={CPU_LIMIT_S}", f"--as={MEM_LIMIT_BYTES}",
-              "--fsize=1048576", "--nproc=64"] if shutil.which("prlimit") else []
+              "--fsize=1048576"] if shutil.which("prlimit") else []
     if isolation_mode() == "netns":
         # Drop back to the invoking user by uid, not $USER: executors run
         # without USER in their environment, and a job run as "nobody"
