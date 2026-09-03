@@ -323,6 +323,7 @@
         <a href="#packing">Packing</a>
         <a href="#results">Results</a>
         <a href="#limit">What limited it</a>
+        <a href="#depth">Rerank depth</a>
         <a href="#boundary">Boundary</a>
         <a href="#reproducibility">Reproducibility</a>
       </nav>
@@ -547,9 +548,89 @@
       </div>
     </section>
 
-    <section id="boundary">
+    <section id="depth">
       <div class="section-head">
         <span class="section-number">06</span>
+        <h2>Rerank depth is the dial, and here is its law<span class="rule"></span></h2>
+      </div>
+      <div class="prose">
+        <p class="lead">The certified rate depends on one declared choice: how many candidate passages the reranker scores per retrieval, sixteen in the reference workload. That number is not special, so the paper measures how the rate moves with it and publishes the rule instead of hiding the choice.</p>
+        <p>The tier's ceiling is a pair budget: about 1,300 to 1,400 scored pairs per second on its 40 cores, whatever the depth. A workflow averages 1.33 rerank calls, so the sustainable rate is roughly 1,300 divided by 1.33 times the depth. At sixteen candidates that predicts 61 workflows per second, and 62.7 was certified. To check the rule rather than assume it, two more depths were run at their predicted edges under one seed with five-minute holds.</p>
+      </div>
+
+      <figure class="capacity-figure" aria-labelledby="depth-caption">
+        <h3>Sustainable rate against rerank candidates per call</h3>
+        <p class="sub">Line: the pair-budget law. Filled points: measured levels that held with zero failures. Open points: the next level up, which did not.</p>
+        <div style="overflow-x:auto">
+          <svg viewBox="0 0 640 330" width="100%" role="img" aria-label="Workflows per second versus rerank candidates per call. A curve falls from 61 at 16 candidates to 20 at 48. Measured points sit on the curve at 16, 32, and 48; open points above the curve at 32 and 48 mark levels that failed.">
+            <defs>
+              <style>
+                .ax { stroke: #a9b4c0; stroke-width: 1; }
+                .grid { stroke: #d9e0e5; stroke-width: 1; }
+                .law { fill: none; stroke: #0672ce; stroke-width: 2; }
+                .pt { fill: #0672ce; stroke: #ffffff; stroke-width: 2; }
+                .pt-fail { fill: #ffffff; stroke: #9b3b2e; stroke-width: 2; }
+                .lab { font: 12px Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #1d2c3b; }
+                .mut { font: 11px Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #5d6875; }
+                .hit { fill: transparent; }
+                .hit:hover + .tip, .tip:hover { opacity: 1; }
+                .tip { opacity: 0; transition: opacity .12s; pointer-events: none; }
+              </style>
+            </defs>
+            <!-- plot area: x 70..600 maps depth 8..56 ; y 30..270 maps 0..80 wf/s -->
+            <g class="grid">
+              <line x1="70" y1="210" x2="600" y2="210"/><line x1="70" y1="150" x2="600" y2="150"/><line x1="70" y1="90" x2="600" y2="90"/><line x1="70" y1="30" x2="600" y2="30"/>
+            </g>
+            <g class="ax"><line x1="70" y1="270" x2="600" y2="270"/><line x1="70" y1="30" x2="70" y2="270"/></g>
+            <g class="mut">
+              <text x="62" y="274" text-anchor="end">0</text><text x="62" y="214" text-anchor="end">20</text><text x="62" y="154" text-anchor="end">40</text><text x="62" y="94" text-anchor="end">60</text><text x="62" y="34" text-anchor="end">80</text>
+              <text x="158" y="290" text-anchor="middle">16</text><text x="335" y="290" text-anchor="middle">32</text><text x="512" y="290" text-anchor="middle">48</text>
+              <text x="335" y="312" text-anchor="middle">rerank candidates per call (16 pairs = reference)</text>
+              <text x="14" y="150" text-anchor="middle" transform="rotate(-90 14 150)">workflows per second, box-wide</text>
+            </g>
+            <!-- law: rate = 1300 / (1.33 * d); points computed for d = 12..56 -->
+            <path class="law" d="M 114 26 L 158 87 L 202 124 L 246 148 L 290 166 L 335 178 L 379 188 L 423 195 L 467 201 L 512 205 L 556 209 L 600 212"/>
+            <!-- measured: sustained (filled) -->
+            <circle class="pt" cx="158" cy="82" r="6"/><rect class="hit" x="146" y="70" width="24" height="24"/><g class="tip"><rect x="170" y="62" width="250" height="34" rx="4" fill="#061b2c"/><text x="180" y="76" fill="#fff" class="lab" style="fill:#fff">16 candidates: 62.7/s certified (3 series)</text><text x="180" y="91" style="fill:#b8c6d1" class="mut">researcher p95 40 s, zero failures</text></g>
+            <circle class="pt" cx="335" cy="174" r="6"/><rect class="hit" x="323" y="162" width="24" height="24"/><g class="tip"><rect x="347" y="154" width="240" height="34" rx="4" fill="#061b2c"/><text x="357" y="168" style="fill:#fff" class="lab">32 candidates: 32/s held, at the edge</text><text x="357" y="183" style="fill:#b8c6d1" class="mut">researcher p95 85 s, zero failures</text></g>
+            <circle class="pt" cx="512" cy="210" r="6"/><rect class="hit" x="500" y="198" width="24" height="24"/><g class="tip"><rect x="380" y="226" width="240" height="34" rx="4" fill="#061b2c"/><text x="390" y="240" style="fill:#fff" class="lab">48 candidates: 20/s held, at the edge</text><text x="390" y="255" style="fill:#b8c6d1" class="mut">researcher p95 99 s, zero failures</text></g>
+            <!-- measured: not sustained (open) -->
+            <circle class="pt-fail" cx="335" cy="150" r="6"/><rect class="hit" x="323" y="138" width="24" height="24"/><g class="tip"><rect x="347" y="118" width="250" height="34" rx="4" fill="#061b2c"/><text x="357" y="132" style="fill:#fff" class="lab">32 candidates: 40/s offered, not sustained</text><text x="357" y="147" style="fill:#b8c6d1" class="mut">researcher p95 150 s, 10 failures per instance</text></g>
+            <circle class="pt-fail" cx="512" cy="186" r="6"/><rect class="hit" x="500" y="174" width="24" height="24"/><g class="tip"><rect x="380" y="150" width="250" height="34" rx="4" fill="#061b2c"/><text x="390" y="164" style="fill:#fff" class="lab">48 candidates: 28/s offered, not sustained</text><text x="390" y="179" style="fill:#b8c6d1" class="mut">researcher p95 188 s, failures</text></g>
+            <circle class="pt-fail" cx="158" cy="54" r="6"/><rect class="hit" x="146" y="42" width="24" height="24"/><g class="tip"><rect x="170" y="22" width="250" height="34" rx="4" fill="#061b2c"/><text x="180" y="36" style="fill:#fff" class="lab">16 candidates: 72/s offered, not sustained</text><text x="180" y="51" style="fill:#b8c6d1" class="mut">researcher p95 189 s, three seeds</text></g>
+            <!-- direct labels -->
+            <text class="lab" x="170" y="86">62.7/s certified</text>
+            <text class="lab" x="347" y="196">32/s</text>
+            <text class="lab" x="524" y="228">20/s</text>
+            <!-- legend -->
+            <g transform="translate(400 40)">
+              <line x1="0" y1="0" x2="26" y2="0" class="law"/><text class="mut" x="32" y="4">pair-budget law</text>
+              <circle class="pt" cx="13" cy="20" r="5"/><text class="mut" x="32" y="24">held, zero failures</text>
+              <circle class="pt-fail" cx="13" cy="40" r="5"/><text class="mut" x="32" y="44">next level, not sustained</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption id="depth-caption">The measured levels sit on the pair-budget line within a few percent at all three depths. Hover a point for its numbers. Passage length enters the same way as depth: cost is per pair of about 125 tokens.</figcaption>
+      </figure>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Candidates per call</th><th>Pairs per workflow</th><th>Law predicts</th><th>Held (measured)</th><th>Not sustained (measured)</th><th>Evidence</th></tr></thead>
+          <tbody>
+            <tr><td><strong>16</strong> (reference)</td><td>21</td><td>61/s</td><td><strong>62.7/s</strong>, researcher p95 40 s, three series</td><td>72/s offered: p95 189 s</td><td>certified set</td></tr>
+            <tr><td>32</td><td>43</td><td>31/s</td><td>32/s at the edge, p95 85 s, zero failures</td><td>40/s offered: p95 150 s, failures</td><td>seed 7601, 5-minute holds</td></tr>
+            <tr><td>48</td><td>64</td><td>20/s</td><td>20/s at the edge, p95 99 s, zero failures</td><td>28/s offered: p95 188 s, failures</td><td>seed 7602, 5-minute holds</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="prose">
+        <p>The reference depth is at the lean end of practice: forty fused candidates, prefiltered to sixteen by a keyword scorer, twelve kept. A deployment that reranks more, or longer passages, lands lower in proportion; one that reranks less lands higher. The rule, not the reference point, is the sizing tool.</p>
+      </div>
+    </section>
+
+    <section id="boundary">
+      <div class="section-head">
+        <span class="section-number">07</span>
         <h2>The capacity figure applies to a defined test boundary<span class="rule"></span></h2>
       </div>
       <div class="prose">
@@ -576,7 +657,7 @@
             <li>Retrieval quality: capacity is invariant to relevance, so ranking quality is reported as a diagnostic and never judged</li>
             <li>Production third-party tool services, multi-node coordination, failover</li>
             <li>Long-duration soak and recovery after overload</li>
-            <li>The exact boundary between 62.7 and the next offered level</li>
+            <li>The exact boundary between 62.7 and the next offered level; depths other than 16 are checked at one seed, not certified</li>
           </ul>
         </div>
       </div>
@@ -587,7 +668,7 @@
 
     <section id="reproducibility">
       <div class="section-head">
-        <span class="section-number">07</span>
+        <span class="section-number">08</span>
         <h2>The result can be traced to versioned evidence<span class="rule"></span></h2>
       </div>
       <div class="prose">

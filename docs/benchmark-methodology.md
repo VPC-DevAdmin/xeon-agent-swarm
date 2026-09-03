@@ -99,6 +99,15 @@ deliberate revisions and must not be cited:
   carries the arrival generator's own receipt (arrivals shed by its stall
   clamp, ticks fired late). A plateau whose achieved arrival rate is under
   95% of the offered rate is generator-limited and sustains no tier.
+- **Rerank depth is a declared dial with a measured law.** The reference
+  workload scores 16 candidates per retrieval (40 fused, keyword-prefiltered
+  to 16, 12 kept). The tier's ceiling is a pair budget, ~1,300-1,400 scored
+  pairs/s on 40 cores at any depth, so the sustainable rate is about
+  1,300 / (1.33 calls x depth). Checked at one seed with 5-minute holds
+  (series 7601, 7602): depth 32 held 32 workflows/s at the edge (researcher
+  p95 85 s, zero failures) and not 40; depth 48 held 20 and not 28; the
+  certified 62.7 at depth 16 sits on the same line. CAPACITY_RERANK_DEPTH
+  is part of the machine fingerprint, so depths never mix.
 - **Context is re-carried, not cached.** Each model call re-sends its full
   context and the serving model charges prefill for all of it. A deployed
   serving tier with prompt caching would charge less for the repeated
