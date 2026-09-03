@@ -105,3 +105,28 @@ def test_comparison_executes_light_in_its_analysis_worker_only():
     name, args = _first_call(c, ANALYSIS_SYS, COMPARISON_OBJ, EXEC_TOOLS)
     assert name == "bench_execute" and '"light"' in args
     assert _first_call(c, WRITING_SYS, COMPARISON_OBJ, EXEC_TOOLS)[0] == "bench_record"
+
+
+def test_task_agent_plans_exactly_one_worker():
+    """v17 task agent: the planner delegates one general-purpose worker and
+    then synthesizes; three-subtask archetypes are untouched."""
+    c = _client()
+    obj = "Handle this single support ticket. Plan EXACTLY one worker subtask and no more."
+    task_tools = [{"type": "function", "function": {"name": "task", "parameters": {}}}]
+    r = c.post("/v1/chat/completions", json={
+        "model": "auto", "tools": task_tools,
+        "messages": [{"role": "system", "content": "You are the orchestrator."},
+                     {"role": "user", "content": obj}]})
+    msg = r.json()["choices"][0]["message"]
+    calls = msg.get("tool_calls") or []
+    assert len(calls) == 1 and calls[0]["function"]["name"] == "task"
+    assert '"general-purpose"' in calls[0]["function"]["arguments"]
+    # after one delegation closes, the planner synthesizes instead of delegating again
+    done = [{"role": "system", "content": "You are the orchestrator."},
+            {"role": "user", "content": obj},
+            {"role": "assistant", "content": None, "tool_calls": [
+                {"id": "t1", "type": "function", "function": {"name": "task", "arguments": calls[0]["function"]["arguments"]}}]},
+            {"role": "tool", "tool_call_id": "t1", "name": "task", "content": '{"result": "filed and classified", "confidence": 0.9}'}]
+    r2 = c.post("/v1/chat/completions", json={"model": "auto", "tools": task_tools, "messages": done})
+    msg2 = r2.json()["choices"][0]["message"]
+    assert not msg2.get("tool_calls") and msg2.get("content")

@@ -414,10 +414,16 @@ def _fake_submit(latency_s=0.05, ok=True, llm_calls=10):
         researcher = query.startswith("Using ONLY the field notes")
         comparison = query.startswith("Using ONLY the measurements")
         analyst = query.startswith("Using ONLY the dataset")
+        task = query.startswith("Handle this single support ticket")
         calls = 13 if (researcher or analyst) else (12 if comparison else llm_calls)
         tools = 6 if (researcher or analyst) else (5 if comparison else 3)
         tin = max(21_000 if researcher else (6500 if (comparison or analyst) else 5200),
                   int(len(query) / 4 * 2))
+        if task:
+            return {"ok": ok, "tokens_in": 2500, "tokens_out": 400,
+                    "error": None if ok else "status=failed",
+                    "trace": {"llm_calls": 4, "steps": 1, "validations": 3,
+                              "task_count": 1, "tool_calls": 1}}
         return {"ok": ok,
                 "tokens_in": tin,
                 "tokens_out": 1400,
@@ -441,8 +447,8 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
     test._e2e = E2ERunner(timeout_s=5, submit=_fake_submit())
     asyncio.run(test.run())
     r = test.result
-    assert r["mix"] == "tile" and r["tile_size"] == 4          # e2e tile = 4 workflows (v17)
-    assert set(r["per_scenario"]) == {"research_brief", "comparison", "digest", "data_analysis"}
+    assert r["mix"] == "tile" and r["tile_size"] == 6          # e2e tile = 6 sessions (v17: 4 types, task agent x2)
+    assert set(r["per_scenario"]) == {"research_brief", "comparison", "digest", "data_analysis", "task_ticket"}
     assert r["verdict"] == "capped" and (r["capacity_tiles"] or 0) >= 1
     assert r["workflows_per_hour"] is not None and r["workflows_per_hour"] > 0
     for sid, row in r["per_scenario"].items():
@@ -450,7 +456,8 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
         # measured, not assumed: v16 researcher retrieves (3 extra turns)
         assert row["trace"]["llm_calls"] == {"research_brief": 13,
                                              "comparison": 12,
-                                             "data_analysis": 13}.get(sid, 10)
+                                             "data_analysis": 13,
+                                             "task_ticket": 4}.get(sid, 10)
         assert row["trace"]["validations"] == 7
     assert r["repro"]["seed"] == 42
 

@@ -129,6 +129,7 @@ e2e_tile:
   comparison: 1
   digest: 1
   data_analysis: 1
+  task_ticket: 2      # the long tail of short-lived agents: two per tile, a declared assumption
 
 # AGENT DEADLINE TIERS. The weigh-in measures a machine's median workflow
 # time at one tile, that median places it in a tier, and the tier's deadline
@@ -275,6 +276,30 @@ e2e_workflows:
       summary table of the top merchants, the peak hour with its load, the
       p95 and p99 transaction values, and a list of anomalies with a
       one-line explanation each.
+  task_ticket:
+    name: "Task agent: one ticket (e2e)"
+    think_ms: 3000
+    # v17 short-lived archetype: one planner turn, ONE general-purpose worker
+    # that writes one durable record and answers, validation, synthesis. Born,
+    # does one thing, dies - the shape of most agents in a deployment
+    # (triggers, routing, extraction). Contract measured from a smoke run
+    # against the real orchestrator on 2026-09-03 and pinned exactly.
+    toolless: true
+    tools: [bench_record]
+    contract: {task_count: [1, 1], steps: [1, 1], llm_calls: [4, 4], validations: [3, 3], tool_calls: [1, 1], tokens_in: [300, 20000]}
+    contract_live: {task_count: [1, 2], steps: [1, 2], llm_calls: [2, 20], validations: [0, 10], tool_calls: [0, 4]}
+    budgets: {max_subagents: 2, max_tool_hops: 2}
+    query: >-
+      Handle this single support ticket (do not research further): a customer
+      reports that scheduled exports stopped arriving after they changed
+      their workspace timezone yesterday; exports run at 02:00 local time
+      and the last one landed at the old time. Classify the ticket
+      (category and severity), decide whether it is a defect or a
+      configuration change, and write the customer reply. Plan EXACTLY one
+      worker subtask and no more. The worker calls bench_record exactly
+      once to file the ticket record, then writes the classification and
+      the reply and stops. Deliverable: category, severity, root cause in
+      one line, and a three-sentence reply.
   digest:
     name: "Digest report (e2e)"
     think_ms: 3000

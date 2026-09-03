@@ -563,6 +563,11 @@ async def chat_completions(request: Request):
     # enabled (manifest present), splice in a tool_user delegation before writing.
     if "task" in tools:
         script = list(_SUBTASKS)
+        # v17 task agent: a single-shot job plans ONE general-purpose worker
+        # (born, does one thing, dies) instead of the three-worker script.
+        if "EXACTLY one worker subtask" in obj:
+            script = [("general-purpose",
+                       "Handle this task end to end: {obj}")]
         tool_id = _enabled_tool(system)
         if tool_id:
             script.insert(2, ("tool_user",
