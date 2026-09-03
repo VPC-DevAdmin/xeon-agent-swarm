@@ -60,8 +60,8 @@ def main() -> None:
     tiers = ["conversational", "interactive", "responsive", "attended", "queued", "background"]
     summary = {"set": str(set_dir), "series": dirs, "rates": rates, "per_rate": {}, "headline": {}}
     lines = [f"# Plateau set {set_dir.name}", "", f"Series: {', '.join(Path(d).name for d in dirs)}", "",
-             "| rate/inst | achieved (median, range) | gen ok | keeps up | researcher p50/p95 | comparison p50/p95 | digest p50/p95 | tiers sustained (all series) | resident (median) | host CPU | retrieval CPU |",
-             "|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| rate/inst | achieved (median, range) | gen ok | keeps up | researcher p50/p95 | comparison p50/p95 | digest p50/p95 | analyst p50/p95 | task p50/p95 | tiers sustained (all series) | resident (median) | host CPU | retrieval CPU |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rates:
         js = [series[d][r] for d in dirs if r in series[d]]
         ach = [j["rate"] for j in js]
@@ -85,6 +85,7 @@ def main() -> None:
                      f"{'yes' if row['generator_ok_all'] else 'NO'} | {'yes' if row['keeps_up_all'] else 'NO'} | "
                      f"{lat('research_brief', 'p50_ms')}/{lat('research_brief', 'p95_ms')} | "
                      f"{lat('comparison', 'p50_ms')}/{lat('comparison', 'p95_ms')} | {lat('digest', 'p50_ms')}/{lat('digest', 'p95_ms')} | "
+                     f"{lat('data_analysis', 'p50_ms')}/{lat('data_analysis', 'p95_ms')} | {lat('task_ticket', 'p50_ms')}/{lat('task_ticket', 'p95_ms')} | "
                      f"{', '.join(sustained) or 'none'} | {row['resident_median']} ({row['resident_range'][0]}-{row['resident_range'][1]}) | "
                      f"{row['host_cpu_median']}% | {row['retrieval_cpu_median']}% |")
     for t in tiers:
