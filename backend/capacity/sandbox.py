@@ -109,4 +109,13 @@ async def run_job(size: str, seed: int) -> dict:
                 "elapsed_ms": round(elapsed, 1)}
     payload.update(ok=True, size=size, elapsed_ms=round(elapsed, 1),
                    isolation=isolation_mode())
+    # Stage timings ride the executor's retrieval stats flush, so a plateau
+    # can be read for sandbox cost (wall, compute, CPU) per size.
+    try:
+        from backend.capacity import retrieval as _rt
+        _rt._ensure_stats()
+        _rt._note(f"sandbox_{size}_wall_ms", elapsed)
+        _rt._note(f"sandbox_{size}_cpu_ms", float(payload.get("cpu_ms") or 0.0))
+    except Exception:  # noqa: BLE001 - diagnostics never fail a job
+        pass
     return payload

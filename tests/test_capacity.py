@@ -442,7 +442,7 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
     asyncio.run(test.run())
     r = test.result
     assert r["mix"] == "tile" and r["tile_size"] == 4          # e2e tile = 4 workflows (v17)
-    assert set(r["per_scenario"]) == {"research_brief", "comparison", "digest"}
+    assert set(r["per_scenario"]) == {"research_brief", "comparison", "digest", "data_analysis"}
     assert r["verdict"] == "capped" and (r["capacity_tiles"] or 0) >= 1
     assert r["workflows_per_hour"] is not None and r["workflows_per_hour"] > 0
     for sid, row in r["per_scenario"].items():

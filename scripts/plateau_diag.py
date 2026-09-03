@@ -106,7 +106,9 @@ def main() -> None:
             t0 = min(by_ts)
             print("=== executor retrieval stages per 30 s (n, p50 of process medians, max p95):")
             keys = ("embed_gate_wait_ms", "embed_call_ms", "rerank_gate_wait_ms", "rerank_call_ms",
-                    "rerank_429_backoff_ms", "fuse_ms", "pack_ms", "retrieve_ms")
+                    "rerank_429_backoff_ms", "fuse_ms", "pack_ms", "retrieve_ms",
+                    "sandbox_light_wall_ms", "sandbox_light_cpu_ms",
+                    "sandbox_heavy_wall_ms", "sandbox_heavy_cpu_ms")
             for ts in sorted(by_ts):
                 rs = by_ts[ts]
                 parts = []
