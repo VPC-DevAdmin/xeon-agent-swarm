@@ -13,14 +13,25 @@ VOL=xeon-agent-swarm_tei_data
 RERANK_SRC=cross-encoder/ms-marco-MiniLM-L-6-v2
 MODEL_ROOT=${XEON_MODEL_ROOT:-$R/data/local-models}
 INT8_DIR=$MODEL_ROOT/ms-marco-int8
-RERANK_CPUS=${RERANK_CPUS:-88-119}
-RERANK_WORKERS=${RERANK_WORKERS:-4}
+# Allocation, v16.1 series 7102 -> 7103: at 32 cores the reranker pin ran
+# flat out (26.5% of host = 34 cores of retrieval) at 32 workflows/s with
+# the HOST at 45%, so the allocation, not the box, set the knee. Retrieval
+# costs ~1.06 cores per workflow/s and the rest of the box ~0.75, so 72
+# reranker cores + 8 embedder cores balance against the remaining 48 near
+# 60-65 workflows/s, where the host itself saturates.
+RERANK_CPUS=${RERANK_CPUS:-56-127}
+RERANK_WORKERS=${RERANK_WORKERS:-9}
 RERANK_THREADS=${RERANK_THREADS:-8}
+EMBED_CPUS=${EMBED_CPUS:-48-55}
 
 start_tei() {
   local name=$1 port=$2 model=$3
   if docker ps --format '{{.Names}}' | grep -q "^$name$"; then
-    return 0
+    # Same allocation? Keep it. A changed cpuset is a new configuration.
+    if [ "$(docker inspect -f '{{.HostConfig.CpusetCpus}}' "$name" 2>/dev/null)" = "$4" ]; then
+      return 0
+    fi
+    echo "$name cpuset changed -> recreating"
   fi
   docker rm -f "$name" >/dev/null 2>&1 || true
   docker run -d --name "$name" -p "127.0.0.1:$port:80" \
@@ -35,7 +46,7 @@ start_tei() {
 # threads that burned the quota instantly each scheduling period and then
 # slept (throttle-thrash: milliseconds became 30-second ReadTimeouts).
 # Pinned cores + matching thread limits give it honest, steady capacity.
-start_tei tei-embed 8880 sentence-transformers/all-MiniLM-L6-v2 "120-127" 8
+start_tei tei-embed 8880 sentence-transformers/all-MiniLM-L6-v2 "$EMBED_CPUS" 8
 
 # Reranker: INT8 on ONNX Runtime, not the TEI container. The quantized
 # graph runs 2.6x faster than FP32 under onnxruntime 1.29 (AMX/VNNI int8
@@ -75,9 +86,22 @@ EOF
 }
 
 start_ort_reranker() {
-  # Already the ORT server (its /health carries the model path)? Keep it.
+  # Already the ORT server (its /health carries the model path) on the
+  # same allocation? Keep it. A changed cpuset or worker count restarts it.
   if curl -sf localhost:8881/health 2>/dev/null | grep -q '"model"'; then
-    return 0
+    local master
+    master=$(pgrep -f "uvicorn scripts.ort_rerank_server:app" | head -1 || true)
+    if [ -n "$master" ]; then
+      local have want
+      have=$(taskset -cp "$master" 2>/dev/null | awk -F': ' '{print $2}')
+      want=$(taskset -c "$RERANK_CPUS" taskset -cp $$ 2>/dev/null | awk -F': ' '{print $2}')
+      local nworkers
+      nworkers=$(ps --ppid "$master" -o pid= | wc -l)
+      if [ "$have" = "$want" ] && [ "$nworkers" -eq $((RERANK_WORKERS + 1)) ]; then
+        return 0
+      fi
+      echo "ort-rerank allocation changed ($have x$((nworkers - 1)) -> $want x$RERANK_WORKERS) -> restarting"
+    fi
   fi
   docker rm -f tei-rerank >/dev/null 2>&1 || true
   for p in $(ss -tlnp 2>/dev/null | grep ":8881 " | grep -oE "pid=[0-9]+" | cut -d= -f2 | sort -u); do
@@ -102,7 +126,7 @@ start_ort_reranker() {
 
 build_int8_reranker
 start_ort_reranker
-echo "retrieval allocations: embed cpus 120-127, rerank cpus $RERANK_CPUS"
+echo "retrieval allocations: embed cpus $EMBED_CPUS, rerank cpus $RERANK_CPUS (${RERANK_WORKERS}x${RERANK_THREADS})"
 
 for port in 8880 8881; do
   for _ in $(seq 1 120); do
