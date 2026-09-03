@@ -94,9 +94,11 @@ start_ort_reranker() {
     if [ -n "$master" ]; then
       local have want
       have=$(taskset -cp "$master" 2>/dev/null | awk -F': ' '{print $2}')
-      want=$(taskset -c "$RERANK_CPUS" taskset -cp $$ 2>/dev/null | awk -F': ' '{print $2}')
+      # taskset prints a normalized list ("56-127"); normalize the wanted
+      # one the same way via a throwaway process under that affinity.
+      want=$(taskset -c "$RERANK_CPUS" bash -c 'taskset -cp $$' 2>/dev/null | awk -F': ' '{print $2}')
       local nworkers
-      nworkers=$(ps --ppid "$master" -o pid= | wc -l)
+      nworkers=$(ps --ppid "$master" -o pid= | wc -l)   # workers + spawn tracker
       if [ "$have" = "$want" ] && [ "$nworkers" -eq $((RERANK_WORKERS + 1)) ]; then
         return 0
       fi

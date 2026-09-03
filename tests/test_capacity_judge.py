@@ -226,3 +226,29 @@ def test_plateau_judges_one_held_rate_as_a_cohort(tmp_path):
     assert "conversational" not in p["sustained_tiers"]
     # Little's law: ~4/s x (31.5 s median + 3 s think) ~ 138 resident
     assert 120 <= p["resident_sessions"] <= 150
+
+
+def test_plateau_censors_a_generator_that_fell_behind(tmp_path):
+    """Unit rows carry the offered rate; a cohort whose achieved arrival
+    rate is under 95% of it is a generator-limited plateau: no tier is
+    sustained, whatever the latencies say."""
+    import gzip, json
+    from backend.capacity import judge
+
+    def ledger(path, offered, actual):
+        rows = [{"k": "header"}]
+        t = 1000.0
+        for i in range(1500):
+            rows.append({"k": "unit", "sid": ["a", "b", "c"][i % 3], "ok": True,
+                         "lat": 30000.0, "sub": t, "end": t + 30.0, "r": offered})
+            t += 1.0 / actual
+        rows.append({"k": "footer"})
+        with gzip.open(path, "wt") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+        return path
+
+    lagging = judge.plateau([ledger(tmp_path / "lag.jsonl.gz", 4.0, 3.0)])
+    assert lagging["generator_ok"] is False and lagging["sustained_tiers"] == []
+    honest = judge.plateau([ledger(tmp_path / "ok.jsonl.gz", 4.0, 3.95)])
+    assert honest["generator_ok"] is True and "interactive" in honest["sustained_tiers"]

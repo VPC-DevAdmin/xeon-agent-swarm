@@ -232,6 +232,48 @@ def _http():
     return _http_client
 
 
+_stage_samples: dict[str, list[float]] = {}
+_stats_task = None
+
+
+def _note(stage: str, ms: float) -> None:
+    _stage_samples.setdefault(stage, []).append(ms)
+
+
+async def _stats_flush_loop() -> None:
+    """Every 30 s, append this process's retrieval stage percentiles to
+    data/capacity/retrieval/stats-<pid>.jsonl, so a plateau can be read
+    stage by stage (embed, gate wait, rerank, fuse, pack) after the fact
+    without touching the prompts."""
+    import json
+    out = Path(os.getenv("CAPACITY_RETRIEVAL_STATS_DIR",
+                         "data/capacity/retrieval"))
+    while True:
+        await asyncio.sleep(30.0)
+        if not _stage_samples:
+            continue
+        snap = {k: sorted(v) for k, v in _stage_samples.items()}
+        _stage_samples.clear()
+        row = {"ts": round(time.time(), 1), "pid": os.getpid()}
+        for k, xs in snap.items():
+            row[k] = {"n": len(xs),
+                      "p50": round(xs[len(xs) // 2], 1),
+                      "p95": round(xs[min(len(xs) - 1, int(len(xs) * 0.95))], 1),
+                      "max": round(xs[-1], 1)}
+        try:
+            out.mkdir(parents=True, exist_ok=True)
+            with open(out / f"stats-{os.getpid()}.jsonl", "a") as fh:
+                fh.write(json.dumps(row) + "\n")
+        except OSError:
+            pass
+
+
+def _ensure_stats() -> None:
+    global _stats_task
+    if _stats_task is None:
+        _stats_task = asyncio.get_event_loop().create_task(_stats_flush_loop())
+
+
 async def _post_backpressure(url: str, payload: dict):
     """POST to a sized model service, treating 429/503 as backpressure.
 
@@ -244,10 +286,15 @@ async def _post_backpressure(url: str, payload: dict):
     delay = 0.25
     waited = 0.0
     resets = 0
+    stage = url.rsplit("/", 1)[-1]
     while True:
         try:
+            t_gate = time.perf_counter()
             async with _gate():
+                t_call = time.perf_counter()
+                _note(f"{stage}_gate_wait_ms", (t_call - t_gate) * 1000.0)
                 r = await _http().post(url, json=payload)
+                _note(f"{stage}_call_ms", (time.perf_counter() - t_call) * 1000.0)
         except (httpx.ReadError, httpx.RemoteProtocolError,
                 httpx.ConnectError) as exc:
             # A pooled keep-alive connection the server closed a moment
@@ -267,6 +314,7 @@ async def _post_backpressure(url: str, payload: dict):
         if waited >= 120.0:
             r.raise_for_status()
         sleep_for = min(delay, 120.0 - waited) * (0.8 + 0.4 * random.random())
+        _note(f"{stage}_429_backoff_ms", sleep_for * 1000.0)
         await asyncio.sleep(sleep_for)
         waited += sleep_for
         delay = min(delay * 2, 10.0)
@@ -324,6 +372,7 @@ async def retrieve(query: str, *, budget_words: int = 6000) -> dict:
     pack run in a worker thread (real CPU, off the event loop); the dense
     call awaits its modeled off-box latency."""
     t0 = time.perf_counter()
+    _ensure_stats()
     embedded = await embed_query(query)      # real inference when configured
     vdb_ms = float(os.getenv("CAPACITY_VDB_MS", "15") or 0)
     if vdb_ms > 0:
@@ -335,13 +384,20 @@ async def retrieve(query: str, *, budget_words: int = 6000) -> dict:
         sparse = sparse_search(query)
         return rrf_fuse(dense, sparse)
 
+    t1 = time.perf_counter()
     fused = await asyncio.to_thread(_fuse_side)
+    _note("fuse_ms", (time.perf_counter() - t1) * 1000.0)
+    t2 = time.perf_counter()
     winners = await cross_rerank(query, fused)
+    _note("rerank_stage_ms", (time.perf_counter() - t2) * 1000.0)
     reranker = "cross-encoder"
     if winners is None:
         winners = await asyncio.to_thread(lexical_rerank, query, fused)
         reranker = "lexical"
+    t3 = time.perf_counter()
     packed = await asyncio.to_thread(pack, winners, budget_words)
+    _note("pack_ms", (time.perf_counter() - t3) * 1000.0)
+    _note("retrieve_ms", (time.perf_counter() - t0) * 1000.0)
     m = re.search(r"topic(\d+)", query)
     per_topic = CHUNKS // TOPICS
     in_topic = (sum(1 for c in winners if c // per_topic == int(m.group(1)))

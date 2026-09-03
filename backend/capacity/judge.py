@@ -287,8 +287,11 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
     from backend.capacity.scenarios import service_ladder
     units = []
     per_ledger = []
+    offered = []
     for path in paths:
         ev = read_evidence(path)
+        rs = sorted(float(u["r"]) for u in ev["units"] if u.get("r") is not None)
+        offered.append(rs[len(rs) // 2] if rs else None)
         us = [(float(u["sub"]), float(u["end"]) if u.get("end") else None,
                u.get("sid") or "?", bool(u.get("ok")),
                float(u["lat"]) if u.get("lat") is not None else None,
@@ -314,6 +317,9 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
     backlog_end = bisect.bisect_right(subs, t_last) - bisect.bisect_left(ends, t_last)
     backlog_delta = backlog_end - backlog_start
     keeps_up = backlog_delta <= max(5, int(0.05 * len(cohort)))
+    offered_sum = sum(o for o in offered if o) if offered else 0.0
+    achieved_ratio = (rate / offered_sum) if offered_sum else None
+    generator_ok = achieved_ratio is None or achieved_ratio >= 0.95
     per_type = {}
     for sid in sids:
         xs = [u for u in cohort if u[2] == sid]
@@ -332,12 +338,22 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
             wins = sum(1 for u in xs if u[3] and u[4] is not None
                        and u[4] <= float(dl) * 1000.0)
             bounds[sid] = round(st.wilson_lower(wins, len(xs), z), 4) if xs else 0.0
-        ok = bool(bounds) and min(bounds.values()) >= target and keeps_up
+        ok = (bool(bounds) and min(bounds.values()) >= target and keeps_up
+              and generator_ok)
         tiers[tier] = {"deadline_s": float(dl), "bounds": bounds,
                        "on_time_and_steady": ok}
     all_lats = sorted(u[4] for u in cohort if u[3] and u[4] is not None)
     med = (_pct(all_lats, 50) or 0.0) / 1000.0
+    # The generator's receipt: the cohort's achieved arrival rate against
+    # the rate the ledgers say was offered (unit rows carry it). A plateau
+    # whose generator fell behind describes load nobody offered, and its
+    # backlog then shrinks for the wrong reason - such a plateau is
+    # censored (generator_limit), never certified.
     return {"plateau_version": PLATEAU_VERSION, "ledgers": len(paths),
+            "offered_rate": round(offered_sum, 3) if offered_sum else None,
+            "achieved_ratio": (round(achieved_ratio, 3)
+                               if achieved_ratio is not None else None),
+            "generator_ok": generator_ok,
             "units": len(units), "units_per_ledger": per_ledger,
             "cohort_units": len(cohort), "warmup_s": round(start - t0, 1),
             "span_s": round(span, 1), "rate": round(rate, 3),
