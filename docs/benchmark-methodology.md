@@ -159,7 +159,18 @@ an allocation, the limit. The sizing arithmetic is in section 8.
 
 Each executor admits at most four reranker calls at a time and backs off
 exponentially on a 429 or 503, so a saturated tier produces queueing the
-judge sees as latency, never errors.
+judge sees as latency, never errors. The tier's own queue is sized from
+those gates, never set as a constant: with four instances of 28 executors
+and four calls each, 448 calls may be in flight, so each of the tier's
+worker processes queues at least its share of that plus a margin. A queue
+below that share refuses calls the cores could serve, and each refusal
+costs the caller a 0.25 to 10 s backoff; a mis-sized queue once turned a
+0.3 s retrieval into 5 to 7 s at 40 workflows/s and looked exactly like a
+latency knee until a router probe and an executor profile showed the
+router answering in its modeled wait and the executors busy only with
+keyword search and database writes. The diagnostic pair, a probe of a
+service from outside the executors alongside a profile of an executor,
+is the standard way a knee is attributed here before it is reported.
 
 ## 4. How load is offered: plateaus
 
