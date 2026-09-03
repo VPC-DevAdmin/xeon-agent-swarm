@@ -876,7 +876,8 @@ class CapacityTest:
                 # 30 s scan can catch.
                 by = await asyncio.to_thread(
                     proc_cpu.sample, groups,
-                    {"sandbox": list(groups.get("executors") or [])})
+                    {"sandbox": list(groups.get("executors") or [])
+                     + list(groups.get("siblings") or [])})
                 if by is not None and s.get("cpu_pct") is not None:
                     by["other"] = round(max(0.0, s["cpu_pct"] - sum(by.values())), 1)
                     s["cpu_by"] = by
