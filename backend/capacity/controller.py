@@ -2001,7 +2001,14 @@ class CapacityTest:
         vals = tuple(os.getenv(k, "0") or "0" for k in
                      ("CAPACITY_MODEL_TTFT_MS", "CAPACITY_MODEL_DECODE_TPS",
                       "CAPACITY_MODEL_PREFILL_TPS"))
-        return "" if vals == ("0", "0", "0") else "|svc=" + ",".join(vals)
+        tag = "" if vals == ("0", "0", "0") else "|svc=" + ",".join(vals)
+        # Rerank depth moves the certified rate almost linearly (v16.1: 16
+        # candidates -> 62.7 workflows/s); a different depth is a different
+        # machine profile.
+        depth = os.getenv("CAPACITY_RERANK_DEPTH", "16") or "16"
+        if depth != "16":
+            tag += f"|rerank={depth}"
+        return tag
 
     async def _weigh_in(self) -> bool:
         """Place this machine in a deadline tier.

@@ -150,3 +150,13 @@ def test_transport_reset_is_retried_once(monkeypatch):
         assert calls["n"] == 3
     else:
         raise AssertionError("three resets must raise")
+
+
+def test_rerank_depth_is_a_declared_parameter(monkeypatch):
+    import backend.capacity.retrieval as rt
+    monkeypatch.delenv("CAPACITY_RERANK_DEPTH", raising=False)
+    assert rt.rerank_depth() == 16
+    monkeypatch.setenv("CAPACITY_RERANK_DEPTH", "48")
+    assert rt.rerank_depth() == 48
+    from backend.capacity import controller as ctl
+    assert "rerank=48" in ctl.CapacityTest._serving_tier_tag()

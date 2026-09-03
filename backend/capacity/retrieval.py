@@ -162,6 +162,13 @@ def rrf_fuse(dense: list[tuple[int, float]], sparse: list[tuple[int, float]],
     return [cid for cid, _ in sorted(score.items(), key=lambda x: -x[1])]
 
 
+def rerank_depth() -> int:
+    """Candidates the cross-encoder scores per retrieval (the declared
+    reference is 16; the certified rate scales inversely with it, so it
+    is a fingerprinted parameter, never a silent constant)."""
+    return int(os.getenv("CAPACITY_RERANK_DEPTH", "16") or 16)
+
+
 def lexical_rerank(query: str, candidates: list[int],
                    top: int = 12) -> list[int]:
     """v16a reranker: term-overlap scoring over the candidates' bodies.
@@ -171,7 +178,7 @@ def lexical_rerank(query: str, candidates: list[int],
     terms = set(re.findall(r"[a-z0-9]+", query.lower()))
     scored = []
     con = _con()
-    for cid in candidates[:32]:
+    for cid in candidates[:max(32, rerank_depth())]:
         row = con.execute("SELECT body FROM chunks WHERE id=?",
                           (cid,)).fetchone()
         if not row:
@@ -346,10 +353,11 @@ async def cross_rerank(query: str, candidates: list[int],
     # prefilters the fused list to 16, and the cross-encoder spends its
     # cycles only on those. Depth 50 cost ~49% of a 128-thread host at 25
     # workflows/s; 16 pairs is one half-batch and a quarter of the demand.
-    prefiltered = lexical_rerank(query, candidates, top=16)
+    depth = rerank_depth()
+    prefiltered = lexical_rerank(query, candidates, top=depth)
     con = _con()
     ids, texts = [], []
-    for cid in prefiltered[:16]:
+    for cid in prefiltered[:depth]:
         row = con.execute("SELECT body FROM chunks WHERE id=?",
                           (cid,)).fetchone()
         if row:
