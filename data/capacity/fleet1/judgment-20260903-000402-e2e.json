@@ -1,0 +1,14 @@
+{
+ "judge_version": "post-2",
+ "deadline_s": null,
+ "confidence": 0.95,
+ "target": 0.95,
+ "capability_users": null,
+ "first_failing_level": null,
+ "levels_judged": 0,
+ "units_judged": 0,
+ "levels": [],
+ "notes": [
+  "no rung deadline in header: completion is the only success criterion, so this judgment certifies completion, not service"
+ ]
+}

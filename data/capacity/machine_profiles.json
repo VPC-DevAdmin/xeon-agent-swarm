@@ -143,5 +143,26 @@
   ],
   "tier": "interactive",
   "deadline_s": 45.0
+ },
+ "target=agent_host|backend=remote_mock|workload=v16|model=mock-tier-router|ctx=-|maxtot=-|quant=-|cpu=Intel(R) Xeon(R) 6761P|cores=128|mem=1007.1|workers=8": {
+  "observations": [
+   {
+    "at": 1788357684.4262323,
+    "commit": "7a86b42",
+    "medians_s": {
+     "research_brief": 6.4
+    },
+    "worst_median_s": 6.4
+   }
+  ],
+  "updated_at": 1788357684.4262714,
+  "pooled_worst_median_s": 6.4,
+  "observation_count": 1,
+  "observed_range_s": [
+   6.4,
+   6.4
+  ],
+  "tier": "interactive",
+  "deadline_s": 45.0
  }
 }
