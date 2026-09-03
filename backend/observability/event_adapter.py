@@ -144,6 +144,8 @@ class EventAdapter:
         self.calls: list[dict] = []                 # every model call, for the routing rollup
         self.steps: dict[str, dict] = {}            # task_call_id -> {step_key, role, attempts}
         self._open_unbound: list[str] = []          # task_call_ids without a namespace yet
+        self.unbound_msgs = 0                       # subagent messages with no delegation
+        self.tcid_collisions = 0                    # delegation ids reused within a run
         self._ns_to_tcid: dict[tuple, str] = {}     # subagent namespace -> task_call_id
         self._delegation_n = 0
         self._orch_attempts = 0
@@ -227,6 +229,10 @@ class EventAdapter:
                    "total_tokens": self.total_tokens, **routing.as_dict()}
         if self.budget_exceeded:
             metrics["budget_exceeded"] = self.budget_exceeded
+        if self.unbound_msgs:
+            metrics["unbound_msgs"] = self.unbound_msgs
+        if self.tcid_collisions:
+            metrics["tcid_collisions"] = self.tcid_collisions
         await self.db.finalize_run(
             self.run_id,
             document_result={"final_answer": self.final_answer or ""},
@@ -307,6 +313,19 @@ class EventAdapter:
         desc = (tc.get("args") or {}).get("description") or ""
         step_key = f"{role}-{self._delegation_n}"[:32]
         tcid = tc.get("id")
+        if tcid in self.steps:
+            # The model reused a tool-call id (seen from a multi-process
+            # stand-in with per-process counters). Retire the earlier
+            # delegation under a private key so its hops and routing stay
+            # in the run's totals; the live id now names the new worker.
+            self.tcid_collisions += 1
+            logging.getLogger(__name__).warning(
+                "run %s: tool-call id %s reused for %s (previous %s)",
+                self.run_id, tcid, step_key, self.steps[tcid]["step_key"])
+            self.steps[f"{tcid}#retired{self._delegation_n}"] = self.steps.pop(tcid)
+            self._ns_to_tcid = {ns: (f"{tcid}#retired{self._delegation_n}"
+                                     if v == tcid else v)
+                                for ns, v in self._ns_to_tcid.items()}
         self.steps[tcid] = {"step_key": step_key, "role": role, "attempts": 0,
                             "desc": desc, "tool_hops": 0,
                             # routing telemetry for this worker (surfaced on task_completed)
@@ -456,12 +475,20 @@ class EventAdapter:
     # ── subagent (worker) calls and tools ────────────────────────────────────
     async def _handle_subagent(self, ns: tuple, m) -> None:
         tcid = self._bind_namespace(ns)
-        if tcid is None:
-            return
-        info = self.steps.get(tcid)
-        if info is None:
-            return
+        info = self.steps.get(tcid) if tcid is not None else None
         kind = type(m).__name__
+        if info is None:
+            # A subagent message with no delegation to charge it to. Rare
+            # (about 0.5% of bench runs lost one tool hop this way); every
+            # occurrence is logged with its stream coordinates and counted
+            # so the loss is visible in the run's metrics, not silent.
+            self.unbound_msgs += 1
+            logging.getLogger(__name__).warning(
+                "run %s: unbound subagent message dropped ns=%r kind=%s "
+                "name=%s open_unbound=%r bound=%r",
+                self.run_id, ns, kind, getattr(m, "name", None),
+                self._open_unbound, list(self._ns_to_tcid))
+            return
         if kind == "ToolMessage":
             # A worker tool call (one tool hop). ToolBudgetGuard declines
             # calls past the cap with an exhaustion notice; those are counted

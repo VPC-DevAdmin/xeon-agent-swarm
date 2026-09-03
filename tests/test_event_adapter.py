@@ -165,3 +165,62 @@ def test_adapter_builds_full_telemetry():
 if __name__ == "__main__":
     test_adapter_builds_full_telemetry()
     print("test_event_adapter OK")
+
+
+def _stream_with_tool_hops(t1, t2):
+    """Two delegations whose workers each make one tool hop."""
+    return [
+        ((), "updates", {"model": {"messages": [
+            ai(tier="tier5", tokens=(9000, 500),
+               tool_calls=[{"name": "task", "id": t1,
+                            "args": {"subagent_type": "research", "description": "gather"}}])]}}),
+        (("tools:AAA",), "updates", {"model": {"messages": [ai(tier="tier5", tokens=(6000, 40))]}}),
+        (("tools:AAA",), "updates", {"tools": {"messages": [tool(name="bench_record", content="RECORD COMMITTED")]}}),
+        (("tools:AAA",), "updates", {"model": {"messages": [ai(tier="tier5", tokens=(6200, 230))]}}),
+        ((), "updates", {"tools": {"messages": [tool(
+            name="task", tool_call_id=t1,
+            content='{"result": "vLLM hits 2400 req/s vs llama.cpp 100 req/s, a 24x gap.", "confidence": 0.8}')]}}),
+        ((), "updates", {"model": {"messages": [
+            ai(tier="tier5", tokens=(10000, 900),
+               tool_calls=[{"name": "task", "id": t2,
+                            "args": {"subagent_type": "writing", "description": "write"}}])]}}),
+        (("tools:BBB",), "updates", {"model": {"messages": [ai(tier="tier3", tokens=(4000, 40))]}}),
+        (("tools:BBB",), "updates", {"tools": {"messages": [tool(name="bench_record", content="RECORD COMMITTED")]}}),
+        (("tools:BBB",), "updates", {"model": {"messages": [ai(tier="tier3", tokens=(4100, 256))]}}),
+        ((), "updates", {"tools": {"messages": [tool(
+            name="task", tool_call_id=t2,
+            content="A clear, sufficiently long write-up comparing the two engines. " * 3)]}}),
+        ((), "updates", {"model": {"messages": [ai(tier="tier5", tokens=(12000, 600),
+                                                   content="# Final brief\nvLLM vs llama.cpp ...")]}}),
+    ]
+
+
+def _run(stream):
+    async def go():
+        fdb = FakeDB()
+        adapter = EventAdapter("run-y", broadcast=None, persistence=fdb, planner_tier="T5")
+        await adapter.start("compare")
+        for ns, mode, chunk in stream:
+            await adapter.handle(ns, mode, chunk)
+        summary = await adapter.finalize()
+        return fdb, adapter, summary
+    return asyncio.run(go())
+
+
+def test_tool_hops_survive_a_reused_delegation_id():
+    """The dropped-tool-call defect: a model (the multi-process mock) handed
+    two planner turns the same tool-call id; keying delegations by that id
+    overwrote the first worker and its hops vanished from the run total
+    (research 4 of 6, digest 2 of 3) with the call count intact. Now the
+    earlier record is retired, not replaced, and the collision is counted."""
+    fdb, adapter, summary = _run(_stream_with_tool_hops("call_mock_7", "call_mock_7"))
+    assert summary["tool_calls"] == 2
+    assert fdb.run["metrics"]["tool_calls"] == 2
+    assert fdb.run["metrics"]["tcid_collisions"] == 1
+    assert fdb.run["metrics"]["call_count"] == 7
+    assert fdb.steps["research-1"]["status"] == "completed"
+    assert fdb.steps["writing-2"]["status"] == "completed"
+    # and the plain case is untouched
+    fdb2, _a, summary2 = _run(_stream_with_tool_hops("call_mock_7", "call_mock_8"))
+    assert summary2["tool_calls"] == 2
+    assert "tcid_collisions" not in fdb2.run["metrics"]

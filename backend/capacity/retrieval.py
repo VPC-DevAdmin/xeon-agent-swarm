@@ -205,6 +205,20 @@ def pack(chunk_ids: list[int], budget_words: int = 6000) -> str:
 
 
 _http_client = None
+_tier_gate: asyncio.Semaphore | None = None
+
+
+def _gate() -> asyncio.Semaphore:
+    """Admission control for the sized model tier: at most N concurrent
+    calls per process (executor). Excess callers wait HERE, in-process,
+    instead of hammering a full tier - so saturation shows up as smoothly
+    rising retrieval latency rather than a 429 retry storm that amplifies
+    demand and turns the knee into a cliff of failures."""
+    global _tier_gate
+    if _tier_gate is None:
+        _tier_gate = asyncio.Semaphore(
+            int(os.getenv("CAPACITY_RERANK_CONCURRENCY", "2") or 2))
+    return _tier_gate
 
 
 def _http():
@@ -226,7 +240,8 @@ async def _post_backpressure(url: str, payload: dict):
     delay = 0.25
     waited = 0.0
     while True:
-        r = await _http().post(url, json=payload)
+        async with _gate():
+            r = await _http().post(url, json=payload)
         if r.status_code not in (429, 503):
             r.raise_for_status()
             return r
@@ -308,7 +323,12 @@ async def retrieve(query: str, *, budget_words: int = 6000) -> dict:
         winners = await asyncio.to_thread(lexical_rerank, query, fused)
         reranker = "lexical"
     packed = await asyncio.to_thread(pack, winners, budget_words)
+    m = re.search(r"topic(\d+)", query)
+    per_topic = CHUNKS // TOPICS
+    in_topic = (sum(1 for c in winners if c // per_topic == int(m.group(1)))
+                / len(winners)) if (m and winners) else None
     return {"chunks": winners, "packed": packed,
             "candidates": len(dense), "reranker": reranker,
             "embedded": embedded is not None,
+            "in_topic_fraction": in_topic,
             "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1)}

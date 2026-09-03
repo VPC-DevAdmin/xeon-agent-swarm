@@ -412,9 +412,11 @@ def _fake_submit(latency_s=0.05, ok=True, llm_calls=10):
         # v16: the researcher retrieves (3 extra worker turns, 3 extra tool
         # calls); the double mirrors the per-type contract it is judged by.
         researcher = query.startswith("Using ONLY the field notes")
-        calls = 13 if researcher else llm_calls
-        tools = 6 if researcher else 3
-        tin = max(21_000 if researcher else 5200, int(len(query) / 4 * 2))
+        comparison = query.startswith("Using ONLY the measurements")
+        calls = 13 if researcher else (11 if comparison else llm_calls)
+        tools = 6 if researcher else (4 if comparison else 3)
+        tin = max(21_000 if researcher else (6500 if comparison else 5200),
+                  int(len(query) / 4 * 2))
         return {"ok": ok,
                 "tokens_in": tin,
                 "tokens_out": 1400,
@@ -445,8 +447,8 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
     for sid, row in r["per_scenario"].items():
         assert row["calls"] > 0 and row["errors"] == 0
         # measured, not assumed: v16 researcher retrieves (3 extra turns)
-        assert row["trace"]["llm_calls"] == (13 if sid == "research_brief"
-                                             else 10)
+        assert row["trace"]["llm_calls"] == {"research_brief": 13,
+                                             "comparison": 11}.get(sid, 10)
         assert row["trace"]["validations"] == 7
     assert r["repro"]["seed"] == 42
 

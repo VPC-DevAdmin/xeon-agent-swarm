@@ -82,3 +82,34 @@ def test_mock_worker_sequences_retrieve_then_record():
     assert mr._tool_result_count(msgs_ret, "bench_retrieve") == 1
     assert mr._tool_result_count(msgs_ret, "bench_record") == 0
     assert mr._tool_result_count(msgs_both, "bench_record") == 1
+
+
+def test_tier_gate_bounds_concurrency(monkeypatch):
+    """Admission control: at most N calls in flight to the sized tier per
+    process; excess callers wait in-process instead of producing 429s."""
+    import asyncio
+    import backend.capacity.retrieval as rt
+    monkeypatch.setenv("CAPACITY_RERANK_CONCURRENCY", "2")
+    rt._tier_gate = None
+    peak = {"now": 0, "max": 0}
+
+    class _Resp:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return []
+
+    class _Client:
+        async def post(self, url, json=None):
+            peak["now"] += 1
+            peak["max"] = max(peak["max"], peak["now"])
+            await asyncio.sleep(0.02)
+            peak["now"] -= 1
+            return _Resp()
+
+    monkeypatch.setattr(rt, "_http", lambda: _Client())
+
+    async def main():
+        await asyncio.gather(*[rt._post_backpressure("http://x/rerank", {})
+                               for _ in range(8)])
+    asyncio.run(main())
+    assert peak["max"] == 2

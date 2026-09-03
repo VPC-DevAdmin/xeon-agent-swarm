@@ -1,43 +1,119 @@
 # Agent capacity benchmark methodology
 
 The methodology of record is the living document maintained alongside the
-benchmark, currently at workload version 14 with offline judge rule post-2.
-It supersedes the archived v8 text (docs/archive/benchmark-methodology-v8.md),
-which predates several deliberate revisions and must not be cited:
+benchmark, currently at workload version 16.1 with offline judge rules
+post-2 (capability) and sweep-2 (throughput). It supersedes the archived v8
+text (docs/archive/benchmark-methodology-v8.md), which predates several
+deliberate revisions and must not be cited:
 
 - **Record-not-refuse for the inference stand-in.** A co-located (loopback)
   stand-in no longer disqualifies a run. Every result instead records the
   stand-in's location, worker count, latency distribution, request-rate
   headroom arithmetic, and its measured share of host CPU on the same
   attribution basis as every other component, so a reader weighs the cost
-  (1.8-2% of host in published runs, counted inside the box totals) rather
-  than trusting an eligibility rule.
+  rather than trusting an eligibility rule.
+- **The serving tier is modeled, not instantaneous.** Every model call
+  waits as a remote serving tier would: time to first token plus output
+  tokens at a decode rate plus input tokens at a prefill rate, computed
+  from the actual payload of that call (CAPACITY_MODEL_TTFT_MS=500,
+  DECODE_TPS=100, PREFILL_TPS=8000; +/-20% jitter). A planner call reading
+  24k tokens waits several times longer than a validator verdict. The
+  three parameters are part of the machine fingerprint, so results under
+  different serving assumptions never mix.
 - **Evidence ledgers and post-processable judgment.** Every run streams a
-  per-unit ledger (submit/completion times, outcome, level, telemetry).
-  Verdicts are recomputed from the ledger by a versioned offline judge
-  (backend/capacity/judge.py); the in-run judge only steers the ramp. Rule
-  changes are applied to history by re-judging stored ledgers, never by
-  re-running load. Ledgers, judgments, and results are versioned in
-  data/capacity/.
+  per-unit ledger (submit/completion times, outcome, level, offered rate,
+  telemetry samples including host CPU, resident memory in GB and percent,
+  and per-group CPU attribution). Verdicts are recomputed from the ledger
+  by a versioned offline judge (backend/capacity/judge.py); the in-run
+  judge only steers. Rule changes are applied to history by re-judging
+  stored ledgers, never by re-running load. Ledgers, judgments, and results
+  are versioned in data/capacity/.
 - **The deadline anchor and the confidence claim, stated precisely.** A
   certified level's claim is: each workflow type's on-time fraction is at
   least 95%, at 95% confidence jointly across types (Wilson lower bound,
   Bonferroni-split alpha), over the units that level decided. A level fails
   only when the Wilson upper bound refutes the target. The bound covers one
   level; selecting the best of many tested levels and run-to-run variation
-  are covered by the repeat series, not by the within-level bound.
-- **Vocabulary.** A *workflow* is one fixed-size unit of agent work (planner,
-  three workers, synthesizer, validator: 10 model calls, 7 validations,
-  3 tool records). A *session* is a closed-loop driver that runs workflows
-  back to back with think time; session count is the capability metric. An
-  *agent* in prose means a session. A *subagent* is one worker inside a
-  workflow (about three in flight per session).
-- **Throughput, measured.** The open-loop measurement ran at workload v15
-  (context-weighted archetypes): a four-instance fleet sustained 453.6
-  workflows/s box-wide, terminated by the cpu verdict at 90% host with all
-  128 threads over 85% busy. The sweep judge (rule sweep-1) post-processes
-  any ledger into rate windows with per-tier on-time bounds and backlog
-  checks, so one sweep answers every deadline policy. Open loop is the
-  primary throughput measurement; the closed loop's remaining role is the
-  residency photograph. Sizing from the measured rate is Derived, no longer
-  Projected.
+  are covered by the repeat series (three runs per certified baseline), not
+  by the within-level bound.
+- **Throughput by plateau, judged by backlog.** The open-loop driver is a
+  dumb generator: it holds a fixed arrival rate for a fixed dwell and never
+  reacts to what it sees except for safety stops (resource streak, backlog
+  cap). A rate is judged in 30 s windows by the sweep-2 rule: every
+  workflow type's on-time fraction against a tier deadline clears the joint
+  Wilson bound AND the backlog does not grow (arrivals-to-date minus
+  completions-to-date changes by at most max(5, 5% of the window's
+  arrivals)). Same-window completion matching was abandoned (sweep-1)
+  because, with 30-160 s workflows, a window's completions answer the
+  previous window's arrivals. Because workflow latency rivals level dwell,
+  rates are run as separate plateaus (one rate per instance start), so
+  every cohort completes under the rate that admitted it, and the
+  latency-versus-rate curve is read across plateaus.
+- **Workload v16.1: the orchestrator earns its context on the box.** Three
+  archetypes, tiled equally. The *researcher* (heavy) makes 13 model calls,
+  7 validations, and 6 tool calls: each of its three workers runs a real
+  retrieval (bench_retrieve) and then a durable record write
+  (bench_record). The *comparison* (medium) makes 11 calls, 7 validations,
+  4 tool calls: its research worker retrieves once, every worker records.
+  The *digest* (light) makes 10 calls, 7 validations, 3 tool calls: records
+  only. Contracts are enforced per unit; a unit outside its contract is
+  invalid, never silently counted. Retrieval is real work on the host: BM25
+  over a 120,000-chunk seeded corpus (SQLite FTS5), reciprocal-rank fusion
+  with a modeled off-box dense index (a large vector database stays off
+  the box; its 15 ms answer is modeled), a lexical prefilter to 16
+  candidates, a cross-encoder rerank of those 16 on the box (INT8
+  ms-marco-MiniLM-L-6-v2 on ONNX Runtime), and packing of the winners with
+  [chunk-N] citations into the worker's context. Workers cite the chunk
+  ids they were given, so grounding is checkable.
+- **Retrieval quality is a diagnostic, not a gate.** Capacity is
+  invariant to relevance: reranking 16 relevant chunks costs exactly what
+  reranking 16 irrelevant ones costs, and the rest of the workflow is
+  fixed by contract. The pipeline therefore reports an in-topic fraction
+  (share of packed chunks from the query's seeded topic) per retrieval as
+  evidence that the pipeline is doing what a production pipeline does, and
+  no verdict depends on it.
+- **The retrieval tier is sized and admission-controlled.** The embedder
+  and reranker are pinned to cpusets (8 and 32 cores) with matching thread
+  limits, not CPU quotas (quotas on a 128-core host throttle-thrash: a
+  128-thread process burns its quota in milliseconds and sleeps). The
+  reranker is quantized to INT8 and served through ONNX Runtime, where the
+  int8 GEMMs use the Xeon's AMX/VNNI units: 1,544 pairs/s at saturation on
+  the 32-core pin versus 530 for the FP32 TEI container. Each executor
+  admits at most two reranker calls at a time
+  (CAPACITY_RERANK_CONCURRENCY) and backs off exponentially on 429/503, so
+  a saturated tier produces queueing, which the judge sees as latency, not
+  errors. The tier's CPU is attributed to the box totals like every other
+  component.
+- **Context is re-carried, not cached.** Each model call re-sends its full
+  context and the serving model charges prefill for all of it. A deployed
+  serving tier with prompt caching would charge less for the repeated
+  prefix; the benchmark keeps the pessimistic accounting because the
+  orchestrator's cost (the thing being measured) does not change with the
+  serving tier's cache policy.
+- **Accounting defects are counted, never hidden.** The stream adapter
+  logs and counts any subagent message it cannot attribute to a delegation
+  (metrics.unbound_msgs); a lost tool hop shows up as a contract miss on
+  that unit, which the harness records as invalid rather than as success
+  or failure.
+- **Host power management is part of the fingerprint.** The reference box
+  ramps idle cores from 500-2,500 MHz to 3,900 MHz under load with no OS
+  frequency governor exposed (firmware-managed), so a call that lands on
+  idle cores pays a ramp of tens of milliseconds. At the operating points
+  that matter (the knee) the cores are saturated and hot; at light load
+  the ramp is inside the reported latency. A BIOS system profile of
+  "Performance" would remove it and must be recorded when used.
+- **Vocabulary.** A *workflow* is one fixed-size unit of agent work of one
+  archetype (contract above). A *session* is a closed-loop driver that
+  runs workflows back to back with think time; session count is the
+  capability metric. An *agent* in prose means a session. A *subagent* is
+  one worker inside a workflow (about three in flight per session).
+  *Resident* workflows at a rate are rate x (median latency + think time)
+  by Little's law.
+- **Throughput, measured.** The open-loop measurement runs at workload
+  v16.1 on a four-instance fleet (4 x 28 executors) with the sweep-2 judge
+  post-processing each instance's ledger into rate windows with per-tier
+  on-time bounds and backlog checks, so one series answers every deadline
+  policy. Open loop is the primary throughput measurement; the closed
+  loop's remaining role is the residency photograph. Sizing from the
+  measured rate is Derived, no longer Projected. The published figure is
+  the median of three plateau series on the certified baseline.

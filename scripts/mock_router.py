@@ -50,6 +50,7 @@ import itertools
 import json
 import os
 import re
+import uuid
 import zlib
 import time
 
@@ -498,7 +499,12 @@ _tool_call_counter = itertools.count(1)
 
 
 def _tool_call(name: str, args: dict) -> dict:
-    return {"id": f"call_mock_{next(_tool_call_counter)}",
+    # Unique across the mock's worker PROCESSES, not just within one: a
+    # per-process counter handed two planner turns of the same run the
+    # same id when different processes served them, and the orchestrator's
+    # stream adapter (keyed by tool-call id) then overwrote the first
+    # worker's record - the ~0.2% "dropped tool call" defect.
+    return {"id": f"call_mock_{uuid.uuid4().hex[:20]}",
             "type": "function",
             "function": {"name": name, "arguments": json.dumps(args)}}
 
@@ -601,8 +607,13 @@ async def chat_completions(request: Request):
     # the retrieved chunks become its working context), then the durable
     # bench_record call, then its answer. A worker granted only
     # bench_record keeps the v14/v15 single-call shape.
-    if ("bench_retrieve" in tools
-            and _tool_result_count(messages, "bench_retrieve") == 0):
+    # Retrieval policy by archetype: the researcher retrieves in every
+    # worker; the comparison (medium) retrieves in its research worker only.
+    _role_now = next((r for r, marker in _ROLE_MARKERS if marker in system),
+                     "general-purpose")
+    _wants_retrieval = ("bench_retrieve" in tools and (
+        "Using ONLY the measurements" not in obj or _role_now == "research"))
+    if _wants_retrieval and _tool_result_count(messages, "bench_retrieve") == 0:
         topic = zlib.crc32(f"{obj[:80]}|{seed}".encode()) % 2000
         tc = _tool_call("bench_retrieve",
                         {"query": f"topic{topic} " + " ".join(
@@ -618,8 +629,29 @@ async def chat_completions(request: Request):
     # (d) worker subagent: detect role from the system prompt, return canned content
     # that passes validate_l0. Workers never emit tool calls.
     role = next((r for r, marker in _ROLE_MARKERS if marker in system), "general-purpose")
+    content = _worker_content(role, obj)
+    # Grounded by construction: a worker that retrieved cites the chunk ids
+    # it was actually given, so a host-side grounding check has something
+    # real to verify (citations must be a subset of the retrieved set).
+    cited: list[str] = []
+    for m in messages:
+        if m.get("role") == "tool":
+            ids = re.findall(r"\[chunk-(\d+)\]", _text(m.get("content")))
+            if ids:
+                cited = ids[:4]
+    if cited:
+        src = " Sources: " + " ".join(f"[chunk-{c}]" for c in cited) + "."
+        try:
+            doc = json.loads(content)
+        except ValueError:
+            doc = None
+        if isinstance(doc, dict) and isinstance(doc.get("result"), str):
+            doc["result"] += src
+            content = json.dumps(doc)
+        else:
+            content += src
     return await _completion(tier=tier, category=_CATEGORY.get(role, "general"), seed=seed,
-                       messages=messages, content=_worker_content(role, obj))
+                       messages=messages, content=content)
 
 
 if __name__ == "__main__":

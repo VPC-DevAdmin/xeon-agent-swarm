@@ -860,7 +860,8 @@ class CapacityTest:
                 self._evidence.write("sample", {
                     k: s.get(k) for k in
                     ("ts", "users", "in_flight", "p95_ms", "err_rate",
-                     "rpm", "cpu_pct", "cpu_by", "oldest_inflight_s")})
+                     "rpm", "cpu_pct", "cpu_by", "oldest_inflight_s",
+                     "mem_gb", "mem_pct")})
             await asyncio.sleep(self.cfg["sample_interval_s"])
 
     def _admit(self, sid: str) -> int:
@@ -2718,7 +2719,11 @@ class CapacityTest:
         knee in the noise at the top of it. That would invent a boundary the
         host never showed. Report the highest rate it sustained instead, as
         the lower bound it is."""
-        top_clean = max((lv["clean_rate"] for lv in self.rate_levels), default=None)
+        # Sweep-mode (dumb generator) levels carry no in-run clean_rate: the
+        # rate curve is post-processed from the ledger (judge.sweep), so
+        # the in-run summary is a lower bound over whatever levels have it.
+        top_clean = max((lv["clean_rate"] for lv in self.rate_levels
+                         if lv.get("clean_rate") is not None), default=None)
         # A hand stop leaves no verdict at all, only the phase, and it censors
         # the run exactly as a ceiling does.
         ended_early = (self.verdict in CENSORING_VERDICTS
@@ -2731,12 +2736,15 @@ class CapacityTest:
                 "reason": CENSOR_REASON.get(self.verdict or "stopped", self.verdict),
                 "levels": self.rate_levels}
             return
-        if len(self.rate_levels) < 4:
-            self.capacity_detail = {"status": "too few offered rates to fit a breakpoint"}
+        fit_levels = [lv for lv in self.rate_levels
+                      if lv.get("clean_rate") is not None]
+        if len(fit_levels) < 4:
+            self.capacity_detail = {"status": "too few offered rates to fit a breakpoint",
+                                    "levels": self.rate_levels}
             return
         rates = [lv.get("achieved_rate", lv["offered_rate"])
-                 for lv in self.rate_levels]
-        clean = [lv["clean_rate"] for lv in self.rate_levels]
+                 for lv in fit_levels]
+        clean = [lv["clean_rate"] for lv in fit_levels]
         fit = st.bootstrap_breakpoint_ci(rates, clean, seed=self.seed or 0)
         if fit is None:
             self.capacity_detail = {"status": "no distinct capacity knee detected",
