@@ -124,11 +124,17 @@ deliberate revisions and must not be cited:
   one worker inside a workflow (about three in flight per session).
   *Resident* workflows at a rate are rate x (median latency + think time)
   by Little's law.
-- **Throughput, measured.** The open-loop measurement runs at workload
-  v16.1 on a four-instance fleet (4 x 28 executors) with the sweep-2 judge
-  post-processing each instance's ledger into rate windows with per-tier
-  on-time bounds and backlog checks, so one series answers every deadline
-  policy. Open loop is the primary throughput measurement; the closed
-  loop's remaining role is the residency photograph. Sizing from the
-  measured rate is Derived, no longer Projected. The published figure is
-  the median of three plateau series on the certified baseline.
+- **Throughput, measured (v16.1 certified set, 2026-09-03).** Three plateau
+  series (seeds 7201, 7301, 7401) on the four-instance fleet with the tier
+  at 40+4 cores, ten-minute holds at 4/8/12/14/16 workflows/s per
+  instance, judged by plateau-1 from the ledgers (data/capacity/set-
+  20260903-061731/summary.json). Highest plateau every series sustains:
+  62.7 workflows/s box-wide (range 62.69-62.86), every tier from
+  interactive (45 s) downward, zero failures in 109,383 admitted units at
+  that level; researcher p50/p95 34/40 s, comparison 29/33 s, digest
+  28/29 s; 2,035 resident sessions (range 2,026-2,038); host 61% of
+  logical threads with the reranker's 40 physical cores saturated and its
+  second SMT siblings idle by design. The next offered level, 18/s per
+  instance, is not sustained (researcher median roughly triples, backlog
+  grows). Open loop is the primary throughput measurement; sizing from
+  the measured rate is Derived, no longer Projected.
