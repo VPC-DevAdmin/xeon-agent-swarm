@@ -1,0 +1,19 @@
+archetype costs -> data/capacity/archetypes-7900-20260903-190702 (rates 2 4, hold 240)
+=== task_ticket (19:07:02)
+  -> data/capacity/series-7900-20260903-190702
+=== digest (19:17:31)
+  -> data/capacity/series-7901-20260903-191731
+=== comparison (19:28:00)
+  -> data/capacity/series-7902-20260903-192800
+=== research_brief (19:38:33)
+  -> data/capacity/series-7903-20260903-193833
+=== data_analysis (19:49:03)
+  -> data/capacity/series-7904-20260903-194903
+| archetype | p50 / p95 (s) | host core-s/wf | of which sandbox | reranker (pair law) | executors + search + records + orchestration | notes |
+|---|---|---|---|---|---|---|
+| task_ticket | 10 / 21 | 0.54 | 0.00 | 0.00 | 0.55 | slope over 16.0 to 32.0 wf/s |
+| digest | 29 / 39 | 1.16 | 0.00 | 0.00 | 1.17 | slope over 8.0 to 16.0 wf/s |
+| comparison | 32 / 41 | 1.99 | 0.41 | 0.46 | 1.12 | slope over 8.0 to 16.0 wf/s |
+| research_brief | 35 / 39 | 3.20 | 0.00 | 1.37 | 1.82 | slope over 4.0 to 8.0 wf/s |
+| data_analysis | 37 / 44 | 6.74 | 4.68 | 0.00 | 0.94 | slope over 8.0 to 16.0 wf/s |
+ARCHETYPES DONE data/capacity/archetypes-7900-20260903-190702
