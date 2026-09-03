@@ -206,6 +206,40 @@ def build_bench_tool() -> StructuredTool:
     )
 
 
+class _BenchExecuteArgs(BaseModel):
+    task: str = Field(description="what to compute over the dataset")
+    size: str = Field(default="light", description="job size: light or heavy")
+
+
+def build_bench_execute_tool() -> StructuredTool:
+    """Sandboxed data job (workload v17): a fresh, limited interpreter runs
+    a seeded aggregation over a generated table and returns its results
+    into the worker's context. The size is declared by the workload; the
+    seed derives from the task text so the job is reproducible."""
+    async def _call(task: str, size: str = "light") -> str:
+        import zlib
+        from backend.capacity import sandbox
+        seed = zlib.crc32(task.encode()) % 1_000_000
+        r = await sandbox.run_job(size if size in sandbox.SIZES else "light", seed)
+        if not r.get("ok"):
+            raise RuntimeError(f"sandboxed job failed: {r.get('error')}")
+        return (f"[bench_execute] {size} job over {r['rows']:,} rows finished in "
+                f"{r['elapsed_ms']}ms (compute {r['compute_ms']}ms, isolation {r['isolation']}).\n"
+                f"Results: top keys by total {r['top_keys']}; value quantiles p50 {r['q50']}, "
+                f"p95 {r['q95']}, p99 {r['q99']}; peak hour {r['hourly_peak_hour']}; "
+                f"outliers {r['outliers']}; max high-value share {r['hi_share_max']}; "
+                f"mean of key means {r['mean_of_means']}.\n\nEXECUTION COMPLETE. Use these "
+                "results in your section; do not run the job again for this subtask.")
+
+    return StructuredTool.from_function(
+        coroutine=_call, name="bench_execute",
+        description="Run a sandboxed data job over the working dataset and "
+                    "return its aggregates (benchmark execution tool). Call "
+                    "EXACTLY ONCE per subtask, before bench_record.",
+        args_schema=_BenchExecuteArgs,
+    )
+
+
 class _BenchRetrieveArgs(BaseModel):
     query: str = Field(description="search query for the document store")
 

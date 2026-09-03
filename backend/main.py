@@ -360,6 +360,9 @@ async def _bench_agent(ckpt_dir: str, mf, *, plan_approval, enabled_tools, key,
         if "bench_retrieve" in (enabled_tools or []):
             from backend.agents.toolbox import build_bench_retrieve_tool
             bench_tools["bench_retrieve"] = build_bench_retrieve_tool()
+        if "bench_execute" in (enabled_tools or []):
+            from backend.agents.toolbox import build_bench_execute_tool
+            bench_tools["bench_execute"] = build_bench_execute_tool()
         _bench_agents[key] = build_agent(
             None, plan_approval=False,
             enabled_tools=enabled_tools, model_factory=mf,

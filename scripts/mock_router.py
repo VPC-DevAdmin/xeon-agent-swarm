@@ -620,6 +620,17 @@ async def chat_completions(request: Request):
                             re.findall(r"[a-z]+", obj.lower())[:6])})
         return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, tool_calls=[tc])
+    # Execution policy by archetype (v17): the data analyst runs a HEAVY
+    # job in every worker; the comparison runs a LIGHT job in its analysis
+    # worker only. After retrieval, before the record.
+    _wants_exec = ("bench_execute" in tools and (
+        "Using ONLY the dataset" in obj or _role_now == "analysis"))
+    if _wants_exec and _tool_result_count(messages, "bench_execute") == 0:
+        size = "heavy" if "Using ONLY the dataset" in obj else "light"
+        tc = _tool_call("bench_execute",
+                        {"task": (obj or "aggregate")[:80], "size": size})
+        return await _completion(tier=tier, category=_CATEGORY.get(_role_now, "general"),
+                           seed=seed, messages=messages, tool_calls=[tc])
     if ("bench_record" in tools
             and _tool_result_count(messages, "bench_record") == 0):
         tc = _tool_call("bench_record", {"key": (obj or "record")[:40]})

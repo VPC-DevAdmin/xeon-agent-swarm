@@ -15,6 +15,12 @@ COMPARISON_OBJ = "Analyze the research findings for: Using ONLY the measurements
 DIGEST_OBJ = "Write the final brief for: Summarize the week's changes"
 TOOLS = [{"type": "function", "function": {"name": n, "parameters": {}}}
          for n in ("bench_retrieve", "bench_record")]
+EXEC_TOOLS = [{"type": "function", "function": {"name": n, "parameters": {}}}
+              for n in ("bench_retrieve", "bench_execute", "bench_record")]
+ANALYST_TOOLS = [{"type": "function", "function": {"name": n, "parameters": {}}}
+                 for n in ("bench_execute", "bench_record")]
+ANALYST_OBJ = "Research the topic: Using ONLY the dataset available through the execution tool, analyze one day"
+WRITING_SYS = "You are a technical writing specialist. Write the report."
 
 
 def _client():
@@ -72,3 +78,30 @@ def test_worker_cites_the_chunks_it_was_given():
     msg = r.json()["choices"][0]["message"]
     assert not msg.get("tool_calls")
     assert "Sources: [chunk-4021] [chunk-77] [chunk-90210]." in msg["content"]
+
+
+def _first_call(client, system, obj, tools):
+    r = client.post("/v1/chat/completions", json={
+        "model": "auto", "tools": tools,
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": obj}]})
+    msg = r.json()["choices"][0]["message"]
+    calls = msg.get("tool_calls") or []
+    return (calls[0]["function"]["name"], calls[0]["function"]["arguments"]) if calls else (None, None)
+
+
+def test_analyst_runs_a_heavy_job_in_every_worker():
+    """v17: the data analyst executes (heavy) in research, analysis, and
+    writing workers alike, and never retrieves."""
+    c = _client()
+    for sys_ in (RESEARCH_SYS, ANALYSIS_SYS, WRITING_SYS):
+        name, args = _first_call(c, sys_, ANALYST_OBJ, ANALYST_TOOLS)
+        assert name == "bench_execute" and '"heavy"' in args
+
+
+def test_comparison_executes_light_in_its_analysis_worker_only():
+    c = _client()
+    assert _first_call(c, RESEARCH_SYS, COMPARISON_OBJ, EXEC_TOOLS)[0] == "bench_retrieve"
+    name, args = _first_call(c, ANALYSIS_SYS, COMPARISON_OBJ, EXEC_TOOLS)
+    assert name == "bench_execute" and '"light"' in args
+    assert _first_call(c, WRITING_SYS, COMPARISON_OBJ, EXEC_TOOLS)[0] == "bench_record"

@@ -2008,6 +2008,14 @@ class CapacityTest:
         depth = os.getenv("CAPACITY_RERANK_DEPTH", "16") or "16"
         if depth != "16":
             tag += f"|rerank={depth}"
+        # v17: the sandbox's isolation mode is part of the profile (a
+        # network-namespaced job and a limits-only job are different
+        # machines to a reader sizing a deployment).
+        try:
+            from backend.capacity import sandbox
+            tag += f"|sandbox={sandbox.isolation_mode()}"
+        except Exception:  # noqa: BLE001
+            pass
         return tag
 
     async def _weigh_in(self) -> bool:

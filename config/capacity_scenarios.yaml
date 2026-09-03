@@ -34,7 +34,7 @@ tile:
   deep_agent: 1
 
 # Bump when scenario/tile semantics change — part of every result's repro block.
-version: 16
+version: 17
 
 scenarios:
   support_agent:
@@ -128,6 +128,7 @@ e2e_tile:
   research_brief: 1
   comparison: 1
   digest: 1
+  data_analysis: 1
 
 # AGENT DEADLINE TIERS. The weigh-in measures a machine's median workflow
 # time at one tile, that median places it in a tier, and the tier's deadline
@@ -232,10 +233,13 @@ e2e_workflows:
     # v16.1: the comparison EARNS its context too - one retrieval per unit
     # (research worker only), the medium archetype by retrieval count.
     toolless: true                       # no catalog/builtin tools; bench_record only
-    tools: [bench_retrieve, bench_record]  # research worker retrieves once; every worker records
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [11, 11], validations: [7, 7], tool_calls: [4, 4], tokens_in: [6000, 200000]}
+    # v17: its analysis worker also RUNS a light sandboxed data job over the
+    # measurements (execution, like retrieval, appears in graded amounts:
+    # analyst 3 heavy, comparison 1 light, researcher and digest none).
+    tools: [bench_retrieve, bench_execute, bench_record]  # research worker retrieves once; analysis worker executes once; every worker records
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [12, 12], validations: [7, 7], tool_calls: [5, 5], tokens_in: [6000, 200000]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
-    budgets: {max_subagents: 4, max_tool_hops: 2}  # PER-AGENT semantics: hop budget binds each worker (intent: 1 call + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack); the guards replan/clamp at these lines so a unit can never balloon past its declared size
+    budgets: {max_subagents: 4, max_tool_hops: 3}  # PER-AGENT semantics: hop budget binds each worker (intent: up to 2 calls + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack)
     query: >-
       Using ONLY the measurements below (do not research further), compare
       INT8, INT4, and FP8 quantization for a 30B-parameter model and recommend
@@ -247,6 +251,30 @@ e2e_workflows:
       throughput 15% higher than INT8 in vendor tests. Plan EXACTLY three worker subtasks and no more: research, analysis, and writing. Each worker calls bench_record exactly once, then writes its section and stops. Deliverable: a
       comparison table, a paragraph on the trade-offs, and one deployment
       recommendation with its main risk.
+  data_analysis:
+    name: "Data analysis pipeline (e2e)"
+    think_ms: 3000
+    # v17 heavy-execution archetype: each of the three workers runs a HEAVY
+    # sandboxed data job (a fresh, limited interpreter aggregating a seeded
+    # 2M-row table) and records; no retrieval, so execution cost stays
+    # separable from retrieval cost.
+    toolless: true
+    tools: [bench_execute, bench_record]
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [6000, 200000]}
+    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 12]}
+    budgets: {max_subagents: 4, max_tool_hops: 3}
+    query: >-
+      Using ONLY the dataset available through the execution tool (do not
+      research further), analyze one day of service events for a payments
+      platform: per-merchant volume and value, the hourly load profile, the
+      value distribution and its tail, and anomalous merchants. Plan EXACTLY
+      three worker subtasks and no more: research (profile the data),
+      analysis (rank and explain the anomalies), and writing (the report).
+      Each worker runs bench_execute exactly once and then bench_record
+      exactly once, then writes its section and stops. Deliverable: a
+      summary table of the top merchants, the peak hour with its load, the
+      p95 and p99 transaction values, and a list of anomalies with a
+      one-line explanation each.
   digest:
     name: "Digest report (e2e)"
     think_ms: 3000
