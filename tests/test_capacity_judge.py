@@ -268,3 +268,35 @@ def test_read_evidence_survives_a_truncated_ledger(tmp_path):
     ev = read_evidence(p)
     assert ev["truncated"] is True
     assert ev["header"] is not None and 150 < len(ev["units"]) <= 200
+
+
+def test_plateau_counts_units_in_flight_at_the_end(tmp_path):
+    """Censored units are arrivals: they hold the achieved rate honest and
+    the backlog visible; for each tier they are pending (excluded) while
+    younger than its deadline and late once older."""
+    import gzip, json
+    from backend.capacity import judge
+    rows = [{"k": "header"}]
+    t = 1000.0
+    for i in range(1200):                      # 300 s at 4/s, 30 s latency
+        rows.append({"k": "unit", "sid": ["a", "b", "c"][i % 3], "ok": True,
+                     "lat": 30000.0, "sub": t, "end": t + 30.0, "r": 4.0})
+        t += 0.25
+    end = t
+    for i in range(400):                       # last 100 s of arrivals still running
+        rows.append({"k": "unit", "sid": ["a", "b", "c"][i % 3], "ok": False,
+                     "lat": None, "sub": t, "end": None, "err": "inflight_at_end", "r": 4.0})
+        t += 0.25
+    rows.append({"k": "footer", "ended_at": t})
+    p = tmp_path / "c.jsonl.gz"
+    with gzip.open(p, "wt") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+    pj = judge.plateau([p])
+    assert pj["inflight_at_end"] == 400
+    assert pj["generator_ok"] is True            # 4/s achieved incl. censored arrivals
+    assert pj["keeps_up"] is False               # 400 admitted, none finished: backlog grew
+    # interactive (45 s): every censored unit is younger than 45 s at the end
+    # except the oldest ~55 s worth -> those count late; the bound still fails
+    # only through keeps_up. Pending exclusion keeps the bound itself honest.
+    assert pj["tiers"]["background"]["bounds"]["a"] >= 0.95

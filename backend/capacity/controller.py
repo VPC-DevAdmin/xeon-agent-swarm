@@ -2311,8 +2311,11 @@ class CapacityTest:
                 self._gen_late_max = tick_late
             if tick_late > 0.1:
                 self._gen_late_ticks += 1
+            # Clamp at 1.5 s of arrivals (was 0.5 s): a one-second stall of
+            # the loop then replays instead of shedding, and 1.5 s of a
+            # plateau's rate is not a burst anybody would notice.
             unclamped = due + (now - last) * rate
-            due = min(unclamped, max(0.5 * rate, 2.0))
+            due = min(unclamped, max(1.5 * rate, 2.0))
             self._gen_shed += unclamped - due
             last = now
             while due >= 1.0 and not self._stop.is_set():
@@ -3115,10 +3118,27 @@ class CapacityTest:
                     self._evidence.write("window", {"a": w[0], "b": w[1]})
                 dl = (self._deadline_s(self.scenario_ids[0])
                       if (self.mode == "e2e" and self.scenario_ids) else None)
+                # Units still in flight when the run ends are arrivals the
+                # ledger would otherwise never see: with 100 s workflows the
+                # last 100 s of a plateau's admissions vanished, the achieved
+                # rate read as a generator shortfall and the backlog as
+                # steady (series 7106). They are written as censored units:
+                # admitted, not finished, judged pending or late by age.
+                for _key, (sid, t_admit) in list(self._inflight.items()):
+                    self._evidence.write("unit", {
+                        "sid": sid, "ok": False, "lat": None, "sub": t_admit,
+                        "end": None, "err": "inflight_at_end",
+                        **({"r": self.offered_rate}
+                           if getattr(self, "offered_rate", None) else {})})
                 self._evidence.write("footer", {
                     "ended_at": self.ended_at,
                     "live_verdict": self.verdict,
                     "deadline_s": dl,
+                    "arrivals": getattr(self, "_arrivals", None),
+                    "rejected": getattr(self, "rejected", None),
+                    "gen_shed": round(getattr(self, "_gen_shed", 0.0), 2),
+                    "gen_late_ticks": getattr(self, "_gen_late_ticks", 0),
+                    "inflight_at_end": len(self._inflight),
                     "harness_ok": (self.harness.get("ok")
                                    if isinstance(self.harness, dict)
                                    else None),

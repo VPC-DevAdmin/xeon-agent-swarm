@@ -288,10 +288,14 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
     units = []
     per_ledger = []
     offered = []
+    ended_at = None
     for path in paths:
         ev = read_evidence(path)
         rs = sorted(float(u["r"]) for u in ev["units"] if u.get("r") is not None)
         offered.append(rs[len(rs) // 2] if rs else None)
+        ft = ev.get("footer") or {}
+        if ft.get("ended_at"):
+            ended_at = max(ended_at or 0.0, float(ft["ended_at"]))
         us = [(float(u["sub"]), float(u["end"]) if u.get("end") else None,
                u.get("sid") or "?", bool(u.get("ok")),
                float(u["lat"]) if u.get("lat") is not None else None,
@@ -320,6 +324,13 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
     offered_sum = sum(o for o in offered if o) if offered else 0.0
     achieved_ratio = (rate / offered_sum) if offered_sum else None
     generator_ok = achieved_ratio is None or achieved_ratio >= 0.95
+    # Units in flight when the run ended are censored: their age at the
+    # end decides. Younger than a tier's deadline = PENDING for that tier
+    # (neither success nor failure, out of the denominator); older = late.
+    run_end = ended_at if ended_at is not None else max(
+        [u[1] for u in units if u[1] is not None] + [t_last])
+    def _age_ms(u):
+        return (run_end - u[0]) * 1000.0
     per_type = {}
     for sid in sids:
         xs = [u for u in cohort if u[2] == sid]
@@ -334,7 +345,9 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
             continue
         bounds = {}
         for sid in sids:
-            xs = [u for u in cohort if u[2] == sid]
+            xs = [u for u in cohort if u[2] == sid
+                  and not (u[5] == "inflight_at_end"
+                           and _age_ms(u) < float(dl) * 1000.0)]
             wins = sum(1 for u in xs if u[3] and u[4] is not None
                        and u[4] <= float(dl) * 1000.0)
             bounds[sid] = round(st.wilson_lower(wins, len(xs), z), 4) if xs else 0.0
@@ -349,7 +362,9 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
     # whose generator fell behind describes load nobody offered, and its
     # backlog then shrinks for the wrong reason - such a plateau is
     # censored (generator_limit), never certified.
+    pending = sum(1 for u in cohort if u[5] == "inflight_at_end")
     return {"plateau_version": PLATEAU_VERSION, "ledgers": len(paths),
+            "inflight_at_end": pending,
             "offered_rate": round(offered_sum, 3) if offered_sum else None,
             "achieved_ratio": (round(achieved_ratio, 3)
                                if achieved_ratio is not None else None),
