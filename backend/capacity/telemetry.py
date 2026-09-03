@@ -209,6 +209,18 @@ def _proc_jiffies(pid: int) -> int | None:
         return None
 
 
+def _proc_child_jiffies(pid: int) -> int | None:
+    """cutime+cstime for one pid (fields 16/17): CPU of its REAPED children.
+    Short-lived children (sandboxed jobs, ~1.5 s) never survive a process
+    scan, but their CPU lands here when the parent reaps them."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            parts = f.read().rsplit(")", 1)[1].split()
+        return int(parts[13]) + int(parts[14])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
 def find_pids(pattern: str) -> list[int]:
     """Pids whose /proc cmdline OR comm contains the pattern.
 
@@ -286,9 +298,14 @@ class ProcessCpuSampler:
 
     def __init__(self):
         self._prev: dict[int, int] = {}
+        self._prev_child: dict[int, int] = {}
         self._prev_total: int | None = None
 
-    def sample(self, groups: dict[str, list[int]]) -> dict[str, float] | None:
+    def sample(self, groups: dict[str, list[int]],
+               children_of: dict[str, list[int]] | None = None) -> dict[str, float] | None:
+        """children_of: {name: [parent pids]} adds groups charged with the
+        CPU of those parents' reaped children (the sandboxed jobs of the
+        executors), which a pid scan cannot see."""
         try:
             with open("/proc/stat") as f:
                 stat = parse_proc_stat(f.read())
@@ -303,6 +320,12 @@ class ProcessCpuSampler:
                 j = _proc_jiffies(pid)
                 if j is not None:
                     cur[pid] = j
+        curc: dict[int, int] = {}
+        for pids in (children_of or {}).values():
+            for pid in pids:
+                j = _proc_child_jiffies(pid)
+                if j is not None:
+                    curc[pid] = j
         out: dict[str, float] | None = None
         if self._prev_total is not None and total > self._prev_total:
             dtotal = total - self._prev_total   # spans ALL cores, same basis as cpu_pct
@@ -311,6 +334,11 @@ class ProcessCpuSampler:
                 dj = sum(max(0, cur.get(p, 0) - self._prev.get(p, cur.get(p, 0)))
                          for p in pids if p in cur)
                 out[name] = round(100.0 * dj / dtotal, 1)
+            for name, pids in (children_of or {}).items():
+                dj = sum(max(0, curc.get(p, 0) - self._prev_child.get(p, curc.get(p, 0)))
+                         for p in pids if p in curc)
+                out[name] = round(out.get(name, 0.0) + 100.0 * dj / dtotal, 1)
         self._prev = cur
+        self._prev_child = curc
         self._prev_total = total
         return out

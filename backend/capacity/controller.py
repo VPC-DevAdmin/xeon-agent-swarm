@@ -733,11 +733,8 @@ class CapacityTest:
             groups["siblings"] = cached.get("siblings", [])
         if os.getenv("CAPACITY_EMBED_URL") or os.getenv("CAPACITY_RERANK_URL"):
             groups["retrieval"] = cached.get("retrieval", [])
-        # v17: sandboxed jobs are the executors' descendants (sudo -> unshare
-        # -> the job), attributed as their own group so execution cost is
-        # visible instead of landing in "other" (17-22% of host at 6-8/s).
-        if cached.get("sandbox"):
-            groups["sandbox"] = cached["sandbox"]
+        # v17: sandboxed jobs are charged from the executors' reaped-children
+        # CPU (see _sample_loop); a scanned pid list would miss 1.5 s jobs.
         if self.inference_backend == "local":
             if self._engine_pids is None:
                 # Rescan until the engine's real compute processes are found:
@@ -873,7 +870,13 @@ class CapacityTest:
                 # worker thread: on the loop they stalled the arrival
                 # generator by up to 2.3 s per sample at 20 workflows/s
                 # (series 7105: gen_late_ticks 158, 121 arrivals shed).
-                by = await asyncio.to_thread(proc_cpu.sample, self._cpu_groups())
+                groups = self._cpu_groups()
+                # Sandboxed jobs live ~1.5 s and are reaped by their executor:
+                # their CPU is the executors' children time, not any pid a
+                # 30 s scan can catch.
+                by = await asyncio.to_thread(
+                    proc_cpu.sample, groups,
+                    {"sandbox": list(groups.get("executors") or [])})
                 if by is not None and s.get("cpu_pct") is not None:
                     by["other"] = round(max(0.0, s["cpu_pct"] - sum(by.values())), 1)
                     s["cpu_by"] = by
@@ -2397,8 +2400,18 @@ class CapacityTest:
                 rec = await self._caller.call(wf, steps[0] if steps else {},
                                               vary_key=f"{self.seed}:open:{idx}")
         except asyncio.CancelledError:
+            # The run stopped with this unit in flight: it is an ARRIVAL the
+            # ledger must keep (censored, judged pending or late by age), or
+            # the last 5% of every 300 s plateau reads as generator shortfall
+            # and the backlog as steady (series 7703: 1,799 admitted, 1,649
+            # rows).
             self.cancelled_requests += 1
-            self._release(key)
+            t_admit = self._release(key)
+            if self._evidence:
+                self._evidence.unit({"scenario": sid, "ok": False, "latency_ms": None,
+                                     "t_submit": t_admit, "ts": None,
+                                     "offered_rate": self.offered_rate,
+                                     "error": "inflight_at_end"})
             await self._settle_spend(reserved, {})
             raise
         except Exception as exc:  # noqa: BLE001 — a failed unit is a data point
