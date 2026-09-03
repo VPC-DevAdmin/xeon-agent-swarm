@@ -35,6 +35,14 @@ RERANK_PHYS_CORES=${RERANK_PHYS_CORES:-14}
 EMBED_PHYS_CORES=${EMBED_PHYS_CORES:-2}
 RERANK_WORKERS=${RERANK_WORKERS:-2}
 RERANK_THREADS=${RERANK_THREADS:-7}
+# The tier's queue is sized FROM the executors' admission gates, never a
+# constant: K instances x W executors x CAPACITY_RERANK_CONCURRENCY calls
+# may be in flight at once, and a per-worker queue below that share
+# refuses calls the cores could serve (each refusal is a 0.25-10 s
+# backoff: with 2 workers x 96 slots against 448 admitted, a 0.3 s
+# retrieval took 5-7 s at 40 workflows/s and looked like a latency knee).
+FLEET_K=${FLEET_K:-4}; FLEET_W=${FLEET_W:-28}; GATE=${CAPACITY_RERANK_CONCURRENCY:-4}
+RERANK_MAX_QUEUE=${RERANK_MAX_QUEUE:-$(( (FLEET_K * FLEET_W * GATE + RERANK_WORKERS - 1) / RERANK_WORKERS + 32 ))}
 phys_cpuset() {  # $1 = how many physical cores, $2 = skip this many from the top, $3 = first|all siblings
   python3 - "$1" "$2" "$3" <<'PY'
 import sys, glob
@@ -71,8 +79,8 @@ print(",".join(str(c) for c in range(ncpu) if c not in taken))
 PY
 )}
 mkdir -p "$R/data/capacity/retrieval"
-printf 'RERANK_CPUS=%s\nEMBED_CPUS=%s\nREST_CPUS=%s\nRERANK_WORKERS=%s\nRERANK_THREADS=%s\n' \
-  "$RERANK_CPUS" "$EMBED_CPUS" "$REST_CPUS" "$RERANK_WORKERS" "$RERANK_THREADS" \
+printf 'RERANK_CPUS=%s\nEMBED_CPUS=%s\nREST_CPUS=%s\nRERANK_WORKERS=%s\nRERANK_THREADS=%s\nRERANK_MAX_QUEUE=%s\n' \
+  "$RERANK_CPUS" "$EMBED_CPUS" "$REST_CPUS" "$RERANK_WORKERS" "$RERANK_THREADS" "$RERANK_MAX_QUEUE" \
   > "$R/data/capacity/retrieval/allocation.env"
 
 start_tei() {
@@ -150,7 +158,9 @@ start_ort_reranker() {
       want=$(taskset -c "$RERANK_CPUS" bash -c 'taskset -cp $$' 2>/dev/null | awk -F': ' '{print $2}')
       local nworkers
       nworkers=$(ps --ppid "$master" -o pid= | wc -l)   # workers + spawn tracker
-      if [ "$have" = "$want" ] && [ "$nworkers" -eq $((RERANK_WORKERS + 1)) ]; then
+      local q
+      q=$(curl -sf localhost:8881/health 2>/dev/null | grep -oE '"max_queue":[0-9]+' | cut -d: -f2)
+      if [ "$have" = "$want" ] && [ "$nworkers" -eq $((RERANK_WORKERS + 1)) ] && [ "${q:-0}" -eq "$RERANK_MAX_QUEUE" ]; then
         return 0
       fi
       echo "ort-rerank allocation changed ($have x$((nworkers - 1)) -> $want x$RERANK_WORKERS) -> restarting"
@@ -169,7 +179,7 @@ start_ort_reranker() {
   # setsid -f: fully detached (own session, reparented to init) so this
   # script - and the fleet script that calls it - returns immediately.
   (cd "$R" && TOKENIZERS_PARALLELISM=false RERANK_SPIN=1 \
-      RERANK_THREADS="$RERANK_THREADS" RERANK_MAX_QUEUE=${RERANK_MAX_QUEUE:-96} \
+      RERANK_THREADS="$RERANK_THREADS" RERANK_MAX_QUEUE="$RERANK_MAX_QUEUE" \
       RERANK_MODEL_DIR="$INT8_DIR" \
       setsid -f taskset -c "$RERANK_CPUS" .venv/bin/uvicorn scripts.ort_rerank_server:app \
         --workers "$RERANK_WORKERS" --port 8881 --host 127.0.0.1 --log-level warning \

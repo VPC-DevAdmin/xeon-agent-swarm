@@ -155,7 +155,7 @@ class RerankRequest(BaseModel):
 @app.get("/health")
 def health() -> dict:
     return {"ok": True, "model": MODEL_DIR, "threads": THREADS,
-            "pid": os.getpid(), "queued": _q.qsize(),
+            "pid": os.getpid(), "queued": _q.qsize(), "max_queue": MAX_QUEUE,
             "batches": _batches, "pairs": _pairs,
             "pairs_per_batch": round(_pairs / _batches, 1) if _batches else None,
             "run_ms_per_batch": round(_run_ms / _batches, 1) if _batches else None,
