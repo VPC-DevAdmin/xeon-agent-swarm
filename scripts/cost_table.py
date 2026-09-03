@@ -29,7 +29,7 @@ def main() -> None:
     a = ap.parse_args()
     rates = sorted({int(re.search(r"rate-(\d+)-i", f).group(1))
                     for f in glob.glob(f"{a.series_dir}/rate-*-i*-evidence-*.jsonl.gz")})
-    print("| per-instance rate | fleet wf/s | sandbox core-s/wf | reranker core-s/wf | orchestration core-s/wf (executors+control+routers+db) | host threads busy |")
+    print("| per-instance rate | fleet wf/s | sandbox core-s/wf | reranker core-s/wf, consumed (reserved) | orchestration core-s/wf (executors+control+routers+db+other) | host threads busy |")
     print("|---|---|---|---|---|---|")
     for r in rates:
         files = sorted(glob.glob(f"{a.series_dir}/rate-{r}-i*-evidence-*.jsonl.gz"))
@@ -52,9 +52,16 @@ def main() -> None:
         # instance 1's ledger sees its own executors + the siblings; sandbox is fleet-wide already
         threads = lambda pct: pct / 100.0 * NCPU
         sandbox = threads(g["sandbox"]) / fleet_rate if fleet_rate else 0.0
-        rerank = threads(g["retrieval"]) / fleet_rate if fleet_rate else 0.0
+        # The tier's attributed share is RESERVED capacity (its runtime
+        # threads spin on their cores whatever the load); its consumed cost
+        # is demand over the measured pair budget: 35 scored pairs per
+        # core-second, 16 pairs per call, (3+1)/6 calls per tile-weighted
+        # workflow at v17.
+        calls_per_wf = (3 + 1) / 6.0
+        rerank = calls_per_wf * 16 / 35.0
+        reserved = threads(g["retrieval"]) / fleet_rate if fleet_rate else 0.0
         orch = threads(g["executors"] + g["siblings"] + g["control"] + g["mock_router"] + g["other"]) / fleet_rate if fleet_rate else 0.0
-        print(f"| {r}/s | {fleet_rate:.1f} | {sandbox:.2f} | {rerank:.2f} | {orch:.2f} | {st.median(cpu):.0f}% |")
+        print(f"| {r}/s | {fleet_rate:.1f} | {sandbox:.2f} | {rerank:.2f} (tier reserved {reserved:.2f}) | {orch:.2f} | {st.median(cpu):.0f}% |")
     if a.stats:
         rows = [json.loads(l) for f in glob.glob(f"{a.stats}/stats-*.jsonl") for l in open(f)]
         for k in ("sandbox_light_cpu_ms", "sandbox_heavy_cpu_ms", "sandbox_light_wall_ms", "sandbox_heavy_wall_ms", "rerank_call_ms"):
