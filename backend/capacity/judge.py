@@ -296,11 +296,17 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
         ft = ev.get("footer") or {}
         if ft.get("ended_at"):
             ended_at = max(ended_at or 0.0, float(ft["ended_at"]))
+        # Weigh-in units (admitted before the generator starts, no offered
+        # rate on the row) are not the plateau's arrivals; counting them
+        # stretched the span and read as a 4-5% generator shortfall on
+        # every 300 s plateau of a fresh fingerprint (series 7702).
+        has_rate = any(u.get("r") is not None for u in ev["units"])
         us = [(float(u["sub"]), float(u["end"]) if u.get("end") else None,
                u.get("sid") or "?", bool(u.get("ok")),
                float(u["lat"]) if u.get("lat") is not None else None,
                (u.get("err") or "")[:40])
-              for u in ev["units"] if u.get("sub")]
+              for u in ev["units"]
+              if u.get("sub") and (not has_rate or u.get("r") is not None)]
         units.extend(us)
         per_ledger.append(len(us))
     if not units:

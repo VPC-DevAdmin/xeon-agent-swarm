@@ -733,6 +733,11 @@ class CapacityTest:
             groups["siblings"] = cached.get("siblings", [])
         if os.getenv("CAPACITY_EMBED_URL") or os.getenv("CAPACITY_RERANK_URL"):
             groups["retrieval"] = cached.get("retrieval", [])
+        # v17: sandboxed jobs are the executors' descendants (sudo -> unshare
+        # -> the job), attributed as their own group so execution cost is
+        # visible instead of landing in "other" (17-22% of host at 6-8/s).
+        if cached.get("sandbox"):
+            groups["sandbox"] = cached["sandbox"]
         if self.inference_backend == "local":
             if self._engine_pids is None:
                 # Rescan until the engine's real compute processes are found:
@@ -819,6 +824,16 @@ class CapacityTest:
                             continue
                         ret.add(cur)
                         stack.extend(kids.get(cur, []))
+                    exec_roots = list(groups.get("executors") or [])
+                    sandbox: set[int] = set()
+                    stack = list(exec_roots)
+                    while stack:
+                        cur = stack.pop()
+                        if cur in sandbox:
+                            continue
+                        sandbox.add(cur)
+                        stack.extend(kids.get(cur, []))
+                    sandbox -= set(exec_roots)
                     mock: set[int] = set()
                     if mock_pid is not None:
                         stack = [mock_pid]
@@ -829,9 +844,10 @@ class CapacityTest:
                             mock.add(cur)
                             stack.extend(kids.get(cur, []))
                     self._sibling_cache = (time.time(),
-                                           {"siblings": sorted(out - own - ret - mock),
+                                           {"siblings": sorted(out - own - ret - mock - sandbox),
                                             "retrieval": sorted(ret - own),
-                                            "mock_router": sorted(mock)},
+                                            "mock_router": sorted(mock),
+                                            "sandbox": sorted(sandbox)},
                                            False)
                 except Exception:  # noqa: BLE001 — attribution is best-effort
                     self._sibling_cache = (time.time(), cached, False)

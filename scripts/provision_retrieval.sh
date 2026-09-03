@@ -26,10 +26,15 @@ INT8_DIR=$MODEL_ROOT/ms-marco-int8
 # measured ~0.4 logical cpu per workflow/s; with retrieval at 1.33 rerank
 # calls per workflow, 40 reranker cores (~90 workflows/s) and 20 cores for
 # everything else (~100 workflows/s) meet where the host itself is full.
-RERANK_PHYS_CORES=${RERANK_PHYS_CORES:-40}
-EMBED_PHYS_CORES=${EMBED_PHYS_CORES:-4}
-RERANK_WORKERS=${RERANK_WORKERS:-5}
-RERANK_THREADS=${RERANK_THREADS:-8}
+# v17 rebalance (series 7702): with sandboxed execution in the tile the
+# executors' side saturates first (sandbox jobs waited 9-39 s for CPU at
+# 8/s per instance while the reranker ran at ~15%). Per tile-weighted
+# workflow: ~0.7 core-s of sandbox, ~0.3 of reranking, ~0.25 of
+# orchestration, so the tier gets 14 + 2 cores and the rest 48.
+RERANK_PHYS_CORES=${RERANK_PHYS_CORES:-14}
+EMBED_PHYS_CORES=${EMBED_PHYS_CORES:-2}
+RERANK_WORKERS=${RERANK_WORKERS:-2}
+RERANK_THREADS=${RERANK_THREADS:-7}
 phys_cpuset() {  # $1 = how many physical cores, $2 = skip this many from the top, $3 = first|all siblings
   python3 - "$1" "$2" "$3" <<'PY'
 import sys, glob
