@@ -336,7 +336,7 @@
         <h1><strong>2,000 AI agents</strong> doing real retrieval on one CPU server</h1>
         <div class="hero-copy">
           <p>One Dell&trade; PowerEdge&trade; R470 sustained 62.7 complete agent workflows per second, about 226,000 an hour, while holding roughly 2,000 agent sessions in flight. Every workflow earned its own context on the server: keyword search over a 120,000-passage store, fusion with a vector index, and a neural reranker running on the CPU's AMX units. Every model call waited like a real API call.</p>
-          <p>The number was certified three times under different seeds and agreed to within 0.3%. What stopped it climbing was the server's own cores: the reranker's 40 physical cores were fully busy at the certified rate, and the next load step overran them.</p>
+          <p>The number was certified three times under different seeds and agreed to within 0.3%. What stopped it climbing was the server's own cores: at the certified rate the reranker's 40 cores were within a few percent of their measured ceiling and the other 24 were about three-quarters busy, 57 of the 64 physical cores in use, and the next load step overran the reranker.</p>
         </div>
         <p class="author">Authored by Vector Path Consulting</p>
         <div class="chips">
@@ -480,15 +480,15 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Offered, per instance</th><th>Achieved, box-wide (median of 3)</th><th>Research brief p50 / p95</th><th>Comparison p50 / p95</th><th>Digest p50 / p95</th><th>Sessions resident</th><th>Host CPU (logical)</th><th>Verdict</th></tr>
+            <tr><th>Offered, per instance</th><th>Achieved, box-wide (median of 3)</th><th>Research brief p50 / p95</th><th>Comparison p50 / p95</th><th>Digest p50 / p95</th><th>Sessions resident</th><th>Reranker, share of its ceiling</th><th>Busy hardware threads</th><th>Verdict</th></tr>
           </thead>
           <tbody>
-            <tr><td>4/s</td><td>15.9/s</td><td>34 / 35 s</td><td>30 / 31 s</td><td>28 / 29 s</td><td>518</td><td>41%</td><td class="pass-text">interactive and every longer tier</td></tr>
-            <tr><td>8/s</td><td>31.7/s</td><td>33 / 35 s</td><td>29 / 31 s</td><td>28 / 29 s</td><td>1,024</td><td>46%</td><td class="pass-text">interactive and every longer tier</td></tr>
-            <tr><td>12/s</td><td>47.4/s</td><td>33 / 35 s</td><td>29 / 30 s</td><td>28 / 29 s</td><td>1,529</td><td>50%</td><td class="pass-text">interactive and every longer tier</td></tr>
-            <tr><td>14/s</td><td>55.3/s</td><td>33 / 35 s</td><td>29 / 30 s</td><td>28 / 29 s</td><td>1,783</td><td>52%</td><td class="pass-text">interactive and every longer tier</td></tr>
-            <tr><td><strong>16/s</strong></td><td><strong>62.7/s</strong></td><td>34 / 40 s</td><td>29 / 33 s</td><td>28 / 29 s</td><td><strong>2,035</strong></td><td>61%</td><td class="pass-text"><strong>certified: interactive and every longer tier</strong></td></tr>
-            <tr><td>18/s</td><td>60.8/s of 72 offered</td><td>82 / 189 s</td><td>43 / 122 s</td><td>29 / 46 s</td><td>not steady</td><td>69%</td><td class="stop-text">not sustained: no tier holds, generator at 84% of schedule</td></tr>
+            <tr><td>4/s</td><td>15.9/s</td><td>34 / 35 s</td><td>30 / 31 s</td><td>28 / 29 s</td><td>518</td><td>23%</td><td>41%</td><td class="pass-text">interactive and every longer tier</td></tr>
+            <tr><td>8/s</td><td>31.7/s</td><td>33 / 35 s</td><td>29 / 31 s</td><td>28 / 29 s</td><td>1,024</td><td>46%</td><td>46%</td><td class="pass-text">interactive and every longer tier</td></tr>
+            <tr><td>12/s</td><td>47.4/s</td><td>33 / 35 s</td><td>29 / 30 s</td><td>28 / 29 s</td><td>1,529</td><td>68%</td><td>50%</td><td class="pass-text">interactive and every longer tier</td></tr>
+            <tr><td>14/s</td><td>55.3/s</td><td>33 / 35 s</td><td>29 / 30 s</td><td>28 / 29 s</td><td>1,783</td><td>80%</td><td>52%</td><td class="pass-text">interactive and every longer tier</td></tr>
+            <tr><td><strong>16/s</strong></td><td><strong>62.7/s</strong></td><td>34 / 40 s</td><td>29 / 33 s</td><td>28 / 29 s</td><td><strong>2,035</strong></td><td><strong>91%</strong></td><td>61%</td><td class="pass-text"><strong>certified: interactive and every longer tier</strong></td></tr>
+            <tr><td>18/s</td><td>60.8/s of 72 offered</td><td>82 / 189 s</td><td>43 / 122 s</td><td>29 / 46 s</td><td>not steady</td><td>over 100%: queue grows</td><td>69%</td><td class="stop-text">not sustained: no tier holds, generator at 84% of schedule</td></tr>
           </tbody>
         </table>
       </div>
@@ -517,7 +517,7 @@
       </div>
 
       <div class="prose">
-        <p>Workflow times did not move from the lightest plateau to the certified one: the research brief's median stayed at 34 seconds and its 95th percentile went from 35 to 40. That flatness is what a sized system looks like below its limit. The step to 18 per instance, run under the same three seeds, is where the tier ran out: the research brief's median went to 82 seconds and its 95th percentile to 189, the comparison's to 43 and 122, no tier's bound held, and the fleet delivered only 60.8 workflows per second against the 72 offered. A certified level with a failed level one step above it is a measured boundary, not a lower bound.</p>
+        <p>Workflow times did not move from the lightest plateau to the certified one: the research brief's median stayed at 34 seconds and its 95th percentile went from 35 to 40. That flatness is what a sized system looks like below its limit. The reranker column is demand over measured ceiling: each workflow makes 1.33 rerank calls on average, and the tier's ceiling on 40 cores was measured at about 92 calls per second, so 62.7 workflows per second is 84 calls per second, 91% of it. The busy-thread column is what a monitoring tool would show and understates the server, for the reason given in section 5. The step to 18 per instance, run under the same three seeds, is where the tier ran out: the research brief's median went to 82 seconds and its 95th percentile to 189, the comparison's to 43 and 122, no tier's bound held, and the fleet delivered only 60.8 workflows per second against the 72 offered. A certified level with a failed level one step above it is a measured boundary, not a lower bound.</p>
       </div>
     </section>
 
@@ -527,8 +527,21 @@
         <h2>The reranker's cores are what limited it<span class="rule"></span></h2>
       </div>
       <div class="prose">
-        <p class="lead">At the certified rate the reranker's 40 physical cores were fully busy. The rest of the server, 20 cores carrying four orchestration instances, their databases, and their model routers, sat near 80% busy. The host's logical-thread utilization reads 61% only because the reranker deliberately uses one thread per core and leaves each core's second hardware thread idle: two runtime threads on the same core were measured to halve each other.</p>
-        <p>The reranker's cost was measured directly and did not depend on how it was arranged: about one physical core for every three rerank calls per second, each call scoring sixteen passages of about 125 tokens, however the work was split across processes and threads. At 62.7 workflows per second the workflows make about 84 rerank calls per second, which is 28 cores' worth of pure scoring plus the batching, tokenization, and serving overhead that fills the rest of the 40. That arithmetic, not a guess, is why the allocation is 40 cores and why the next step fails.</p>
+        <p class="lead">At the certified rate the server's physical cores were 90% used: the reranker's 40 cores at 91% of their measured ceiling, the embedder's 4 lightly, and the other 20, carrying four orchestration instances, their databases, and their model routers, at 72% measured occupancy (71% of their hardware-thread capacity). A monitoring tool reads the same moment as 61% because it counts hardware threads, and the reranker deliberately leaves each of its cores' second threads idle: two runtime threads on the same core were measured to halve each other, so a saturated reranker core is fully used with one thread busy.</p>
+        </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Where the 64 cores were at 62.7 workflows/s</th><th>Physical cores</th><th>How used</th><th>Utilization</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Reranker</strong> (INT8 cross-encoder on AMX)</td><td>40</td><td>One runtime thread per core; second threads idle by design</td><td>91% of measured ceiling (84 of ~92 rerank calls/s)</td></tr>
+            <tr><td><strong>Embedder</strong></td><td>4</td><td>Query embeddings, one per retrieval</td><td>80% occupancy</td></tr>
+            <tr><td><strong>Orchestration and everything else</strong></td><td>20</td><td>Four instances, 112 executors, four databases, four routers, both threads per core</td><td>72% occupancy, 71% of thread capacity</td></tr>
+            <tr><td><strong>Server</strong></td><td>64</td><td></td><td><strong>57 cores in use, 90%</strong> (61% of hardware threads)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="prose">
+        <p>The core figures come from a dedicated 16-per-instance plateau (seed 7501) sampled per hardware thread every five seconds, taking each core as busy as its busier thread and the median over the plateau's middle: reranker cores 99% occupied, embedder 80%, the other twenty 72%, 90% of the 64 cores overall, while the same samples read 59% of hardware threads. The reranker's cost was measured directly and did not depend on how it was arranged: about one physical core for every three rerank calls per second, each call scoring sixteen passages of about 125 tokens, however the work was split across processes and threads. At 62.7 workflows per second the workflows make about 84 rerank calls per second, which is 28 cores' worth of pure scoring plus the batching, tokenization, and serving overhead that fills the rest of the 40. That arithmetic, not a guess, is why the allocation is 40 cores and why the next step fails.</p>
         <p>Three software limits were found and removed on the way to this result, and the paper reports them because a reader sizing a system will meet them too. A queue in front of the reranker refused calls its cores could have served. An admission gate in each executor queued retrievals for tens of seconds while the tier answered in three. And the reranker's own runtime, when given a range of logical CPUs instead of whole physical cores, shared its cores' AMX units with unrelated work and delivered a third of its benchmark. Each was fixed, and each fix is in the versioned code behind this result.</p>
         <p>Two totals fall out of the records for sizing the model tier behind this host. A completed workflow moved about 27,000 tokens on average through its model calls, 35,000 for a research brief, and generated about 1,700. At the certified rate the model tier would absorb about 1.7 million tokens per second and generate about 107,000 tokens per second across roughly 2,000 concurrent sessions.</p>
       </div>

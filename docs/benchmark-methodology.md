@@ -133,8 +133,11 @@ deliberate revisions and must not be cited:
   interactive (45 s) downward, zero failures in 109,383 admitted units at
   that level; researcher p50/p95 34/40 s, comparison 29/33 s, digest
   28/29 s; 2,035 resident sessions (range 2,026-2,038); host 61% of
-  logical threads with the reranker's 40 physical cores saturated and its
-  second SMT siblings idle by design. The next offered level, 18/s per
+  logical threads, which understates the box: sampled per hardware thread
+  (scripts/core_occupancy.py, seed 7501), 90% of the 64 physical cores
+  were occupied - reranker cores 99% (one thread per core by design),
+  embedder 80%, the other twenty 72% - and the reranker ran at 91% of its
+  measured ceiling (84 of ~92 rerank calls/s). The next offered level, 18/s per
   instance, run under the same three seeds, is not sustained: researcher
   82/189 s, comparison 43/122 s, no tier's bound holds, and the fleet
   delivered 60.8 of 72 offered workflows/s (combined summary in
