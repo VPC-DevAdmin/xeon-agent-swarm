@@ -113,3 +113,40 @@ def test_tier_gate_bounds_concurrency(monkeypatch):
                                for _ in range(8)])
     asyncio.run(main())
     assert peak["max"] == 2
+
+
+def test_transport_reset_is_retried_once(monkeypatch):
+    """A keep-alive race (server closed the pooled connection) surfaces as
+    httpx.ReadError on the next send; the call is retried on a fresh
+    connection instead of failing the workflow. Three in a row still raise."""
+    import asyncio
+    import httpx
+    import backend.capacity.retrieval as rt
+    rt._tier_gate = None
+    calls = {"n": 0}
+
+    class _Resp:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return []
+
+    class _Client:
+        def __init__(self, fail_first):
+            self.fail_first = fail_first
+        async def post(self, url, json=None):
+            calls["n"] += 1
+            if calls["n"] <= self.fail_first:
+                raise httpx.ReadError("")
+            return _Resp()
+
+    monkeypatch.setattr(rt, "_http", lambda: _Client(fail_first=1))
+    asyncio.run(rt._post_backpressure("http://x/rerank", {}))
+    assert calls["n"] == 2
+    calls["n"] = 0
+    monkeypatch.setattr(rt, "_http", lambda: _Client(fail_first=3))
+    try:
+        asyncio.run(rt._post_backpressure("http://x/rerank", {}))
+    except httpx.ReadError:
+        assert calls["n"] == 3
+    else:
+        raise AssertionError("three resets must raise")

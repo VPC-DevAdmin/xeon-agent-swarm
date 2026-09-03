@@ -20,6 +20,7 @@ not from rebuilding the store.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import random
 import re
@@ -204,6 +205,8 @@ def pack(chunk_ids: list[int], budget_words: int = 6000) -> str:
     return "\n\n".join(out)
 
 
+logger = logging.getLogger(__name__)
+
 _http_client = None
 _tier_gate: asyncio.Semaphore | None = None
 
@@ -237,11 +240,27 @@ async def _post_backpressure(url: str, payload: dict):
     in the ledger (the honest, judgeable signal) rather than as 18,500
     failed workflows (observed when 429 was treated as fatal). Backoff is
     capped; a tier that stays saturated past the cap is a real failure."""
+    import httpx
     delay = 0.25
     waited = 0.0
+    resets = 0
     while True:
-        async with _gate():
-            r = await _http().post(url, json=payload)
+        try:
+            async with _gate():
+                r = await _http().post(url, json=payload)
+        except (httpx.ReadError, httpx.RemoteProtocolError,
+                httpx.ConnectError) as exc:
+            # A pooled keep-alive connection the server closed a moment
+            # ago (idle timeout race) reads as a reset on the next send.
+            # Retrieval is idempotent; retry on a fresh connection, at most
+            # twice, so a transport blip is not a failed workflow.
+            resets += 1
+            if resets > 2:
+                raise
+            logger.warning("retrieval %s: %s, retry %d", url,
+                           type(exc).__name__, resets)
+            await asyncio.sleep(0.1 * resets)
+            continue
         if r.status_code not in (429, 503):
             r.raise_for_status()
             return r
