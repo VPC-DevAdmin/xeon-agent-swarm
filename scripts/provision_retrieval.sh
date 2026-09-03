@@ -29,7 +29,10 @@ start_tei() {
 # slept (throttle-thrash: milliseconds became 30-second ReadTimeouts).
 # Pinned cores + matching thread limits give it honest, steady capacity.
 start_tei tei-embed 8880 sentence-transformers/all-MiniLM-L6-v2 "120-127" 8
-start_tei tei-rerank 8881 cross-encoder/ms-marco-MiniLM-L-6-v2 "88-119" 32
+# 8 threads per op, not 32: ganging every core onto one 150-token forward
+# is mostly synchronization; 8-thread ops running 4-wide measure 20% more
+# pairs/s at identical latency (28 -> 34 rerank-queries/s on this pin).
+start_tei tei-rerank 8881 cross-encoder/ms-marco-MiniLM-L-6-v2 "88-119" 8
 echo "retrieval allocations: embed cpus 120-127, rerank cpus 88-119"
 
 for port in 8880 8881; do
