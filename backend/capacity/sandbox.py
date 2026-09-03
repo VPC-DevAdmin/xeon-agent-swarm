@@ -38,7 +38,10 @@ JOB_SCRIPT = Path(__file__).with_name("sandbox_job.py")
 # numpy import included. The job reads this from argv - one source.
 SIZES = {"light": 450_000, "heavy": 3_300_000}
 CPU_LIMIT_S = int(os.getenv("CAPACITY_SANDBOX_CPU_S", "30") or 30)
-MEM_LIMIT_BYTES = int(os.getenv("CAPACITY_SANDBOX_MEM_MB", "2048") or 2048) * 1024 * 1024
+# Address-space limit, not resident: numpy + OpenBLAS reserve several GB of
+# virtual space at import even single-threaded, so the cap is 8 GB while a
+# heavy job's resident set is ~0.5 GB.
+MEM_LIMIT_BYTES = int(os.getenv("CAPACITY_SANDBOX_MEM_MB", "8192") or 8192) * 1024 * 1024
 WALL_LIMIT_S = float(os.getenv("CAPACITY_SANDBOX_WALL_S", "60") or 60)
 
 _mode: str | None = None
@@ -72,7 +75,11 @@ def _command(size: str, seed: int) -> list[str]:
     limits = ["prlimit", f"--cpu={CPU_LIMIT_S}", f"--as={MEM_LIMIT_BYTES}",
               "--fsize=1048576", "--nproc=64"] if shutil.which("prlimit") else []
     if isolation_mode() == "netns":
-        user = os.getenv("USER") or os.getenv("LOGNAME") or "nobody"
+        # Drop back to the invoking user by uid, not $USER: executors run
+        # without USER in their environment, and a job run as "nobody"
+        # cannot load numpy's extensions from the user's venv.
+        import pwd
+        user = pwd.getpwuid(os.getuid()).pw_name
         return ["sudo", "-n", "unshare", "-n", "--", "sudo", "-n", "-u", user,
                 *limits, *inner]
     return [*limits, *inner]
@@ -88,7 +95,7 @@ async def run_job(size: str, seed: int) -> dict:
            "MKL_NUM_THREADS": "1", "PYTHONHASHSEED": "0"}
     t0 = time.perf_counter()
     proc = await asyncio.create_subprocess_exec(
-        *_command(size, seed), env=env,
+        *_command(size, seed), env=env, cwd="/tmp",
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         stdin=asyncio.subprocess.DEVNULL)
     try:
