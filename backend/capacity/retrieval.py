@@ -29,6 +29,8 @@ import time
 import zlib
 from pathlib import Path
 
+from backend.capacity import stages
+
 CORPUS_VERSION = "v2"
 CHUNKS = int(os.getenv("CAPACITY_CORPUS_CHUNKS", "120000"))
 TOPICS = 2000
@@ -248,6 +250,7 @@ _stats_task = None
 
 def _note(stage: str, ms: float) -> None:
     _stage_samples.setdefault(stage, []).append(ms)
+    stages.note(stage, ms)
 
 
 async def _stats_flush_loop() -> None:

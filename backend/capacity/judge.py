@@ -394,6 +394,78 @@ def summarize(judgment: dict) -> dict:
              "levels_judged", "units_judged", "deadline_s", "notes")}
 
 
+STAGE_GROUPS = {
+    "model_wait": ("model_wait_ms",),
+    "retrieval": ("retrieve_ms",),
+    "rerank_call": ("rerank_call_ms",),
+    "rerank_backoff": ("rerank_429_backoff_ms",),
+    "sandbox_wall": ("sandbox_light_wall_ms", "sandbox_heavy_wall_ms"),
+    "sandbox_cpu": ("sandbox_light_cpu_ms", "sandbox_heavy_cpu_ms"),
+}
+
+
+def stages(paths: list, warmup_x: float = 1.5) -> dict:
+    """Per-archetype stage breakdown of one held rate, from the per-unit
+    stage sums the executors put on each ledger row (`st`).
+
+    For every archetype in the plateau's cohort (same warm-up rule as
+    `plateau`): units, median latency, and the median per-unit SUM of each
+    stage group in seconds - model wait as modeled by the stand-in, the
+    retrieval pipeline, the reranker call inside it, backoff after a
+    refusal, sandboxed job wall and CPU. The sums are resource time, not
+    the critical path (parallel workers add), so the reading is across
+    rates: the stage whose per-unit sum inflates as the rate rises is
+    where that archetype's slowdown lives."""
+    units = []
+    for path in paths:
+        ev = read_evidence(path)
+        has_rate = any(u.get("r") is not None for u in ev["units"])
+        for u in ev["units"]:
+            if not u.get("sub") or (has_rate and u.get("r") is None):
+                continue
+            units.append((float(u["sub"]), u.get("sid") or "?", bool(u.get("ok")),
+                          float(u["lat"]) if u.get("lat") is not None else None,
+                          u.get("st") or {}))
+    if not units:
+        return {"stages_version": "stages-1", "units": 0, "per_type": {}}
+    units.sort(key=lambda u: u[0])
+    t0, t_last = units[0][0], units[-1][0]
+    slowest = max((u[3] for u in units if u[2] and u[3]), default=0.0) / 1000.0
+    start = t0 + min(warmup_x * slowest, 0.5 * (t_last - t0))
+    cohort = [u for u in units if start <= u[0] <= t_last and u[2] and u[3] is not None]
+    per: dict[str, dict] = {}
+    for sid in sorted({u[1] for u in cohort}):
+        us = [u for u in cohort if u[1] == sid]
+        with_st = [u for u in us if u[4]]
+        row = {"n": len(us), "with_stages": len(with_st),
+               "p50_s": round(_pct([u[3] for u in us], 50) / 1000.0, 1),
+               "p95_s": round(_pct([u[3] for u in us], 95) / 1000.0, 1)}
+        for g, keys in STAGE_GROUPS.items():
+            sums = [sum(float((u[4].get(k) or [0, 0])[0]) for k in keys) for u in with_st]
+            cnts = [sum(int((u[4].get(k) or [0, 0])[1]) for k in keys) for u in with_st]
+            if with_st and any(cnts):
+                row[g] = {"p50_s": round(_pct(sums, 50) / 1000.0, 2),
+                          "p95_s": round(_pct(sums, 95) / 1000.0, 2),
+                          "calls": round(sum(cnts) / len(cnts), 2)}
+        per[sid] = row
+    return {"stages_version": "stages-1", "units": len(cohort), "per_type": per}
+
+
+def stages_table(paths: list) -> str:
+    """The breakdown as a markdown table (seconds per unit, p50 of sums)."""
+    s = stages(paths)
+    cols = list(STAGE_GROUPS)
+    lines = ["| archetype | n | latency p50/p95 | " + " | ".join(cols) + " |",
+             "|---|---|---|" + "---|" * len(cols)]
+    for sid, r in s["per_type"].items():
+        cells = []
+        for g in cols:
+            v = r.get(g)
+            cells.append(f"{v['p50_s']} ({v['calls']:g} calls)" if v else "-")
+        lines.append(f"| {sid} | {r['n']} | {r['p50_s']}/{r['p95_s']} | " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
 def main() -> None:  # pragma: no cover — thin CLI
     import argparse
     ap = argparse.ArgumentParser(
@@ -406,7 +478,13 @@ def main() -> None:  # pragma: no cover — thin CLI
     ap.add_argument("--plateau", nargs="*", metavar="LEDGER",
                     help="judge one held rate from these ledgers (pooled) "
                          "plus the positional one")
+    ap.add_argument("--stages", nargs="*", metavar="LEDGER",
+                    help="per-archetype stage breakdown of one held rate "
+                         "from these ledgers plus the positional one")
     args = ap.parse_args()
+    if args.stages is not None:
+        print(stages_table([args.evidence, *args.stages]))
+        return
     if args.plateau is not None:
         p = plateau([args.evidence, *args.plateau])
         if args.out:

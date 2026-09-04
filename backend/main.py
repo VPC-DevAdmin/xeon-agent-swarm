@@ -132,7 +132,8 @@ async def read_run_outcome(run_id: str) -> dict:
                       "task_count": int(m.get("task_count") or 0),
                       "tool_calls": int(m.get("tool_calls") or 0),
                       "plan_rejections": int(m.get("plan_rejections") or 0),
-                      "tool_clamps": int(m.get("tool_clamps") or 0)}}
+                      "tool_clamps": int(m.get("tool_clamps") or 0),
+                      "stages": m.get("stages") or {}}}
 
 
 @asynccontextmanager
@@ -736,7 +737,17 @@ async def internal_run(request: Request):
         raise HTTPException(403, "internal endpoint")
     body = await request.json()
     run_id = body.pop("run_id")
-    task = asyncio.create_task(run_deepagents(run_id, body.pop("query"), **body))
+    query = body.pop("query")
+
+    async def _bound_run():
+        # Per-run stage accounting (backend/capacity/stages.py): bind this
+        # task's context to the run so every timed stage in its workers
+        # lands on this run's unit row in the evidence ledger.
+        from backend.capacity import stages
+        stages.begin(run_id)
+        return await run_deepagents(run_id, query, **body)
+
+    task = asyncio.create_task(_bound_run())
     _run_tasks[run_id] = task
     task.add_done_callback(lambda _t, rid=run_id: _run_tasks.pop(rid, None))
     return {"accepted": run_id}

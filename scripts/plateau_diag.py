@@ -39,6 +39,11 @@ def main() -> None:
     for r in rates:
         print(f"=== plateau {r}/s per instance")
         files = sorted(glob.glob(f"{d}/rate-{r}-i*-evidence-*.jsonl.gz"))
+        try:
+            from backend.capacity.judge import stages_table
+            print(stages_table(files))
+        except Exception as exc:  # noqa: BLE001
+            print("  (stage breakdown unavailable:", exc, ")")
         lat = collections.defaultdict(list)
         for f in files:
             inst = re.search(r"-(i\d)-", f).group(1)

@@ -34,6 +34,7 @@ import logging
 import os
 import time
 
+from backend.capacity import stages
 from backend.schemas.models import EventType, SwarmEvent
 from backend.observability.callbacks import to_internal_tier
 from backend.observability.routing import rollup_routing
@@ -84,6 +85,20 @@ def _category(m) -> str | None:
     meta = getattr(m, "response_metadata", {}) or {}
     headers = {k.lower(): v for k, v in (meta.get("headers", {}) or {}).items()}
     return headers.get("x-vsr-selected-category")
+
+
+def _note_model_wait(m) -> None:
+    """The stand-in declares the serving wait it modeled for a call in
+    x-mock-wait-s; add it to the run's stage accounting so a unit's model
+    time is on its ledger row beside its retrieval and execution time."""
+    meta = getattr(m, "response_metadata", {}) or {}
+    headers = {k.lower(): v for k, v in (meta.get("headers", {}) or {}).items()}
+    w = headers.get("x-mock-wait-s")
+    if w is not None:
+        try:
+            stages.note("model_wait_ms", float(w) * 1000.0)
+        except (TypeError, ValueError):
+            pass
 
 
 def _usage(m) -> tuple[int, int]:
@@ -223,6 +238,7 @@ class EventAdapter:
                                       total_attempts=self._orch_attempts)
         metrics = {"task_count": self._delegation_n,
                    "tool_calls": tool_calls,
+                   "stages": stages.collect(self.run_id),
                    "plan_rejections": self.plan_rejections,
                    "tool_clamps": self.tool_clamps,
                    "validation_tokens": self.validation_tokens,
@@ -269,6 +285,7 @@ class EventAdapter:
         kind = type(m).__name__
         if kind == "AIMessage":
             tin, tout = _usage(m)
+            _note_model_wait(m)
             if tout or tin:                      # a real planner/synthesis model call
                 self._orch_attempts += 1
                 tier = _tier_observed(m)
@@ -506,6 +523,7 @@ class EventAdapter:
             return
         if kind == "AIMessage":
             tin, tout = _usage(m)
+            _note_model_wait(m)
             if not (tout or tin):
                 return                            # not a real model call
             info["attempts"] += 1

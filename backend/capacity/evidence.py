@@ -68,6 +68,11 @@ class EvidenceWriter:
                if rec.get("offered_rate") is not None else {}),
             **({"err": str(rec.get("error"))[:120]} if rec.get("error")
                else {}),
+            # Per-unit stage sums from the executor ({stage: [ms, n]}), so
+            # a plateau splits by archetype and stage after the fact.
+            **({"st": {k: [v.get("ms"), v.get("n")] for k, v in
+                       ((rec.get("trace") or {}).get("stages") or {}).items()}}
+               if (rec.get("trace") or {}).get("stages") else {}),
         })
 
     def close(self) -> dict | None:
