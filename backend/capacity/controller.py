@@ -2049,6 +2049,11 @@ class CapacityTest:
             tag += f"|sandbox={sandbox.isolation_mode()}"
         except Exception:  # noqa: BLE001
             pass
+        # A named tile (the CPU-heavy mix) is a different workload; the
+        # reference tile carries no tag so every earlier profile still reads.
+        tile = os.getenv("CAPACITY_E2E_TILE")
+        if tile:
+            tag += f"|tile={tile}"
         return tag
 
     async def _weigh_in(self) -> bool:

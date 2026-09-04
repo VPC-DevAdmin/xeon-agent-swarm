@@ -240,4 +240,10 @@ for port in 8880 $(seq 8881 $((8880 + RERANK_WORKERS))); do
 done
 
 (cd "$R" && .venv/bin/python -c "from backend.capacity import retrieval; print('corpus:', retrieval.ensure_corpus())")
+# The ingestion agent's document set (CPU-heavy mix): generated once,
+# seeded, not committed (data/capacity/ingest is ignored).
+if [ ! -f "$R/data/capacity/ingest/doc-039.pdf" ]; then
+  (cd "$R" && PYTHONPATH=. .venv/bin/python scripts/make_ingest_docs.py --docs 40 --pages 20)
+fi
+(cd "$R" && .venv/bin/python -c "import pypdf" 2>/dev/null) || echo "WARNING: pypdf missing in the venv (pip install pypdf) - the ingestion agent cannot parse"
 echo "RETRIEVAL PROVISIONED"

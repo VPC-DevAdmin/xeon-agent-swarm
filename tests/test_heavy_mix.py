@@ -115,3 +115,12 @@ def test_heavy_tile_is_selected_by_name(monkeypatch):
     monkeypatch.delenv("CAPACITY_E2E_TILE")
     sc._file_cache = None
     assert "research_brief" in sc.load_e2e_tile() and "code_agent" not in sc.load_e2e_tile()
+
+
+def test_fingerprint_names_the_tile(monkeypatch):
+    from backend.capacity.controller import CapacityTest
+    monkeypatch.delenv("CAPACITY_E2E_TILE", raising=False)
+    base = CapacityTest._serving_tier_tag()
+    assert "|tile=" not in base
+    monkeypatch.setenv("CAPACITY_E2E_TILE", "heavy")
+    assert CapacityTest._serving_tier_tag().endswith("|tile=heavy")
