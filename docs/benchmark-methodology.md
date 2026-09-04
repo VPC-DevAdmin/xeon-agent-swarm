@@ -285,6 +285,42 @@ attended 450 s, queued 1,200 s, background 3,600 s. Every plateau is
 judged against all six; the paper reports the tiers a reader is likely to
 size against and prints the whole curve.
 
+### Per-unit stage accounting
+
+Every ledger row carries the unit's own stage sums, gathered on the
+executor that ran it: the model wait the stand-in modeled for each of its
+calls, the retrieval pipeline and the reranker call inside it, any backoff
+after a refusal, and the sandboxed jobs' wall and CPU time. A run's task
+is bound to an accumulator when it starts, so the stages its parallel
+workers time land on the same unit. `judge.py --stages` splits a plateau
+by archetype and stage from those rows; the sums are resource time, not
+the critical path (a researcher's three workers retrieve in parallel), so
+the reading is across rates: the stage whose per-unit sum inflates as the
+rate rises is where that archetype's slowdown lives, and what is left after
+the model wait and the stages is the orchestration work the executors did
+for the unit, which is where CPU starvation shows.
+
+On the reference allocation (validation plateaus of series 8995, 300 s
+holds at 40 and 44 workflows/s, same build and allocation as the
+certified set; seconds per unit, medians):
+
+| Archetype | Latency p50, 40 → 44 wf/s | Model wait (modeled) | Retrieval, sum (calls) | Rerank call, sum | Sandbox wall / CPU, sum (jobs) | Remainder: orchestration on the executors |
+|---|---|---|---|---|---|---|
+| Task ticket | 10.1 → 16.7 | 8.4 | – | – | – | 1.7 → 8.3 |
+| Digest | 27.9 → 39.7 | 24.1 | – | – | – | 3.8 → 15.5 |
+| Comparison | 31.1 → 65.5 | 26.5 | 0.33 → 1.53 (1) | 0.17 → 0.38 | 0.31 / 0.24 → 4.29 / 0.48 (1) | 4.0 → 33.2 |
+| Research brief | 33.8 → 51.2 | 28.9 | 0.97 → 3.99 (3) | 0.56 → 1.26 | – | 3.9 → 18.3 |
+| Data analyst | 36.7 → 136.6 | 27.8 | – | – | 4.83 / 4.60 → 72.8 / 10.1 (3) | 4.1 → 36.0 |
+
+The model wait is identical at both rates to the hundredth of a second,
+which is the instrumentation's check on itself: it is modeled, not
+served. At 40 every archetype's remainder is 2 to 4 s. At 44 the analyst's
+three jobs wait 73 s of wall for 10 s of CPU, the comparison's one job
+4.3 s for 0.5, and the remainder grows for every archetype, the digest and
+task agent included, which use neither retrieval nor the sandbox: the
+executors' cores are the limit, and the reranker call (0.2 to 0.6 s at 40,
+0.4 to 1.3 s at 44) is not.
+
 ## 7. Attribution and what "utilization" means
 
 A sampler reads `/proc` every two seconds and attributes CPU to groups on
