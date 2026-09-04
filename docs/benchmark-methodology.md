@@ -163,18 +163,33 @@ tier sized to saturate exactly at the target queues at the target (a
 14-core reranker sat at ~90% of its pair budget at 40 workflows/s and
 queued 13 s per call); a tier sized generously starves the other side (at
 20 cores the remaining 42 collapsed at the same rate, sandbox jobs alone
-taking half of all hardware threads). At the reference mix, 40 workflows/s
-needs about 33 cores of sandboxed execution, 10 to 12 of orchestration,
-12 of reranking at full utilization, and 2 of embedding: 58 to 60 of the
-64 physical cores, which is the box's limit. The sizing arithmetic is in
-section 8.
+taking half of all hardware threads). At the reference allocation and
+mix, 40 workflows/s has the executors' 46 cores 60% occupied and the tier
+at about three quarters of its pair budget; at 44 the executors' side is
+full on both threads of every core and the sandbox's CPU per workflow
+nearly doubles (0.84 to 1.62 core-seconds) as sibling threads contend,
+which is what makes the cliff sharp. The box's limit is just above 40
+workflows/s whatever the split. The sizing arithmetic is in section 8.
+
+The reranker tier is four independent server processes, each pinned to
+four whole cores of its own and each with its own queue, and every
+executor rotates its calls across the four per call, moving a refused
+call to the next process before it backs off. The shape matters as much
+as the core count: as one listening socket shared by four worker
+processes, the kernel handed each keep-alive *connection*, not each
+request, to a worker, and 229 of 269 executor connections landed on one
+of them. That worker's queue filled at a third of the tier's pair budget
+while the other three idled, which series hit it depended on how the
+connections fell at warm-up, and the box looked like it had a knee at 40
+workflows/s that its cores did not have. Balancing per call makes the
+tier's throughput the sum of its processes.
 
 Each executor admits at most four reranker calls at a time and backs off
 exponentially on a 429 or 503, so a saturated tier produces queueing the
 judge sees as latency, never errors. The tier's own queue is sized from
 those gates, never set as a constant: with four instances of 28 executors
 and four calls each, 448 calls may be in flight, so each of the tier's
-worker processes queues at least its share of that plus a margin. A queue
+server processes queues at least its share of that plus a margin. A queue
 below that share refuses calls the cores could serve, and each refusal
 costs the caller a 0.25 to 10 s backoff; a mis-sized queue once turned a
 0.3 s retrieval into 5 to 7 s at 40 workflows/s and looked exactly like a
@@ -334,6 +349,19 @@ depth, sandbox isolation mode, the core allocation (`allocation.env`),
 the process topology, the host profile, and the ledger's SHA-256. Ledgers,
 judgments, set summaries, and per-core samples are committed under
 `data/capacity/`. Two results compare only when their fingerprints match.
+
+The certified set of record on the reference server is
+`data/capacity/set-20260904-070910` (seeds 8801, 8901, 9001; 4, 6, 8, 10,
+11, and 12 per instance; ten-minute holds; run commit 4a81e9f, evidence
+commit 43abb89): 39.8 workflows/s box-wide (39.83 to 39.86 across the
+series) for every tier from interactive up, 1,274 resident (1,273 to
+1,277), latencies flat from 16 to 40 workflows/s, zero failures through
+40; 44 offered delivered 43.5 with the backlog doubling inside the hold,
+48 delivered 44.2 with the generator shedding. The per-core samples for
+the set are `data/capacity/set-8800-mpstat.log`. The two earlier sets
+kept alongside it (`set-20260904-034441` on a shared-socket tier,
+`set-20260903-152713` on a 14-core tier) are the record of the two
+software limits found and removed on the way, not results.
 
 ## 10. Known limits
 
