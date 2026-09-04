@@ -321,6 +321,38 @@ task agent included, which use neither retrieval nor the sandbox: the
 executors' cores are the limit, and the reranker call (0.2 to 0.6 s at 40,
 0.4 to 1.3 s at 44) is not.
 
+### Process families and the executor spread
+
+Every sample attributes host CPU to process families on the whole-host
+basis (100% is all 128 threads): the instance's control process, its
+executors, the sibling instances, the retrieval tier, the model stand-in,
+the databases (every PostgreSQL process on the host), the sandboxed jobs
+(charged from the executors' reaped-children time, since a 1.5 s job never
+survives a process scan), and the remainder. Each sample also carries the
+executors' per-process distribution (min, median, max, in percent of one
+hardware thread), so an uneven pool shows where a family total would hide
+it. At 40 workflows/s in steady state (series 8997): sandbox 26.3%,
+retrieval 12.7%, executors 11.3% across the four instances, database
+0.5%, control and stand-in 0.5%, other 0.5%; the 28 executors of an
+instance run at 5 / 10 / 26 percent of a thread each. At 44 the sandbox
+family doubles to 55% and the executors grow by two thirds, while the
+database stays under 1%.
+
+### The start-up transient
+
+Every fleet run opens with a surge: the generator offers its full rate
+from the first second while nothing completes for the first 30 s, so the
+in-flight count overshoots its steady value by about 30%, the extra
+sandbox jobs land on both threads of the application cores, each job's
+CPU time doubles, and the host reads about 86% until the overshoot drains.
+The drain takes about a minute at 36 workflows/s and three minutes at 40,
+because the excess capacity that drains it shrinks as the rate nears the
+cliff; at 44 it never drains, which is the cliff. The judge's warm-up rule
+(units admitted before 1.5 times the slowest completed latency are not in
+the cohort) and the ten-minute hold are what keep it out of a certified
+number; a five-minute check hold at 40 sits inside it and must not be read
+as steady state.
+
 ## 7. Attribution and what "utilization" means
 
 A sampler reads `/proc` every two seconds and attributes CPU to groups on
