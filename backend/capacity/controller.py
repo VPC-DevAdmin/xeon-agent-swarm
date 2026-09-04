@@ -733,6 +733,12 @@ class CapacityTest:
             groups["siblings"] = cached.get("siblings", [])
         if os.getenv("CAPACITY_EMBED_URL") or os.getenv("CAPACITY_RERANK_URL"):
             groups["retrieval"] = cached.get("retrieval", [])
+        # The databases (every PostgreSQL process on the host: the fleet's
+        # four containers and the service's own) as their own family, so
+        # the report can say what the durable-record path costs instead of
+        # folding it into "other".
+        if cached.get("database"):
+            groups["database"] = cached["database"]
         # v17: sandboxed jobs are charged from the executors' reaped-children
         # CPU (see _sample_loop); a scanned pid list would miss 1.5 s jobs.
         if self.inference_backend == "local":
@@ -765,7 +771,7 @@ class CapacityTest:
             own.update(g)
         if getattr(self, "_sibling_cache", None) is None:
             self._sibling_cache = (0.0, {"siblings": [], "retrieval": [],
-                                         "mock_router": []}, False)
+                                         "mock_router": [], "database": []}, False)
         ts, cached, refreshing = self._sibling_cache
         mock_pid = None
         try:
@@ -831,6 +837,7 @@ class CapacityTest:
                         sandbox.add(cur)
                         stack.extend(kids.get(cur, []))
                     sandbox -= set(exec_roots)
+                    db = {p for p in find_pids("postgres") if p not in own}
                     mock: set[int] = set()
                     if mock_pid is not None:
                         stack = [mock_pid]
@@ -841,10 +848,11 @@ class CapacityTest:
                             mock.add(cur)
                             stack.extend(kids.get(cur, []))
                     self._sibling_cache = (time.time(),
-                                           {"siblings": sorted(out - own - ret - mock - sandbox),
+                                           {"siblings": sorted(out - own - ret - mock - sandbox - db),
                                             "retrieval": sorted(ret - own),
                                             "mock_router": sorted(mock),
-                                            "sandbox": sorted(sandbox)},
+                                            "sandbox": sorted(sandbox),
+                                            "database": sorted(db)},
                                            False)
                 except Exception:  # noqa: BLE001 — attribution is best-effort
                     self._sibling_cache = (time.time(), cached, False)
@@ -877,8 +885,13 @@ class CapacityTest:
                 by = await asyncio.to_thread(
                     proc_cpu.sample, groups,
                     {"sandbox": list(groups.get("executors") or [])
-                     + list(groups.get("siblings") or [])})
+                     + list(groups.get("siblings") or [])},
+                    ("executors",))
                 if by is not None and s.get("cpu_pct") is not None:
+                    # Per-executor distribution (percent of one thread) rides
+                    # beside the family totals: an uneven pool is a software
+                    # limit a group total cannot show.
+                    s["cpu_exec"] = by.pop("executors_spread", None)
                     by["other"] = round(max(0.0, s["cpu_pct"] - sum(by.values())), 1)
                     s["cpu_by"] = by
             except Exception:  # noqa: BLE001 — attribution must never kill telemetry
@@ -915,7 +928,7 @@ class CapacityTest:
                 self._evidence.write("sample", {
                     k: s.get(k) for k in
                     ("ts", "users", "in_flight", "p95_ms", "err_rate",
-                     "rpm", "cpu_pct", "cpu_by", "oldest_inflight_s",
+                     "rpm", "cpu_pct", "cpu_by", "cpu_exec", "oldest_inflight_s",
                      "mem_gb", "mem_pct", "gen_shed", "gen_late_ticks",
                      "gen_late_max")})
             await asyncio.sleep(self.cfg["sample_interval_s"])

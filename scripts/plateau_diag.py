@@ -64,6 +64,11 @@ def main() -> None:
                 for k, v in (s.get("cpu_by") or {}).items():
                     groups[k].append(v)
             g = {k: round(pct(v, 0.5), 1) for k, v in groups.items()}
+            ex = [s["cpu_exec"] for s in mid if s.get("cpu_exec")]
+            exec_spread = ""
+            if ex:
+                exec_spread = (f" exec%thread min/p50/max={pct([e['min'] for e in ex], .5):.0f}/"
+                               f"{pct([e['p50'] for e in ex], .5):.0f}/{pct([e['max'] for e in ex], .5):.0f}")
             subs = sorted(u["sub"] for u in ev["units"] if u.get("sub"))
             span = (subs[-1] - subs[0]) if len(subs) > 1 else 0
             gen = ""
@@ -72,7 +77,7 @@ def main() -> None:
                        f" late_max={smp[-1].get('gen_late_max')}")
             line = " ".join(f"{k[:4]} {pct(v, .5):.0f}/{pct(v, .95):.0f}" for k, v in sorted(by.items()))
             print(f"  {inst} n={sum(len(v) for v in by.values()):5d} arr={len(subs) / span if span else 0:.2f}/s "
-                  f"p50/p95 {line} bad={sum(bad.values())} cpu={cpu} by={g}{gen}")
+                  f"p50/p95 {line} bad={sum(bad.values())} cpu={cpu} by={g}{exec_spread}{gen}")
             if bad:
                 print(f"     failures: {dict(bad)}")
         pj = plateau(files)

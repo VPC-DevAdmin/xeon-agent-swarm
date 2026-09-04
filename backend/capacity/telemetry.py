@@ -199,6 +199,16 @@ async def sample_kv_pct(base_url: str) -> float | None:
 # or everything else on the machine. Percentages share the host cpu_pct basis
 # (100% = the whole box), so the components stack under the host line.
 
+def _read_proc_stat_total() -> int | None:
+    """Total jiffies across all CPUs from /proc/stat (None when unreadable)."""
+    try:
+        with open("/proc/stat") as f:
+            stat = parse_proc_stat(f.read())
+    except OSError:
+        return None
+    return None if stat is None else stat[1]
+
+
 def _proc_jiffies(pid: int) -> int | None:
     """utime+stime for one pid (fields 14/15 of /proc/<pid>/stat)."""
     try:
@@ -302,18 +312,19 @@ class ProcessCpuSampler:
         self._prev_total: int | None = None
 
     def sample(self, groups: dict[str, list[int]],
-               children_of: dict[str, list[int]] | None = None) -> dict[str, float] | None:
+               children_of: dict[str, list[int]] | None = None,
+               spread_of: tuple[str, ...] = ()) -> dict[str, float] | None:
         """children_of: {name: [parent pids]} adds groups charged with the
         CPU of those parents' reaped children (the sandboxed jobs of the
-        executors), which a pid scan cannot see."""
-        try:
-            with open("/proc/stat") as f:
-                stat = parse_proc_stat(f.read())
-        except OSError:
+        executors), which a pid scan cannot see.
+
+        spread_of: group names whose per-process distribution is reported
+        too, as `<name>_spread` = {n, min, p50, max} in percent of ONE
+        hardware thread, so an uneven pool (one hot executor among 28 idle
+        ones) is visible where a group total hides it."""
+        total = _read_proc_stat_total()
+        if total is None:
             return None
-        if stat is None:
-            return None
-        total = stat[1]
         cur: dict[int, int] = {}
         for pids in groups.values():
             for pid in pids:
@@ -338,6 +349,14 @@ class ProcessCpuSampler:
                 dj = sum(max(0, curc.get(p, 0) - self._prev_child.get(p, curc.get(p, 0)))
                          for p in pids if p in curc)
                 out[name] = round(out.get(name, 0.0) + 100.0 * dj / dtotal, 1)
+            ncpu = os.cpu_count() or 1
+            for name in spread_of:
+                per = sorted(100.0 * ncpu * max(0, cur[p] - self._prev.get(p, cur[p])) / dtotal
+                             for p in groups.get(name, []) if p in cur and p in self._prev)
+                if per:
+                    out[f"{name}_spread"] = {"n": len(per), "min": round(per[0], 1),
+                                             "p50": round(per[len(per) // 2], 1),
+                                             "max": round(per[-1], 1)}
         self._prev = cur
         self._prev_child = curc
         self._prev_total = total
