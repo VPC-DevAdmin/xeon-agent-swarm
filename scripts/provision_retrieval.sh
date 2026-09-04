@@ -46,6 +46,13 @@ INT8_DIR=$MODEL_ROOT/ms-marco-int8
 # ~87% near 36 workflows/s, both over at 40.
 RERANK_PHYS_CORES=${RERANK_PHYS_CORES:-16}
 EMBED_PHYS_CORES=${EMBED_PHYS_CORES:-2}
+# A SEPARATE embedder for bulk ingestion (CPU-heavy mix): the ingestion
+# agent embeds ~1,900 chunks per workflow, and on a shared embedder those
+# batches queued the researchers' single-query embeds behind them for
+# 17 s per call (series 8997). Production RAG stacks separate online
+# query embedding from batch ingestion for the same reason. 0 = none (the
+# ingestion agent then uses the query embedder).
+INGEST_EMBED_PHYS_CORES=${INGEST_EMBED_PHYS_CORES:-0}
 RERANK_WORKERS=${RERANK_WORKERS:-4}
 RERANK_THREADS=${RERANK_THREADS:-4}
 # The tier's queue is sized FROM the executors' admission gates, never a
@@ -75,10 +82,14 @@ PY
 RERANK_CPUS=${RERANK_CPUS:-$(phys_cpuset "$RERANK_PHYS_CORES" 0 first)}
 RERANK_CPUS_ALL=$(phys_cpuset "$RERANK_PHYS_CORES" 0 all)
 EMBED_CPUS=${EMBED_CPUS:-$(phys_cpuset "$EMBED_PHYS_CORES" "$RERANK_PHYS_CORES" all)}
+INGEST_EMBED_CPUS=""
+if [ "$INGEST_EMBED_PHYS_CORES" -gt 0 ]; then
+  INGEST_EMBED_CPUS=${INGEST_EMBED_CPUS:-$(phys_cpuset "$INGEST_EMBED_PHYS_CORES" $((RERANK_PHYS_CORES + EMBED_PHYS_CORES)) all)}
+fi
 # Everything else (instances, executors, mocks, databases) gets the
 # remaining whole cores, published for the fleet script to pin to, so no
 # executor shares a physical core - and its AMX units - with the tier.
-REST_CPUS=${REST_CPUS:-$(python3 - "$RERANK_CPUS_ALL" "$EMBED_CPUS" <<'PY'
+REST_CPUS=${REST_CPUS:-$(python3 - "$RERANK_CPUS_ALL" "$EMBED_CPUS" "$INGEST_EMBED_CPUS" <<'PY'
 import sys, os
 taken = set()
 for arg in sys.argv[1:]:
@@ -110,9 +121,10 @@ for ((i = 0; i < RERANK_WORKERS; i++)); do
   RERANK_URLS="${RERANK_URLS:+$RERANK_URLS,}http://127.0.0.1:$((8881 + i))"
 done
 mkdir -p "$R/data/capacity/retrieval"
-printf 'RERANK_CPUS=%s\nEMBED_CPUS=%s\nREST_CPUS=%s\nRERANK_WORKERS=%s\nRERANK_THREADS=%s\nRERANK_MAX_QUEUE=%s\nRERANK_URLS=%s\nRERANK_CPUSETS=%s\n' \
+printf 'RERANK_CPUS=%s\nEMBED_CPUS=%s\nREST_CPUS=%s\nRERANK_WORKERS=%s\nRERANK_THREADS=%s\nRERANK_MAX_QUEUE=%s\nRERANK_URLS=%s\nRERANK_CPUSETS=%s\nINGEST_EMBED_CPUS=%s\nINGEST_EMBED_URL=%s\n' \
   "$RERANK_CPUS" "$EMBED_CPUS" "$REST_CPUS" "$RERANK_WORKERS" "$RERANK_THREADS" "$RERANK_MAX_QUEUE" \
   "$RERANK_URLS" "$(IFS=';'; echo "${RERANK_CPUSETS[*]}")" \
+  "$INGEST_EMBED_CPUS" "$([ -n "$INGEST_EMBED_CPUS" ] && echo http://127.0.0.1:8879)" \
   > "$R/data/capacity/retrieval/allocation.env"
 
 start_tei() {
@@ -138,6 +150,11 @@ start_tei() {
 # slept (throttle-thrash: milliseconds became 30-second ReadTimeouts).
 # Pinned cores + matching thread limits give it honest, steady capacity.
 start_tei tei-embed 8880 sentence-transformers/all-MiniLM-L6-v2 "$EMBED_CPUS" 8
+if [ -n "$INGEST_EMBED_CPUS" ]; then
+  start_tei tei-ingest 8879 sentence-transformers/all-MiniLM-L6-v2 "$INGEST_EMBED_CPUS" $((INGEST_EMBED_PHYS_CORES * 2))
+else
+  docker rm -f tei-ingest >/dev/null 2>&1 || true
+fi
 
 # Reranker: INT8 on ONNX Runtime, not the TEI container. The quantized
 # graph runs 2.6x faster than FP32 under onnxruntime 1.29 (AMX/VNNI int8
@@ -228,9 +245,9 @@ start_ort_reranker() {
 
 build_int8_reranker
 start_ort_reranker
-echo "retrieval allocations: embed cpus $EMBED_CPUS, rerank cpus $RERANK_CPUS (${RERANK_WORKERS} servers x ${RERANK_THREADS} threads: $(IFS=';'; echo "${RERANK_CPUSETS[*]}"))"
+echo "retrieval allocations: embed cpus $EMBED_CPUS${INGEST_EMBED_CPUS:+, ingest embed cpus $INGEST_EMBED_CPUS}, rerank cpus $RERANK_CPUS (${RERANK_WORKERS} servers x ${RERANK_THREADS} threads: $(IFS=';'; echo "${RERANK_CPUSETS[*]}"))"
 
-for port in 8880 $(seq 8881 $((8880 + RERANK_WORKERS))); do
+for port in 8880 ${INGEST_EMBED_CPUS:+8879} $(seq 8881 $((8880 + RERANK_WORKERS))); do
   for _ in $(seq 1 120); do
     curl -sf "localhost:$port/health" >/dev/null 2>&1 && break
     sleep 5

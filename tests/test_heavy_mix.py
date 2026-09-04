@@ -112,3 +112,30 @@ def test_fingerprint_names_the_tile(monkeypatch):
     assert "|tile=" not in base
     monkeypatch.setenv("CAPACITY_E2E_TILE", "heavy")
     assert CapacityTest._serving_tier_tag().endswith("|tile=heavy")
+
+
+def test_ingest_embedding_prefers_the_ingest_embedder(monkeypatch):
+    import asyncio
+    import backend.capacity.retrieval as rt
+    seen = []
+
+    class _Resp:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return [[0.1, 0.2]] * 32
+
+    class _Client:
+        async def post(self, url, json=None):
+            seen.append(url)
+            return _Resp()
+
+    monkeypatch.setattr(rt, "_http", lambda: _Client())
+    rt._tier_gate = None
+    monkeypatch.setenv("CAPACITY_EMBED_URL", "http://q:8880")
+    monkeypatch.setenv("CAPACITY_INGEST_EMBED_URL", "http://i:8879")
+    out = asyncio.run(rt.embed_batch(["x"] * 40))
+    assert len(out) == 64 and seen == ["http://i:8879/embed", "http://i:8879/embed"]
+    monkeypatch.delenv("CAPACITY_INGEST_EMBED_URL")
+    seen.clear()
+    asyncio.run(rt.embed_batch(["x"]))
+    assert seen == ["http://q:8880/embed"]

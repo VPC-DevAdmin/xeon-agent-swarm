@@ -392,9 +392,12 @@ async def embed_query(query: str) -> list[float] | None:
 
 
 async def embed_batch(texts: list[str]) -> list[list[float]] | None:
-    """Embed many texts on the CPU embedder in client-batch slices (the
-    ingestion agent's chunks). None when no embedder is configured."""
-    url = os.getenv("CAPACITY_EMBED_URL")
+    """Embed many texts in client-batch slices (the ingestion agent's
+    chunks) on the INGEST embedder when one is provisioned
+    (CAPACITY_INGEST_EMBED_URL), else on the query embedder. A shared
+    embedder queued single-query embeds behind these batches for 17 s per
+    call; production stacks separate the two. None when no embedder."""
+    url = os.getenv("CAPACITY_INGEST_EMBED_URL") or os.getenv("CAPACITY_EMBED_URL")
     if not url:
         return None
     out: list[list[float]] = []

@@ -89,6 +89,7 @@ if [ -f "$R/data/capacity/retrieval/allocation.env" ]; then
   # The reranker tier's server processes, one per port; executors rotate
   # across them per call (see provision_retrieval.sh).
   RERANK_URLS=$(grep ^RERANK_URLS= "$R/data/capacity/retrieval/allocation.env" | cut -d= -f2)
+  INGEST_EMBED_URL=$(grep ^INGEST_EMBED_URL= "$R/data/capacity/retrieval/allocation.env" | cut -d= -f2)
 fi
 PIN=""
 [ -n "$REST_CPUS" ] && PIN="taskset -c $REST_CPUS"
@@ -125,6 +126,7 @@ for i in $(seq 1 "$K"); do
       CAPACITY_MODEL_DECODE_TPS="${CAPACITY_MODEL_DECODE_TPS:-0}" \
       CAPACITY_MODEL_PREFILL_TPS="${CAPACITY_MODEL_PREFILL_TPS:-0}" \
       CAPACITY_EMBED_URL="${CAPACITY_EMBED_URL:-http://127.0.0.1:8880}" \
+      CAPACITY_INGEST_EMBED_URL="${CAPACITY_INGEST_EMBED_URL:-${INGEST_EMBED_URL:-}}" \
       CAPACITY_RERANK_URL="${CAPACITY_RERANK_URL:-${RERANK_URLS:-http://127.0.0.1:8881}}" \
       SCHEDULER_ENABLED=0 \
       nohup $PIN .venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 \
