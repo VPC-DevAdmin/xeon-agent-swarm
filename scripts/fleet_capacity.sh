@@ -95,8 +95,17 @@ echo "instances pinned to: ${REST_CPUS:-all cpus}"
 for i in $(seq 1 "$K"); do
   free_port $((8100 + i * 10))
 done
-pkill -f "backend.main:app --host 127.0.0.1 --port 93" 2>/dev/null || true
+# Sweep EVERY leftover fleet executor, not just instance 1's port range: an
+# instance killed hard leaves its 28 executors alive, and 868 of them were
+# found idling (and eating memory and the orchestration floor) after a day
+# of aborted starts. Fleet executors live on ports 9300-10499; the main
+# service's pool (80xx) is untouched.
+for p in $(pgrep -f "backend.main:app --host 127.0.0.1 --port (9[3-9]|10)[0-9]{2}" 2>/dev/null); do
+  kill -9 "$p" 2>/dev/null || true
+done
 sleep 1
+left=$(pgrep -fc "backend.main:app --host 127.0.0.1 --port (9[3-9]|10)[0-9]{2}" 2>/dev/null || true)
+echo "stale fleet executors swept (left: ${left:-0})"
 
 for i in $(seq 1 "$K"); do
   PORT=$((8100 + i * 10))
