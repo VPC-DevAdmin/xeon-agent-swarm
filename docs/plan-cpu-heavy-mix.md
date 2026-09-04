@@ -41,34 +41,34 @@ alone before the tile is certified, as the typical archetypes were.
 
 | Archetype | Tile weight | Host work per workflow | Model calls | Gen tokens | What the work is |
 |---|---|---|---|---|---|
-| Code agent (build and test) | 2 | ~46 core-s | 13 | ~1,800 | three workers each compile a generated library (twelve units of sixty invertible mixing functions with derived inverses, gcc -O2) and run its 721 property tests in the sandbox; measured 15.1 core-s per build (7.6 compile, 7.4 tests); the verifier is the test result |
+| Code agent (build and test) | 2 | ~24 core-s | 13 | ~1,800 | three workers each build a real project from vendored source in the sandbox, Lua 5.4.7 through its own Makefile with gcc -O2, and run its own test suite; measured 7.5 core-s per build-and-test step (7.0 build, 0.5 tests, 61 source files, 30,098 lines); the verifier is the suite's result |
 | Deep research | 1 | ~13 core-s | 13 | ~1,800 | three retrievals at rerank depth 128 (11 core-s of reranking on the pair law) plus BM25 and fusion |
 | Ingestion agent | 1 | ~7 core-s | 4 | ~550 | one worker parses 400 PDF pages in the sandbox (measured 3.9 core-s), then the executor embeds the ~1,900 chunks on the CPU embedder and indexes them; the check query is the verifier |
 | Analyst XL | 1 | ~94 core-s | 13 | ~1,800 | three sandboxed jobs over 60M rows each (measured 31.1 core-s per job, eighteen times the reference job) |
-| Task ticket | 1 | 0.54 core-s | 4 | 550 | unchanged; keeps the mix honest |
-| Ops task | 1 | ~1 core-s (measured 0.4 per job) | 4 | ~550 | modeled on the lab tasks: merge and repair a repository with six conflicting files, then configure, start and probe a service on the sandbox's loopback; eleven checks; mostly waiting rather than computing, as the lab's own tasks were |
+| Task ticket | 1 | 0.54 core-s | 4 | 550 | unchanged; the short-lived agent every deployment has |
 
-Job sizes are declared parameters (`CAPACITY_BUILD_FILES`, `CAPACITY_BUILD_WORK`,
-the XL row count, `CAPACITY_INGEST_PAGES`). The first measured sizes (six
-build units, 30M rows, 200 pages) landed the tile at about 1:2.7 at the
-conservative serving point; the compute-shaped steps were then doubled
-before certification so the headline is measured at one declared size.
+Job sizes are declared parameters (the vendored project, the XL row
+count, `CAPACITY_INGEST_PAGES`, the rerank depth) and are stated with the
+result. The build step is a real project so it can be reported as one:
+nothing in it is generated, and the SQLite amalgamation can be vendored
+beside Lua for a heavier, equally recognizable compile.
 
-The ops task is there so the two studies share a row: at 0.4 core-seconds
-it is lighter than the lab's tasks (7 to 16 core-seconds, most of it
-apt-get and service restarts our sandbox cannot spend), which is itself a
-finding: install-configure-verify work does not move the ratio.
+An ops-style archetype modeled on the lab's install-configure-verify
+tasks was built and dropped: at 0.4 core-seconds per task it only waited
+(git and a service round trip), and an agent that waits does not belong
+in a mix whose purpose is host work. The lab's own ops tasks, at 7 to 16
+core-seconds and 2 to 5 core-ms per token, remain the comparison row.
 Validations are done exactly as in the typical mix, as calls to the
 serving tier, so the ratio moves only through work nobody can call a
 lever.
 
 Tile estimate at the declared sizes, from the measured per-job costs and
-the reference orchestration floors: **about 30 core-s and 1,520 generated
-tokens per workflow, 20 core-ms per token**, which is 1.4 GPUs per socket
-at 2,400 tok/s and 0.9 at 3,800. The published number is whatever the
-certified set measures, with the formula and the band beside it.
+the reference orchestration floors: **about 27 core-s and 1,380 generated
+tokens per workflow, 19.5 core-ms per token**, which is 1.4 GPUs per
+socket at 2,400 tok/s and 0.9 at 3,800. The published number is whatever
+the certified set measures, with the formula and the band beside it.
 
-| Serving point (generation tok/s per GPU) | Typical mix (certified) | Heavy tile at the declared sizes (~30 core-s/wf) | Lab's own ops tasks |
+| Serving point (generation tok/s per GPU) | Typical mix (certified) | Heavy tile at the declared sizes (~27 core-s/wf) | Lab's own ops tasks |
 |---|---|---|---|
 | 1,300 (lab window average, draining fleet) | 1 : 61 | 1 : 2.5 | 1 : 8 to 1 : 20 |
 | 2,400 (lab peak, conservative) | 1 : 33 | 1 : 1.4 | |
@@ -106,11 +106,11 @@ tokens at a rate no serving tier would accept.
 
 ## What the box does at the heavy mix
 
-At ~30 core-s per workflow one 64-core socket sustains about 1.8
-workflows/s (about 110 per minute), driving roughly 2,800 generated
-tokens per second and about 18 model calls per second: one RTX PRO 6000
+At ~27 core-s per workflow one 64-core socket sustains about 2
+workflows/s (about 120 per minute), driving roughly 2,800 generated
+tokens per second and about 20 model calls per second: one RTX PRO 6000
 inside its measured peak band. The analyst XL's three 60M-row jobs hold
-about 5 GB each, so at that rate the sandboxes hold roughly 120 GB of the
+about 5 GB each, so at that rate the sandboxes hold roughly 100 GB of the
 host's 1 TB. The plateau method is unchanged; only the rate ladder
 moves (0.25 to 1 per instance instead of 4 to 12). The allocation is
 re-derived from the cost laws before the set, since the heavy mix shifts
@@ -128,8 +128,7 @@ work from the reranker tier to the sandbox side.
 2. **Build the heavy archetypes (3 to 4 days).** Build-and-test sandbox
    job with a real project and test suite; XL data job size; ingestion
    tool (parse, chunk, embed via the CPU embedder, index); per-archetype
-   rerank depth; ops-task job (install, configure, verify) with its
-   service check; encoder validators served like the reranker for the
+   rerank depth; encoder validators served like the reranker for the
    placement sensitivity; scenarios, stand-in policies, tests. Each archetype is
    measured alone (the existing cost-run script) and the tile's core-ms
    per token is checked against the target band before certification.
