@@ -36,10 +36,17 @@ INT8_DIR=$MODEL_ROOT/ms-marco-int8
 # and queued 13-15 s per call. A tier is sized so its utilization at the
 # executor-side cliff stays under ~70%: 44 workflows/s x 0.67 calls x 16
 # pairs = 470 pairs/s, 35 pairs per core-second -> 20 cores at 67%.
-RERANK_PHYS_CORES=${RERANK_PHYS_CORES:-20}
+# ...and the executors' side needs its headroom too: at 20 tier cores the
+# remaining 42 collapsed at 40 workflows/s (sandbox jobs alone 50% of all
+# threads, host 82%). The reference mix needs ~33 cores of sandbox, 10-12
+# of orchestration, 12 of reranking at full utilization and 2 of embedding
+# at 40 workflows/s - 58-60 of 64 physical cores, which is the box's
+# limit. 16 tier cores leave 46: the tier at ~70% and the executors at
+# ~87% near 36 workflows/s, both over at 40.
+RERANK_PHYS_CORES=${RERANK_PHYS_CORES:-16}
 EMBED_PHYS_CORES=${EMBED_PHYS_CORES:-2}
 RERANK_WORKERS=${RERANK_WORKERS:-4}
-RERANK_THREADS=${RERANK_THREADS:-5}
+RERANK_THREADS=${RERANK_THREADS:-4}
 # The tier's queue is sized FROM the executors' admission gates, never a
 # constant: K instances x W executors x CAPACITY_RERANK_CONCURRENCY calls
 # may be in flight at once, and a per-worker queue below that share
