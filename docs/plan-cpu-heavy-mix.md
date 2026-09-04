@@ -139,22 +139,27 @@ work from the reranker tier to the sandbox side.
    holds, the cliff above; per-unit stage attribution names the stage
    each archetype's cost lives in; process families and the executor
    spread show the host saturating.
-4. **Recorded serving profile (needs an API key, tens of dollars).**
-   Capture the heavy mix's query set from a traced run, replay it against
-   a cloud endpoint at several concurrency levels with the real model
-   (time to first token, latency, real token counts, throttling per
-   call), and run the certified set with the stand-in replaying that
-   record. The serving side of the result is then measured data from a
-   named model and level, repeatable, and re-recordable for any other
-   model; the host side is unchanged. The recording is also the check on
-   the lab's serving numbers, on this workload's own calls.
-5. **Physical pairing (optional, needs one GPU).** Put the orchestration
-   server in front of one RTX PRO 6000 serving the same model in vLLM,
-   replace the stand-in with the live tier for the certified point, and
-   scrape vLLM's metrics as the lab harness does. This measures tokens
-   per second per GPU on our call shapes (2,000-token prompts, 140-token
-   outputs) rather than on coding-agent shapes, and shows both sides
-   saturating together, which is the 1:1 demonstration in one picture.
+4. **Recorded serving profile against one known GPU (an API key and a
+   dedicated endpoint or rented instance; tens of dollars).** Capture the
+   heavy mix's query set from a traced run and replay it with
+   `scripts/replay_query_set.py --sweep --gpus 1` against a single-GPU
+   endpoint serving an open-weight model (a Together dedicated endpoint
+   on one H100 or RTX PRO 6000, or one rented instance running vLLM):
+   concurrency doubles until aggregate generation throughput stops
+   rising, and that ceiling is the GPU's tokens per second on this
+   workload's own calls. `scripts/ratio_from_profile.py` then computes
+   GPUs per socket from two measurements and nothing typed in: host
+   core-ms per generated token from a plateau's ledgers, and tokens per
+   GPU from the recording. The same recording gives the per-call timing
+   the stand-in replays in the certified set, the real token counts, and
+   a throughput-versus-concurrency curve of our own. A shared serverless
+   endpoint gives the timing and tokens but not the GPU count, so it
+   serves the "host under a production model" run, not the ratio.
+   Re-recording for another model or GPU is the same 45 minutes.
+5. **Physical pairing (optional, needs the GPU in the same rack).** The
+   same replay and sweep against a GPU the orchestration server can reach
+   directly, with the stand-in replaced by the live tier for the
+   certified point, showing both sides saturating together.
 6. **Paper (1 day).** A ratio section: the formula, the measured constant
    for each mix, a chart of GPUs per socket against GPU throughput with
    the lab band marked, and the two archetype cost badges sets.
