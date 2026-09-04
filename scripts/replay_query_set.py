@@ -164,7 +164,15 @@ def main() -> None:
     ap.add_argument("queryset")
     ap.add_argument("--base-url", required=True)
     ap.add_argument("--model", required=True)
-    ap.add_argument("--concurrency", default="1,8,32")
+    ap.add_argument("--concurrency", default="1,8,32",
+                    help="levels to run; --sweep replaces it with 1,2,4,...,--max-concurrency")
+    ap.add_argument("--sweep", action="store_true",
+                    help="saturation sweep against ONE known GPU: doubling levels until aggregate "
+                         "generation tokens/s stops rising; the plateau is that GPU's ceiling on this workload")
+    ap.add_argument("--max-concurrency", type=int, default=256)
+    ap.add_argument("--gpus", type=int, default=None,
+                    help="GPUs behind the endpoint (a dedicated endpoint or a rented instance); "
+                         "recorded so the ratio can read tokens per GPU from this file")
     ap.add_argument("--min-calls", type=int, default=300)
     ap.add_argument("--max-tokens", type=int, default=None)
     ap.add_argument("--timeout", type=float, default=180.0)
@@ -175,23 +183,53 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     all_rows: list[dict] = []
     spans: dict[int, float] = {}
-    for level in [int(x) for x in a.concurrency.split(",") if x.strip()]:
+    if a.sweep:
+        levels = []
+        lv = 1
+        while lv <= a.max_concurrency:
+            levels.append(lv)
+            lv *= 2
+    else:
+        levels = [int(x) for x in a.concurrency.split(",") if x.strip()]
+    best = 0.0
+    for level in levels:
         rows, span = asyncio.run(run_level(items, a.base_url.rstrip("/"), a.model, level,
-                                           a.min_calls, a.max_tokens, a.timeout))
+                                           max(a.min_calls, level * 4), a.max_tokens, a.timeout))
         spans[level] = span
+        for r in rows:
+            if a.gpus:
+                r["gpus"] = a.gpus
         all_rows += rows
         ok = [r for r in rows if r.get("ok")]
+        gen = sum(r['completion_tokens'] for r in ok) / span
         print(f"concurrency {level}: {len(ok)}/{len(rows)} ok in {span:.0f}s, "
-              f"{sum(r['completion_tokens'] for r in ok) / span:.0f} gen tok/s, "
-              f"{sum(r.get('retries', 0) for r in rows)} retries", flush=True)
+              f"{gen:.0f} gen tok/s, {sum(r.get('retries', 0) for r in rows)} retries", flush=True)
         with open(out / "calls.jsonl", "w") as fh:
             for r in all_rows:
                 fh.write(json.dumps(r) + "\n")
+        if a.sweep:
+            # Stop once doubling the concurrency adds under 10% of throughput
+            # (or throttling appears): the ceiling has been found.
+            if sum(r.get("retries", 0) for r in rows) > len(rows) * 0.05:
+                print("throttling at this level; stopping the sweep", flush=True)
+                break
+            if best and gen < best * 1.10:
+                print("throughput flat; ceiling reached", flush=True)
+                break
+            best = max(best, gen)
     summary = summarize(all_rows, spans)
     (out / "summary.md").write_text(f"# Serving profile: {a.model} via {a.base_url}\n\n" + summary + "\n")
+    ok_rows = [r for r in all_rows if r.get("ok")]
+    per_level = {lv: sum(r["completion_tokens"] for r in ok_rows if r["concurrency"] == lv) / spans[lv]
+                 for lv in spans}
+    ceiling = max(per_level.values()) if per_level else None
     (out / "profile.json").write_text(json.dumps({"model": a.model, "base_url": a.base_url,
                                                    "queryset": a.queryset, "levels": sorted(spans),
                                                    "spans_s": spans, "calls": len(all_rows),
+                                                   "gpus": a.gpus,
+                                                   "gen_tok_s_per_level": per_level,
+                                                   "gen_tok_s_ceiling": ceiling,
+                                                   "gen_tok_s_per_gpu": (ceiling / a.gpus) if (a.gpus and ceiling) else None,
                                                    "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, indent=1))
     print(summary)
     print(f"-> {out}/calls.jsonl (use CAPACITY_SERVING_PROFILE={out}/calls.jsonl CAPACITY_SERVING_CONCURRENCY=<level>)")
