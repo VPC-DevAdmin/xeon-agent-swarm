@@ -1,0 +1,2905 @@
+{
+ "set": "data/capacity/set-20260904-070910",
+ "series": [
+  "data/capacity/series-8801-20260904-070910",
+  "data/capacity/series-8901-20260904-081844",
+  "data/capacity/series-9001-20260904-092822"
+ ],
+ "rates": [
+  4,
+  6,
+  8,
+  10,
+  11,
+  12
+ ],
+ "per_rate": {
+  "4": {
+   "achieved_median": 15.97,
+   "achieved_range": [
+    15.95,
+    15.97
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": true,
+   "tiers_sustained_all_series": [
+    "interactive",
+    "responsive",
+    "attended",
+    "queued",
+    "background"
+   ],
+   "resident_median": 518,
+   "resident_range": [
+    516,
+    518
+   ],
+   "host_cpu_median": 33.1,
+   "retrieval_cpu_median": 9.8,
+   "per_series": {
+    "series-8801-20260904-070910": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 400,
+     "offered_rate": 16.0,
+     "achieved_ratio": 0.998,
+     "generator_ok": true,
+     "units": 9596,
+     "units_per_ledger": [
+      2399,
+      2399,
+      2399,
+      2399
+     ],
+     "cohort_units": 8257,
+     "warmup_s": 85.1,
+     "span_s": 517.1,
+     "rate": 15.966,
+     "backlog_start": 400,
+     "backlog_end": 400,
+     "backlog_delta": 0,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 1376,
+       "ok": 1292,
+       "p50_ms": 31799.1,
+       "p95_ms": 32961.5,
+       "failed": {
+        "inflight_at_end": 84
+       }
+      },
+      "data_analysis": {
+       "n": 1377,
+       "ok": 1280,
+       "p50_ms": 36649.1,
+       "p95_ms": 37906.6,
+       "failed": {
+        "inflight_at_end": 97
+       }
+      },
+      "digest": {
+       "n": 1377,
+       "ok": 1302,
+       "p50_ms": 28268.0,
+       "p95_ms": 29478.5,
+       "failed": {
+        "inflight_at_end": 75
+       }
+      },
+      "research_brief": {
+       "n": 1376,
+       "ok": 1284,
+       "p50_ms": 34460.2,
+       "p95_ms": 35745.0,
+       "failed": {
+        "inflight_at_end": 92
+       }
+      },
+      "task_ticket": {
+       "n": 2751,
+       "ok": 2699,
+       "p50_ms": 10247.8,
+       "p95_ms": 11118.4,
+       "failed": {
+        "inflight_at_end": 52
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 518,
+     "think_s": 3.0,
+     "host_cpu_pct": 33.1,
+     "retrieval_cpu_pct": 9.8,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 4
+    },
+    "series-8901-20260904-081844": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 407,
+     "offered_rate": 16.0,
+     "achieved_ratio": 0.997,
+     "generator_ok": true,
+     "units": 9596,
+     "units_per_ledger": [
+      2399,
+      2399,
+      2399,
+      2399
+     ],
+     "cohort_units": 8288,
+     "warmup_s": 83.4,
+     "span_s": 519.5,
+     "rate": 15.953,
+     "backlog_start": 408,
+     "backlog_end": 408,
+     "backlog_delta": 0,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 1381,
+       "ok": 1295,
+       "p50_ms": 31740.4,
+       "p95_ms": 32946.6,
+       "failed": {
+        "inflight_at_end": 86
+       }
+      },
+      "data_analysis": {
+       "n": 1382,
+       "ok": 1282,
+       "p50_ms": 36669.5,
+       "p95_ms": 37887.8,
+       "failed": {
+        "inflight_at_end": 100
+       }
+      },
+      "digest": {
+       "n": 1382,
+       "ok": 1307,
+       "p50_ms": 28232.3,
+       "p95_ms": 29446.8,
+       "failed": {
+        "inflight_at_end": 75
+       }
+      },
+      "research_brief": {
+       "n": 1380,
+       "ok": 1290,
+       "p50_ms": 34451.8,
+       "p95_ms": 35731.5,
+       "failed": {
+        "inflight_at_end": 90
+       }
+      },
+      "task_ticket": {
+       "n": 2763,
+       "ok": 2707,
+       "p50_ms": 10205.2,
+       "p95_ms": 11130.5,
+       "failed": {
+        "inflight_at_end": 56
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 516,
+     "think_s": 3.0,
+     "host_cpu_pct": 33.2,
+     "retrieval_cpu_pct": 10.0,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 4
+    },
+    "series-9001-20260904-092822": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 400,
+     "offered_rate": 16.0,
+     "achieved_ratio": 0.998,
+     "generator_ok": true,
+     "units": 9596,
+     "units_per_ledger": [
+      2399,
+      2399,
+      2399,
+      2399
+     ],
+     "cohort_units": 8245,
+     "warmup_s": 85.8,
+     "span_s": 516.4,
+     "rate": 15.966,
+     "backlog_start": 405,
+     "backlog_end": 401,
+     "backlog_delta": -4,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 1373,
+       "ok": 1289,
+       "p50_ms": 31745.2,
+       "p95_ms": 32944.1,
+       "failed": {
+        "inflight_at_end": 84
+       }
+      },
+      "data_analysis": {
+       "n": 1376,
+       "ok": 1279,
+       "p50_ms": 36655.4,
+       "p95_ms": 37949.4,
+       "failed": {
+        "inflight_at_end": 97
+       }
+      },
+      "digest": {
+       "n": 1374,
+       "ok": 1300,
+       "p50_ms": 28291.8,
+       "p95_ms": 29488.1,
+       "failed": {
+        "inflight_at_end": 74
+       }
+      },
+      "research_brief": {
+       "n": 1373,
+       "ok": 1283,
+       "p50_ms": 34562.8,
+       "p95_ms": 35779.9,
+       "failed": {
+        "inflight_at_end": 90
+       }
+      },
+      "task_ticket": {
+       "n": 2749,
+       "ok": 2694,
+       "p50_ms": 10207.8,
+       "p95_ms": 11115.7,
+       "failed": {
+        "inflight_at_end": 55
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9958,
+        "data_analysis": 0.9958,
+        "digest": 0.9959,
+        "research_brief": 0.9958,
+        "task_ticket": 0.998
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 518,
+     "think_s": 3.0,
+     "host_cpu_pct": 32.9,
+     "retrieval_cpu_pct": 9.6,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 4
+    }
+   }
+  },
+  "6": {
+   "achieved_median": 23.94,
+   "achieved_range": [
+    23.94,
+    23.96
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": true,
+   "tiers_sustained_all_series": [
+    "interactive",
+    "responsive",
+    "attended",
+    "queued",
+    "background"
+   ],
+   "resident_median": 771,
+   "resident_range": [
+    771,
+    772
+   ],
+   "host_cpu_median": 41.6,
+   "retrieval_cpu_median": 11.4,
+   "per_series": {
+    "series-8801-20260904-070910": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 599,
+     "offered_rate": 24.0,
+     "achieved_ratio": 0.998,
+     "generator_ok": true,
+     "units": 14396,
+     "units_per_ledger": [
+      3599,
+      3599,
+      3599,
+      3599
+     ],
+     "cohort_units": 12247,
+     "warmup_s": 90.7,
+     "span_s": 511.2,
+     "rate": 23.957,
+     "backlog_start": 605,
+     "backlog_end": 599,
+     "backlog_delta": -6,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 2041,
+       "ok": 1917,
+       "p50_ms": 31508.0,
+       "p95_ms": 32801.1,
+       "failed": {
+        "inflight_at_end": 124
+       }
+      },
+      "data_analysis": {
+       "n": 2042,
+       "ok": 1896,
+       "p50_ms": 36553.0,
+       "p95_ms": 37793.6,
+       "failed": {
+        "inflight_at_end": 146
+       }
+      },
+      "digest": {
+       "n": 2041,
+       "ok": 1929,
+       "p50_ms": 28113.8,
+       "p95_ms": 29257.1,
+       "failed": {
+        "inflight_at_end": 112
+       }
+      },
+      "research_brief": {
+       "n": 2040,
+       "ok": 1905,
+       "p50_ms": 34139.4,
+       "p95_ms": 35473.3,
+       "failed": {
+        "inflight_at_end": 135
+       }
+      },
+      "task_ticket": {
+       "n": 4083,
+       "ok": 4001,
+       "p50_ms": 10172.1,
+       "p95_ms": 11058.8,
+       "failed": {
+        "inflight_at_end": 82
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9972,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9972,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9972,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9972,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9972,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 771,
+     "think_s": 3.0,
+     "host_cpu_pct": 41.5,
+     "retrieval_cpu_pct": 11.3,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 6
+    },
+    "series-8901-20260904-081844": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 602,
+     "offered_rate": 24.0,
+     "achieved_ratio": 0.997,
+     "generator_ok": true,
+     "units": 14396,
+     "units_per_ledger": [
+      3599,
+      3599,
+      3599,
+      3599
+     ],
+     "cohort_units": 12274,
+     "warmup_s": 89.7,
+     "span_s": 512.8,
+     "rate": 23.936,
+     "backlog_start": 602,
+     "backlog_end": 604,
+     "backlog_delta": 2,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 2046,
+       "ok": 1920,
+       "p50_ms": 31445.9,
+       "p95_ms": 32769.1,
+       "failed": {
+        "inflight_at_end": 126
+       }
+      },
+      "data_analysis": {
+       "n": 2046,
+       "ok": 1900,
+       "p50_ms": 36507.9,
+       "p95_ms": 37759.5,
+       "failed": {
+        "inflight_at_end": 146
+       }
+      },
+      "digest": {
+       "n": 2046,
+       "ok": 1933,
+       "p50_ms": 28126.7,
+       "p95_ms": 29264.1,
+       "failed": {
+        "inflight_at_end": 113
+       }
+      },
+      "research_brief": {
+       "n": 2045,
+       "ok": 1910,
+       "p50_ms": 34126.8,
+       "p95_ms": 35474.8,
+       "failed": {
+        "inflight_at_end": 135
+       }
+      },
+      "task_ticket": {
+       "n": 4091,
+       "ok": 4009,
+       "p50_ms": 10130.3,
+       "p95_ms": 11042.0,
+       "failed": {
+        "inflight_at_end": 82
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.9987
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9972,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9987
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9972,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9987
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9972,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9987
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9972,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9987
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9972,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9987
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 771,
+     "think_s": 3.0,
+     "host_cpu_pct": 41.6,
+     "retrieval_cpu_pct": 11.4,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 6
+    },
+    "series-9001-20260904-092822": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 601,
+     "offered_rate": 24.0,
+     "achieved_ratio": 0.997,
+     "generator_ok": true,
+     "units": 14396,
+     "units_per_ledger": [
+      3599,
+      3599,
+      3599,
+      3599
+     ],
+     "cohort_units": 12229,
+     "warmup_s": 91.6,
+     "span_s": 510.9,
+     "rate": 23.936,
+     "backlog_start": 604,
+     "backlog_end": 602,
+     "backlog_delta": -2,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 2038,
+       "ok": 1911,
+       "p50_ms": 31503.4,
+       "p95_ms": 32769.3,
+       "failed": {
+        "inflight_at_end": 127
+       }
+      },
+      "data_analysis": {
+       "n": 2038,
+       "ok": 1893,
+       "p50_ms": 36524.4,
+       "p95_ms": 37762.5,
+       "failed": {
+        "inflight_at_end": 145
+       }
+      },
+      "digest": {
+       "n": 2038,
+       "ok": 1925,
+       "p50_ms": 28144.3,
+       "p95_ms": 29304.5,
+       "failed": {
+        "inflight_at_end": 113
+       }
+      },
+      "research_brief": {
+       "n": 2038,
+       "ok": 1903,
+       "p50_ms": 34184.9,
+       "p95_ms": 35466.3,
+       "failed": {
+        "inflight_at_end": 135
+       }
+      },
+      "task_ticket": {
+       "n": 4077,
+       "ok": 3996,
+       "p50_ms": 10124.1,
+       "p95_ms": 11030.0,
+       "failed": {
+        "inflight_at_end": 81
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9971,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9971,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9971,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9971,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9972,
+        "data_analysis": 0.9971,
+        "digest": 0.9972,
+        "research_brief": 0.9972,
+        "task_ticket": 0.9986
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 772,
+     "think_s": 3.0,
+     "host_cpu_pct": 41.6,
+     "retrieval_cpu_pct": 11.4,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 6
+    }
+   }
+  },
+  "8": {
+   "achieved_median": 31.9,
+   "achieved_range": [
+    31.89,
+    31.91
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": true,
+   "tiers_sustained_all_series": [
+    "interactive",
+    "responsive",
+    "attended",
+    "queued",
+    "background"
+   ],
+   "resident_median": 1023,
+   "resident_range": [
+    1023,
+    1023
+   ],
+   "host_cpu_median": 46.4,
+   "retrieval_cpu_median": 12.1,
+   "per_series": {
+    "series-8801-20260904-070910": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 801,
+     "offered_rate": 32.0,
+     "achieved_ratio": 0.997,
+     "generator_ok": true,
+     "units": 19196,
+     "units_per_ledger": [
+      4799,
+      4799,
+      4799,
+      4799
+     ],
+     "cohort_units": 16191,
+     "warmup_s": 95.4,
+     "span_s": 507.6,
+     "rate": 31.895,
+     "backlog_start": 805,
+     "backlog_end": 813,
+     "backlog_delta": 8,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 2698,
+       "ok": 2531,
+       "p50_ms": 31190.5,
+       "p95_ms": 32450.0,
+       "failed": {
+        "inflight_at_end": 167
+       }
+      },
+      "data_analysis": {
+       "n": 2700,
+       "ok": 2507,
+       "p50_ms": 36343.7,
+       "p95_ms": 37561.3,
+       "failed": {
+        "inflight_at_end": 193
+       }
+      },
+      "digest": {
+       "n": 2699,
+       "ok": 2549,
+       "p50_ms": 27942.6,
+       "p95_ms": 29141.4,
+       "failed": {
+        "inflight_at_end": 150
+       }
+      },
+      "research_brief": {
+       "n": 2698,
+       "ok": 2515,
+       "p50_ms": 33853.0,
+       "p95_ms": 35191.2,
+       "failed": {
+        "inflight_at_end": 183
+       }
+      },
+      "task_ticket": {
+       "n": 5396,
+       "ok": 5288,
+       "p50_ms": 10087.9,
+       "p95_ms": 10981.7,
+       "failed": {
+        "inflight_at_end": 108
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9979,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9979,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9979,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9979,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9979,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 1023,
+     "think_s": 3.0,
+     "host_cpu_pct": 46.4,
+     "retrieval_cpu_pct": 12.1,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 8
+    },
+    "series-8901-20260904-081844": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 794,
+     "offered_rate": 32.0,
+     "achieved_ratio": 0.997,
+     "generator_ok": true,
+     "units": 19196,
+     "units_per_ledger": [
+      4799,
+      4799,
+      4799,
+      4799
+     ],
+     "cohort_units": 16087,
+     "warmup_s": 98.7,
+     "span_s": 504.3,
+     "rate": 31.897,
+     "backlog_start": 798,
+     "backlog_end": 795,
+     "backlog_delta": -3,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 2680,
+       "ok": 2517,
+       "p50_ms": 31170.7,
+       "p95_ms": 32369.4,
+       "failed": {
+        "inflight_at_end": 163
+       }
+      },
+      "data_analysis": {
+       "n": 2682,
+       "ok": 2488,
+       "p50_ms": 36311.1,
+       "p95_ms": 37580.1,
+       "failed": {
+        "inflight_at_end": 194
+       }
+      },
+      "digest": {
+       "n": 2682,
+       "ok": 2533,
+       "p50_ms": 27970.6,
+       "p95_ms": 29136.1,
+       "failed": {
+        "inflight_at_end": 149
+       }
+      },
+      "research_brief": {
+       "n": 2680,
+       "ok": 2500,
+       "p50_ms": 33888.3,
+       "p95_ms": 35182.2,
+       "failed": {
+        "inflight_at_end": 180
+       }
+      },
+      "task_ticket": {
+       "n": 5363,
+       "ok": 5255,
+       "p50_ms": 10074.4,
+       "p95_ms": 10989.3,
+       "failed": {
+        "inflight_at_end": 108
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9978,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9978,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9978,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9978,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9978,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 1023,
+     "think_s": 3.0,
+     "host_cpu_pct": 46.3,
+     "retrieval_cpu_pct": 12.1,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 8
+    },
+    "series-9001-20260904-092822": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 797,
+     "offered_rate": 32.0,
+     "achieved_ratio": 0.997,
+     "generator_ok": true,
+     "units": 19196,
+     "units_per_ledger": [
+      4799,
+      4799,
+      4799,
+      4799
+     ],
+     "cohort_units": 16161,
+     "warmup_s": 96.2,
+     "span_s": 506.4,
+     "rate": 31.914,
+     "backlog_start": 796,
+     "backlog_end": 797,
+     "backlog_delta": 1,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 2693,
+       "ok": 2526,
+       "p50_ms": 31185.5,
+       "p95_ms": 32428.3,
+       "failed": {
+        "inflight_at_end": 167
+       }
+      },
+      "data_analysis": {
+       "n": 2695,
+       "ok": 2500,
+       "p50_ms": 36329.3,
+       "p95_ms": 37554.8,
+       "failed": {
+        "inflight_at_end": 195
+       }
+      },
+      "digest": {
+       "n": 2694,
+       "ok": 2546,
+       "p50_ms": 27984.9,
+       "p95_ms": 29116.9,
+       "failed": {
+        "inflight_at_end": 148
+       }
+      },
+      "research_brief": {
+       "n": 2692,
+       "ok": 2512,
+       "p50_ms": 33833.0,
+       "p95_ms": 35206.2,
+       "failed": {
+        "inflight_at_end": 180
+       }
+      },
+      "task_ticket": {
+       "n": 5387,
+       "ok": 5280,
+       "p50_ms": 10058.3,
+       "p95_ms": 10962.2,
+       "failed": {
+        "inflight_at_end": 107
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9979,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9979,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9979,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9979,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9979,
+        "data_analysis": 0.9978,
+        "digest": 0.9979,
+        "research_brief": 0.9979,
+        "task_ticket": 0.999
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 1023,
+     "think_s": 3.0,
+     "host_cpu_pct": 46.4,
+     "retrieval_cpu_pct": 12.1,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 8
+    }
+   }
+  },
+  "10": {
+   "achieved_median": 39.83,
+   "achieved_range": [
+    39.83,
+    39.86
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": true,
+   "tiers_sustained_all_series": [
+    "interactive",
+    "responsive",
+    "attended",
+    "queued",
+    "background"
+   ],
+   "resident_median": 1274,
+   "resident_range": [
+    1273,
+    1277
+   ],
+   "host_cpu_median": 51.5,
+   "retrieval_cpu_median": 12.7,
+   "per_series": {
+    "series-8801-20260904-070910": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 994,
+     "offered_rate": 40.0,
+     "achieved_ratio": 0.996,
+     "generator_ok": true,
+     "units": 23996,
+     "units_per_ledger": [
+      5999,
+      5999,
+      5999,
+      5999
+     ],
+     "cohort_units": 19437,
+     "warmup_s": 115.7,
+     "span_s": 488.0,
+     "rate": 39.833,
+     "backlog_start": 1133,
+     "backlog_end": 994,
+     "backlog_delta": -139,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 3239,
+       "ok": 3032,
+       "p50_ms": 30967.5,
+       "p95_ms": 32279.9,
+       "failed": {
+        "inflight_at_end": 207
+       }
+      },
+      "data_analysis": {
+       "n": 3241,
+       "ok": 2996,
+       "p50_ms": 36377.4,
+       "p95_ms": 37705.2,
+       "failed": {
+        "inflight_at_end": 245
+       }
+      },
+      "digest": {
+       "n": 3240,
+       "ok": 3053,
+       "p50_ms": 27858.8,
+       "p95_ms": 29010.1,
+       "failed": {
+        "inflight_at_end": 187
+       }
+      },
+      "research_brief": {
+       "n": 3238,
+       "ok": 3016,
+       "p50_ms": 33631.7,
+       "p95_ms": 35050.3,
+       "failed": {
+        "inflight_at_end": 222
+       }
+      },
+      "task_ticket": {
+       "n": 6479,
+       "ok": 6346,
+       "p50_ms": 10030.3,
+       "p95_ms": 10924.9,
+       "failed": {
+        "inflight_at_end": 133
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 1273,
+     "think_s": 3.0,
+     "host_cpu_pct": 51.5,
+     "retrieval_cpu_pct": 12.7,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 10
+    },
+    "series-8901-20260904-081844": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 992,
+     "offered_rate": 40.0,
+     "achieved_ratio": 0.996,
+     "generator_ok": true,
+     "units": 23996,
+     "units_per_ledger": [
+      5999,
+      5999,
+      5999,
+      5999
+     ],
+     "cohort_units": 19311,
+     "warmup_s": 118.9,
+     "span_s": 484.8,
+     "rate": 39.832,
+     "backlog_start": 1151,
+     "backlog_end": 993,
+     "backlog_delta": -158,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 3218,
+       "ok": 3014,
+       "p50_ms": 31033.7,
+       "p95_ms": 32379.5,
+       "failed": {
+        "inflight_at_end": 204
+       }
+      },
+      "data_analysis": {
+       "n": 3220,
+       "ok": 2978,
+       "p50_ms": 36438.3,
+       "p95_ms": 39629.1,
+       "failed": {
+        "inflight_at_end": 242
+       }
+      },
+      "digest": {
+       "n": 3218,
+       "ok": 3031,
+       "p50_ms": 27863.6,
+       "p95_ms": 29039.8,
+       "failed": {
+        "inflight_at_end": 187
+       }
+      },
+      "research_brief": {
+       "n": 3217,
+       "ok": 2993,
+       "p50_ms": 33695.5,
+       "p95_ms": 35147.3,
+       "failed": {
+        "inflight_at_end": 224
+       }
+      },
+      "task_ticket": {
+       "n": 6438,
+       "ok": 6303,
+       "p50_ms": 10058.1,
+       "p95_ms": 10984.3,
+       "failed": {
+        "inflight_at_end": 135
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9959,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 1274,
+     "think_s": 3.0,
+     "host_cpu_pct": 51.4,
+     "retrieval_cpu_pct": 12.7,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 10
+    },
+    "series-9001-20260904-092822": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 989,
+     "offered_rate": 40.0,
+     "achieved_ratio": 0.997,
+     "generator_ok": true,
+     "units": 23996,
+     "units_per_ledger": [
+      5999,
+      5999,
+      5999,
+      5999
+     ],
+     "cohort_units": 19264,
+     "warmup_s": 119.9,
+     "span_s": 483.3,
+     "rate": 39.862,
+     "backlog_start": 1175,
+     "backlog_end": 990,
+     "backlog_delta": -185,
+     "keeps_up": true,
+     "per_type": {
+      "comparison": {
+       "n": 3210,
+       "ok": 3001,
+       "p50_ms": 31088.9,
+       "p95_ms": 32581.0,
+       "failed": {
+        "inflight_at_end": 209
+       }
+      },
+      "data_analysis": {
+       "n": 3212,
+       "ok": 2969,
+       "p50_ms": 36443.1,
+       "p95_ms": 42861.3,
+       "failed": {
+        "inflight_at_end": 243
+       }
+      },
+      "digest": {
+       "n": 3212,
+       "ok": 3028,
+       "p50_ms": 27919.6,
+       "p95_ms": 29159.2,
+       "failed": {
+        "inflight_at_end": 184
+       }
+      },
+      "research_brief": {
+       "n": 3209,
+       "ok": 2986,
+       "p50_ms": 33756.5,
+       "p95_ms": 35399.2,
+       "failed": {
+        "inflight_at_end": 223
+       }
+      },
+      "task_ticket": {
+       "n": 6421,
+       "ok": 6291,
+       "p50_ms": 10038.2,
+       "p95_ms": 10977.4,
+       "failed": {
+        "inflight_at_end": 130
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9675,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9982,
+        "data_analysis": 0.9982,
+        "digest": 0.9982,
+        "research_brief": 0.9982,
+        "task_ticket": 0.9991
+       },
+       "on_time_and_steady": true
+      }
+     },
+     "sustained_tiers": [
+      "interactive",
+      "responsive",
+      "attended",
+      "queued",
+      "background"
+     ],
+     "resident_sessions": 1277,
+     "think_s": 3.0,
+     "host_cpu_pct": 51.7,
+     "retrieval_cpu_pct": 12.7,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 10
+    }
+   }
+  },
+  "11": {
+   "achieved_median": 43.53,
+   "achieved_range": [
+    43.41,
+    43.56
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": false,
+   "tiers_sustained_all_series": [],
+   "resident_median": 2833,
+   "resident_range": [
+    2647,
+    2835
+   ],
+   "host_cpu_median": 86.4,
+   "retrieval_cpu_median": 13.1,
+   "per_series": {
+    "series-8801-20260904-070910": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 5562,
+     "offered_rate": 44.0,
+     "achieved_ratio": 0.99,
+     "generator_ok": true,
+     "units": 26344,
+     "units_per_ledger": [
+      6583,
+      6589,
+      6585,
+      6587
+     ],
+     "cohort_units": 13150,
+     "warmup_s": 301.8,
+     "span_s": 301.8,
+     "rate": 43.565,
+     "backlog_start": 2684,
+     "backlog_end": 5585,
+     "backlog_delta": 2901,
+     "keeps_up": false,
+     "per_type": {
+      "comparison": {
+       "n": 2190,
+       "ok": 846,
+       "p50_ms": 145275.5,
+       "p95_ms": 209167.1,
+       "failed": {
+        "inflight_at_end": 1344
+       }
+      },
+      "data_analysis": {
+       "n": 2192,
+       "ok": 207,
+       "p50_ms": 232842.6,
+       "p95_ms": 271836.2,
+       "failed": {
+        "inflight_at_end": 1985
+       }
+      },
+      "digest": {
+       "n": 2192,
+       "ok": 1644,
+       "p50_ms": 55191.4,
+       "p95_ms": 107935.2,
+       "failed": {
+        "inflight_at_end": 548
+       }
+      },
+      "research_brief": {
+       "n": 2192,
+       "ok": 1376,
+       "p50_ms": 71578.6,
+       "p95_ms": 109895.5,
+       "failed": {
+        "inflight_at_end": 816
+       }
+      },
+      "task_ticket": {
+       "n": 4384,
+       "ok": 3515,
+       "p50_ms": 32243.4,
+       "p95_ms": 91466.6,
+       "failed": {
+        "inflight_at_end": 869
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.0472
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.1368,
+        "research_brief": 0.0007,
+        "task_ticket": 0.569
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.3526,
+        "data_analysis": 0.0,
+        "digest": 0.9775,
+        "research_brief": 0.9195,
+        "task_ticket": 0.9962
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9936,
+        "data_analysis": 0.9745,
+        "digest": 0.9967,
+        "research_brief": 0.9961,
+        "task_ticket": 0.9985
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9936,
+        "data_analysis": 0.9745,
+        "digest": 0.9967,
+        "research_brief": 0.9961,
+        "task_ticket": 0.9985
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9936,
+        "data_analysis": 0.9745,
+        "digest": 0.9967,
+        "research_brief": 0.9961,
+        "task_ticket": 0.9985
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 2647,
+     "think_s": 3.0,
+     "host_cpu_pct": 86.4,
+     "retrieval_cpu_pct": 13.0,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 11
+    },
+    "series-8901-20260904-081844": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 5853,
+     "offered_rate": 44.0,
+     "achieved_ratio": 0.987,
+     "generator_ok": true,
+     "units": 26281,
+     "units_per_ledger": [
+      6575,
+      6561,
+      6564,
+      6581
+     ],
+     "cohort_units": 13094,
+     "warmup_s": 301.6,
+     "span_s": 301.6,
+     "rate": 43.412,
+     "backlog_start": 2859,
+     "backlog_end": 5872,
+     "backlog_delta": 3013,
+     "keeps_up": false,
+     "per_type": {
+      "comparison": {
+       "n": 2182,
+       "ok": 625,
+       "p50_ms": 169373.8,
+       "p95_ms": 223353.6,
+       "failed": {
+        "inflight_at_end": 1557
+       }
+      },
+      "data_analysis": {
+       "n": 2183,
+       "ok": 117,
+       "p50_ms": 234982.1,
+       "p95_ms": 283780.0,
+       "failed": {
+        "inflight_at_end": 2066
+       }
+      },
+      "digest": {
+       "n": 2184,
+       "ok": 1631,
+       "p50_ms": 60973.1,
+       "p95_ms": 96910.1,
+       "failed": {
+        "inflight_at_end": 553
+       }
+      },
+      "research_brief": {
+       "n": 2181,
+       "ok": 1528,
+       "p50_ms": 76152.9,
+       "p95_ms": 109915.2,
+       "failed": {
+        "inflight_at_end": 653
+       }
+      },
+      "task_ticket": {
+       "n": 4364,
+       "ok": 3340,
+       "p50_ms": 34951.5,
+       "p95_ms": 97259.5,
+       "failed": {
+        "inflight_at_end": 1024
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.0179
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0655,
+        "research_brief": 0.0013,
+        "task_ticket": 0.5164
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.1448,
+        "data_analysis": 0.0,
+        "digest": 0.9967,
+        "research_brief": 0.9912,
+        "task_ticket": 0.9978
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9914,
+        "data_analysis": 0.9558,
+        "digest": 0.9967,
+        "research_brief": 0.9965,
+        "task_ticket": 0.9984
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9914,
+        "data_analysis": 0.9558,
+        "digest": 0.9967,
+        "research_brief": 0.9965,
+        "task_ticket": 0.9984
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9914,
+        "data_analysis": 0.9558,
+        "digest": 0.9967,
+        "research_brief": 0.9965,
+        "task_ticket": 0.9984
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 2833,
+     "think_s": 3.0,
+     "host_cpu_pct": 86.5,
+     "retrieval_cpu_pct": 13.1,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 11
+    },
+    "series-9001-20260904-092822": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 5829,
+     "offered_rate": 44.0,
+     "achieved_ratio": 0.989,
+     "generator_ok": true,
+     "units": 26307,
+     "units_per_ledger": [
+      6582,
+      6563,
+      6580,
+      6582
+     ],
+     "cohort_units": 13128,
+     "warmup_s": 301.6,
+     "span_s": 301.6,
+     "rate": 43.531,
+     "backlog_start": 2709,
+     "backlog_end": 5838,
+     "backlog_delta": 3129,
+     "keeps_up": false,
+     "per_type": {
+      "comparison": {
+       "n": 2188,
+       "ok": 698,
+       "p50_ms": 157440.1,
+       "p95_ms": 217577.6,
+       "failed": {
+        "inflight_at_end": 1490
+       }
+      },
+      "data_analysis": {
+       "n": 2188,
+       "ok": 173,
+       "p50_ms": 240185.2,
+       "p95_ms": 277674.2,
+       "failed": {
+        "inflight_at_end": 2015
+       }
+      },
+      "digest": {
+       "n": 2188,
+       "ok": 1578,
+       "p50_ms": 61406.8,
+       "p95_ms": 95310.0,
+       "failed": {
+        "inflight_at_end": 610
+       }
+      },
+      "research_brief": {
+       "n": 2187,
+       "ok": 1491,
+       "p50_ms": 77730.8,
+       "p95_ms": 112212.9,
+       "failed": {
+        "inflight_at_end": 696
+       }
+      },
+      "task_ticket": {
+       "n": 4377,
+       "ok": 3359,
+       "p50_ms": 34855.0,
+       "p95_ms": 96373.2,
+       "failed": {
+        "inflight_at_end": 1018
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.0157
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0613,
+        "research_brief": 0.0001,
+        "task_ticket": 0.5388
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.2329,
+        "data_analysis": 0.0,
+        "digest": 0.9966,
+        "research_brief": 0.9951,
+        "task_ticket": 0.9984
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9923,
+        "data_analysis": 0.9697,
+        "digest": 0.9966,
+        "research_brief": 0.9964,
+        "task_ticket": 0.9984
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9923,
+        "data_analysis": 0.9697,
+        "digest": 0.9966,
+        "research_brief": 0.9964,
+        "task_ticket": 0.9984
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9923,
+        "data_analysis": 0.9697,
+        "digest": 0.9966,
+        "research_brief": 0.9964,
+        "task_ticket": 0.9984
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 2835,
+     "think_s": 3.0,
+     "host_cpu_pct": 86.4,
+     "retrieval_cpu_pct": 13.1,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 11
+    }
+   }
+  },
+  "12": {
+   "achieved_median": 44.2,
+   "achieved_range": [
+    43.75,
+    47.43
+   ],
+   "generator_ok_all": false,
+   "keeps_up_all": false,
+   "tiers_sustained_all_series": [],
+   "resident_median": 5792,
+   "resident_range": [
+    4631,
+    5986
+   ],
+   "host_cpu_median": 86.5,
+   "retrieval_cpu_median": 13.2,
+   "per_series": {
+    "series-8801-20260904-070910": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 9278,
+     "offered_rate": 48.0,
+     "achieved_ratio": 0.988,
+     "generator_ok": true,
+     "units": 28652,
+     "units_per_ledger": [
+      7158,
+      7170,
+      7166,
+      7158
+     ],
+     "cohort_units": 14307,
+     "warmup_s": 301.7,
+     "span_s": 301.7,
+     "rate": 47.429,
+     "backlog_start": 5141,
+     "backlog_end": 10372,
+     "backlog_delta": 5231,
+     "keeps_up": false,
+     "per_type": {
+      "comparison": {
+       "n": 2384,
+       "ok": 125,
+       "p50_ms": 200471.3,
+       "p95_ms": 257794.3,
+       "failed": {
+        "inflight_at_end": 2259
+       }
+      },
+      "data_analysis": {
+       "n": 2385,
+       "ok": 0,
+       "p50_ms": null,
+       "p95_ms": null,
+       "failed": {
+        "inflight_at_end": 2385
+       }
+      },
+      "digest": {
+       "n": 2384,
+       "ok": 1272,
+       "p50_ms": 118907.6,
+       "p95_ms": 178680.5,
+       "failed": {
+        "inflight_at_end": 1112
+       }
+      },
+      "research_brief": {
+       "n": 2384,
+       "ok": 708,
+       "p50_ms": 151137.1,
+       "p95_ms": 203210.6,
+       "failed": {
+        "inflight_at_end": 1676
+       }
+      },
+      "task_ticket": {
+       "n": 4770,
+       "ok": 2924,
+       "p50_ms": 68781.2,
+       "p95_ms": 163672.5,
+       "failed": {
+        "inflight_at_end": 1846
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.0316
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0954,
+        "research_brief": 0.0,
+        "task_ticket": 0.1553
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.6271,
+        "research_brief": 0.245,
+        "task_ticket": 0.8302
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.9585,
+        "data_analysis": 0.0,
+        "digest": 0.9958,
+        "research_brief": 0.9924,
+        "task_ticket": 0.9982
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.9585,
+        "data_analysis": 0.0,
+        "digest": 0.9958,
+        "research_brief": 0.9924,
+        "task_ticket": 0.9982
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.9585,
+        "data_analysis": 0.0,
+        "digest": 0.9958,
+        "research_brief": 0.9924,
+        "task_ticket": 0.9982
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 4631,
+     "think_s": 3.0,
+     "host_cpu_pct": 86.5,
+     "retrieval_cpu_pct": 13.1,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 12
+    },
+    "series-8901-20260904-081844": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 9868,
+     "offered_rate": 48.0,
+     "achieved_ratio": 0.921,
+     "generator_ok": false,
+     "units": 27615,
+     "units_per_ledger": [
+      7152,
+      7145,
+      6156,
+      7162
+     ],
+     "cohort_units": 13331,
+     "warmup_s": 301.6,
+     "span_s": 301.6,
+     "rate": 44.199,
+     "backlog_start": 5343,
+     "backlog_end": 10891,
+     "backlog_delta": 5548,
+     "keeps_up": false,
+     "per_type": {
+      "comparison": {
+       "n": 2165,
+       "ok": 2,
+       "p50_ms": 261755.0,
+       "p95_ms": 279973.1,
+       "failed": {
+        "inflight_at_end": 2163
+       }
+      },
+      "data_analysis": {
+       "n": 2185,
+       "ok": 0,
+       "p50_ms": null,
+       "p95_ms": null,
+       "failed": {
+        "inflight_at_end": 2185
+       }
+      },
+      "digest": {
+       "n": 2221,
+       "ok": 625,
+       "p50_ms": 179752.3,
+       "p95_ms": 242267.1,
+       "failed": {
+        "inflight_at_end": 1596
+       }
+      },
+      "research_brief": {
+       "n": 2222,
+       "ok": 508,
+       "p50_ms": 197213.4,
+       "p95_ms": 256245.5,
+       "failed": {
+        "inflight_at_end": 1714
+       }
+      },
+      "task_ticket": {
+       "n": 4538,
+       "ok": 2328,
+       "p50_ms": 103224.2,
+       "p95_ms": 186695.6,
+       "failed": {
+        "inflight_at_end": 2210
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.0
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.0125
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0988,
+        "research_brief": 0.0446,
+        "task_ticket": 0.6645
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.2698,
+        "data_analysis": 0.0,
+        "digest": 0.9914,
+        "research_brief": 0.9895,
+        "task_ticket": 0.9977
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.2698,
+        "data_analysis": 0.0,
+        "digest": 0.9914,
+        "research_brief": 0.9895,
+        "task_ticket": 0.9977
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.2698,
+        "data_analysis": 0.0,
+        "digest": 0.9914,
+        "research_brief": 0.9895,
+        "task_ticket": 0.9977
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 5986,
+     "think_s": 3.0,
+     "host_cpu_pct": 86.4,
+     "retrieval_cpu_pct": 13.2,
+     "truncated_ledgers": 1,
+     "per_instance_rate": 12
+    },
+    "series-9001-20260904-092822": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 9453,
+     "offered_rate": 48.0,
+     "achieved_ratio": 0.911,
+     "generator_ok": false,
+     "units": 27492,
+     "units_per_ledger": [
+      7150,
+      7146,
+      6016,
+      7180
+     ],
+     "cohort_units": 13208,
+     "warmup_s": 301.9,
+     "span_s": 301.9,
+     "rate": 43.752,
+     "backlog_start": 5213,
+     "backlog_end": 10477,
+     "backlog_delta": 5264,
+     "keeps_up": false,
+     "per_type": {
+      "comparison": {
+       "n": 2139,
+       "ok": 6,
+       "p50_ms": 261406.5,
+       "p95_ms": 276455.7,
+       "failed": {
+        "inflight_at_end": 2133
+       }
+      },
+      "data_analysis": {
+       "n": 2144,
+       "ok": 0,
+       "p50_ms": null,
+       "p95_ms": null,
+       "failed": {
+        "inflight_at_end": 2144
+       }
+      },
+      "digest": {
+       "n": 2211,
+       "ok": 750,
+       "p50_ms": 165980.4,
+       "p95_ms": 226881.1,
+       "failed": {
+        "inflight_at_end": 1461
+       }
+      },
+      "research_brief": {
+       "n": 2184,
+       "ok": 622,
+       "p50_ms": 182255.3,
+       "p95_ms": 244992.2,
+       "failed": {
+        "inflight_at_end": 1562
+       }
+      },
+      "task_ticket": {
+       "n": 4530,
+       "ok": 2377,
+       "p50_ms": 94360.6,
+       "p95_ms": 189031.2,
+       "failed": {
+        "inflight_at_end": 2153
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.0
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.0,
+        "research_brief": 0.0,
+        "task_ticket": 0.0253
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "comparison": 0.0,
+        "data_analysis": 0.0,
+        "digest": 0.1886,
+        "research_brief": 0.11,
+        "task_ticket": 0.6426
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "comparison": 0.5258,
+        "data_analysis": 0.0,
+        "digest": 0.9928,
+        "research_brief": 0.9914,
+        "task_ticket": 0.9977
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "comparison": 0.5258,
+        "data_analysis": 0.0,
+        "digest": 0.9928,
+        "research_brief": 0.9914,
+        "task_ticket": 0.9977
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "comparison": 0.5258,
+        "data_analysis": 0.0,
+        "digest": 0.9928,
+        "research_brief": 0.9914,
+        "task_ticket": 0.9977
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 5792,
+     "think_s": 3.0,
+     "host_cpu_pct": 86.5,
+     "retrieval_cpu_pct": 13.2,
+     "truncated_ledgers": 1,
+     "per_instance_rate": 12
+    }
+   }
+  }
+ },
+ "headline": {
+  "interactive": {
+   "per_instance_rate": 10,
+   "fleet_rate_median": 39.83,
+   "fleet_rate_range": [
+    39.83,
+    39.86
+   ],
+   "resident_median": 1274,
+   "resident_range": [
+    1273,
+    1277
+   ]
+  },
+  "responsive": {
+   "per_instance_rate": 10,
+   "fleet_rate_median": 39.83,
+   "fleet_rate_range": [
+    39.83,
+    39.86
+   ],
+   "resident_median": 1274,
+   "resident_range": [
+    1273,
+    1277
+   ]
+  },
+  "attended": {
+   "per_instance_rate": 10,
+   "fleet_rate_median": 39.83,
+   "fleet_rate_range": [
+    39.83,
+    39.86
+   ],
+   "resident_median": 1274,
+   "resident_range": [
+    1273,
+    1277
+   ]
+  },
+  "queued": {
+   "per_instance_rate": 10,
+   "fleet_rate_median": 39.83,
+   "fleet_rate_range": [
+    39.83,
+    39.86
+   ],
+   "resident_median": 1274,
+   "resident_range": [
+    1273,
+    1277
+   ]
+  },
+  "background": {
+   "per_instance_rate": 10,
+   "fleet_rate_median": 39.83,
+   "fleet_rate_range": [
+    39.83,
+    39.86
+   ],
+   "resident_median": 1274,
+   "resident_range": [
+    1273,
+    1277
+   ]
+  }
+ }
+}

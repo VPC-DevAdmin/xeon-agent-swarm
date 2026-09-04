@@ -1,0 +1,3 @@
+data/capacity/series-8501-20260904-034441
+data/capacity/series-8601-20260904-044222
+data/capacity/series-8701-20260904-054010
