@@ -67,7 +67,7 @@ e2e_workflows:
   ingestion:
     name: "Ingestion agent: parse, embed, index (e2e, heavy mix)"
     think_ms: 3000
-    # One worker parses a seeded selection of 400 PDF pages in the sandbox
+    # One worker parses a seeded selection of 100 PDF pages in the sandbox
     # (sandbox_ingest_job.py), then the executor embeds the chunks on the
     # CPU embedder and indexes them (toolbox.bench_execute, kind ingest),
     # records, and writes the ingest summary.

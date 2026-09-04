@@ -49,7 +49,10 @@ KIND_SCRIPTS = {"build": Path(__file__).with_name("sandbox_build_job.py"),
                 "ingest": Path(__file__).with_name("sandbox_ingest_job.py")}
 BUILD_SRC = os.getenv("CAPACITY_BUILD_SRC", "data/capacity/build")   # vendored tarballs live here
 # Declared job sizes for the heavy mix (docs/plan-cpu-heavy-mix.md).
-INGEST_PAGES = int(os.getenv("CAPACITY_INGEST_PAGES", "400") or 400)
+# Ingestion is embedding-bound: ~250-token chunks cost ~11 GFLOP each
+# through the MiniLM embedder in FP32, so 100 pages (~480 chunks) is
+# already a heavy step; 400 pages saturated a four-core embedder alone.
+INGEST_PAGES = int(os.getenv("CAPACITY_INGEST_PAGES", "100") or 100)
 INGEST_DOCS = os.getenv("CAPACITY_INGEST_DOCS", "data/capacity/ingest")
 CPU_LIMIT_S = int(os.getenv("CAPACITY_SANDBOX_CPU_S", "30") or 30)
 # Heavier kinds get proportionate limits; a limit is a runaway guard, never a
