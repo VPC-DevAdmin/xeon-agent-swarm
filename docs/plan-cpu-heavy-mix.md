@@ -39,46 +39,46 @@ token changes. Costs are planning estimates from the measured cost laws
 sandboxed rows, the measured per-archetype floors); each is measured
 alone before the tile is certified, as the typical archetypes were.
 
-| Archetype | Tile weight | Host work per workflow (est.) | Model calls | Gen tokens | What the work is |
+| Archetype | Tile weight | Host work per workflow | Model calls | Gen tokens | What the work is |
 |---|---|---|---|---|---|
-| Code agent (build and test) | 2 | ~28 core-s | 13 | ~1,800 | three workers each compile a small project and run its test suite in the sandbox (~9 core-s per step); the verifier is the test result |
-| Deep research | 1 | ~13.5 core-s | 13 | ~1,800 | three retrievals at rerank depth 128 over a 1M-chunk corpus (11 core-s of reranking on the pair law) plus BM25 and fusion |
-| Ingestion agent | 1 | ~12 core-s | 6 | ~900 | parse 200 pages, chunk, embed 1,000 chunks on the CPU embedder, index them; summaries are the model calls |
-| Analyst XL | 1 | ~40 core-s | 13 | ~1,800 | three sandboxed jobs over 30M rows each (the existing job at 9x the size) |
+| Code agent (build and test) | 2 | ~46 core-s | 13 | ~1,800 | three workers each compile a generated library (twelve units of sixty invertible mixing functions with derived inverses, gcc -O2) and run its 721 property tests in the sandbox; measured 15.1 core-s per build (7.6 compile, 7.4 tests); the verifier is the test result |
+| Deep research | 1 | ~13 core-s | 13 | ~1,800 | three retrievals at rerank depth 128 (11 core-s of reranking on the pair law) plus BM25 and fusion |
+| Ingestion agent | 1 | ~7 core-s | 4 | ~550 | one worker parses 400 PDF pages in the sandbox (measured 3.9 core-s), then the executor embeds the ~1,900 chunks on the CPU embedder and indexes them; the check query is the verifier |
+| Analyst XL | 1 | ~94 core-s | 13 | ~1,800 | three sandboxed jobs over 60M rows each (measured 31.1 core-s per job, eighteen times the reference job) |
 | Task ticket | 1 | 0.54 core-s | 4 | 550 | unchanged; keeps the mix honest |
-| Ops task (new) | 1 | ~10 core-s (their measured 7 to 16) | 6 | ~2,000 | modeled on the lab tasks: install, configure, start and verify a service in the sandbox (nginx logging, git repair, a cert); the verifier is the service check; most shell time waits rather than computes |
+| Ops task | 1 | ~1 core-s (measured 0.4 per job) | 4 | ~550 | modeled on the lab tasks: merge and repair a repository with six conflicting files, then configure, start and probe a service on the sandbox's loopback; eleven checks; mostly waiting rather than computing, as the lab's own tasks were |
 
-The ops task is there so the two studies share a row: its host cost and
-tokens per task should land where the lab measured them (7 to 16
-core-seconds per task), which anchors our constant to their data before
-the compute-shaped archetypes build on it. Validations are done exactly
-as in the typical mix, as calls to the serving tier, so the ratio moves
-only through work nobody can call a lever.
+Job sizes are declared parameters (`CAPACITY_BUILD_FILES`, `CAPACITY_BUILD_WORK`,
+the XL row count, `CAPACITY_INGEST_PAGES`). The first measured sizes (six
+build units, 30M rows, 200 pages) landed the tile at about 1:2.7 at the
+conservative serving point; the compute-shaped steps were then doubled
+before certification so the headline is measured at one declared size.
 
-Tile estimate: **about 19 core-s and 1,540 generated tokens per
-workflow, 12.5 core-ms per token**, which is 2.1 GPUs per socket at
-2,400 tok/s and 1.3 at 3,800. One dial closes the rest, and it is a
-declared, linear, real-work parameter: **job size**. The analyst's row
-count and the code agent's test-suite length are stated in the contract;
-doubling the compute-shaped steps takes the tile to about 1.2 GPUs per
-socket at the conservative band. The tile is designed to land inside the
-1:1 band across the lab's measured range, and the published number is
-whatever the certified set measures, with the formula and the band
-beside it.
+The ops task is there so the two studies share a row: at 0.4 core-seconds
+it is lighter than the lab's tasks (7 to 16 core-seconds, most of it
+apt-get and service restarts our sandbox cannot spend), which is itself a
+finding: install-configure-verify work does not move the ratio.
+Validations are done exactly as in the typical mix, as calls to the
+serving tier, so the ratio moves only through work nobody can call a
+lever.
 
-| Serving point (generation tok/s per GPU) | Typical mix (certified) | Heavy tile baseline (~19 core-s/wf) | Heavy tile, compute steps doubled (~34 core-s/wf) | Lab's own ops tasks |
-|---|---|---|---|---|
-| 1,300 (lab window average, draining fleet) | 1 : 61 | 1 : 4.0 | 1 : 2.2 | 1 : 8 to 1 : 20 |
-| 2,400 (lab peak, conservative) | 1 : 33 | 1 : 2.1 | 1 : 1.2 | |
-| 3,800 (lab peak, best) | 1 : 21 | 1 : 1.4 | 1 : 0.7 | |
+Tile estimate at the declared sizes, from the measured per-job costs and
+the reference orchestration floors: **about 30 core-s and 1,520 generated
+tokens per workflow, 20 core-ms per token**, which is 1.4 GPUs per socket
+at 2,400 tok/s and 0.9 at 3,800. The published number is whatever the
+certified set measures, with the formula and the band beside it.
+
+| Serving point (generation tok/s per GPU) | Typical mix (certified) | Heavy tile at the declared sizes (~30 core-s/wf) | Lab's own ops tasks |
+|---|---|---|---|
+| 1,300 (lab window average, draining fleet) | 1 : 61 | 1 : 2.5 | 1 : 8 to 1 : 20 |
+| 2,400 (lab peak, conservative) | 1 : 33 | 1 : 1.4 | |
+| 3,800 (lab peak, best) | 1 : 21 | 1 : 0.9 | |
 
 Estimated socket-to-GPU ratio, one 64-core socket against one RTX PRO
 6000 serving the lab's 35B mixture-of-experts model. The target is the
-heavy tile's baseline row: about 1:2 at the conservative serving point
-and 1:1.4 at the best measured one, with 1:1 reached by doubling the
-compute-shaped steps or by a GPU that delivers more tokens than the lab's
-peaks. Planning estimates from the measured cost laws; the certified set
-replaces them.
+heavy tile's row: about 1:1.4 at the conservative serving point and 1:1
+at the best measured one. Estimates from measured per-job costs and the
+reference orchestration floors; the certified set replaces them.
 
 ## Where small-model inference runs is a sensitivity, not the result
 
@@ -106,10 +106,12 @@ tokens at a rate no serving tier would accept.
 
 ## What the box does at the heavy mix
 
-At ~19 core-s per workflow one 64-core socket sustains about 2.8
-workflows/s (about 170 per minute), driving roughly 4,300 generated
-tokens per second and about 30 model calls per second: one RTX PRO 6000
-at its measured peak band, two at the window average. The plateau method is unchanged; only the rate ladder
+At ~30 core-s per workflow one 64-core socket sustains about 1.8
+workflows/s (about 110 per minute), driving roughly 2,800 generated
+tokens per second and about 18 model calls per second: one RTX PRO 6000
+inside its measured peak band. The analyst XL's three 60M-row jobs hold
+about 5 GB each, so at that rate the sandboxes hold roughly 120 GB of the
+host's 1 TB. The plateau method is unchanged; only the rate ladder
 moves (0.25 to 1 per instance instead of 4 to 12). The allocation is
 re-derived from the cost laws before the set, since the heavy mix shifts
 work from the reranker tier to the sandbox side.
