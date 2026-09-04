@@ -39,8 +39,10 @@ def plateau_point(series_dir, r):
         lat += [u["lat"] / 1000 for u in ev["units"] if u.get("ok") and u.get("lat")]
         smp = [s for s in ev["samples"] if s.get("cpu_pct") is not None]
         mid = smp[len(smp) // 4: 3 * len(smp) // 4] or smp
+        if not mid:
+            continue
         busy["host"].append(st.median([s["cpu_pct"] for s in mid]) / 100 * NCPU)
-        for k in ("executors", "siblings", "control", "mock_router", "retrieval", "sandbox", "other"):
+        for k in ("executors", "siblings", "control", "mock_router", "retrieval", "database", "sandbox", "other"):
             busy[k].append(st.median([(s.get("cpu_by") or {}).get(k, 0.0) for s in mid]) / 100 * NCPU)
     rate = n / span if span else 0.0
     return rate, {k: st.median(v) for k, v in busy.items()}, pct(lat, .5), pct(lat, .95)
@@ -57,10 +59,13 @@ def main():
         if len(rates) < 2:
             print(f"| {sid} | (one rate only) |"); continue
         (r1, b1, p50, p95), (r2, b2, _, _) = plateau_point(sdir, rates[0]), plateau_point(sdir, rates[-1])
+        if p50 is None or not b1.get("host") or not b2.get("host"):
+            print(f"| {sid} | (no completed units) | | | | | rates {rates[0]} and {rates[-1]} |"); continue
         dr = r2 - r1
         slope = {k: (b2[k] - b1[k]) / dr for k in b1} if dr > 0 else {k: 0.0 for k in b1}
         rerank = RETRIEVALS.get(sid, 0) * DEPTH.get(sid, 16) / 35.0
-        orch = slope["executors"] + slope["siblings"] + slope["control"] + slope["mock_router"] + slope["other"]
+        orch = (slope["executors"] + slope["siblings"] + slope["control"] + slope["mock_router"]
+                + slope.get("database", 0.0) + slope["other"])
         total = slope["host"] - slope["retrieval"] + rerank   # tier share is reserved; replace by consumed
         out[sid] = {"p50_s": p50, "p95_s": p95, "host_core_s_per_wf": round(total, 2), "sandbox": round(slope["sandbox"], 2),
                     "reranker_consumed": round(rerank, 2), "executor_side": round(orch, 2), "rates": [r1, r2]}
