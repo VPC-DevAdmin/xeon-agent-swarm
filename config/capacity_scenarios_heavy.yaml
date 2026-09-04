@@ -73,7 +73,9 @@ e2e_workflows:
     # records, and writes the ingest summary.
     toolless: true
     tools: [bench_execute, bench_record]
-    contract: {task_count: [1, 1], steps: [1, 1], llm_calls: [4, 4], validations: [3, 3], tool_calls: [2, 2], tokens_in: [300, 40000]}
+    # One worker with two tool calls (execute, then record) is five model
+    # calls: the task ticket's four plus one for the extra tool result.
+    contract: {task_count: [1, 1], steps: [1, 1], llm_calls: [5, 5], validations: [3, 3], tool_calls: [2, 2], tokens_in: [300, 40000]}
     contract_live: {task_count: [1, 2], steps: [1, 2], llm_calls: [2, 20], validations: [0, 10], tool_calls: [0, 6]}
     budgets: {max_subagents: 2, max_tool_hops: 3}
     query: >-
