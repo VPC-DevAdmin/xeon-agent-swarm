@@ -62,12 +62,15 @@ two components so the mixed case exists in the data. Five roles is already
 a lot for a reader; a sixth would not add an identifiable term.
 
 **The tile** is the unit of load: one research brief, one comparison, one
-digest, one data analyst, and two task agents (six sessions). The task
+digest, one data analyst, and two task agents (six workflow arrivals). The task
 agent is weighted twice because short-lived agents are most of a
 deployment. That weight is a declared assumption; the per-component cost
 table (section 8) lets a reader rescale to any mix. At the reference mix a
 workflow moves about 20,000 tokens through the model tier and generates
 about 1,300.
+
+The six positions describe the arrival mix, not resident concurrency.
+Workflow duration determines how many sessions remain active at once.
 
 Every workflow runs the production orchestrator end to end: a planner
 delegates the declared subtasks to specialist workers (one, for the task
@@ -146,16 +149,25 @@ reference server has 64 cores with two SMT threads each and an irregular
 sibling map, so allocations are never written as logical ranges. The
 reranker's runtime gets one thread per physical core (the first sibling);
 two runtime threads on one core's siblings were measured to halve each
-other. The reference allocation is 14 cores for the reranker, 2 for the
-embedder, and the remaining 48 for the four instances, their executors,
-stand-ins, and databases, which are pinned there so nothing shares AMX
-units with the tier. Pinning is by cpuset, not quota: a CPU quota on a
+other. The reference allocation is 16 cores for the reranker, 2 for the
+embedder, and the remaining 46 for the four instances, their executors,
+stand-ins, databases, and sandboxed jobs, which are pinned there so nothing
+shares AMX units with the tier. Pinning is by cpuset, not quota: a CPU quota on a
 128-thread host lets a many-threaded process burn its allowance in
 milliseconds and sleep for the rest of the period.
 
 The allocation is set from measured costs so that both sides of the server
-saturate near the same rate, which is what makes the server, rather than
-an allocation, the limit. The sizing arithmetic is in section 8.
+keep headroom up to the same rate and run out together just above it,
+which is what makes the server, rather than an allocation, the limit. A
+tier sized to saturate exactly at the target queues at the target (a
+14-core reranker sat at ~90% of its pair budget at 40 workflows/s and
+queued 13 s per call); a tier sized generously starves the other side (at
+20 cores the remaining 42 collapsed at the same rate, sandbox jobs alone
+taking half of all hardware threads). At the reference mix, 40 workflows/s
+needs about 33 cores of sandboxed execution, 10 to 12 of orchestration,
+12 of reranking at full utilization, and 2 of embedding: 58 to 60 of the
+64 physical cores, which is the box's limit. The sizing arithmetic is in
+section 8.
 
 Each executor admits at most four reranker calls at a time and backs off
 exponentially on a 429 or 503, so a saturated tier produces queueing the
@@ -300,8 +312,16 @@ be rescaled to a different mix, depth, or job size.
   across the four instances (executors, control, stand-ins, databases),
   nearly independent of rate, plus a small per-workflow marginal cost.
 - **Allocation.** Cores are divided so that the tier's pair budget and the
-  executors' side reach saturation near the same rate; with the reference
-  mix that is 14 + 2 cores for the tier and 48 for everything else.
+  executors' side both keep headroom (about 70% and 85% respectively) up
+  to the same rate; with the reference mix that is 16 + 2 cores for the
+  tier and 46 for everything else, and the box is full near 40
+  workflows/s whatever the split.
+- **Per archetype** (each measured alone at two rates, floor cancelled):
+  task agent 0.54 core-seconds per workflow, digest 1.16, comparison 1.99
+  (0.41 light job, 0.46 rerank), research brief 3.20 (1.37 rerank across
+  three calls), data analyst 6.74 (4.68 in three heavy jobs). Measured at
+  light load, so upper bounds; the mixed tile's marginal cost at the
+  certified point runs about a third lower.
 
 `scripts/cost_table.py` produces the per-component table from any series;
 `scripts/plateau_set_summary.py` produces the certified set summary.
