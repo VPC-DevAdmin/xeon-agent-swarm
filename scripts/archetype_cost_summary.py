@@ -10,6 +10,10 @@ from backend.capacity.evidence import read_evidence
 
 NCPU = 128
 RETRIEVALS = {"research_brief": 3, "comparison": 1, "digest": 0, "data_analysis": 0, "task_ticket": 0}
+# Heavy mix: retrievals per workflow and the declared rerank depth per call
+# (the reference archetypes rerank at depth 16).
+RETRIEVALS.update({"code_agent": 0, "analyst_xl": 0, "ingestion": 0, "ops_task": 0, "deep_research": 3})
+DEPTH = {"deep_research": 128}
 JOBS = {"research_brief": (0, 0), "comparison": (1, 0), "digest": (0, 0), "data_analysis": (0, 3), "task_ticket": (0, 0)}  # (light, heavy)
 
 
@@ -55,7 +59,7 @@ def main():
         (r1, b1, p50, p95), (r2, b2, _, _) = plateau_point(sdir, rates[0]), plateau_point(sdir, rates[-1])
         dr = r2 - r1
         slope = {k: (b2[k] - b1[k]) / dr for k in b1} if dr > 0 else {k: 0.0 for k in b1}
-        rerank = RETRIEVALS[sid] * 16 / 35.0
+        rerank = RETRIEVALS.get(sid, 0) * DEPTH.get(sid, 16) / 35.0
         orch = slope["executors"] + slope["siblings"] + slope["control"] + slope["mock_router"] + slope["other"]
         total = slope["host"] - slope["retrieval"] + rerank   # tier share is reserved; replace by consumed
         out[sid] = {"p50_s": p50, "p95_s": p95, "host_core_s_per_wf": round(total, 2), "sandbox": round(slope["sandbox"], 2),
