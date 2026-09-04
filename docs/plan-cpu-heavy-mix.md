@@ -47,74 +47,55 @@ alone before the tile is certified, as the typical archetypes were.
 | Analyst XL | 1 | ~40 core-s | 13 | ~1,800 | three sandboxed jobs over 30M rows each (the existing job at 9x the size) |
 | Task ticket | 1 | 0.54 core-s | 4 | 550 | unchanged; keeps the mix honest |
 | Ops task (new) | 1 | ~10 core-s (their measured 7 to 16) | 6 | ~2,000 | modeled on the lab tasks: install, configure, start and verify a service in the sandbox (nginx logging, git repair, a cert); the verifier is the service check; most shell time waits rather than computes |
-| Encoder validator on every validation | all | ~1 core-s per validation | 0 | 0 | the seven validations per workflow become full-context encoder checks (cross-encoder or NLI class, INT8 on AMX, one forward pass, no generation) instead of generative model calls |
 
 The ops task is there so the two studies share a row: its host cost and
-tokens per task should land where the lab measured them, which anchors
-our constant to their data before the compute-shaped archetypes build on
-it. Tile estimate with the encoder validators: **about 25 core-s and
-1,000 generated tokens per workflow, 25 core-ms per token**, which is
-1.1 GPUs per socket at 2,400 tok/s and 0.7 at 3,800. The validators do
-two things at once: they add real host work, and they remove the seven
-short generative calls per workflow from the GPU, which is the larger
-effect on the ratio. Two further dials are legitimate enterprise choices
-rather than benchmark tricks:
+tokens per task should land where the lab measured them (7 to 16
+core-seconds per task), which anchors our constant to their data before
+the compute-shaped archetypes build on it. Validations are done exactly
+as in the typical mix, as calls to the serving tier, so the ratio moves
+only through work nobody can call a lever.
 
-- **Job size.** The analyst's row count and the code agent's test-suite
-  length are declared parameters; the cost is linear in both.
-- **A generative judge for the final grade.** One per workflow, on the
-  GPU tier by default; a labeled variant runs it as a small language
-  model on the host (INT8 on AMX, about 15 core-s and 3 to 5 s per
-  grade). See the next section for why it is a variant and not the
-  baseline.
+Tile estimate: **about 19 core-s and 1,540 generated tokens per
+workflow, 12.5 core-ms per token**, which is 2.1 GPUs per socket at
+2,400 tok/s and 1.3 at 3,800. One dial closes the rest, and it is a
+declared, linear, real-work parameter: **job size**. The analyst's row
+count and the code agent's test-suite length are stated in the contract;
+doubling the compute-shaped steps takes the tile to about 1.2 GPUs per
+socket at the conservative band. The tile is designed to land inside the
+1:1 band across the lab's measured range, and the published number is
+whatever the certified set measures, with the formula and the band
+beside it.
 
-## Validators on the host, the judge on the GPU
+## Where small-model inference runs is a sensitivity, not the result
 
-The worry about a CPU-side judge is right: token generation is what GPUs
-are for, and a saturated host should not spend 15 core-seconds producing
-100 tokens that a GPU produces in a twentieth of a GPU-second. The plan
-therefore splits validation into the two things it actually is.
+Validation is the tempting lever, and the plan deliberately keeps it out
+of the baseline. Most validations in these workflows are judgments over a
+context rather than text (grounding, schema, test result, policy), and an
+encoder model answers each in one forward pass on the host, the same
+class of work the host already does for reranking. But a full-context
+check costs about 0.6 to 1 core-second on the host against about 5 ms on
+a GPU; seven per workflow would be seven times the host's entire current
+cost per workflow and would cut the typical mix from 40 to about 8
+workflows/s. Placing them on the host would move the ratio by that
+factor, and a reader would be right to say the mechanism is inference
+the GPU does a hundred times cheaper.
 
-**Checks that do not generate go on the host.** Most validations in an
-agent workflow are judgments over a context, not text: is this section
-grounded in the retrieved passages, does this output satisfy the schema,
-does the test report say pass, is this content within policy. An encoder
-model answers those in one forward pass with no decode loop, and the
-host already serves that class of model on AMX: the reranker's 35 pairs
-per core-second at 125 tokens scales to roughly one full-context check
-per core-second. These checks are cheap where they run, need no GPU
-scheduling, keep the retrieved context on the host instead of shipping it
-to the serving tier a second time, and are bit-reproducible with fixed
-threads, which matters for a benchmark verifier. Every one of them moved
-off the GPU is a short generative call the serving tier no longer has to
-schedule, and short calls are the least efficient work a batched decoder
-does. This is the mainstream enterprise pattern for guardrails and
-gating, so it is defensible as realism, not as a way to make the host
-look busy.
-
-**Generation stays on the GPU by default.** A grade that has to be written
-out (a rubric score with reasons, a synthesis critique) is generation, and
-the GPU is the right place for it whenever the GPU tier has capacity. The
-CPU variant is kept for two reasons a reader may weigh differently:
-independence, since a judge on a different model family and different
-hardware is a stronger check than a tier grading its own output; and
-availability, since at the lab's density boundary the GPU is the binding
-resource with zero headroom while the host had a third of its cores idle
-at our certified point, so a host-side judge converts idle orchestration
-capacity into serving capacity. Both variants are measured and both are
-published with their cost per workflow and their latency, and the
-headline ratio uses the GPU-judge baseline.
-
-The tile is designed to land inside the 1:1 band across the lab's
-measured range, and the published number is whatever the certified set
-measures, with the formula and the band beside it.
+The plan therefore treats placement as a **published sensitivity applied
+to both mixes**: each mix is reported with validations on the serving
+tier (the baseline and the headline) and with encoder validators on the
+host, each with the per-check cost stated for both placements. The
+reader sees that where small-model inference runs is a design choice
+with a known effect on the ratio, and the paper's claim rests on the
+baseline. A generative judge on the host is not run in any variant: its
+only effect is the one a critic would name, and the host produces
+tokens at a rate no serving tier would accept.
 
 ## What the box does at the heavy mix
 
-At ~25 core-s per workflow one 64-core socket sustains about 2.2
-workflows/s (about 130 per minute), driving roughly 2,200 generated
-tokens per second and about 10 generative calls per second: one RTX PRO
-6000 near its measured peak band. The plateau method is unchanged; only the rate ladder
+At ~19 core-s per workflow one 64-core socket sustains about 2.8
+workflows/s (about 170 per minute), driving roughly 4,300 generated
+tokens per second and about 30 model calls per second: one RTX PRO 6000
+at its measured peak band, two at the window average. The plateau method is unchanged; only the rate ladder
 moves (0.25 to 1 per instance instead of 4 to 12). The allocation is
 re-derived from the cost laws before the set, since the heavy mix shifts
 work from the reranker tier to the sandbox side.
@@ -132,8 +113,8 @@ work from the reranker tier to the sandbox side.
    job with a real project and test suite; XL data job size; ingestion
    tool (parse, chunk, embed via the CPU embedder, index); per-archetype
    rerank depth; ops-task job (install, configure, verify) with its
-   service check; encoder validators served like the reranker; the
-   optional host-side judge; scenarios, stand-in policies, tests. Each archetype is
+   service check; encoder validators served like the reranker for the
+   placement sensitivity; scenarios, stand-in policies, tests. Each archetype is
    measured alone (the existing cost-run script) and the tile's core-ms
    per token is checked against the target band before certification.
 3. **Certify the heavy mix (1 day box time).** Three seeds, ten-minute
@@ -163,6 +144,10 @@ work from the reranker tier to the sandbox side.
   rows, so any customer mix can be placed on the same curve.
 - The ratio is reported as a function of GPU throughput with the
   measured band, never as a single number without its serving point.
+- The headline ratio for each mix uses validations on the serving tier;
+  host-side validators appear only in the placement sensitivity, with
+  their per-check cost on both sides. No generative judging runs on the
+  host in any published variant.
 
 ## What this does not claim
 
