@@ -246,3 +246,6 @@ data/capacity/**/retrieval/
 
 # Local preview config (per-machine port)
 .claude/launch.json
+
+# generated document set for the ingestion agent (scripts/make_ingest_docs.py)
+data/capacity/ingest/

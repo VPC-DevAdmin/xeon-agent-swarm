@@ -391,8 +391,22 @@ async def embed_query(query: str) -> list[float] | None:
     return r.json()[0]
 
 
+async def embed_batch(texts: list[str]) -> list[list[float]] | None:
+    """Embed many texts on the CPU embedder in client-batch slices (the
+    ingestion agent's chunks). None when no embedder is configured."""
+    url = os.getenv("CAPACITY_EMBED_URL")
+    if not url:
+        return None
+    out: list[list[float]] = []
+    for start in range(0, len(texts), 32):
+        r = await _post_backpressure(f"{url}/embed", {"inputs": texts[start:start + 32],
+                                                      "truncate": True})
+        out.extend(r.json())
+    return out
+
+
 async def cross_rerank(query: str, candidates: list[int],
-                       top: int = 12) -> list[int] | None:
+                       top: int = 12, depth: int | None = None) -> list[int] | None:
     """Real cross-encoder reranking via the TEI service (v16b): one call
     scoring (query, body) for every candidate. Returns None when no
     reranker is configured (the lexical v16a reranker then runs)."""
@@ -403,7 +417,7 @@ async def cross_rerank(query: str, candidates: list[int],
     # prefilters the fused list to 16, and the cross-encoder spends its
     # cycles only on those. Depth 50 cost ~49% of a 128-thread host at 25
     # workflows/s; 16 pairs is one half-batch and a quarter of the demand.
-    depth = rerank_depth()
+    depth = int(depth or rerank_depth())
     prefiltered = lexical_rerank(query, candidates, top=depth)
     con = _con()
     ids, texts = [], []
@@ -428,7 +442,8 @@ async def cross_rerank(query: str, candidates: list[int],
     return [cid for _s, cid in scored[:top]]
 
 
-async def retrieve(query: str, *, budget_words: int = 6000) -> dict:
+async def retrieve(query: str, *, budget_words: int = 6000,
+                   depth: int | None = None) -> dict:
     """The full v16a pipeline for one query. Sparse, rerank, fetch, and
     pack run in a worker thread (real CPU, off the event loop); the dense
     call awaits its modeled off-box latency."""
@@ -449,7 +464,7 @@ async def retrieve(query: str, *, budget_words: int = 6000) -> dict:
     fused = await asyncio.to_thread(_fuse_side)
     _note("fuse_ms", (time.perf_counter() - t1) * 1000.0)
     t2 = time.perf_counter()
-    winners = await cross_rerank(query, fused)
+    winners = await cross_rerank(query, fused, depth=depth)
     _note("rerank_stage_ms", (time.perf_counter() - t2) * 1000.0)
     reranker = "cross-encoder"
     if winners is None:

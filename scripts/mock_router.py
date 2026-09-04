@@ -624,18 +624,37 @@ async def chat_completions(request: Request):
         "Using ONLY the measurements" not in obj or _role_now == "research"))
     if _wants_retrieval and _tool_result_count(messages, "bench_retrieve") == 0:
         topic = zlib.crc32(f"{obj[:80]}|{seed}".encode()) % 2000
-        tc = _tool_call("bench_retrieve",
-                        {"query": f"topic{topic} " + " ".join(
-                            re.findall(r"[a-z]+", obj.lower())[:6])})
+        args = {"query": f"topic{topic} " + " ".join(
+            re.findall(r"[a-z]+", obj.lower())[:6])}
+        # Heavy mix: the deep researcher declares its rerank depth in the
+        # objective ("retrieving at rerank depth 128").
+        m_depth = re.search(r"rerank depth (\d+)", obj)
+        if m_depth:
+            args["depth"] = int(m_depth.group(1))
+        tc = _tool_call("bench_retrieve", args)
         return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, tool_calls=[tc])
     # Execution policy by archetype (v17): the data analyst runs a HEAVY
     # job in every worker; the comparison runs a LIGHT job in its analysis
     # worker only. After retrieval, before the record.
+    # Heavy mix (docs/plan-cpu-heavy-mix.md): the code agent builds in every
+    # worker, the XL analyst runs xl jobs, the ops task and the ingestion
+    # agent run their single job in their one worker.
+    _kind = None
+    if "Using ONLY the build" in obj:
+        _kind = "build"
+    elif "Using ONLY the repository" in obj:
+        _kind = "ops"
+    elif "Using ONLY the document set" in obj:
+        _kind = "ingest"
+    elif "Using ONLY the dataset (XL)" in obj:
+        _kind = "xl"
+    elif "Using ONLY the dataset" in obj:
+        _kind = "heavy"
     _wants_exec = ("bench_execute" in tools and (
-        "Using ONLY the dataset" in obj or _role_now == "analysis"))
+        _kind is not None or _role_now == "analysis"))
     if _wants_exec and _tool_result_count(messages, "bench_execute") == 0:
-        size = "heavy" if "Using ONLY the dataset" in obj else "light"
+        size = _kind or "light"
         tc = _tool_call("bench_execute",
                         {"task": (obj or "aggregate")[:80], "size": size})
         return await _completion(tier=tier, category=_CATEGORY.get(_role_now, "general"),

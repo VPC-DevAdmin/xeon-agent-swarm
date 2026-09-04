@@ -84,7 +84,7 @@ def arrival_schedule() -> dict:
 
 def e2e_tile_sessions() -> list[str]:
     wfs = load_e2e_workflows()
-    raw = _load_file().get("e2e_tile") or {}
+    raw = _e2e_tile_raw()
     tile = {wid: int(n) for wid, n in raw.items() if wid in wfs and int(n) > 0}         or {wid: 1 for wid in wfs}
     out: list[str] = []
     for wid, n in tile.items():
@@ -94,7 +94,7 @@ def e2e_tile_sessions() -> list[str]:
 
 def load_e2e_tile() -> dict[str, int]:
     wfs = load_e2e_workflows()
-    raw = _load_file().get("e2e_tile") or {}
+    raw = _e2e_tile_raw()
     return {wid: int(n) for wid, n in raw.items() if wid in wfs and int(n) > 0}         or {wid: 1 for wid in wfs}
 
 
@@ -141,15 +141,49 @@ def synthetic_text(vary_key: str, n_chars: int) -> str:
 _file_cache: tuple[float, dict] | None = None
 
 
+def _extra_paths() -> list[str]:
+    """Companion scenario files merged over the main one: their
+    `e2e_workflows` add to (or override) the main file's, and their
+    `e2e_tiles` register named tiles (see load_e2e_tile). Listed in
+    CAPACITY_SCENARIOS_EXTRA (comma-separated); by default the CPU-heavy
+    mix's file when it exists, so the two mixes live side by side without
+    editing the reference workload file."""
+    raw = os.getenv("CAPACITY_SCENARIOS_EXTRA")
+    if raw is not None:
+        return [p.strip() for p in raw.split(",") if p.strip()]
+    default = os.path.join(_CONFIG_DIR, "capacity_scenarios_heavy.yaml")
+    return [default] if os.path.exists(default) else []
+
+
 def _load_file() -> dict:
     """mtime-cached: config parses once per process (standard practice); an
     edited file is picked up on the next call."""
     global _file_cache
-    mtime = os.path.getmtime(_PATH)
+    paths = [_PATH, *_extra_paths()]
+    mtime = tuple(os.path.getmtime(p) for p in paths)
     if _file_cache is None or _file_cache[0] != mtime:
         with open(_PATH) as f:
-            _file_cache = (mtime, yaml.safe_load(f) or {})
+            data = yaml.safe_load(f) or {}
+        for extra in paths[1:]:
+            with open(extra) as f:
+                more = yaml.safe_load(f) or {}
+            data.setdefault("e2e_workflows", {}).update(more.get("e2e_workflows") or {})
+            data.setdefault("e2e_tiles", {}).update(more.get("e2e_tiles") or {})
+        _file_cache = (mtime, data)
     return _file_cache[1]
+
+
+def _e2e_tile_raw() -> dict:
+    """The selected tile: CAPACITY_E2E_TILE names one of `e2e_tiles`
+    (the CPU-heavy mix's tile, say); unset, the reference `e2e_tile`."""
+    name = os.getenv("CAPACITY_E2E_TILE")
+    data = _load_file()
+    if name:
+        tiles = data.get("e2e_tiles") or {}
+        if name not in tiles:
+            raise KeyError(f"no e2e tile named {name!r} (have: {sorted(tiles)})")
+        return tiles[name] or {}
+    return data.get("e2e_tile") or {}
 
 
 def load_tile() -> dict[str, int]:

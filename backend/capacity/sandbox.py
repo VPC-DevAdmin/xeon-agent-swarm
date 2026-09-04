@@ -36,8 +36,27 @@ JOB_SCRIPT = Path(__file__).with_name("sandbox_job.py")
 # Rows per job, calibrated on the reference Xeon (one core, 3.6 GHz):
 # light ~0.25 core-seconds, heavy ~2 core-seconds, interpreter start and
 # numpy import included. The job reads this from argv - one source.
-SIZES = {"light": 450_000, "heavy": 3_300_000}
+SIZES = {"light": 450_000, "heavy": 3_300_000, "xl": 30_000_000}
+# Job KINDS beyond the data job (CPU-heavy mix, see docs/plan-cpu-heavy-mix.md):
+#   build   generate a C project, compile it with gcc -O2, run its property
+#           tests (the shape of a code agent's build-and-test step)
+#   ops     repair a git repository with conflicting branches, then configure,
+#           start and smoke-test a small service (the shape of the lab's
+#           install-configure-verify tasks; mostly waiting, little compute)
+#   ingest  parse a set of PDF pages, normalize and chunk the text (the
+#           embedding and indexing happen on the executor, see toolbox)
+# Each kind has its own script; per-kind limits below.
+KINDS = ("light", "heavy", "xl", "build", "ops", "ingest")
+KIND_SCRIPTS = {"build": Path(__file__).with_name("sandbox_build_job.py"),
+                "ops": Path(__file__).with_name("sandbox_ops_job.py"),
+                "ingest": Path(__file__).with_name("sandbox_ingest_job.py")}
+BUILD_WORK = int(os.getenv("CAPACITY_BUILD_WORK", "1500000") or 1500000)   # inputs per property test
+INGEST_PAGES = int(os.getenv("CAPACITY_INGEST_PAGES", "200") or 200)
+INGEST_DOCS = os.getenv("CAPACITY_INGEST_DOCS", "data/capacity/ingest")
 CPU_LIMIT_S = int(os.getenv("CAPACITY_SANDBOX_CPU_S", "30") or 30)
+# Heavier kinds get proportionate limits; a limit is a runaway guard, never a
+# budget the job is expected to approach.
+KIND_LIMITS = {"xl": (150, 300), "build": (150, 300), "ops": (60, 180), "ingest": (150, 300)}
 # Address-space limit, not resident: numpy + OpenBLAS reserve several GB of
 # virtual space at import even single-threaded, so the cap is 8 GB while a
 # heavy job's resident set is ~0.5 GB.
@@ -62,22 +81,38 @@ def isolation_mode() -> str:
     return _mode
 
 
-def _command(size: str, seed: int) -> list[str]:
-    # The job interpreter is isolated (-I -S): hand it the one site dir that
-    # holds numpy, found from the parent's own import, nothing else.
+def _site_dir() -> str:
     try:
         import numpy
-        site = os.path.dirname(os.path.dirname(numpy.__file__))
+        return os.path.dirname(os.path.dirname(numpy.__file__))
     except ImportError:
-        site = next((p for p in sys.path if p.endswith("site-packages")), "")
+        return next((p for p in sys.path if p.endswith("site-packages")), "")
+
+
+def _command(kind: str, seed: int) -> list[str]:
+    # The job interpreter is isolated (-I -S): hand it the one site dir that
+    # holds numpy (and pypdf), found from the parent's own import, nothing else.
+    site = _site_dir()
     # Thread caps travel INSIDE the command: sudo resets the environment, and
     # without them OpenBLAS spawns a thread per CPU at import (128 here) and
     # numpy fails to load under the process limit.
-    inner = ["env", "OPENBLAS_NUM_THREADS=1", "OMP_NUM_THREADS=1",
-             "MKL_NUM_THREADS=1", "PYTHONHASHSEED=0",
-             sys.executable, "-I", "-S", str(JOB_SCRIPT), size, str(seed), site,
-             str(SIZES[size])]
-    limits = ["prlimit", f"--cpu={CPU_LIMIT_S}", f"--as={MEM_LIMIT_BYTES}",
+    env_part = ["env", "OPENBLAS_NUM_THREADS=1", "OMP_NUM_THREADS=1",
+                "MKL_NUM_THREADS=1", "PYTHONHASHSEED=0", "HOME=/tmp",
+                "GIT_CONFIG_NOSYSTEM=1"]
+    if kind in SIZES:
+        script = [str(JOB_SCRIPT), kind, str(seed), site, str(SIZES[kind])]
+    elif kind == "build":
+        script = [str(KIND_SCRIPTS[kind]), str(seed), str(BUILD_WORK)]
+    elif kind == "ops":
+        script = [str(KIND_SCRIPTS[kind]), str(seed)]
+    elif kind == "ingest":
+        script = [str(KIND_SCRIPTS[kind]), str(seed), site,
+                  str(Path(INGEST_DOCS).resolve()), str(INGEST_PAGES)]
+    else:
+        raise ValueError(f"unknown job kind {kind!r}")
+    inner = [*env_part, sys.executable, "-I", "-S", *script]
+    cpu_s, _wall = KIND_LIMITS.get(kind, (CPU_LIMIT_S, WALL_LIMIT_S))
+    limits = ["prlimit", f"--cpu={cpu_s}", f"--as={MEM_LIMIT_BYTES}",
               "--fsize=1048576"] if shutil.which("prlimit") else []
     if isolation_mode() == "netns":
         # Drop back to the invoking user by uid, not $USER: executors run
@@ -85,15 +120,26 @@ def _command(size: str, seed: int) -> list[str]:
         # cannot load numpy's extensions from the user's venv.
         import pwd
         user = pwd.getpwuid(os.getuid()).pw_name
+        if kind == "ops":
+            # The ops job starts a service on the loopback INSIDE the fresh
+            # network namespace, where lo is down until root raises it.
+            import shlex
+            tail = shlex.join(["sudo", "-n", "-u", user, *limits, *inner])
+            return ["sudo", "-n", "unshare", "-n", "--", "sh", "-c",
+                    "ip link set lo up 2>/dev/null; exec " + tail]
         return ["sudo", "-n", "unshare", "-n", "--", "sudo", "-n", "-u", user,
                 *limits, *inner]
     return [*limits, *inner]
 
 
+def wall_limit(kind: str) -> float:
+    return float(KIND_LIMITS.get(kind, (0, WALL_LIMIT_S))[1])
+
+
 async def run_job(size: str, seed: int) -> dict:
-    """Run one sandboxed job. Returns {ok, size, rows, elapsed_ms, cpu_ms,
-    result} or {ok: False, error}."""
-    if size not in SIZES:
+    """Run one sandboxed job of a kind (a data size, or build/ops/ingest).
+    Returns {ok, size, elapsed_ms, cpu_ms, ...result} or {ok: False, error}."""
+    if size not in KINDS:
         raise ValueError(f"unknown job size {size!r}")
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
            "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1",
@@ -104,7 +150,7 @@ async def run_job(size: str, seed: int) -> dict:
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         stdin=asyncio.subprocess.DEVNULL)
     try:
-        out, err = await asyncio.wait_for(proc.communicate(), timeout=WALL_LIMIT_S)
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=wall_limit(size))
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()

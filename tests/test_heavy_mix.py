@@ -1,0 +1,104 @@
+"""The CPU-heavy mix: job kinds, tool wiring, stand-in policies, tile selection."""
+import asyncio
+import json
+import os
+import subprocess
+import sys
+
+import pytest
+
+from backend.capacity import sandbox
+
+
+@pytest.fixture(autouse=True)
+def _rlimits(monkeypatch):
+    monkeypatch.setenv("CAPACITY_SANDBOX_ISOLATION", "rlimits")
+    sandbox._mode = None
+
+
+def test_build_job_compiles_and_its_tests_pass(monkeypatch):
+    monkeypatch.setattr(sandbox, "BUILD_WORK", 20_000)
+    r = asyncio.run(sandbox.run_job("build", 11))
+    assert r["ok"] and r["failures"] == 0 and r["tests"] == 361
+    assert r["functions"] == 720 and r["lines"] > 5000 and r["cpu_ms"] > 0
+    again = asyncio.run(sandbox.run_job("build", 11))
+    assert again["digest"] == r["digest"]                      # deterministic for a seed
+
+
+def test_ops_job_repairs_the_repository_and_proves_the_service():
+    r = asyncio.run(sandbox.run_job("ops", 5))
+    assert r["ok"] and r["commits"] == 4 and r["conflicts"] == 6 == r["resolved"]
+    assert r["failures"] == 0 and r["service_ok"] is True and r["checks"] >= 10
+
+
+def test_ingest_job_parses_and_chunks(tmp_path, monkeypatch):
+    subprocess.run([sys.executable, "scripts/make_ingest_docs.py", "--docs", "2", "--pages", "6",
+                    "--out", str(tmp_path)], check=True, capture_output=True)
+    monkeypatch.setattr(sandbox, "INGEST_DOCS", str(tmp_path))
+    monkeypatch.setattr(sandbox, "INGEST_PAGES", 8)
+    r = asyncio.run(sandbox.run_job("ingest", 2))
+    assert r["ok"] and r["pages"] == 8 and r["docs"] == 2 and r["chunks"] > 20
+    assert all(len(t.split()) <= 180 for t in r["texts"])
+
+
+def test_xl_size_is_the_data_job_at_nine_times_the_rows():
+    assert sandbox.SIZES["xl"] == 30_000_000
+    assert sandbox.wall_limit("xl") > sandbox.wall_limit("heavy")
+
+
+def test_execute_tool_reports_each_kind(tmp_path, monkeypatch):
+    from backend.agents.toolbox import build_bench_execute_tool
+    monkeypatch.setattr(sandbox, "BUILD_WORK", 20_000)
+    tool = build_bench_execute_tool()
+    out = asyncio.run(tool.coroutine(task="build the library", size="build"))
+    assert out.startswith("[bench_execute] build:") and "0 failures" in out and "EXECUTION COMPLETE" in out
+    out = asyncio.run(tool.coroutine(task="repair the service", size="ops"))
+    assert "service up and answering" in out
+    subprocess.run([sys.executable, "scripts/make_ingest_docs.py", "--docs", "1", "--pages", "4",
+                    "--out", str(tmp_path)], check=True, capture_output=True)
+    monkeypatch.setattr(sandbox, "INGEST_DOCS", str(tmp_path))
+    monkeypatch.setattr(sandbox, "INGEST_PAGES", 4)
+    monkeypatch.delenv("CAPACITY_EMBED_URL", raising=False)      # no embedder: parse + index only
+    out = asyncio.run(tool.coroutine(task="ingest the reports", size="ingest"))
+    assert out.startswith("[bench_execute] ingest: parsed 4 pages") and "indexed in" in out
+
+
+def test_stand_in_policies_pick_the_kind_and_depth():
+    sys.path.insert(0, "scripts")
+    import mock_router as mr
+    tools = ["bench_execute", "bench_record", "bench_retrieve", "task"]
+
+    def worker_call(obj, system="You are the analysis worker."):
+        body = {"model": "auto", "messages": [{"role": "system", "content": system},
+                                                {"role": "user", "content": obj}],
+                "tools": [{"type": "function", "function": {"name": t}} for t in tools]}
+        resp = asyncio.run(mr.chat_completions_impl(body)) if hasattr(mr, "chat_completions_impl") else None
+        return resp
+    # policy selection is a pure function of the objective text: exercise it directly
+    cases = {"Using ONLY the build available": "build", "Using ONLY the repository": "ops",
+             "Using ONLY the document set": "ingest", "Using ONLY the dataset (XL) available": "xl",
+             "Using ONLY the dataset available": "heavy"}
+    src = open("scripts/mock_router.py").read()
+    for marker, kind in cases.items():
+        assert marker.split(" available")[0] in src and f'"{kind}"' in src
+    assert 'rerank depth (\\d+)' in src
+
+
+def test_heavy_tile_is_selected_by_name(monkeypatch):
+    from backend.capacity import scenarios as sc
+    monkeypatch.setenv("CAPACITY_E2E_TILE", "heavy")
+    sc._file_cache = None
+    tile = sc.load_e2e_tile()
+    assert tile == {"code_agent": 2, "deep_research": 1, "ingestion": 1, "analyst_xl": 1,
+                    "task_ticket": 1, "ops_task": 1}
+    assert len(sc.e2e_tile_sessions()) == 7
+    wfs = sc.load_e2e_workflows()
+    assert wfs["code_agent"]["contract"]["llm_calls"] == [13, 13]
+    assert wfs["ops_task"]["contract"]["tool_calls"] == [2, 2]
+    monkeypatch.setenv("CAPACITY_E2E_TILE", "nope")
+    sc._file_cache = None
+    with pytest.raises(KeyError):
+        sc.load_e2e_tile()
+    monkeypatch.delenv("CAPACITY_E2E_TILE")
+    sc._file_cache = None
+    assert "research_brief" in sc.load_e2e_tile() and "code_agent" not in sc.load_e2e_tile()

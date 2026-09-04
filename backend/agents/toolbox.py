@@ -208,7 +208,47 @@ def build_bench_tool() -> StructuredTool:
 
 class _BenchExecuteArgs(BaseModel):
     task: str = Field(description="what to compute over the dataset")
-    size: str = Field(default="light", description="job size: light or heavy")
+    size: str = Field(default="light",
+                      description="job: light, heavy or xl (data), build, ops, or ingest")
+
+
+async def _finish_ingest(r: dict) -> str:
+    """The executor's half of the ingestion step: embed the parsed chunks on
+    the CPU embedder (client batches of 32), index them for keyword search
+    in an in-memory FTS5 table, and answer a check query. Both stages are
+    timed into the unit's stage accounting."""
+    import sqlite3
+    import time
+    from backend.capacity import retrieval
+    texts = list(r.get("texts") or [])
+    t0 = time.perf_counter()
+    vecs = await retrieval.embed_batch(texts) if texts else []
+    embed_ms = (time.perf_counter() - t0) * 1000.0
+    t1 = time.perf_counter()
+    con = sqlite3.connect(":memory:")
+    con.execute("CREATE VIRTUAL TABLE chunks USING fts5(body)")
+    con.executemany("INSERT INTO chunks(body) VALUES (?)", [(t,) for t in texts])
+    con.commit()
+    words = (texts[0].split() if texts else ["capacity"])
+    query = " ".join(w for w in words[3:6] if w.isalpha()) or "capacity"
+    hit = con.execute("SELECT rowid, bm25(chunks) FROM chunks WHERE chunks MATCH ? "
+                      "ORDER BY bm25(chunks) LIMIT 1", (query,)).fetchone()
+    con.close()
+    index_ms = (time.perf_counter() - t1) * 1000.0
+    try:
+        retrieval._ensure_stats()
+        retrieval._note("ingest_embed_ms", embed_ms)
+        retrieval._note("ingest_index_ms", index_ms)
+    except Exception:  # noqa: BLE001
+        pass
+    dim = len(vecs[0]) if vecs else 0
+    return (f"[bench_execute] ingest: parsed {r['pages']} pages of {r['docs']} documents "
+            f"({r['words']:,} words) in {r['parse_ms']:.0f}ms, {r['chunks']} chunks "
+            f"({r['duplicates']} duplicates dropped); embedded {len(vecs or [])} chunks "
+            f"(dim {dim}) in {embed_ms:.0f}ms; indexed in {index_ms:.0f}ms; check query "
+            f"'{query}' -> chunk {hit[0] if hit else 'none'} (isolation {r['isolation']}).\n\n"
+            "EXECUTION COMPLETE. Use these results in your section; do not ingest again for "
+            "this subtask.")
 
 
 def build_bench_execute_tool() -> StructuredTool:
@@ -220,9 +260,24 @@ def build_bench_execute_tool() -> StructuredTool:
         import zlib
         from backend.capacity import sandbox
         seed = zlib.crc32(task.encode()) % 1_000_000
-        r = await sandbox.run_job(size if size in sandbox.SIZES else "light", seed)
+        kind = size if size in sandbox.KINDS else "light"
+        r = await sandbox.run_job(kind, seed)
         if not r.get("ok"):
             raise RuntimeError(f"sandboxed job failed: {r.get('error')}")
+        if kind == "build":
+            return (f"[bench_execute] build: {r['files']} files, {r['lines']:,} lines, "
+                    f"{r['functions']} functions compiled in {r['compile_ms']:.0f}ms; "
+                    f"{r['tests']} tests run in {r['test_ms']:.0f}ms, {r['failures']} failures; "
+                    f"digest {r['digest']} (isolation {r['isolation']}).\n\nEXECUTION COMPLETE. "
+                    "Use these results in your section; do not run the build again for this subtask.")
+        if kind == "ops":
+            return (f"[bench_execute] ops: merged {r['commits']} commits with {r['conflicts']} "
+                    f"conflicting files resolved ({r['resolved']}); {r['checks']} checks, "
+                    f"{r['failures']} failures; service {'up and answering' if r['service_ok'] else 'FAILED'} "
+                    f"(isolation {r['isolation']}).\n\nEXECUTION COMPLETE. Use these results in your "
+                    "section; do not run the task again for this subtask.")
+        if kind == "ingest":
+            return await _finish_ingest(r)
         return (f"[bench_execute] {size} job over {r['rows']:,} rows finished in "
                 f"{r['elapsed_ms']}ms (compute {r['compute_ms']}ms, isolation {r['isolation']}).\n"
                 f"Results: top keys by total {r['top_keys']}; value quantiles p50 {r['q50']}, "
@@ -242,6 +297,9 @@ def build_bench_execute_tool() -> StructuredTool:
 
 class _BenchRetrieveArgs(BaseModel):
     query: str = Field(description="search query for the document store")
+    depth: int | None = Field(default=None,
+                              description="rerank depth (candidates scored per call); "
+                                          "default is the workload's declared depth")
 
 
 def build_bench_retrieve_tool() -> StructuredTool:
@@ -249,9 +307,9 @@ def build_bench_retrieve_tool() -> StructuredTool:
     rerank + packing over the seeded corpus store, with the large vector
     index modeled as an off-box call. The packed chunks return into the
     worker's context with chunk-id citations."""
-    async def _call(query: str) -> str:
+    async def _call(query: str, depth: int | None = None) -> str:
         from backend.capacity import retrieval
-        r = await retrieval.retrieve(query)
+        r = await retrieval.retrieve(query, depth=depth)
         return (f"[bench_retrieve] {len(r['chunks'])} chunks retrieved in "
                 f"{r['elapsed_ms']}ms for '{query[:60]}'.\n\n"
                 + r["packed"]
