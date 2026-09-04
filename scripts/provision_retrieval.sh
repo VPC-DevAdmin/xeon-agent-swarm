@@ -1,8 +1,9 @@
 #!/bin/bash
 # Provision the v16 retrieval stack on this box, idempotently:
 #   :8880  embedder   TEI container, sentence-transformers/all-MiniLM-L6-v2
-#   :8881  reranker   ONNX Runtime server (scripts/ort_rerank_server.py),
-#                     cross-encoder/ms-marco-MiniLM-L-6-v2 quantized to INT8
+#   :8881.. reranker  ONNX Runtime servers (scripts/ort_rerank_server.py),
+#                     cross-encoder/ms-marco-MiniLM-L-6-v2 quantized to INT8;
+#                     one process per port, each pinned to its own cores
 #   the seeded corpus store (built once, shared read-only)
 # Model weights cache in the tei_data volume; the INT8 reranker is built
 # once into data/local-models/, so re-provision is instant.
@@ -90,9 +91,28 @@ ncpu = os.cpu_count() or 128
 print(",".join(str(c) for c in range(ncpu) if c not in taken))
 PY
 )}
+# The tier is RERANK_WORKERS independent server PROCESSES on ports 8881..,
+# each pinned to RERANK_THREADS whole cores of its own (one inference
+# thread per core). It was one uvicorn socket shared by four workers, but
+# the kernel hands each keep-alive CONNECTION to a worker, not each
+# request: 229 of 269 executor connections sat on one worker, whose queue
+# filled at a third of the tier's pair budget while the others idled, and
+# which series hit it depended on how connections fell at warm-up. The
+# executors rotate across the ports per call (CAPACITY_RERANK_URL is the
+# comma-separated list), so the tier's throughput is the sum of its parts.
+IFS=, read -ra _RC <<< "$RERANK_CPUS"
+if [ "${#_RC[@]}" -ne $((RERANK_WORKERS * RERANK_THREADS)) ]; then
+  echo "reranker cores (${#_RC[@]}) must equal workers x threads ($RERANK_WORKERS x $RERANK_THREADS)"; exit 1
+fi
+RERANK_CPUSETS=(); RERANK_URLS=""
+for ((i = 0; i < RERANK_WORKERS; i++)); do
+  RERANK_CPUSETS+=("$(IFS=,; echo "${_RC[*]:i*RERANK_THREADS:RERANK_THREADS}")")
+  RERANK_URLS="${RERANK_URLS:+$RERANK_URLS,}http://127.0.0.1:$((8881 + i))"
+done
 mkdir -p "$R/data/capacity/retrieval"
-printf 'RERANK_CPUS=%s\nEMBED_CPUS=%s\nREST_CPUS=%s\nRERANK_WORKERS=%s\nRERANK_THREADS=%s\nRERANK_MAX_QUEUE=%s\n' \
+printf 'RERANK_CPUS=%s\nEMBED_CPUS=%s\nREST_CPUS=%s\nRERANK_WORKERS=%s\nRERANK_THREADS=%s\nRERANK_MAX_QUEUE=%s\nRERANK_URLS=%s\nRERANK_CPUSETS=%s\n' \
   "$RERANK_CPUS" "$EMBED_CPUS" "$REST_CPUS" "$RERANK_WORKERS" "$RERANK_THREADS" "$RERANK_MAX_QUEUE" \
+  "$RERANK_URLS" "$(IFS=';'; echo "${RERANK_CPUSETS[*]}")" \
   > "$R/data/capacity/retrieval/allocation.env"
 
 start_tei() {
@@ -156,32 +176,37 @@ EOF
   )
 }
 
+rerank_server_ok() {  # $1 = index: healthy on its port, on its cpuset, with the sized queue
+  local i=$1 port=$((8881 + $1)) pid have want q
+  curl -sf "localhost:$port/health" 2>/dev/null | grep -q '"model"' || return 1
+  pid=$(ss -tlnp 2>/dev/null | grep ":$port " | grep -oE "pid=[0-9]+" | head -1 | cut -d= -f2)
+  [ -n "$pid" ] || return 1
+  have=$(taskset -cp "$pid" 2>/dev/null | awk -F': ' '{print $2}')
+  # taskset prints a normalized list ("56-127"); normalize the wanted one
+  # the same way via a throwaway process under that affinity.
+  want=$(taskset -c "${RERANK_CPUSETS[$i]}" bash -c 'taskset -cp $$' 2>/dev/null | awk -F': ' '{print $2}')
+  q=$(curl -sf "localhost:$port/health" 2>/dev/null | grep -oE '"max_queue":[0-9]+' | cut -d: -f2)
+  [ "$have" = "$want" ] && [ "${q:-0}" -eq "$RERANK_MAX_QUEUE" ]
+}
+
 start_ort_reranker() {
-  # Already the ORT server (its /health carries the model path) on the
-  # same allocation? Keep it. A changed cpuset or worker count restarts it.
-  if curl -sf localhost:8881/health 2>/dev/null | grep -q '"model"'; then
-    local master
-    master=$(pgrep -f "uvicorn scripts.ort_rerank_server:app" | head -1 || true)
-    if [ -n "$master" ]; then
-      local have want
-      have=$(taskset -cp "$master" 2>/dev/null | awk -F': ' '{print $2}')
-      # taskset prints a normalized list ("56-127"); normalize the wanted
-      # one the same way via a throwaway process under that affinity.
-      want=$(taskset -c "$RERANK_CPUS" bash -c 'taskset -cp $$' 2>/dev/null | awk -F': ' '{print $2}')
-      local nworkers
-      nworkers=$(ps --ppid "$master" -o pid= | wc -l)   # workers + spawn tracker
-      local q
-      q=$(curl -sf localhost:8881/health 2>/dev/null | grep -oE '"max_queue":[0-9]+' | cut -d: -f2)
-      if [ "$have" = "$want" ] && [ "$nworkers" -eq $((RERANK_WORKERS + 1)) ] && [ "${q:-0}" -eq "$RERANK_MAX_QUEUE" ]; then
-        return 0
-      fi
-      echo "ort-rerank allocation changed ($have x$((nworkers - 1)) -> $want x$RERANK_WORKERS) -> restarting"
-    fi
-  fi
-  docker rm -f tei-rerank >/dev/null 2>&1 || true
-  for p in $(ss -tlnp 2>/dev/null | grep ":8881 " | grep -oE "pid=[0-9]+" | cut -d= -f2 | sort -u); do
-    kill -9 "$p" 2>/dev/null || true
+  # Already the ORT servers (their /health carries the model path), one per
+  # port on the same allocation? Keep them. Any change restarts them all.
+  local ok=1 i
+  for ((i = 0; i < RERANK_WORKERS; i++)); do
+    rerank_server_ok "$i" || ok=0
   done
+  if [ "$ok" -eq 1 ] && ! ss -tln 2>/dev/null | grep -q ":$((8881 + RERANK_WORKERS)) "; then
+    return 0
+  fi
+  echo "ort-rerank allocation changed -> restarting ${RERANK_WORKERS} servers"
+  docker rm -f tei-rerank >/dev/null 2>&1 || true
+  for ((i = 0; i < RERANK_WORKERS + 8; i++)); do
+    for p in $(ss -tlnp 2>/dev/null | grep ":$((8881 + i)) " | grep -oE "pid=[0-9]+" | cut -d= -f2 | sort -u); do
+      kill -9 "$p" 2>/dev/null || true
+    done
+  done
+  for p in $(pgrep -f "uvicorn scripts.ort_rerank_server:app" || true); do kill -9 "$p" 2>/dev/null || true; done
   sleep 1
   mkdir -p "$R/data/capacity/retrieval"
   # Serial tokenization: the tokenizers crate's rayon workers keep spinning
@@ -190,20 +215,22 @@ start_ort_reranker() {
   # tokenize in 3 ms on one thread.
   # setsid -f: fully detached (own session, reparented to init) so this
   # script - and the fleet script that calls it - returns immediately.
-  (cd "$R" && TOKENIZERS_PARALLELISM=false RERANK_SPIN=1 \
-      RERANK_THREADS="$RERANK_THREADS" RERANK_MAX_QUEUE="$RERANK_MAX_QUEUE" \
-      RERANK_MODEL_DIR="$INT8_DIR" \
-      setsid -f taskset -c "$RERANK_CPUS" .venv/bin/uvicorn scripts.ort_rerank_server:app \
-        --workers "$RERANK_WORKERS" --port 8881 --host 127.0.0.1 --log-level warning \
-        > data/capacity/retrieval/ort-rerank.log 2>&1 < /dev/null)
-  echo "started ort-rerank ($INT8_DIR) on :8881, cpus $RERANK_CPUS, ${RERANK_WORKERS}x${RERANK_THREADS} threads"
+  for ((i = 0; i < RERANK_WORKERS; i++)); do
+    (cd "$R" && TOKENIZERS_PARALLELISM=false RERANK_SPIN=1 \
+        RERANK_THREADS="$RERANK_THREADS" RERANK_MAX_QUEUE="$RERANK_MAX_QUEUE" \
+        RERANK_MODEL_DIR="$INT8_DIR" \
+        setsid -f taskset -c "${RERANK_CPUSETS[$i]}" .venv/bin/uvicorn scripts.ort_rerank_server:app \
+          --workers 1 --port $((8881 + i)) --host 127.0.0.1 --log-level warning \
+          > "data/capacity/retrieval/ort-rerank-$((8881 + i)).log" 2>&1 < /dev/null)
+    echo "started ort-rerank ($INT8_DIR) on :$((8881 + i)), cpus ${RERANK_CPUSETS[$i]}, ${RERANK_THREADS} threads"
+  done
 }
 
 build_int8_reranker
 start_ort_reranker
-echo "retrieval allocations: embed cpus $EMBED_CPUS, rerank cpus $RERANK_CPUS (${RERANK_WORKERS}x${RERANK_THREADS})"
+echo "retrieval allocations: embed cpus $EMBED_CPUS, rerank cpus $RERANK_CPUS (${RERANK_WORKERS} servers x ${RERANK_THREADS} threads: $(IFS=';'; echo "${RERANK_CPUSETS[*]}"))"
 
-for port in 8880 8881; do
+for port in 8880 $(seq 8881 $((8880 + RERANK_WORKERS))); do
   for _ in $(seq 1 120); do
     curl -sf "localhost:$port/health" >/dev/null 2>&1 && break
     sleep 5

@@ -284,19 +284,60 @@ def _ensure_stats() -> None:
         _stats_task = asyncio.get_event_loop().create_task(_stats_flush_loop())
 
 
-async def _post_backpressure(url: str, payload: dict):
+def _rerank_urls() -> list[str]:
+    """The reranker tier as a list of independent server processes.
+
+    CAPACITY_RERANK_URL may name several servers, comma-separated. The
+    tier used to be one uvicorn socket shared by four worker processes;
+    with keep-alive connections the kernel hands each CONNECTION, not each
+    request, to a worker, and 229 of 269 executor connections landed on one
+    worker. That worker's queue filled (429s, 5-8 s waits) while the other
+    three idled at a third of the tier's pair budget, and which series hit
+    it depended on how the connections fell at warm-up. One process per
+    server, each on its own cores, with the client choosing per CALL, makes
+    the tier's throughput the sum of its processes."""
+    raw = os.getenv("CAPACITY_RERANK_URL") or ""
+    return [u.strip().rstrip("/") for u in raw.split(",") if u.strip()]
+
+
+_rerank_next = None
+
+
+def _pick_rerank_url() -> tuple[str, list[str]]:
+    """Round-robin over the reranker servers, starting at a per-process
+    random offset so 112 executors do not march in lockstep; returns the
+    chosen server and the others as fallbacks for a refusal."""
+    global _rerank_next
+    urls = _rerank_urls()
+    if _rerank_next is None:
+        _rerank_next = random.randrange(len(urls))
+    i = _rerank_next % len(urls)
+    _rerank_next = i + 1
+    return urls[i], urls[i + 1:] + urls[:i]
+
+
+async def _post_backpressure(url: str, payload: dict,
+                             alternates: list[str] | None = None):
     """POST to a sized model service, treating 429/503 as backpressure.
 
     A bounded tier SHEDS when its queue fills; the correct client behavior
     is to wait and retry, so tier saturation shows up as retrieval LATENCY
     in the ledger (the honest, judgeable signal) rather than as 18,500
     failed workflows (observed when 429 was treated as fatal). Backoff is
-    capped; a tier that stays saturated past the cap is a real failure."""
+    capped; a tier that stays saturated past the cap is a real failure.
+
+    `alternates` are the tier's other server processes: a refusal moves the
+    call to the next one after a 50 ms pause, and the escalating backoff
+    only starts once every server has refused in turn."""
     import httpx
     delay = 0.25
     waited = 0.0
     resets = 0
+    refusals = 0
     stage = url.rsplit("/", 1)[-1]
+    path = "/" + stage
+    urls = [url] + [a.rstrip("/") + path for a in (alternates or [])
+                    if a.rstrip("/") + path != url]
     while True:
         try:
             t_gate = time.perf_counter()
@@ -323,6 +364,12 @@ async def _post_backpressure(url: str, payload: dict):
             return r
         if waited >= 120.0:
             r.raise_for_status()
+        refusals += 1
+        if len(urls) > 1:
+            url = urls[refusals % len(urls)]
+            if refusals % len(urls):
+                await asyncio.sleep(0.05 * (0.8 + 0.4 * random.random()))
+                continue
         sleep_for = min(delay, 120.0 - waited) * (0.8 + 0.4 * random.random())
         _note(f"{stage}_429_backoff_ms", sleep_for * 1000.0)
         await asyncio.sleep(sleep_for)
@@ -346,9 +393,9 @@ async def cross_rerank(query: str, candidates: list[int],
     """Real cross-encoder reranking via the TEI service (v16b): one call
     scoring (query, body) for every candidate. Returns None when no
     reranker is configured (the lexical v16a reranker then runs)."""
-    url = os.getenv("CAPACITY_RERANK_URL")
-    if not url:
+    if not _rerank_urls():
         return None
+    url, alternates = _pick_rerank_url()
     # Two-stage rerank, standard practice: the cheap lexical scorer
     # prefilters the fused list to 16, and the cross-encoder spends its
     # cycles only on those. Depth 50 cost ~49% of a 128-thread host at 25
@@ -371,7 +418,7 @@ async def cross_rerank(query: str, candidates: list[int],
         r = await _post_backpressure(
             f"{url}/rerank",
             {"query": query, "texts": texts[start:start + 32],
-             "truncate": True})
+             "truncate": True}, alternates=alternates)
         for item in r.json():
             scored.append((float(item["score"]), ids[start + item["index"]]))
     scored.sort(reverse=True)

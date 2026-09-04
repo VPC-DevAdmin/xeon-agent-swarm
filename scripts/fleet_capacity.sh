@@ -83,8 +83,12 @@ done
 # The tier publishes the box's remaining whole cores; instances and their
 # executors are pinned there so the tier's cores are its own.
 REST_CPUS=""
+RERANK_URLS=""
 if [ -f "$R/data/capacity/retrieval/allocation.env" ]; then
   REST_CPUS=$(grep ^REST_CPUS= "$R/data/capacity/retrieval/allocation.env" | cut -d= -f2)
+  # The reranker tier's server processes, one per port; executors rotate
+  # across them per call (see provision_retrieval.sh).
+  RERANK_URLS=$(grep ^RERANK_URLS= "$R/data/capacity/retrieval/allocation.env" | cut -d= -f2)
 fi
 PIN=""
 [ -n "$REST_CPUS" ] && PIN="taskset -c $REST_CPUS"
@@ -121,7 +125,7 @@ for i in $(seq 1 "$K"); do
       CAPACITY_MODEL_DECODE_TPS="${CAPACITY_MODEL_DECODE_TPS:-0}" \
       CAPACITY_MODEL_PREFILL_TPS="${CAPACITY_MODEL_PREFILL_TPS:-0}" \
       CAPACITY_EMBED_URL="${CAPACITY_EMBED_URL:-http://127.0.0.1:8880}" \
-      CAPACITY_RERANK_URL="${CAPACITY_RERANK_URL:-http://127.0.0.1:8881}" \
+      CAPACITY_RERANK_URL="${CAPACITY_RERANK_URL:-${RERANK_URLS:-http://127.0.0.1:8881}}" \
       SCHEDULER_ENABLED=0 \
       nohup $PIN .venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 \
         --port $PORT --log-level warning \

@@ -160,3 +160,45 @@ def test_rerank_depth_is_a_declared_parameter(monkeypatch):
     assert rt.rerank_depth() == 48
     from backend.capacity import controller as ctl
     assert "rerank=48" in ctl.CapacityTest._serving_tier_tag()
+
+
+def test_rerank_servers_rotate_per_call(monkeypatch):
+    """The tier is several server processes; calls rotate across them from
+    a per-process random offset (so a fleet of executors does not march in
+    lockstep), and each call carries the others as fallbacks."""
+    import backend.capacity.retrieval as rt
+    monkeypatch.setenv("CAPACITY_RERANK_URL",
+                       "http://a:8881, http://a:8882/,http://a:8883")
+    rt._rerank_next = None
+    picks = [rt._pick_rerank_url() for _ in range(6)]
+    urls = [u for u, _ in picks]
+    assert sorted(set(urls)) == ["http://a:8881", "http://a:8882", "http://a:8883"]
+    assert urls[:3] == urls[3:]                       # round-robin
+    assert all(len(alts) == 2 and u not in alts for u, alts in picks)
+
+
+def test_refusal_moves_to_the_next_server_before_backing_off(monkeypatch):
+    """A 503 from one server's full queue is tried on the next server after
+    ~50 ms; the escalating backoff starts only once every server refused."""
+    import asyncio
+    import time
+    import backend.capacity.retrieval as rt
+    rt._tier_gate = None
+    seen = []
+
+    class _Resp:
+        def __init__(self, code): self.status_code = code
+        def raise_for_status(self): pass
+        def json(self): return []
+
+    class _Client:
+        async def post(self, url, json=None):
+            seen.append(url)
+            return _Resp(503 if url.startswith("http://a:8881") else 200)
+
+    monkeypatch.setattr(rt, "_http", lambda: _Client())
+    t0 = time.perf_counter()
+    asyncio.run(rt._post_backpressure("http://a:8881/rerank", {},
+                                      alternates=["http://a:8882", "http://a:8883"]))
+    assert seen == ["http://a:8881/rerank", "http://a:8882/rerank"]
+    assert time.perf_counter() - t0 < 0.2
