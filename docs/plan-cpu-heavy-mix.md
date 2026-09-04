@@ -66,6 +66,20 @@ socket at the conservative band. The tile is designed to land inside the
 whatever the certified set measures, with the formula and the band
 beside it.
 
+| Serving point (generation tok/s per GPU) | Typical mix (certified) | Heavy tile baseline (~19 core-s/wf) | Heavy tile, compute steps doubled (~34 core-s/wf) | Lab's own ops tasks |
+|---|---|---|---|---|
+| 1,300 (lab window average, draining fleet) | 1 : 61 | 1 : 4.0 | 1 : 2.2 | 1 : 8 to 1 : 20 |
+| 2,400 (lab peak, conservative) | 1 : 33 | 1 : 2.1 | 1 : 1.2 | |
+| 3,800 (lab peak, best) | 1 : 21 | 1 : 1.4 | 1 : 0.7 | |
+
+Estimated socket-to-GPU ratio, one 64-core socket against one RTX PRO
+6000 serving the lab's 35B mixture-of-experts model. The target is the
+heavy tile's baseline row: about 1:2 at the conservative serving point
+and 1:1.4 at the best measured one, with 1:1 reached by doubling the
+compute-shaped steps or by a GPU that delivers more tokens than the lab's
+peaks. Planning estimates from the measured cost laws; the certified set
+replaces them.
+
 ## Where small-model inference runs is a sensitivity, not the result
 
 Validation is the tempting lever, and the plan deliberately keeps it out
