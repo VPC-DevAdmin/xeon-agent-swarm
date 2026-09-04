@@ -1,0 +1,19 @@
+archetype costs -> data/capacity/archetypes-9400-20260904-172211 (rates 2 4, hold 480)
+=== ingestion (17:22:11)
+  -> data/capacity/series-9400-20260904-172211
+=== code_agent (17:40:51)
+  -> data/capacity/series-9401-20260904-174051
+=== deep_research (17:59:37)
+  -> data/capacity/series-9402-20260904-175937
+=== analyst_xl (18:18:29)
+  -> data/capacity/series-9403-20260904-181829
+| archetype | p50 / p95 (s) | host core-s/wf | of which sandbox | reranker (pair law) | executors + search + records + orchestration | notes |
+|---|---|---|---|---|---|---|
+Traceback (most recent call last):
+  File "/home/devadmin/work/repos/xeon-agent-swarm/scripts/archetype_cost_summary.py", line 72, in <module>
+    main()
+  File "/home/devadmin/work/repos/xeon-agent-swarm/scripts/archetype_cost_summary.py", line 67, in main
+    print(f"| {sid} | {p50:.0f} / {p95:.0f} | {total:.2f} | {slope['sandbox']:.2f} | {rerank:.2f} | {orch:.2f} | slope over {r1:.1f} to {r2:.1f} wf/s |")
+                      ^^^^^^^^^
+TypeError: unsupported format string passed to NoneType.__format__
+ARCHETYPES DONE data/capacity/archetypes-9400-20260904-172211

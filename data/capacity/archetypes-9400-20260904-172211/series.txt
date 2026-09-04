@@ -1,0 +1,4 @@
+ingestion data/capacity/series-9400-20260904-172211
+code_agent data/capacity/series-9401-20260904-174051
+deep_research data/capacity/series-9402-20260904-175937
+analyst_xl data/capacity/series-9403-20260904-181829
