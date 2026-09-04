@@ -19,8 +19,8 @@ def _rlimits(monkeypatch):
 def test_build_job_compiles_and_its_tests_pass(monkeypatch):
     monkeypatch.setattr(sandbox, "BUILD_WORK", 20_000)
     r = asyncio.run(sandbox.run_job("build", 11))
-    assert r["ok"] and r["failures"] == 0 and r["tests"] == 361
-    assert r["functions"] == 720 and r["lines"] > 5000 and r["cpu_ms"] > 0
+    assert r["ok"] and r["failures"] == 0 and r["tests"] == 721
+    assert r["functions"] == 1440 and r["lines"] > 10000 and r["cpu_ms"] > 0
     again = asyncio.run(sandbox.run_job("build", 11))
     assert again["digest"] == r["digest"]                      # deterministic for a seed
 
@@ -42,7 +42,7 @@ def test_ingest_job_parses_and_chunks(tmp_path, monkeypatch):
 
 
 def test_xl_size_is_the_data_job_at_nine_times_the_rows():
-    assert sandbox.SIZES["xl"] == 30_000_000
+    assert sandbox.SIZES["xl"] == 60_000_000
     assert sandbox.wall_limit("xl") > sandbox.wall_limit("heavy")
 
 
@@ -51,7 +51,7 @@ def test_execute_tool_reports_each_kind(tmp_path, monkeypatch):
     monkeypatch.setattr(sandbox, "BUILD_WORK", 20_000)
     tool = build_bench_execute_tool()
     out = asyncio.run(tool.coroutine(task="build the library", size="build"))
-    assert out.startswith("[bench_execute] build:") and "0 failures" in out and "EXECUTION COMPLETE" in out
+    assert out.startswith("[bench_execute] build:") and " 0 failures" in out and "EXECUTION COMPLETE" in out
     out = asyncio.run(tool.coroutine(task="repair the service", size="ops"))
     assert "service up and answering" in out
     subprocess.run([sys.executable, "scripts/make_ingest_docs.py", "--docs", "1", "--pages", "4",

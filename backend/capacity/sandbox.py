@@ -36,7 +36,7 @@ JOB_SCRIPT = Path(__file__).with_name("sandbox_job.py")
 # Rows per job, calibrated on the reference Xeon (one core, 3.6 GHz):
 # light ~0.25 core-seconds, heavy ~2 core-seconds, interpreter start and
 # numpy import included. The job reads this from argv - one source.
-SIZES = {"light": 450_000, "heavy": 3_300_000, "xl": 30_000_000}
+SIZES = {"light": 450_000, "heavy": 3_300_000, "xl": 60_000_000}
 # Job KINDS beyond the data job (CPU-heavy mix, see docs/plan-cpu-heavy-mix.md):
 #   build   generate a C project, compile it with gcc -O2, run its property
 #           tests (the shape of a code agent's build-and-test step)
@@ -50,13 +50,19 @@ KINDS = ("light", "heavy", "xl", "build", "ops", "ingest")
 KIND_SCRIPTS = {"build": Path(__file__).with_name("sandbox_build_job.py"),
                 "ops": Path(__file__).with_name("sandbox_ops_job.py"),
                 "ingest": Path(__file__).with_name("sandbox_ingest_job.py")}
-BUILD_WORK = int(os.getenv("CAPACITY_BUILD_WORK", "3000000") or 3000000)   # inputs per property test (~4 s of tests on the reference Xeon)
-INGEST_PAGES = int(os.getenv("CAPACITY_INGEST_PAGES", "200") or 200)
+# Declared job sizes for the heavy mix (docs/plan-cpu-heavy-mix.md): the
+# compute-shaped steps run at twice the first measured size, so the
+# certified set is measured at one declared size.
+BUILD_WORK = int(os.getenv("CAPACITY_BUILD_WORK", "3000000") or 3000000)   # inputs per property test
+BUILD_FILES = int(os.getenv("CAPACITY_BUILD_FILES", "12") or 12)          # translation units of 60 functions
+INGEST_PAGES = int(os.getenv("CAPACITY_INGEST_PAGES", "400") or 400)
 INGEST_DOCS = os.getenv("CAPACITY_INGEST_DOCS", "data/capacity/ingest")
 CPU_LIMIT_S = int(os.getenv("CAPACITY_SANDBOX_CPU_S", "30") or 30)
 # Heavier kinds get proportionate limits; a limit is a runaway guard, never a
 # budget the job is expected to approach.
-KIND_LIMITS = {"xl": (150, 300), "build": (150, 300), "ops": (60, 180), "ingest": (150, 300)}
+KIND_LIMITS = {"xl": (300, 600), "build": (300, 600), "ops": (60, 180), "ingest": (300, 600)}
+# Address-space cap per kind (bytes): the XL job holds ten 60M-element arrays.
+KIND_MEM = {"xl": 24 * 1024 ** 3}
 # Address-space limit, not resident: numpy + OpenBLAS reserve several GB of
 # virtual space at import even single-threaded, so the cap is 8 GB while a
 # heavy job's resident set is ~0.5 GB.
@@ -102,7 +108,7 @@ def _command(kind: str, seed: int) -> list[str]:
     if kind in SIZES:
         script = [str(JOB_SCRIPT), kind, str(seed), site, str(SIZES[kind])]
     elif kind == "build":
-        script = [str(KIND_SCRIPTS[kind]), str(seed), str(BUILD_WORK)]
+        script = [str(KIND_SCRIPTS[kind]), str(seed), str(BUILD_WORK), str(BUILD_FILES)]
     elif kind == "ops":
         script = [str(KIND_SCRIPTS[kind]), str(seed)]
     elif kind == "ingest":
@@ -112,7 +118,7 @@ def _command(kind: str, seed: int) -> list[str]:
         raise ValueError(f"unknown job kind {kind!r}")
     inner = [*env_part, sys.executable, "-I", "-S", *script]
     cpu_s, _wall = KIND_LIMITS.get(kind, (CPU_LIMIT_S, WALL_LIMIT_S))
-    limits = ["prlimit", f"--cpu={cpu_s}", f"--as={MEM_LIMIT_BYTES}",
+    limits = ["prlimit", f"--cpu={cpu_s}", f"--as={KIND_MEM.get(kind, MEM_LIMIT_BYTES)}",
               "--fsize=1048576"] if shutil.which("prlimit") else []
     if isolation_mode() == "netns":
         # Drop back to the invoking user by uid, not $USER: executors run

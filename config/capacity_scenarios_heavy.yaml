@@ -22,8 +22,8 @@ e2e_workflows:
   code_agent:
     name: "Code agent: build and test (e2e, heavy mix)"
     think_ms: 3000
-    # Three workers each build the working tree's library with gcc -O2 in
-    # the sandbox and run its property tests (backend/capacity/
+    # Three workers each build the working tree's library (twelve units of
+    # sixty functions) with gcc -O2 in the sandbox and run its property tests (backend/capacity/
     # sandbox_build_job.py), then record. The verifier is the test result.
     toolless: true
     tools: [bench_execute, bench_record]
@@ -68,7 +68,7 @@ e2e_workflows:
   ingestion:
     name: "Ingestion agent: parse, embed, index (e2e, heavy mix)"
     think_ms: 3000
-    # One worker parses a seeded selection of PDF pages in the sandbox
+    # One worker parses a seeded selection of 400 PDF pages in the sandbox
     # (sandbox_ingest_job.py), then the executor embeds the chunks on the
     # CPU embedder and indexes them (toolbox.bench_execute, kind ingest),
     # records, and writes the ingest summary.
@@ -89,8 +89,8 @@ e2e_workflows:
   analyst_xl:
     name: "Data analysis pipeline, XL (e2e, heavy mix)"
     think_ms: 3000
-    # The data analyst with its three heavy jobs at the XL size (30M rows
-    # each, nine times the reference job): the same aggregation, the same
+    # The data analyst with its three heavy jobs at the XL size (60M rows
+    # each, eighteen times the reference job): the same aggregation, the same
     # report, nine times the sandbox work per workflow.
     toolless: true
     tools: [bench_execute, bench_record]

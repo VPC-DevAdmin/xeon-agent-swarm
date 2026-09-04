@@ -1,11 +1,11 @@
 """The sandboxed build-and-test job (runs in an isolated interpreter; see
 sandbox.py).
 
-    python -I -S sandbox_build_job.py <seed> <work>
+    python -I -S sandbox_build_job.py <seed> <work> <files>
 
 The shape of a code agent's step: the working tree holds a small C
 library, the agent builds it and runs its test suite. Here the library is
-generated from the seed (six translation units of invertible 64-bit
+generated from the seed (`files` translation units of sixty invertible 64-bit
 mixing functions, each with its inverse derived at generation time from
 the modular inverse of its multiplier), compiled with gcc -O2, and tested
 by a harness that checks, for every function, that inverse(f(x)) == x over
@@ -25,8 +25,9 @@ import tempfile
 import time
 
 seed = int(sys.argv[1])
-WORK = int(sys.argv[2]) if len(sys.argv) > 2 else 1_500_000
-FILES, PER_FILE = 6, 60
+WORK = int(sys.argv[2]) if len(sys.argv) > 2 else 3_000_000
+FILES = int(sys.argv[3]) if len(sys.argv) > 3 else 12
+PER_FILE = 60
 MASK = (1 << 64) - 1
 t0 = time.perf_counter()
 rng = random.Random(seed)
