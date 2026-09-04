@@ -43,7 +43,7 @@ alone before the tile is certified, as the typical archetypes were.
 |---|---|---|---|---|---|
 | Code agent (build and test) | 2 | ~118 core-s | 13 | ~1,800 | three workers each build a real working tree from vendored source in the sandbox, Lua 5.4.7 through its own Makefile and the SQLite 3.50.4 amalgamation, both with gcc -O2, and run both suites (Lua's own tests; an integration script against the built engine: schema, 300k rows, index, aggregates, integrity check); measured 39 core-s per build-and-test step (38 building 327,000 lines across 63 files, 1.1 for the suites); the verifier is the suites' result |
 | Deep research | 1 | ~13 core-s | 13 | ~1,800 | three retrievals at rerank depth 128 (11 core-s of reranking on the pair law) plus BM25 and fusion |
-| Ingestion agent | 1 | ~7 core-s | 4 | ~550 | one worker parses 400 PDF pages in the sandbox (measured 3.9 core-s), then the executor embeds the ~1,900 chunks on the CPU embedder and indexes them; the check query is the verifier |
+| Ingestion agent | 1 | ~25 core-s | 4 | ~550 | one worker parses 100 PDF pages in the sandbox (about 1 core-s), then the executor embeds the ~480 chunks on a separate ingest embedder (measured 22 chunks per second per core in FP32, so about 22 core-s of embedding) and indexes them; the check query is the verifier. Ingestion is embedding-bound: the parse is trivial next to it, which is why the ingest embedder is its own tier |
 | Analyst XL | 1 | ~94 core-s | 13 | ~1,800 | three sandboxed jobs over 60M rows each (measured 31.1 core-s per job, eighteen times the reference job) |
 | Task ticket | 1 | 0.54 core-s | 4 | 550 | unchanged; the short-lived agent every deployment has |
 
@@ -63,9 +63,12 @@ serving tier, so the ratio moves only through work nobody can call a
 lever.
 
 Tile estimate at the declared sizes, from the measured per-job costs and
-the reference orchestration floors: **about 58 core-s and 1,380 generated
-tokens per workflow, 42 core-ms per token**, which is 0.6 GPUs per socket
-at 2,400 tok/s, 0.4 at 3,800, and 1.2 at the lab's window average. The published number is whatever
+the reference orchestration floors: **about 59 core-s and 1,380 generated
+tokens per workflow, 43 core-ms per token**, which is 0.6 GPUs per socket
+at 2,400 tok/s, 0.4 at 3,800, and 1.2 at the lab's window average. The
+first check plateau of the tile at 1.2 workflows/s (series 9490, before
+the ingest tier was sized) held with the four other archetypes at their
+stand-alone latencies and the host at 58% of threads. The published number is whatever
 the certified set measures, with the formula and the band beside it.
 
 | Serving point (generation tok/s per GPU) | Typical mix (certified) | Heavy tile at the declared sizes (~58 core-s/wf) | Lab's own ops tasks |
