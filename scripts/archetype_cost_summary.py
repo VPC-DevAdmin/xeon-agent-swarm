@@ -13,6 +13,14 @@ RETRIEVALS = {"research_brief": 3, "comparison": 1, "digest": 0, "data_analysis"
 JOBS = {"research_brief": (0, 0), "comparison": (1, 0), "digest": (0, 0), "data_analysis": (0, 3), "task_ticket": (0, 0)}  # (light, heavy)
 
 
+
+def _rate_of(path: str) -> float:
+    """Per-instance rate from a series file name; integers stay integers
+    (rate-8-i1 -> 8), fractional rates are floats (rate-0.5-i1 -> 0.5)."""
+    import re as _re
+    r = _re.search(r"rate-([0-9.]+)-i", path).group(1)
+    return int(r) if r.isdigit() else float(r)
+
 def pct(xs, q):
     xs = sorted(xs); return xs[min(len(xs) - 1, int(round(q * (len(xs) - 1))))] if xs else None
 
@@ -41,7 +49,7 @@ def main():
     print("|---|---|---|---|---|---|---|")
     out = {}
     for sid, sdir in rows:
-        rates = sorted({int(re.search(r"rate-(\d+)-i", f).group(1)) for f in glob.glob(f"{sdir}/rate-*-i*-evidence-*.jsonl.gz")})
+        rates = sorted({_rate_of(f) for f in glob.glob(f"{sdir}/rate-*-i*-evidence-*.jsonl.gz")})
         if len(rates) < 2:
             print(f"| {sid} | (one rate only) |"); continue
         (r1, b1, p50, p95), (r2, b2, _, _) = plateau_point(sdir, rates[0]), plateau_point(sdir, rates[-1])

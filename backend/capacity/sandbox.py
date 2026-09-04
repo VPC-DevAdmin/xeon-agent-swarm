@@ -50,7 +50,7 @@ KINDS = ("light", "heavy", "xl", "build", "ops", "ingest")
 KIND_SCRIPTS = {"build": Path(__file__).with_name("sandbox_build_job.py"),
                 "ops": Path(__file__).with_name("sandbox_ops_job.py"),
                 "ingest": Path(__file__).with_name("sandbox_ingest_job.py")}
-BUILD_WORK = int(os.getenv("CAPACITY_BUILD_WORK", "1500000") or 1500000)   # inputs per property test
+BUILD_WORK = int(os.getenv("CAPACITY_BUILD_WORK", "3000000") or 3000000)   # inputs per property test (~4 s of tests on the reference Xeon)
 INGEST_PAGES = int(os.getenv("CAPACITY_INGEST_PAGES", "200") or 200)
 INGEST_DOCS = os.getenv("CAPACITY_INGEST_DOCS", "data/capacity/ingest")
 CPU_LIMIT_S = int(os.getenv("CAPACITY_SANDBOX_CPU_S", "30") or 30)

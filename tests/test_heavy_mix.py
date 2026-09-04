@@ -64,24 +64,37 @@ def test_execute_tool_reports_each_kind(tmp_path, monkeypatch):
 
 
 def test_stand_in_policies_pick_the_kind_and_depth():
-    sys.path.insert(0, "scripts")
-    import mock_router as mr
-    tools = ["bench_execute", "bench_record", "bench_retrieve", "task"]
+    from fastapi.testclient import TestClient
+    from tests.test_workload_v15 import _mock_router
+    client = TestClient(_mock_router().app)
+    exec_tools = [{"type": "function", "function": {"name": n, "parameters": {}}}
+                  for n in ("bench_execute", "bench_record")]
+    ret_tools = [{"type": "function", "function": {"name": n, "parameters": {}}}
+                 for n in ("bench_retrieve", "bench_record")]
 
-    def worker_call(obj, system="You are the analysis worker."):
-        body = {"model": "auto", "messages": [{"role": "system", "content": system},
-                                                {"role": "user", "content": obj}],
-                "tools": [{"type": "function", "function": {"name": t}} for t in tools]}
-        resp = asyncio.run(mr.chat_completions_impl(body)) if hasattr(mr, "chat_completions_impl") else None
-        return resp
-    # policy selection is a pure function of the objective text: exercise it directly
-    cases = {"Using ONLY the build available": "build", "Using ONLY the repository": "ops",
-             "Using ONLY the document set": "ingest", "Using ONLY the dataset (XL) available": "xl",
-             "Using ONLY the dataset available": "heavy"}
-    src = open("scripts/mock_router.py").read()
-    for marker, kind in cases.items():
-        assert marker.split(" available")[0] in src and f'"{kind}"' in src
-    assert 'rerank depth (\\d+)' in src
+    def first_call(system, obj, tools):
+        r = client.post("/v1/chat/completions", json={
+            "model": "auto", "tools": tools,
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": obj}]})
+        assert r.status_code == 200, r.text
+        calls = r.json()["choices"][0]["message"].get("tool_calls") or []
+        fn = calls[0]["function"]
+        return fn["name"], json.loads(fn["arguments"])
+
+    research = "You are a research specialist. Gather facts."
+    general = "You are a general-purpose specialist."
+    for obj, kind in (("Research the topic: Using ONLY the build available through the execution tool", "build"),
+                      ("Handle this task end to end: Using ONLY the repository available through the execution tool", "ops"),
+                      ("Handle this task end to end: Using ONLY the document set available through the execution tool", "ingest"),
+                      ("Research the topic: Using ONLY the dataset (XL) available through the execution tool", "xl"),
+                      ("Research the topic: Using ONLY the dataset available through the execution tool", "heavy")):
+        name, args = first_call(general if "Handle" in obj else research, obj, exec_tools)
+        assert (name, args["size"]) == ("bench_execute", kind), (obj, name, args)
+    name, args = first_call(research, "Research the topic: Using ONLY the field notes below, and retrieving at rerank depth 128, write a brief", ret_tools)
+    assert name == "bench_retrieve" and args["depth"] == 128
+    name, args = first_call(research, "Research the topic: Using ONLY the field notes below, write a brief", ret_tools)
+    assert name == "bench_retrieve" and "depth" not in args
 
 
 def test_heavy_tile_is_selected_by_name(monkeypatch):

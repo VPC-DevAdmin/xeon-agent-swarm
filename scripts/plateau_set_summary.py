@@ -23,6 +23,14 @@ from backend.capacity.evidence import read_evidence
 from backend.capacity.judge import plateau
 
 
+
+def _rate_of(path: str) -> float:
+    """Per-instance rate from a series file name; integers stay integers
+    (rate-8-i1 -> 8), fractional rates are floats (rate-0.5-i1 -> 0.5)."""
+    import re as _re
+    r = _re.search(r"rate-([0-9.]+)-i", path).group(1)
+    return int(r) if r.isdigit() else float(r)
+
 def pct(xs, q):
     xs = sorted(xs)
     return xs[min(len(xs) - 1, int(round(q * (len(xs) - 1))))] if xs else None
@@ -30,7 +38,7 @@ def pct(xs, q):
 
 def judge_series(series_dir: str) -> dict:
     out = {}
-    rates = sorted({int(re.search(r"rate-(\d+)-i", f).group(1))
+    rates = sorted({_rate_of(f)
                     for f in glob.glob(f"{series_dir}/rate-*-i*-evidence-*.jsonl.gz")})
     for r in rates:
         files = sorted(glob.glob(f"{series_dir}/rate-{r}-i*-evidence-*.jsonl.gz"))

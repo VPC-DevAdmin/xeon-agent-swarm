@@ -11,8 +11,14 @@ echo "archetype costs -> $OUT (rates $LO $HI, hold $HOLD)" | tee "$OUT/log"
 # Per-archetype rates keep each run below its own knee (a researcher alone
 # at 4/s per instance is 48 rerank calls/s, past a 14-core tier), and the
 # task agent runs faster so its small cost clears the floor's noise.
-rates_for() { case "$1" in research_brief) echo "1 2";; task_ticket) echo "4 8";; *) echo "$LO $HI";; esac; }
-for sid in task_ticket digest comparison research_brief data_analysis; do
+# Heavy-mix archetypes run at fractional per-instance rates: alone, each
+# saturates the box between 1 and 3 workflows/s box-wide.
+rates_for() { case "$1" in
+  research_brief) echo "1 2";; task_ticket) echo "4 8";;
+  code_agent) echo "0.25 0.5";; analyst_xl) echo "0.15 0.3";; deep_research) echo "0.15 0.3";;
+  ingestion) echo "0.5 1";; ops_task) echo "2 4";;
+  *) echo "$LO $HI";; esac; }
+for sid in ${ARCHETYPES:-task_ticket digest comparison research_brief data_analysis}; do
   echo "=== $sid ($(date +%H:%M:%S))" | tee -a "$OUT/log"
   set -- $(rates_for "$sid")
   FLEET_MIX=custom FLEET_SCENARIOS="[\"$sid\"]" PLATEAU_HOLD=$HOLD scripts/plateau_series.sh "$SEED" "$1" "$2" > "$OUT/$sid.log" 2>&1
