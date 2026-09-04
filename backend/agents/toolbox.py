@@ -209,7 +209,7 @@ def build_bench_tool() -> StructuredTool:
 class _BenchExecuteArgs(BaseModel):
     task: str = Field(description="what to compute over the dataset")
     size: str = Field(default="light",
-                      description="job: light, heavy or xl (data), build, ops, or ingest")
+                      description="job: light, heavy or xl (data), build, or ingest")
 
 
 async def _finish_ingest(r: dict) -> str:
@@ -265,17 +265,11 @@ def build_bench_execute_tool() -> StructuredTool:
         if not r.get("ok"):
             raise RuntimeError(f"sandboxed job failed: {r.get('error')}")
         if kind == "build":
-            return (f"[bench_execute] build: {r['files']} files, {r['lines']:,} lines, "
-                    f"{r['functions']} functions compiled in {r['compile_ms']:.0f}ms; "
-                    f"{r['tests']} tests run in {r['test_ms']:.0f}ms, {r['failures']} failures; "
-                    f"digest {r['digest']} (isolation {r['isolation']}).\n\nEXECUTION COMPLETE. "
+            return (f"[bench_execute] build: {r['project']} ({r['sources']} source files, "
+                    f"{r['lines']:,} lines) built in {r['build_ms']:.0f}ms; test suite "
+                    f"{r['suites']} suites run in {r['test_ms']:.0f}ms, {r['failures']} failures "
+                    f"(isolation {r['isolation']}).\n\nEXECUTION COMPLETE. "
                     "Use these results in your section; do not run the build again for this subtask.")
-        if kind == "ops":
-            return (f"[bench_execute] ops: merged {r['commits']} commits with {r['conflicts']} "
-                    f"conflicting files resolved ({r['resolved']}); {r['checks']} checks, "
-                    f"{r['failures']} failures; service {'up and answering' if r['service_ok'] else 'FAILED'} "
-                    f"(isolation {r['isolation']}).\n\nEXECUTION COMPLETE. Use these results in your "
-                    "section; do not run the task again for this subtask.")
         if kind == "ingest":
             return await _finish_ingest(r)
         return (f"[bench_execute] {size} job over {r['rows']:,} rows finished in "

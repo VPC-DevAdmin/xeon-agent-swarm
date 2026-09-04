@@ -16,19 +16,11 @@ def _rlimits(monkeypatch):
     sandbox._mode = None
 
 
-def test_build_job_compiles_and_its_tests_pass(monkeypatch):
-    monkeypatch.setattr(sandbox, "BUILD_WORK", 20_000)
+def test_build_job_builds_lua_and_its_suite_passes():
     r = asyncio.run(sandbox.run_job("build", 11))
-    assert r["ok"] and r["failures"] == 0 and r["tests"] == 721
-    assert r["functions"] == 1440 and r["lines"] > 10000 and r["cpu_ms"] > 0
-    again = asyncio.run(sandbox.run_job("build", 11))
-    assert again["digest"] == r["digest"]                      # deterministic for a seed
-
-
-def test_ops_job_repairs_the_repository_and_proves_the_service():
-    r = asyncio.run(sandbox.run_job("ops", 5))
-    assert r["ok"] and r["commits"] == 4 and r["conflicts"] == 6 == r["resolved"]
-    assert r["failures"] == 0 and r["service_ok"] is True and r["checks"] >= 10
+    assert r["ok"] and r["failures"] == 0 and r["suites"] >= 1
+    assert r["project"].startswith("lua-5.4.7") and r["sources"] >= 60 and r["lines"] > 25000
+    assert r["build_ms"] > 0 and r["test_ms"] > 0 and r["cpu_ms"] > 0
 
 
 def test_ingest_job_parses_and_chunks(tmp_path, monkeypatch):
@@ -48,12 +40,9 @@ def test_xl_size_is_the_data_job_at_nine_times_the_rows():
 
 def test_execute_tool_reports_each_kind(tmp_path, monkeypatch):
     from backend.agents.toolbox import build_bench_execute_tool
-    monkeypatch.setattr(sandbox, "BUILD_WORK", 20_000)
     tool = build_bench_execute_tool()
-    out = asyncio.run(tool.coroutine(task="build the library", size="build"))
-    assert out.startswith("[bench_execute] build:") and " 0 failures" in out and "EXECUTION COMPLETE" in out
-    out = asyncio.run(tool.coroutine(task="repair the service", size="ops"))
-    assert "service up and answering" in out
+    out = asyncio.run(tool.coroutine(task="build the tree", size="build"))
+    assert out.startswith("[bench_execute] build: lua-5.4.7") and " 0 failures" in out and "EXECUTION COMPLETE" in out
     subprocess.run([sys.executable, "scripts/make_ingest_docs.py", "--docs", "1", "--pages", "4",
                     "--out", str(tmp_path)], check=True, capture_output=True)
     monkeypatch.setattr(sandbox, "INGEST_DOCS", str(tmp_path))
@@ -85,7 +74,6 @@ def test_stand_in_policies_pick_the_kind_and_depth():
     research = "You are a research specialist. Gather facts."
     general = "You are a general-purpose specialist."
     for obj, kind in (("Research the topic: Using ONLY the build available through the execution tool", "build"),
-                      ("Handle this task end to end: Using ONLY the repository available through the execution tool", "ops"),
                       ("Handle this task end to end: Using ONLY the document set available through the execution tool", "ingest"),
                       ("Research the topic: Using ONLY the dataset (XL) available through the execution tool", "xl"),
                       ("Research the topic: Using ONLY the dataset available through the execution tool", "heavy")):
@@ -103,11 +91,11 @@ def test_heavy_tile_is_selected_by_name(monkeypatch):
     sc._file_cache = None
     tile = sc.load_e2e_tile()
     assert tile == {"code_agent": 2, "deep_research": 1, "ingestion": 1, "analyst_xl": 1,
-                    "task_ticket": 1, "ops_task": 1}
-    assert len(sc.e2e_tile_sessions()) == 7
+                    "task_ticket": 1}
+    assert len(sc.e2e_tile_sessions()) == 6
     wfs = sc.load_e2e_workflows()
     assert wfs["code_agent"]["contract"]["llm_calls"] == [13, 13]
-    assert wfs["ops_task"]["contract"]["tool_calls"] == [2, 2]
+    assert wfs["ingestion"]["contract"]["tool_calls"] == [2, 2] and "ops_task" not in wfs
     monkeypatch.setenv("CAPACITY_E2E_TILE", "nope")
     sc._file_cache = None
     with pytest.raises(KeyError):

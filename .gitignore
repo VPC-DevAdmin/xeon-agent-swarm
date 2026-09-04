@@ -249,3 +249,10 @@ data/capacity/**/retrieval/
 
 # generated document set for the ingestion agent (scripts/make_ingest_docs.py)
 data/capacity/ingest/
+
+# vendored project sources for the code agent (tarballs kept; extracted tree is not)
+!data/capacity/build/
+!data/capacity/build/*.tar.gz
+!data/capacity/build/*.zip
+data/capacity/build/src/
+data/capacity/build/.extract.lock

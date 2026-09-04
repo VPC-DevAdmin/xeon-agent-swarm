@@ -16,7 +16,6 @@ e2e_tiles:
     ingestion: 1
     analyst_xl: 1
     task_ticket: 1
-    ops_task: 1
 
 e2e_workflows:
   code_agent:
@@ -32,14 +31,14 @@ e2e_workflows:
     budgets: {max_subagents: 4, max_tool_hops: 3}
     query: >-
       Using ONLY the build available through the execution tool (do not
-      research further), take the mixing-function library through its
-      change: build it and run the test suite, fix what fails, and confirm
-      the digest. Plan EXACTLY three worker subtasks and no more: research
+      research further), take the interpreter and its embedded database
+      through the change: build the tree and run the test suite, fix what
+      fails, and confirm the tests. Plan EXACTLY three worker subtasks and no more: research
       (build the baseline and read the failures), analysis (make the
       change and rebuild), and writing (the change note). Each worker runs
       bench_execute exactly once and then bench_record exactly once, then
       writes its section and stops. Deliverable: the build result, the
-      test counts, the digest, and a change note.
+      test counts, and a change note.
   deep_research:
     name: "Deep research brief (e2e, heavy mix)"
     think_ms: 3000
@@ -109,25 +108,3 @@ e2e_workflows:
       Deliverable: a summary table of the top merchants, the peak hour with
       its load, the p95 and p99 transaction values, and a list of anomalies
       with a one-line explanation each.
-  ops_task:
-    name: "Ops task: repair and verify a service (e2e, heavy mix)"
-    think_ms: 3000
-    # Modeled on the lab study's tasks (nginx logging, git repair, a cert):
-    # one worker repairs a repository with conflicting branches, then
-    # configures, starts and smoke-tests a service inside the sandbox
-    # (sandbox_ops_job.py). Mostly waiting, little compute, by design: the
-    # row that anchors this study to the lab's measured tasks.
-    toolless: true
-    tools: [bench_execute, bench_record]
-    contract: {task_count: [1, 1], steps: [1, 1], llm_calls: [4, 4], validations: [3, 3], tool_calls: [2, 2], tokens_in: [300, 40000]}
-    contract_live: {task_count: [1, 2], steps: [1, 2], llm_calls: [2, 20], validations: [0, 10], tool_calls: [0, 6]}
-    budgets: {max_subagents: 2, max_tool_hops: 3}
-    query: >-
-      Using ONLY the repository available through the execution tool (do not
-      research further), bring the service back: merge the feature branch
-      into main and resolve the conflicts, then configure the service from
-      its config file, start it, and prove its health and routes answer.
-      Plan EXACTLY one worker subtask and no more. The worker runs
-      bench_execute exactly once and then bench_record exactly once, then
-      writes the change summary and stops. Deliverable: the merge result,
-      the checks that passed, and the service status.

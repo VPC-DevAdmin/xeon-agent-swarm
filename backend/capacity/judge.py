@@ -400,9 +400,9 @@ STAGE_GROUPS = {
     "rerank_call": ("rerank_call_ms",),
     "rerank_backoff": ("rerank_429_backoff_ms",),
     "sandbox_wall": ("sandbox_light_wall_ms", "sandbox_heavy_wall_ms", "sandbox_xl_wall_ms",
-                     "sandbox_build_wall_ms", "sandbox_ops_wall_ms", "sandbox_ingest_wall_ms"),
+                     "sandbox_build_wall_ms", "sandbox_ingest_wall_ms"),
     "sandbox_cpu": ("sandbox_light_cpu_ms", "sandbox_heavy_cpu_ms", "sandbox_xl_cpu_ms",
-                    "sandbox_build_cpu_ms", "sandbox_ops_cpu_ms", "sandbox_ingest_cpu_ms"),
+                    "sandbox_build_cpu_ms", "sandbox_ingest_cpu_ms"),
     "ingest_embed": ("ingest_embed_ms",),
     "ingest_index": ("ingest_index_ms",),
 }

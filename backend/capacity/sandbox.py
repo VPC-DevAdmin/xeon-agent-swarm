@@ -38,29 +38,23 @@ JOB_SCRIPT = Path(__file__).with_name("sandbox_job.py")
 # numpy import included. The job reads this from argv - one source.
 SIZES = {"light": 450_000, "heavy": 3_300_000, "xl": 60_000_000}
 # Job KINDS beyond the data job (CPU-heavy mix, see docs/plan-cpu-heavy-mix.md):
-#   build   generate a C project, compile it with gcc -O2, run its property
-#           tests (the shape of a code agent's build-and-test step)
-#   ops     repair a git repository with conflicting branches, then configure,
-#           start and smoke-test a small service (the shape of the lab's
-#           install-configure-verify tasks; mostly waiting, little compute)
+#   build   build a real project from vendored source (Lua 5.4.7, plus the
+#           SQLite amalgamation when present) and run its test suite: the
+#           shape of a code agent's build-and-test step
 #   ingest  parse a set of PDF pages, normalize and chunk the text (the
 #           embedding and indexing happen on the executor, see toolbox)
 # Each kind has its own script; per-kind limits below.
-KINDS = ("light", "heavy", "xl", "build", "ops", "ingest")
+KINDS = ("light", "heavy", "xl", "build", "ingest")
 KIND_SCRIPTS = {"build": Path(__file__).with_name("sandbox_build_job.py"),
-                "ops": Path(__file__).with_name("sandbox_ops_job.py"),
                 "ingest": Path(__file__).with_name("sandbox_ingest_job.py")}
-# Declared job sizes for the heavy mix (docs/plan-cpu-heavy-mix.md): the
-# compute-shaped steps run at twice the first measured size, so the
-# certified set is measured at one declared size.
-BUILD_WORK = int(os.getenv("CAPACITY_BUILD_WORK", "3000000") or 3000000)   # inputs per property test
-BUILD_FILES = int(os.getenv("CAPACITY_BUILD_FILES", "12") or 12)          # translation units of 60 functions
+BUILD_SRC = os.getenv("CAPACITY_BUILD_SRC", "data/capacity/build")   # vendored tarballs live here
+# Declared job sizes for the heavy mix (docs/plan-cpu-heavy-mix.md).
 INGEST_PAGES = int(os.getenv("CAPACITY_INGEST_PAGES", "400") or 400)
 INGEST_DOCS = os.getenv("CAPACITY_INGEST_DOCS", "data/capacity/ingest")
 CPU_LIMIT_S = int(os.getenv("CAPACITY_SANDBOX_CPU_S", "30") or 30)
 # Heavier kinds get proportionate limits; a limit is a runaway guard, never a
 # budget the job is expected to approach.
-KIND_LIMITS = {"xl": (300, 600), "build": (300, 600), "ops": (60, 180), "ingest": (300, 600)}
+KIND_LIMITS = {"xl": (300, 600), "build": (300, 600), "ingest": (300, 600)}
 # Address-space cap per kind (bytes): the XL job holds ten 60M-element arrays.
 KIND_MEM = {"xl": 24 * 1024 ** 3}
 # Address-space limit, not resident: numpy + OpenBLAS reserve several GB of
@@ -108,9 +102,7 @@ def _command(kind: str, seed: int) -> list[str]:
     if kind in SIZES:
         script = [str(JOB_SCRIPT), kind, str(seed), site, str(SIZES[kind])]
     elif kind == "build":
-        script = [str(KIND_SCRIPTS[kind]), str(seed), str(BUILD_WORK), str(BUILD_FILES)]
-    elif kind == "ops":
-        script = [str(KIND_SCRIPTS[kind]), str(seed)]
+        script = [str(KIND_SCRIPTS[kind]), str(seed), str(_build_tree())]
     elif kind == "ingest":
         script = [str(KIND_SCRIPTS[kind]), str(seed), site,
                   str(Path(INGEST_DOCS).resolve()), str(INGEST_PAGES)]
@@ -118,24 +110,49 @@ def _command(kind: str, seed: int) -> list[str]:
         raise ValueError(f"unknown job kind {kind!r}")
     inner = [*env_part, sys.executable, "-I", "-S", *script]
     cpu_s, _wall = KIND_LIMITS.get(kind, (CPU_LIMIT_S, WALL_LIMIT_S))
+    # File-size cap: 1 MB for the data jobs (they write nothing); the build
+    # links binaries and writes a test database, so 64 MB.
+    fsize = 64 * 1024 * 1024 if kind == "build" else 1048576
     limits = ["prlimit", f"--cpu={cpu_s}", f"--as={KIND_MEM.get(kind, MEM_LIMIT_BYTES)}",
-              "--fsize=1048576"] if shutil.which("prlimit") else []
+              f"--fsize={fsize}"] if shutil.which("prlimit") else []
     if isolation_mode() == "netns":
         # Drop back to the invoking user by uid, not $USER: executors run
         # without USER in their environment, and a job run as "nobody"
         # cannot load numpy's extensions from the user's venv.
         import pwd
         user = pwd.getpwuid(os.getuid()).pw_name
-        if kind == "ops":
-            # The ops job starts a service on the loopback INSIDE the fresh
-            # network namespace, where lo is down until root raises it.
-            import shlex
-            tail = shlex.join(["sudo", "-n", "-u", user, *limits, *inner])
-            return ["sudo", "-n", "unshare", "-n", "--", "sh", "-c",
-                    "ip link set lo up 2>/dev/null; exec " + tail]
         return ["sudo", "-n", "unshare", "-n", "--", "sudo", "-n", "-u", user,
                 *limits, *inner]
     return [*limits, *inner]
+
+
+def _build_tree() -> Path:
+    """The vendored project sources, extracted once beside their tarballs
+    (data/capacity/build/src/lua-5.4.7, lua-5.4.7-tests, and the SQLite
+    amalgamation when its zip is present). Extraction happens on the
+    executor, outside the sandbox, guarded by a lock so concurrent first
+    jobs do not race."""
+    import fcntl
+    import tarfile
+    import zipfile
+    root = Path(BUILD_SRC).resolve()
+    src = root / "src"
+    if (src / "lua-5.4.7-tests" / "all.lua").exists():
+        return src
+    src.mkdir(parents=True, exist_ok=True)
+    with open(root / ".extract.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not (src / "lua-5.4.7-tests" / "all.lua").exists():
+            for tb in ("lua-5.4.7.tar.gz", "lua-5.4.7-tests.tar.gz"):
+                with tarfile.open(root / tb) as t:
+                    t.extractall(src, filter="data")
+            for z in root.glob("sqlite-amalgamation-*.zip"):
+                with zipfile.ZipFile(z) as zf:
+                    zf.extractall(src)
+                inner = next(src.glob("sqlite-amalgamation-*/sqlite3.c"), None)
+                if inner is not None:
+                    inner.parent.rename(src / "sqlite")
+    return src
 
 
 def wall_limit(kind: str) -> float:
@@ -143,7 +160,7 @@ def wall_limit(kind: str) -> float:
 
 
 async def run_job(size: str, seed: int) -> dict:
-    """Run one sandboxed job of a kind (a data size, or build/ops/ingest).
+    """Run one sandboxed job of a kind (a data size, or build/ingest).
     Returns {ok, size, elapsed_ms, cpu_ms, ...result} or {ok: False, error}."""
     if size not in KINDS:
         raise ValueError(f"unknown job size {size!r}")

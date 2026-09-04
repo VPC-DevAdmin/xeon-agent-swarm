@@ -1,22 +1,23 @@
 """The sandboxed build-and-test job (runs in an isolated interpreter; see
 sandbox.py).
 
-    python -I -S sandbox_build_job.py <seed> <work> <files>
+    python -I -S sandbox_build_job.py <seed> <src-root>
 
-The shape of a code agent's step: the working tree holds a small C
-library, the agent builds it and runs its test suite. Here the library is
-generated from the seed (`files` translation units of sixty invertible 64-bit
-mixing functions, each with its inverse derived at generation time from
-the modular inverse of its multiplier), compiled with gcc -O2, and tested
-by a harness that checks, for every function, that inverse(f(x)) == x over
-`work` seeded inputs and that a fixed-buffer digest matches the value
-computed independently in Python. Deterministic for a seed. Prints one
-JSON line: files, functions, lines, compile_ms, test_ms, tests, failures,
-cpu_ms, compute_ms.
+The shape of a code agent's step: build the working tree and run its
+test suite. The tree is a real, recognizable project vendored into the
+repository: Lua 5.4.7 (MIT; lua.org) built with gcc -O2 through its own
+Makefile and tested with its own suite (all.lua in its portable mode),
+and, when the SQLite amalgamation is present beside it (public domain;
+sqlite.org), the database engine compiled from sqlite3.c with its shell
+and exercised by an integration script (schema, 300k inserted rows, an
+index, aggregates, integrity check). Every step is the project's own
+tooling; nothing is generated. Deterministic for a seed (the seed only
+names the working copy). Prints one JSON line: project, sources, lines,
+build_ms, test_ms, suites, failures, cpu_ms, compute_ms.
 """
+import glob
 import json
 import os
-import random
 import resource
 import shutil
 import subprocess
@@ -24,146 +25,83 @@ import sys
 import tempfile
 import time
 
-seed = int(sys.argv[1])
-WORK = int(sys.argv[2]) if len(sys.argv) > 2 else 3_000_000
-FILES = int(sys.argv[3]) if len(sys.argv) > 3 else 12
-PER_FILE = 60
-MASK = (1 << 64) - 1
+seed, src_root = int(sys.argv[1]), sys.argv[2]
 t0 = time.perf_counter()
-rng = random.Random(seed)
+work = tempfile.mkdtemp(prefix=f"bench-build-{seed % 1000}-", dir="/tmp")
+env = {**os.environ, "CC": "gcc", "MAKEFLAGS": "", "LC_ALL": "C"}
+failures = 0
+suites = 0
+build_ms = 0.0
+test_ms = 0.0
 
 
-def mix_params():
-    a = rng.randrange(13, 33)
-    c = rng.getrandbits(64) | 1                  # odd: invertible mod 2^64
-    b = rng.randrange(13, 33)
-    k = rng.getrandbits(64)
-    return a, c, b, k
+def run(cmd, cwd, timeout=900):
+    return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout)
 
 
-def unshift(x, s):
-    """Invert x ^= x >> s (64-bit)."""
-    y = x
-    for _ in range(64 // s + 1):
-        y = x ^ (y >> s)
-    return y & MASK
-
-
-def mix_py(x, p):
-    a, c, b, k = p
-    x = (x ^ (x >> a)) & MASK
-    x = (x * c) & MASK
-    x = (x ^ (x >> b)) & MASK
-    return (x + k) & MASK
-
-
-funcs = []
-for fi in range(FILES):
-    for j in range(PER_FILE):
-        funcs.append(mix_params())
-
-work = tempfile.mkdtemp(prefix="bench-build-", dir="/tmp")
 try:
-    lines = 0
-    # header
-    hdr = ["#include <stdint.h>", "#include <stddef.h>"]
-    for i in range(len(funcs)):
-        hdr.append(f"uint64_t f{i}(uint64_t x);")
-        hdr.append(f"uint64_t g{i}(uint64_t x);")
-    hdr.append("uint64_t digest(const unsigned char *buf, size_t n, int fn);")
-    open(os.path.join(work, "lib.h"), "w").write("\n".join(hdr) + "\n")
-    lines += len(hdr)
-    # translation units: f_i (mix) and g_i (its inverse)
-    for fi in range(FILES):
-        src = ['#include "lib.h"', ""]
-        for j in range(PER_FILE):
-            i = fi * PER_FILE + j
-            a, c, b, k = funcs[i]
-            cinv = pow(c, -1, 1 << 64)
-            src += [f"uint64_t f{i}(uint64_t x) {{",
-                    f"    x ^= x >> {a};",
-                    f"    x *= {c}ULL;",
-                    f"    x ^= x >> {b};",
-                    f"    return x + {k}ULL;",
-                    "}",
-                    f"uint64_t g{i}(uint64_t x) {{",
-                    f"    uint64_t y;",
-                    f"    x -= {k}ULL;",
-                    f"    y = x; for (int r = 0; r < {64 // b + 1}; r++) y = x ^ (y >> {b}); x = y;",
-                    f"    x *= {cinv}ULL;",
-                    f"    y = x; for (int r = 0; r < {64 // a + 1}; r++) y = x ^ (y >> {a}); x = y;",
-                    "    return x;",
-                    "}", ""]
-        open(os.path.join(work, f"unit{fi}.c"), "w").write("\n".join(src))
-        lines += len(src)
-    # digest over a buffer through a chain of functions (independent Python reference)
-    dig = ['#include "lib.h"',
-           "uint64_t digest(const unsigned char *buf, size_t n, int fn) {",
-           "    uint64_t h = 0x9E3779B97F4A7C15ULL;",
-           "    for (size_t i = 0; i < n; i++) {",
-           "        h ^= buf[i];",
-           "        switch (fn % 8) {"]
-    for r in range(8):
-        dig.append(f"            case {r}: h = f{r * 7}(h); break;")
-    dig += ["        }", "        fn++;", "    }", "    return h;", "}"]
-    open(os.path.join(work, "digest.c"), "w").write("\n".join(dig) + "\n")
-    lines += len(dig)
-    buf = bytes(rng.getrandbits(8) for _ in range(4096))
-    h = 0x9E3779B97F4A7C15
-    fn = seed % 8
-    for byte in buf:
-        h ^= byte
-        h = mix_py(h, funcs[(fn % 8) * 7])
-        fn += 1
-    expected_digest = h
-    # test harness: round-trip property over WORK inputs per function, then the digest
-    harness = ['#include "lib.h"', "#include <stdio.h>", "#include <stdlib.h>",
-               "typedef uint64_t (*fn_t)(uint64_t);",
-               "static fn_t F[] = {" + ", ".join(f"f{i}" for i in range(len(funcs))) + "};",
-               "static fn_t G[] = {" + ", ".join(f"g{i}" for i in range(len(funcs))) + "};",
-               "int main(void) {",
-               f"    const uint64_t n = {WORK}ULL; long tests = 0, failures = 0;",
-               f"    uint64_t x = {rng.getrandbits(64)}ULL;",
-               f"    for (int i = 0; i < {len(funcs)}; i++) {{",
-               "        uint64_t s = x + (uint64_t)i * 0x9E3779B97F4A7C15ULL;",
-               "        for (uint64_t t = 0; t < n; t++) { s += 0x2545F4914F6CDD1DULL;",
-               "            if (G[i](F[i](s)) != s) failures++; }",
-               "        tests++;",
-               "    }",
-               "    static unsigned char buf[4096] = {" + ",".join(str(b) for b in buf) + "};",
-               f"    uint64_t d = digest(buf, 4096, {seed % 8}); tests++;",
-               f"    if (d != {expected_digest}ULL) failures++;",
-               '    printf("{\\"tests\\": %ld, \\"failures\\": %ld, \\"digest\\": \\"%016llx\\"}\\n", tests, failures, (unsigned long long)d);',
-               "    return failures ? 1 : 0;",
-               "}"]
-    open(os.path.join(work, "test_main.c"), "w").write("\n".join(harness) + "\n")
-    lines += len(harness)
-    cc = shutil.which("gcc") or shutil.which("cc") or "gcc"
+    lua = os.path.join(work, "lua-5.4.7")
+    tests = os.path.join(work, "lua-5.4.7-tests")
+    shutil.copytree(os.path.join(src_root, "lua-5.4.7"), lua)
+    shutil.copytree(os.path.join(src_root, "lua-5.4.7-tests"), tests)
+    sources = glob.glob(os.path.join(lua, "src", "*.c")) + glob.glob(os.path.join(lua, "src", "*.h"))
+    lines = sum(sum(1 for _ in open(f, errors="replace")) for f in sources)
+    target = "macosx" if sys.platform == "darwin" else "generic"
     t1 = time.perf_counter()
-    srcs = sorted(f for f in os.listdir(work) if f.endswith(".c"))
-    comp = subprocess.run([cc, "-O2", "-std=c11", "-o", "prog", *srcs], cwd=work,
-                          capture_output=True, text=True)
-    compile_ms = (time.perf_counter() - t1) * 1000
-    if comp.returncode != 0:
-        print(json.dumps({"error": "compile failed: " + comp.stderr[-400:]}))
+    r = run(["make", "-s", target], lua)
+    build_ms += (time.perf_counter() - t1) * 1000
+    if r.returncode != 0:
+        print(json.dumps({"error": "lua build failed: " + r.stderr[-400:]}))
         sys.exit(2)
     t2 = time.perf_counter()
-    run = subprocess.run([os.path.join(work, "prog")], cwd=work, capture_output=True, text=True)
-    test_ms = (time.perf_counter() - t2) * 1000
-    try:
-        res = json.loads(run.stdout.strip().splitlines()[-1])
-    except (ValueError, IndexError):
-        print(json.dumps({"error": "test harness produced no result: " + run.stderr[-300:]}))
-        sys.exit(3)
+    r = run([os.path.join(lua, "src", "lua"), "-e", "_U=true", "all.lua"], tests)
+    test_ms += (time.perf_counter() - t2) * 1000
+    suites += 1
+    if r.returncode != 0 or "final OK" not in r.stdout:
+        failures += 1
+    project = "lua-5.4.7"
+
+    sqlite_src = os.path.join(src_root, "sqlite")
+    if os.path.isdir(sqlite_src):
+        sq = os.path.join(work, "sqlite")
+        shutil.copytree(sqlite_src, sq)
+        sources += [os.path.join(sq, "sqlite3.c"), os.path.join(sq, "shell.c")]
+        lines += sum(sum(1 for _ in open(f, errors="replace")) for f in sources[-2:])
+        t3 = time.perf_counter()
+        r = run(["gcc", "-O2", "-DSQLITE_THREADSAFE=0", "-DSQLITE_OMIT_LOAD_EXTENSION",
+                 "sqlite3.c", "shell.c", "-o", "sqlite3", "-lm"], sq)
+        build_ms += (time.perf_counter() - t3) * 1000
+        if r.returncode != 0:
+            print(json.dumps({"error": "sqlite build failed: " + r.stderr[-400:]}))
+            sys.exit(2)
+        sql = """
+CREATE TABLE events(id INTEGER PRIMARY KEY, merchant INTEGER, value REAL, ts INTEGER);
+WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<300000)
+INSERT INTO events(merchant, value, ts) SELECT (i*7919)%4096, ((i*104729)%100000)/100.0, (i*31)%86400 FROM n;
+CREATE INDEX ev_m ON events(merchant);
+SELECT merchant, COUNT(*), ROUND(SUM(value),2) FROM events GROUP BY merchant ORDER BY 3 DESC LIMIT 5;
+SELECT COUNT(*) FROM events WHERE value > 990;
+SELECT ts/3600, COUNT(*) FROM events GROUP BY 1 ORDER BY 2 DESC LIMIT 1;
+PRAGMA integrity_check;
+"""
+        t4 = time.perf_counter()
+        r = run([os.path.join(sq, "sqlite3"), os.path.join(work, "smoke.db")], sq)
+        r = subprocess.run([os.path.join(sq, "sqlite3"), os.path.join(work, "smoke.db")], input=sql,
+                           cwd=sq, env=env, capture_output=True, text=True, timeout=900)
+        test_ms += (time.perf_counter() - t4) * 1000
+        suites += 1
+        if r.returncode != 0 or "ok" not in r.stdout.strip().splitlines()[-1:]:
+            failures += 1
+        project += "+sqlite"
     cpu = resource.getrusage(resource.RUSAGE_SELF)
     kids = resource.getrusage(resource.RUSAGE_CHILDREN)
     print(json.dumps({
-        "files": FILES + 3, "functions": len(funcs) * 2, "lines": lines,
-        "compile_ms": round(compile_ms, 1), "test_ms": round(test_ms, 1),
-        "tests": res["tests"], "failures": res["failures"], "digest": res["digest"],
+        "project": project, "sources": len(sources), "lines": lines,
+        "build_ms": round(build_ms, 1), "test_ms": round(test_ms, 1),
+        "suites": suites, "failures": failures,
         "cpu_ms": round((cpu.ru_utime + cpu.ru_stime + kids.ru_utime + kids.ru_stime) * 1000, 1),
         "compute_ms": round((time.perf_counter() - t0) * 1000, 1),
     }))
-    sys.exit(0 if res["failures"] == 0 else 1)
+    sys.exit(0 if failures == 0 else 1)
 finally:
     shutil.rmtree(work, ignore_errors=True)

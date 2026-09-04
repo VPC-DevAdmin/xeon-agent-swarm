@@ -638,13 +638,11 @@ async def chat_completions(request: Request):
     # job in every worker; the comparison runs a LIGHT job in its analysis
     # worker only. After retrieval, before the record.
     # Heavy mix (docs/plan-cpu-heavy-mix.md): the code agent builds in every
-    # worker, the XL analyst runs xl jobs, the ops task and the ingestion
-    # agent run their single job in their one worker.
+    # worker, the XL analyst runs xl jobs, the ingestion agent runs its
+    # single job in its one worker.
     _kind = None
     if "Using ONLY the build" in obj:
         _kind = "build"
-    elif "Using ONLY the repository" in obj:
-        _kind = "ops"
     elif "Using ONLY the document set" in obj:
         _kind = "ingest"
     elif "Using ONLY the dataset (XL)" in obj:
