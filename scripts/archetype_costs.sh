@@ -18,7 +18,7 @@ echo "archetype costs -> $OUT (rates $LO $HI, hold $HOLD)" | tee "$OUT/log"
 rates_for() { case "$1" in
   research_brief) echo "1 2";; task_ticket) echo "4 8";;
   code_agent) echo "0.04 0.08";; analyst_xl) echo "0.05 0.1";; deep_research) echo "0.15 0.3";;
-  ingestion) echo "0.5 1";;
+  ingestion) echo "0.05 0.1";;   # ~1,900 chunks per workflow on the 2-core embedder: 0.5/s per instance saturated it 3x
   *) echo "$LO $HI";; esac; }
 for sid in ${ARCHETYPES:-task_ticket digest comparison research_brief data_analysis}; do
   echo "=== $sid ($(date +%H:%M:%S))" | tee -a "$OUT/log"
