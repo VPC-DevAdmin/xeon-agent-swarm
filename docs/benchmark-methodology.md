@@ -447,7 +447,19 @@ series) for every tier from interactive up, 1,274 resident (1,273 to
 1,277), latencies flat from 16 to 40 workflows/s, zero failures through
 40; 44 offered delivered 43.5 with the backlog doubling inside the hold,
 48 delivered 44.2 with the generator shedding. The per-core samples for
-the set are `data/capacity/set-8800-mpstat.log`. The two earlier sets
+the set are `data/capacity/set-8800-mpstat.log`.
+
+The same set re-run with the stand-in at a serving tier's density
+boundary (`data/capacity/set-20260904-140358`, seeds 9101, 9201, 9301:
+500 ms to first token, 2,000 prompt tokens per second and 20 output
+tokens per second per request, the rates a lab measurement of a single
+GPU serving a 35B mixture-of-experts model showed at its boundary)
+certifies the same 39.8 workflows/s (39.77 to 39.84) with the same cliff
+at 44, now with 4,334 resident sessions (4,331 to 4,338), 109 GB of host
+memory, and the responsive tier (150 s) as the certified one: every
+workflow carries about 110 s of modeled model wait, latencies are flat
+from 16 to 40 workflows/s, and the host's capacity does not move. Serving
+speed sets residency and the tier; the host sets the rate. The two earlier sets
 kept alongside it (`set-20260904-034441` on a shared-socket tier,
 `set-20260903-152713` on a 14-core tier) are the record of the two
 software limits found and removed on the way, not results.
