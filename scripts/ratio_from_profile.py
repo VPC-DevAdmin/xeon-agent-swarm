@@ -56,10 +56,12 @@ def host_side(series_dir: str, rate: str) -> dict:
     out_per_wf = tokens_out / max(1, completed)
     wf_per_s = units / span if span else 0.0
     gen_tok_s = wf_per_s * out_per_wf
-    # busy physical cores: thread-busy on a 2-way SMT host under-reads core
-    # occupancy; the certified set's per-core sampler measured cores at
-    # ~1.3x threads at the reference point. Report both bases.
-    threads_busy = sum(busy_threads)
+    # Every instance samples the WHOLE host, so the four readings are the
+    # same quantity: take their median, never their sum. Busy physical
+    # cores: thread-busy on a 2-way SMT host under-reads core occupancy;
+    # the certified set's per-core sampler measured cores at ~1.3x threads
+    # at the reference point. Report both bases.
+    threads_busy = st.median(busy_threads)
     return {"wf_per_s": round(wf_per_s, 3), "gen_tokens_per_wf": round(out_per_wf),
             "gen_tok_s": round(gen_tok_s), "threads_busy": round(threads_busy, 1),
             "core_ms_per_token_threads": round(threads_busy / 2 * 1000 / max(1, gen_tok_s), 3),
