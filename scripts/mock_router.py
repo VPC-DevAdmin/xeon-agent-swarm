@@ -418,6 +418,146 @@ def _synthesis_text(obj: str) -> str:
         "a deterministic offline test fixture rather than a real-world measurement."
     )
 
+# ── serving profile: recorded answers and timing in place of the model ─────
+#
+# A run can be replayed against a REAL endpoint (scripts/replay_query_set.py):
+# every call the workload makes is classified by its position in the
+# workflow (archetype / role / phase), the same calls are sent to the cloud
+# model, and each response's time to first token, total latency and token
+# counts are recorded. With CAPACITY_SERVING_PROFILE pointing at that
+# record, the stand-in answers each call with the recorded timing and
+# token counts for the same position instead of the modeled formula, so the
+# serving side of a benchmark run is measured data from a named model at
+# a named concurrency, repeatable and re-recordable for another model.
+
+_ARCHETYPE_MARKERS: list[tuple[str, str]] = [
+    ("Using ONLY the build", "code_agent"),
+    ("rerank depth", "deep_research"),
+    ("Using ONLY the document set", "ingestion"),
+    ("Using ONLY the dataset (XL)", "analyst_xl"),
+    ("Using ONLY the dataset", "data_analysis"),
+    ("Using ONLY the measurements", "comparison"),
+    ("Using ONLY the field notes", "research_brief"),
+    ("support ticket", "task_ticket"),
+    ("Using ONLY the four items", "digest"),
+]
+
+
+def _archetype_of(obj: str) -> str:
+    for marker, sid in _ARCHETYPE_MARKERS:
+        if marker in obj:
+            return sid
+    return "unknown"
+
+
+def call_key(body: dict) -> str:
+    """archetype/role/phase for one request: the position of a call in its
+    workflow, which is what its timing and size depend on."""
+    messages = body.get("messages") or []
+    system = _system_text(messages).lower()
+    tools = _tool_names(body)
+    obj = _objective(messages)
+    sid = _archetype_of(obj)
+    if _JUDGE_MARKER in system:
+        return f"{sid}/judge/0"
+    if _PARTIAL_SYNTH_MARKER in system:
+        return f"{sid}/partial/0"
+    if "submit_plan" in tools and _tool_result_count(messages, "submit_plan") == 0:
+        return f"{sid}/planner/plan"
+    if "task" in tools:
+        return f"{sid}/planner/{_tool_result_count(messages, 'task')}"
+    if _TOOL_USER_MARKER in system:
+        return f"{sid}/tool_user/{int(_tool_results_present(messages))}"
+    role = next((r for r, marker in _ROLE_MARKERS if marker in system), "general-purpose")
+    done = sum(1 for m in messages if m.get("role") == "tool")
+    return f"{sid}/{role}/{done}"
+
+
+def _trace_dir() -> str | None:
+    return os.environ.get("CAPACITY_MOCK_TRACE_DIR") or None
+
+
+def _trace(body: dict, key: str, resp: JSONResponse) -> None:
+    """Append the request and the stand-in's answer to the trace (one file
+    per worker process) so a query set can be captured from a run."""
+    tdir = _trace_dir()
+    if not tdir:
+        return
+    try:
+        os.makedirs(tdir, exist_ok=True)
+        payload = json.loads(bytes(resp.body))
+        with open(os.path.join(tdir, f"trace-{os.getpid()}.jsonl"), "a") as fh:
+            fh.write(json.dumps({"ts": round(time.time(), 3), "key": key,
+                                 "model": body.get("model"), "messages": body.get("messages"),
+                                 "tools": body.get("tools"), "max_tokens": body.get("max_tokens"),
+                                 "response": payload["choices"][0]["message"],
+                                 "usage": payload.get("usage")}) + "\n")
+    except Exception:  # noqa: BLE001 - tracing never fails a call
+        pass
+
+
+_profile: dict | None = None
+_profile_key: tuple = ()
+
+
+def _load_profile() -> dict | None:
+    """The recorded serving profile: {key: [(ttft_ms, total_ms, prompt_tokens,
+    completion_tokens), ...]} for the concurrency level selected by
+    CAPACITY_SERVING_CONCURRENCY (default: the highest recorded). Cached
+    per (path, level); re-read when either changes."""
+    global _profile, _profile_key
+    path = os.environ.get("CAPACITY_SERVING_PROFILE")
+    want = os.environ.get("CAPACITY_SERVING_CONCURRENCY")
+    if _profile is not None and _profile_key == (path, want):
+        return _profile or None
+    _profile_key = (path, want)
+    if not path:
+        _profile = {}
+        return None
+    rows = []
+    with open(path) as fh:
+        for line in fh:
+            try:
+                r = json.loads(line)
+            except ValueError:
+                continue
+            if r.get("ok") and r.get("total_ms") is not None:
+                rows.append(r)
+    levels = sorted({int(r.get("concurrency") or 1) for r in rows})
+    level = int(want) if want else (levels[-1] if levels else 1)
+    by_key: dict[str, list] = {}
+    for r in rows:
+        if int(r.get("concurrency") or 1) != level:
+            continue
+        by_key.setdefault(r["key"], []).append(
+            (float(r.get("ttft_ms") or 0.0), float(r["total_ms"]),
+             int(r.get("prompt_tokens") or 0), int(r.get("completion_tokens") or 0)))
+    by_role: dict[str, list] = {}
+    for k, v in by_key.items():
+        by_role.setdefault(k.split("/", 1)[1], []).extend(v)
+    _profile = {"level": level, "model": next((r.get("model") for r in rows), None),
+                "by_key": by_key, "by_role": by_role, "path": path}
+    return _profile
+
+
+def profile_sample(key: str, seed: str) -> tuple[float, int, int] | None:
+    """(wait_s, prompt_tokens, completion_tokens) recorded for this call
+    position, chosen by the unit's seed; a position never recorded falls
+    back to the same role in any archetype; None when no profile is set."""
+    prof = _load_profile()
+    if not prof:
+        return None
+    samples = prof["by_key"].get(key) or prof["by_role"].get(key.split("/", 1)[1])
+    if not samples:
+        return None
+    ttft, total, pin, pout = samples[_hash(seed + key) % len(samples)]
+    return total / 1000.0, pin, pout
+
+
+import contextvars
+
+_current_key: contextvars.ContextVar[str] = contextvars.ContextVar("mock_call_key", default="")
+
 # ── response assembly ────────────────────────────────────────────────────────
 
 def _usage(messages: list[dict], completion_text: str) -> dict:
@@ -471,7 +611,14 @@ async def _completion(*, tier: str, category: str, seed: str, messages: list[dic
         message["tool_calls"] = tool_calls
         finish_reason = "tool_calls"
         completion_text = json.dumps(tool_calls)
-    wait = _model_wait_s(messages, completion_text, seed)
+    usage = _usage(messages, completion_text)
+    _key = _current_key.get()
+    recorded = profile_sample(_key, seed) if _key else None
+    if recorded is not None:
+        wait, pin, pout = recorded
+        usage = {"prompt_tokens": pin, "completion_tokens": pout, "total_tokens": pin + pout}
+    else:
+        wait = _model_wait_s(messages, completion_text, seed)
     if wait > 0:
         await asyncio.sleep(wait)
     body = {
@@ -481,12 +628,14 @@ async def _completion(*, tier: str, category: str, seed: str, messages: list[dic
         # The real gateway's body model field is already a tier id (model.py).
         "model": tier,
         "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
-        "usage": _usage(messages, completion_text),
+        "usage": usage,
     }
     hdrs = _headers(tier, category, seed)
-    # The modeled wait rides the response so a probe can split router
-    # latency into "waited as modeled" and "queued behind the box".
+    # The modeled (or recorded) wait rides the response so a probe can split
+    # router latency into "waited as modeled" and "queued behind the box".
     hdrs["x-mock-wait-s"] = f"{wait:.3f}"
+    if recorded is not None:
+        hdrs["x-mock-profile"] = _key
     return JSONResponse(body, headers=hdrs)
 
 
@@ -527,6 +676,15 @@ async def chat_completions(request: Request):
         return _error(400, "Malformed JSON request body.")
     if not isinstance(body, dict) or not isinstance(body.get("messages"), list):
         return _error(400, "Request must include a 'messages' array.", param="messages")
+    key = call_key(body)
+    _current_key.set(key)
+    resp = await _chat_impl(body)
+    if resp.status_code == 200 and _trace_dir():
+        _trace(body, key, resp)
+    return resp
+
+
+async def _chat_impl(body: dict) -> JSONResponse:
 
     if body.get("stream"):
         return _error(400, "Streaming is not supported by this gateway.", param="stream")

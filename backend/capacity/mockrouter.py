@@ -64,6 +64,9 @@ def metadata(base_url: str | None) -> dict | None:
         "model_ttft_ms": float(os.getenv("CAPACITY_MODEL_TTFT_MS", "0") or 0),
         "model_decode_tps": float(os.getenv("CAPACITY_MODEL_DECODE_TPS", "0") or 0),
         "model_prefill_tps": float(os.getenv("CAPACITY_MODEL_PREFILL_TPS", "0") or 0),
+        # A recorded serving profile replaces the modeled tier when set.
+        "serving_profile": os.getenv("CAPACITY_SERVING_PROFILE"),
+        "serving_concurrency": os.getenv("CAPACITY_SERVING_CONCURRENCY"),
         # Supplied only after an independent endpoint diagnostic.  Agent-host
         # results require twice the observed model-call demand as headroom.
         "certified_requests_per_s": float(certified) if certified else None,

@@ -2035,6 +2035,12 @@ class CapacityTest:
                      ("CAPACITY_MODEL_TTFT_MS", "CAPACITY_MODEL_DECODE_TPS",
                       "CAPACITY_MODEL_PREFILL_TPS"))
         tag = "" if vals == ("0", "0", "0") else "|svc=" + ",".join(vals)
+        # A recorded serving profile (a named model at a named concurrency,
+        # scripts/replay_query_set.py) replaces the modeled tier.
+        prof = os.getenv("CAPACITY_SERVING_PROFILE")
+        if prof:
+            tag += (f"|svc=profile:{os.path.basename(os.path.dirname(prof) or prof)}"
+                    f"@{os.getenv('CAPACITY_SERVING_CONCURRENCY', 'max')}")
         # Rerank depth moves the certified rate almost linearly (v16.1: 16
         # candidates -> 62.7 workflows/s); a different depth is a different
         # machine profile.

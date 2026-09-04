@@ -353,6 +353,27 @@ the cohort) and the ten-minute hold are what keep it out of a certified
 number; a five-minute check hold at 40 sits inside it and must not be read
 as steady state.
 
+### The serving side as recorded data
+
+The stand-in's per-call wait is a formula (time to first token, prefill
+and decode rates). For a result whose serving side must be measured
+rather than modeled, the workload's own calls are recorded and replayed:
+a traced run writes every model call the orchestrator makes, classified
+by its position in the workflow (archetype, role, phase);
+`scripts/capture_query_set.py` dedupes them into a representative query
+set with a few seeds' worth of content per position; and
+`scripts/replay_query_set.py` sends that set to a real OpenAI-compatible
+endpoint at one or more concurrency levels, streaming each call to
+measure time to first token, total latency, the real tokenizer's token
+counts, and any throttling, and writes the per-call record and a
+summary (per-role latency and decode rate, aggregate tokens per second
+per level). A benchmark run then points the stand-in at that record
+(`CAPACITY_SERVING_PROFILE`, `CAPACITY_SERVING_CONCURRENCY`): every call
+answers with the recorded timing and token counts for its position, the
+run's fingerprint names the model and level, and the host is measured
+under a serving tier that is data from a named model, repeatable, and
+re-recordable for another model in minutes.
+
 ## 7. Attribution and what "utilization" means
 
 A sampler reads `/proc` every two seconds and attributes CPU to groups on
