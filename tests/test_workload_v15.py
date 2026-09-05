@@ -39,10 +39,10 @@ def test_context_profile_builds_a_seeded_sectioned_corpus():
     assert salt1 != salt2
 
 
-def test_digest_prompt_stays_light():
+def test_task_agent_prompt_stays_light():
     test = ctl.CapacityTest("e2e", [], _cfg(seed=42), mix="tile")
-    wf = test.scenarios["digest"]
-    q = test._workflow_query(wf, "digest", 1)
+    wf = test.scenarios["task_ticket"]
+    q = test._workflow_query(wf, "task_ticket", 1)
     assert "### SECTION" not in q
     assert len(q.split()) < 500
 
@@ -75,12 +75,12 @@ def test_contract_tokens_in_reads_from_the_record():
     rec = {"ok": True, "tokens_in": 100,
            "trace": {"task_count": 3, "steps": 3, "llm_calls": 13,
                      "validations": 7, "tool_calls": 6}}
-    test._check_contract("research_brief", rec)
+    test._check_contract("deep_research", rec)
     assert rec.get("invalid") is True          # 100 << the 30k floor
     rec2 = {"ok": True, "tokens_in": 55_000,
             "trace": {"task_count": 3, "steps": 3, "llm_calls": 13,
                       "validations": 7, "tool_calls": 6}}
-    test._check_contract("research_brief", rec2)
+    test._check_contract("deep_research", rec2)
     assert rec2.get("invalid") is None and rec2["ok"] is True
 
 

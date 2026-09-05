@@ -409,21 +409,27 @@ def _fake_submit(latency_s=0.05, ok=True, llm_calls=10):
     re-carry their slices, roughly doubling the prompt's own tokens."""
     async def submit(query, opts=None):
         await asyncio.sleep(latency_s)
-        # v16: the researcher retrieves (3 extra worker turns, 3 extra tool
-        # calls); the double mirrors the per-type contract it is judged by.
+        # The double mirrors the per-type contract each archetype is judged
+        # by: three-worker archetypes make 13 calls with 6 tool calls, the
+        # ingestion agent one worker with two tool calls, the task agent one.
         researcher = query.startswith("Using ONLY the field notes")
-        comparison = query.startswith("Using ONLY the measurements")
+        coder = query.startswith("Using ONLY the build")
         analyst = query.startswith("Using ONLY the dataset")
+        ingest = query.startswith("Using ONLY the document set")
         task = query.startswith("Handle this single support ticket")
-        calls = 13 if (researcher or analyst) else (12 if comparison else llm_calls)
-        tools = 6 if (researcher or analyst) else (5 if comparison else 3)
-        tin = max(21_000 if researcher else (6500 if (comparison or analyst) else 5200),
-                  int(len(query) / 4 * 2))
+        calls = 13 if (researcher or analyst or coder) else llm_calls
+        tools = 6 if (researcher or analyst or coder) else 3
+        tin = max(21_000 if researcher else 6500, int(len(query) / 4 * 2))
         if task:
             return {"ok": ok, "tokens_in": 2500, "tokens_out": 400,
                     "error": None if ok else "status=failed",
                     "trace": {"llm_calls": 4, "steps": 1, "validations": 3,
                               "task_count": 1, "tool_calls": 1}}
+        if ingest:
+            return {"ok": ok, "tokens_in": 2500, "tokens_out": 400,
+                    "error": None if ok else "status=failed",
+                    "trace": {"llm_calls": 5, "steps": 1, "validations": 3,
+                              "task_count": 1, "tool_calls": 2}}
         return {"ok": ok,
                 "tokens_in": tin,
                 "tokens_out": 1400,
@@ -447,18 +453,15 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
     test._e2e = E2ERunner(timeout_s=5, submit=_fake_submit())
     asyncio.run(test.run())
     r = test.result
-    assert r["mix"] == "tile" and r["tile_size"] == 6          # e2e tile = 6 sessions (v17: 4 types, task agent x2)
-    assert set(r["per_scenario"]) == {"research_brief", "comparison", "digest", "data_analysis", "task_ticket"}
+    assert r["mix"] == "tile" and r["tile_size"] == 12         # the enterprise tile: twelve arrivals, six of them task agents
+    assert set(r["per_scenario"]) == {"code_agent", "analyst_large", "deep_research", "ingestion", "task_ticket"}
     assert r["verdict"] == "capped" and (r["capacity_tiles"] or 0) >= 1
     assert r["workflows_per_hour"] is not None and r["workflows_per_hour"] > 0
     for sid, row in r["per_scenario"].items():
         assert row["calls"] > 0 and row["errors"] == 0
-        # measured, not assumed: v16 researcher retrieves (3 extra turns)
-        assert row["trace"]["llm_calls"] == {"research_brief": 13,
-                                             "comparison": 12,
-                                             "data_analysis": 13,
-                                             "task_ticket": 4}.get(sid, 10)
-        assert row["trace"]["validations"] == (3 if sid == "task_ticket" else 7)
+        # measured, not assumed: each archetype's contract shape
+        assert row["trace"]["llm_calls"] == {"task_ticket": 4, "ingestion": 5}.get(sid, 13)
+        assert row["trace"]["validations"] == (3 if sid in ("task_ticket", "ingestion") else 7)
     assert r["repro"]["seed"] == 42
 
 

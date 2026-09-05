@@ -111,7 +111,7 @@ def test_organisation_tiles_are_selected_by_name(monkeypatch):
         sc.load_e2e_tile()
     monkeypatch.delenv("CAPACITY_E2E_TILE")
     sc._file_cache = None
-    assert "research_brief" in sc.load_e2e_tile() and "code_agent" not in sc.load_e2e_tile()
+    assert sc.load_e2e_tile() == {"code_agent": 2, "analyst_large": 2, "deep_research": 1, "ingestion": 1, "task_ticket": 6}
 
 
 def test_fingerprint_names_the_tile(monkeypatch):

@@ -1,6 +1,7 @@
-# Capacity-test agent scenarios — six REAL agent flows for capacity planning.
-# A "virtual user" is one of these blocks looping continuously; the ramp adds
-# users until the system saturates.
+# Synthetic agent scenarios for inference-engine capacity planning.
+# The publication benchmark uses `e2e_workflows`, `e2e_tile` and `e2e_tiles`
+# below: five agent archetypes at production sizes in three organisation
+# tiles. This older synthetic family remains available for engine-load testing.
 #
 # Every scenario is a genuine agent loop (no chatbot pings): tools are called
 # and their results injected into context, later steps re-read what earlier
@@ -20,11 +21,9 @@
 #   session_turns: K      context compounds across K loops (a user session or
 #                         ticket conversation), then resets; context_cap bounds it
 
-# The reference tile — one "Agent Capacity Unit" (ACU). Capacity ramps add one
-# COMPLETE tile at a time so every rung has the same workload mix and adjacent
-# rungs are comparable (the VMmark tile idea). Weighted toward support because
-# that's the dominant real-world deployment. Custom mixes remain available for
-# customer-specific planning but are marked non-comparable.
+# The synthetic reference tile contains six archetypes and seven virtual users.
+# Capacity ramps add one complete tile at a time so every rung keeps the same
+# workload mix. This tile does not define the publication benchmark.
 tile:
   support_agent: 2
   doc_intelligence: 1
@@ -124,12 +123,38 @@ scenarios:
 # validation, synthesis) — the truth test behind the synthetic traces. Lower
 # scale by nature: one "call" = one complete workflow. Determinism comes from
 # the router the app is configured with (mock router => fully deterministic).
+# The default tile is the enterprise tile; CAPACITY_E2E_TILE selects one of
+# the named tiles below and rides the run fingerprint.
 e2e_tile:
-  research_brief: 1
-  comparison: 1
-  digest: 1
-  data_analysis: 1
-  task_ticket: 2      # the long tail of short-lived agents: two per tile, a declared assumption
+  code_agent: 2
+  analyst_large: 2
+  deep_research: 1
+  ingestion: 1
+  task_ticket: 6
+
+e2e_tiles:
+  # Three organisation-shaped tiles of twelve sessions from the five
+  # archetypes: task agent (task_ticket), research agent at depth 128
+  # (deep_research), data analyst at 40M rows (analyst_large), code agent,
+  # ingestion agent. Small agents dominate by count; the compute-carrying
+  # archetypes set the host work per token.
+  enterprise:          # a technology-forward company: two coders, two analysts in twelve
+    code_agent: 2
+    analyst_large: 2
+    deep_research: 1
+    ingestion: 1
+    task_ticket: 6
+  engineering:         # an engineering organisation
+    code_agent: 3
+    analyst_large: 1
+    deep_research: 1
+    task_ticket: 7
+  analytics:           # a data and research organisation
+    analyst_large: 3
+    ingestion: 1
+    deep_research: 2
+    task_ticket: 6
+
 
 # AGENT DEADLINE TIERS. The weigh-in measures a machine's median workflow
 # time at one tile, that median places it in a tier, and the tier's deadline
@@ -203,83 +228,10 @@ arrival_schedule:
 # workload-invalid: it counts as neither a success nor a capacity failure, and
 # enough of them invalidate the run.
 e2e_workflows:
-  research_brief:
-    name: "Research brief (e2e)"
-    think_ms: 3000
-    # v16: the researcher EARNS its context - each worker performs real
-    # on-box retrieval (sparse search + fusion + rerank + packing over the
-    # seeded corpus store; dense vector search modeled off-box) instead of
-    # receiving a pre-baked corpus in the prompt.
-    toolless: true                       # no catalog/builtin tools; bench_record only
-    tools: [bench_retrieve, bench_record]  # per worker: 1 real retrieval + 1 record call
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [20000, 500000]}
-    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
-    budgets: {max_subagents: 4, max_tool_hops: 2}  # PER-AGENT semantics: hop budget binds each worker (intent: 1 call + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack); the guards replan/clamp at these lines so a unit can never balloon past its declared size
-    query: >-
-      Using ONLY the field notes below (do not research further), write a
-      one-page brief on CPU-only LLM inference with a clear recommendation.
-      Field notes: (1) llama.cpp with 4-bit GGUF quantization reached 12
-      tokens/sec for a 30B model on a 64-core Xeon, with prompt processing at
-      95 tokens/sec; memory use was 21 GB. (2) SGLang's CPU backend with AMX
-      and FP8 weights reached 19 tokens/sec decode and 210 tokens/sec prefill
-      on the same class of machine at 26 GB resident, but requires AVX-512/AMX
-      capable PyTorch builds. (3) vLLM's CPU mode is maintained primarily for
-      development parity; published numbers show roughly half of SGLang's CPU
-      throughput on identical hardware. (4) All three engines saturate memory
-      bandwidth before compute at batch sizes above 8. Plan EXACTLY three worker subtasks and no more: research, analysis, and writing. Each worker calls bench_record exactly once, then writes its section and stops. Deliverable: a brief
-      with sections for findings, trade-offs, and one recommendation.
-  comparison:
-    name: "Comparison analysis (e2e)"
-    think_ms: 3000
-    # v16.1: the comparison EARNS its context too - one retrieval per unit
-    # (research worker only), the medium archetype by retrieval count.
-    toolless: true                       # no catalog/builtin tools; bench_record only
-    # v17: its analysis worker also RUNS a light sandboxed data job over the
-    # measurements (execution, like retrieval, appears in graded amounts:
-    # analyst 3 heavy, comparison 1 light, researcher and digest none).
-    tools: [bench_retrieve, bench_execute, bench_record]  # research worker retrieves once; analysis worker executes once; every worker records
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [12, 12], validations: [7, 7], tool_calls: [5, 5], tokens_in: [6000, 200000]}
-    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
-    budgets: {max_subagents: 4, max_tool_hops: 3}  # PER-AGENT semantics: hop budget binds each worker (intent: up to 2 calls + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack)
-    query: >-
-      Using ONLY the measurements below (do not research further), compare
-      INT8, INT4, and FP8 quantization for a 30B-parameter model and recommend
-      one for deployment. Measurements: INT8 — 30 GB weights, 0.3% average
-      accuracy loss on evaluation suites, broad kernel support. INT4 — 16 GB
-      weights, 1.8% accuracy loss that concentrates in math and code tasks,
-      fastest decode on memory-bound hosts. FP8 — 31 GB weights, 0.1% accuracy
-      loss, requires recent hardware support (AMX/FP8 kernels), prefill
-      throughput 15% higher than INT8 in vendor tests. Plan EXACTLY three worker subtasks and no more: research, analysis, and writing. Each worker calls bench_record exactly once, then writes its section and stops. Deliverable: a
-      comparison table, a paragraph on the trade-offs, and one deployment
-      recommendation with its main risk.
-  data_analysis:
-    name: "Data analysis pipeline (e2e)"
-    think_ms: 3000
-    # v17 heavy-execution archetype: each of the three workers runs a HEAVY
-    # sandboxed data job (a fresh, limited interpreter aggregating a seeded
-    # 2M-row table) and records; no retrieval, so execution cost stays
-    # separable from retrieval cost.
-    toolless: true
-    tools: [bench_execute, bench_record]
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [6000, 200000]}
-    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 12]}
-    budgets: {max_subagents: 4, max_tool_hops: 3}
-    query: >-
-      Using ONLY the dataset available through the execution tool (do not
-      research further), analyze one day of service events for a payments
-      platform: per-merchant volume and value, the hourly load profile, the
-      value distribution and its tail, and anomalous merchants. Plan EXACTLY
-      three worker subtasks and no more: research (profile the data),
-      analysis (rank and explain the anomalies), and writing (the report).
-      Each worker runs bench_execute exactly once and then bench_record
-      exactly once, then writes its section and stops. Deliverable: a
-      summary table of the top merchants, the peak hour with its load, the
-      p95 and p99 transaction values, and a list of anomalies with a
-      one-line explanation each.
   task_ticket:
     name: "Task agent: one ticket (e2e)"
     think_ms: 3000
-    # v17 short-lived archetype: one planner turn, ONE general-purpose worker
+    # The task agent: one planner turn, ONE general-purpose worker
     # that writes one durable record and answers, validation, synthesis. Born,
     # does one thing, dies - the shape of most agents in a deployment
     # (triggers, routing, extraction). Contract measured from a smoke run
@@ -300,27 +252,95 @@ e2e_workflows:
       once to file the ticket record, then writes the classification and
       the reply and stops. Deliverable: category, severity, root cause in
       one line, and a three-sentence reply.
-  digest:
-    name: "Digest report (e2e)"
+  code_agent:
+    name: "Code agent: build and test (e2e, heavy mix)"
     think_ms: 3000
-    toolless: true                       # no catalog/builtin tools; bench_record only
-    tools: [bench_record]                # 1 real record-keeping call per worker
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [10, 10], validations: [7, 7], tool_calls: [3, 3], tokens_in: [500, 30000]}
-    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}  # calibration 2026-08-27: healthy units 12-34 calls, 2-8 tools; bounds sit inside the budget lines so budgets fail runaways first
-    budgets: {max_subagents: 4, max_tool_hops: 2}  # PER-AGENT semantics: hop budget binds each worker (intent: 1 call + 1 slack), subagent budget binds the plan (intent: 3 + 1 slack); the guards replan/clamp at these lines so a unit can never balloon past its declared size
+    # Three workers each build the working tree's library (twelve units of
+    # sixty functions) with gcc -O2 in the sandbox and run its property tests (backend/capacity/
+    # sandbox_build_job.py), then record. The verifier is the test result.
+    toolless: true
+    tools: [bench_execute, bench_record]
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [6000, 200000]}
+    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 12]}
+    budgets: {max_subagents: 4, max_tool_hops: 3}
     query: >-
-      Using ONLY the four items below (do not research further), compile a
-      digest in exactly five bullet points, ordered by operational impact.
-      Items: (1) An open-source serving stack added disaggregated prefill,
-      letting prefill and decode scale on separate node pools. (2) A major
-      inference engine released speculative-decoding support that reports
-      1.9x decode speedup on 70B models with a 1B draft model. (3) A widely
-      used gateway added semantic caching with embedding-similarity hits,
-      claiming 30% token savings on support workloads. (4) Two engines
-      standardized on an OpenAI-compatible batch API for offline jobs.
-      Plan EXACTLY three worker subtasks and no more, never one per item:
-      research (extract the key facts from ALL FOUR items), analysis (rank
-      all four by operational impact), and writing (compose the digest).
-      Each worker calls bench_record exactly once, then writes its section
-      and stops. Deliverable: five bullets, each naming the item it
-      summarizes and one sentence on who is affected.
+      Using ONLY the build available through the execution tool (do not
+      research further), take the interpreter and its embedded database
+      through the change: build the tree and run the test suite, fix what
+      fails, and confirm the tests. Plan EXACTLY three worker subtasks and no more: research
+      (build the baseline and read the failures), analysis (make the
+      change and rebuild), and writing (the change note). Each worker runs
+      bench_execute exactly once and then bench_record exactly once, then
+      writes its section and stops. Deliverable: the build result, the
+      test counts, and a change note.
+  deep_research:
+    name: "Deep research brief (e2e, heavy mix)"
+    think_ms: 3000
+    # The research brief with its three retrievals at rerank depth 128:
+    # the cross-encoder scores eight times the candidates per call, on the
+    # reranker's pair law, and the packed context is the same size.
+    toolless: true
+    tools: [bench_retrieve, bench_record]
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [20000, 500000]}
+    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}
+    budgets: {max_subagents: 4, max_tool_hops: 2}
+    query: >-
+      Using ONLY the field notes below (do not research further), and
+      retrieving at rerank depth 128, write a one-page brief on capacity
+      planning for agent hosts with a clear recommendation. Field notes:
+      (1) an orchestration host's cost per workflow is set by the tool
+      work its agents do, not by the model calls they make. (2) Reranking
+      cost is linear in candidates per call; depth 16 costs a quarter of
+      depth 64. (3) Sandboxed execution dominates the host at analyst-heavy
+      mixes. (4) The serving tier's tokens per second decide how many
+      hosts one accelerator needs. Plan EXACTLY three worker subtasks and
+      no more: research, analysis, and writing. Each worker calls
+      bench_record exactly once, then writes its section and stops.
+      Deliverable: a brief with sections for findings, trade-offs, and one
+      recommendation.
+  ingestion:
+    name: "Ingestion agent: parse, embed, index (e2e, heavy mix)"
+    think_ms: 3000
+    # One worker parses a seeded selection of 100 PDF pages in the sandbox
+    # (sandbox_ingest_job.py), then the executor embeds the chunks on the
+    # CPU embedder and indexes them (toolbox.bench_execute, kind ingest),
+    # records, and writes the ingest summary.
+    toolless: true
+    tools: [bench_execute, bench_record]
+    # One worker with two tool calls (execute, then record) is five model
+    # calls: the task ticket's four plus one for the extra tool result.
+    contract: {task_count: [1, 1], steps: [1, 1], llm_calls: [5, 5], validations: [3, 3], tool_calls: [2, 2], tokens_in: [300, 40000]}
+    contract_live: {task_count: [1, 2], steps: [1, 2], llm_calls: [2, 20], validations: [0, 10], tool_calls: [0, 6]}
+    budgets: {max_subagents: 2, max_tool_hops: 3}
+    query: >-
+      Using ONLY the document set available through the execution tool (do
+      not research further), ingest the newly arrived reports: parse the
+      pages, chunk and de-duplicate the text, embed the chunks, and index
+      them for search, then confirm the index answers a query. Plan EXACTLY
+      one worker subtask and no more. The worker runs bench_execute exactly
+      once and then bench_record exactly once, then writes the ingest
+      summary and stops. Deliverable: pages parsed, chunks indexed, and the
+      top hit for the check query.
+  analyst_large:
+    name: "Data analysis pipeline, large (e2e, enterprise mix)"
+    think_ms: 3000
+    # The data analyst with its three jobs at 40M rows each (a week of
+    # events; about 17 core-s per job, ~50 per workflow): the size a team
+    # runs daily, between the reference job and the month-end XL.
+    toolless: true
+    tools: [bench_execute, bench_record]
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [6000, 200000]}
+    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 12]}
+    budgets: {max_subagents: 4, max_tool_hops: 3}
+    query: >-
+      Using ONLY the dataset (L) available through the execution tool (do
+      not research further), analyze one week of service events for a
+      payments platform: per-merchant volume and value, the hourly load
+      profile, the value distribution and its tail, and anomalous
+      merchants. Plan EXACTLY three worker subtasks and no more: research
+      (profile the data), analysis (rank and explain the anomalies), and
+      writing (the report). Each worker runs bench_execute exactly once and
+      then bench_record exactly once, then writes its section and stops.
+      Deliverable: a summary table of the top merchants, the peak hour with
+      its load, the p95 and p99 transaction values, and a list of anomalies
+      with a one-line explanation each.

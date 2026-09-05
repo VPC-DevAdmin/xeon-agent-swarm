@@ -433,14 +433,10 @@ def _synthesis_text(obj: str) -> str:
 _ARCHETYPE_MARKERS: list[tuple[str, str]] = [
     ("Using ONLY the build", "code_agent"),
     ("rerank depth", "deep_research"),
+    ("Using ONLY the field notes", "deep_research"),
     ("Using ONLY the document set", "ingestion"),
-    ("Using ONLY the dataset (XL)", "analyst_xl"),
-    ("Using ONLY the dataset (L)", "analyst_large"),
-    ("Using ONLY the dataset", "data_analysis"),
-    ("Using ONLY the measurements", "comparison"),
-    ("Using ONLY the field notes", "research_brief"),
+    ("Using ONLY the dataset", "analyst_large"),
     ("support ticket", "task_ticket"),
-    ("Using ONLY the four items", "digest"),
 ]
 
 

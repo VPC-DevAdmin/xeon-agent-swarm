@@ -145,14 +145,12 @@ def _extra_paths() -> list[str]:
     """Companion scenario files merged over the main one: their
     `e2e_workflows` add to (or override) the main file's, and their
     `e2e_tiles` register named tiles (see load_e2e_tile). Listed in
-    CAPACITY_SCENARIOS_EXTRA (comma-separated); by default the CPU-heavy
-    mix's file when it exists, so the two mixes live side by side without
-    editing the reference workload file."""
+    CAPACITY_SCENARIOS_EXTRA (comma-separated); none by default, since the
+    catalog and its tiles live in the main file."""
     raw = os.getenv("CAPACITY_SCENARIOS_EXTRA")
     if raw is not None:
         return [p.strip() for p in raw.split(",") if p.strip()]
-    default = os.path.join(_CONFIG_DIR, "capacity_scenarios_heavy.yaml")
-    return [default] if os.path.exists(default) else []
+    return []
 
 
 def _load_file() -> dict:
@@ -175,7 +173,7 @@ def _load_file() -> dict:
 
 def _e2e_tile_raw() -> dict:
     """The selected tile: CAPACITY_E2E_TILE names one of `e2e_tiles`
-    (the CPU-heavy mix's tile, say); unset, the reference `e2e_tile`."""
+    (enterprise, engineering, analytics); unset, the default `e2e_tile`."""
     name = os.getenv("CAPACITY_E2E_TILE")
     data = _load_file()
     if name:

@@ -118,7 +118,7 @@ Twelve positions describe the arrival mix, not resident concurrency.
 Workflow duration determines how many agents remain active at once. The
 tile is selected with `CAPACITY_E2E_TILE=enterprise`, `engineering`, or
 `analytics` and rides the run fingerprint; the workflows and tiles are
-declared in `config/capacity_scenarios_heavy.yaml`.
+declared in `config/capacity_scenarios.yaml`.
 
 Every workflow runs the production orchestrator end to end: a planner
 delegates the declared subtasks to specialist workers (one, for the task
@@ -527,7 +527,7 @@ token from a plateau and its per-core samples.
 ## 9. Reproducibility record
 
 Each result carries the seed, the software commit, the workload definition
-(`config/capacity_scenarios_heavy.yaml` and the tile name), the
+(`config/capacity_scenarios.yaml` and the tile name), the
 serving-tier parameters, rerank depth, sandbox isolation mode, the core
 allocation (`allocation.env`), the process topology, the host profile, and
 the ledger's SHA-256. Ledgers, judgments, and set summaries are committed

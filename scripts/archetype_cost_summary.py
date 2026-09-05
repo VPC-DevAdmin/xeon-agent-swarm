@@ -9,12 +9,13 @@ from pathlib import Path
 from backend.capacity.evidence import read_evidence
 
 NCPU = 128
-RETRIEVALS = {"research_brief": 3, "comparison": 1, "digest": 0, "data_analysis": 0, "task_ticket": 0}
-# Heavy mix: retrievals per workflow and the declared rerank depth per call
-# (the reference archetypes rerank at depth 16).
-RETRIEVALS.update({"code_agent": 0, "analyst_large": 0, "ingestion": 0, "deep_research": 3})
+# Retrievals per workflow and the declared rerank depth per call.
+RETRIEVALS = {"task_ticket": 0, "deep_research": 3, "ingestion": 0, "analyst_large": 0, "code_agent": 0}
 DEPTH = {"deep_research": 128}
-JOBS = {"research_brief": (0, 0), "comparison": (1, 0), "digest": (0, 0), "data_analysis": (0, 3), "task_ticket": (0, 0)}  # (light, heavy)
+# Reference-size sandbox jobs per workflow, (light, heavy); the catalog's
+# archetypes run the large data job, the build and the ingest parse, whose
+# costs are read from the per-unit stage sums instead.
+JOBS = {sid: (0, 0) for sid in RETRIEVALS}
 
 
 

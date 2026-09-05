@@ -101,7 +101,7 @@ def main() -> None:
             win = [u for u in ev["units"] if u.get("sub") and w <= u["sub"] - t0 < w + 30]
             if not win:
                 continue
-            res = [u["lat"] / 1000 for u in win if u["sid"] == "research_brief" and u.get("ok") and u.get("lat")]
+            res = [u["lat"] / 1000 for u in win if u["sid"] == "deep_research" and u.get("ok") and u.get("lat")]
             ss = [s for s in ev["samples"] if w <= s["ts"] - t0 < w + 30]
             infl = pct([s["in_flight"] for s in ss], .5) if ss else None
             cpu = pct([s["cpu_pct"] for s in ss if s.get("cpu_pct") is not None], .5) if ss else None
