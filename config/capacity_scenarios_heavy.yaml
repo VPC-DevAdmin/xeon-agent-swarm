@@ -16,6 +16,20 @@ e2e_tiles:
     ingestion: 1
     analyst_xl: 1
     task_ticket: 1
+  # The ENTERPRISE tile: the same compute-carrying agents as a tenth of a
+  # fleet in which small agents dominate by count (eleven task tickets,
+  # two digests, a research brief and a comparison). Dilution by small
+  # agents barely moves the ratio, because they are cheap on both axes;
+  # what sets it is that one agent in ten builds code or crunches data.
+  enterprise:
+    code_agent: 2
+    analyst_xl: 1
+    deep_research: 1
+    ingestion: 1
+    digest: 2
+    research_brief: 1
+    comparison: 1
+    task_ticket: 11
 
 e2e_workflows:
   code_agent:
