@@ -300,3 +300,24 @@ def test_plateau_counts_units_in_flight_at_the_end(tmp_path):
     # except the oldest ~55 s worth -> those count late; the bound still fails
     # only through keeps_up. Pending exclusion keeps the bound itself honest.
     assert pj["tiers"]["background"]["bounds"]["a"] >= 0.95
+
+
+def test_plateau_reports_on_time_counts_per_tier(tmp_path):
+    """A set pools its series' cohort counts for the joint bound; the
+    per-tier counts ride the judgment for that."""
+    import gzip, json
+    from backend.capacity import judge
+    rows = [{"k": "header"}]
+    t = 1000.0
+    for i in range(200):
+        rows.append({"k": "unit", "sid": "a" if i % 2 else "b", "ok": True, "lat": 30000.0,
+                     "sub": t, "end": t + 30.0, "r": 2.0})
+        t += 0.5
+    rows.append({"k": "footer"})
+    p = tmp_path / "e.jsonl.gz"
+    with gzip.open(p, "wt") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+    j = judge.plateau([p])
+    c = j["tiers"]["interactive"]["counts"]
+    assert set(c) == {"a", "b"} and all(w == n and n > 40 for w, n in c.values())

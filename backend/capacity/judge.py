@@ -350,6 +350,7 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
         if dl is None:
             continue
         bounds = {}
+        counts = {}
         for sid in sids:
             xs = [u for u in cohort if u[2] == sid
                   and not (u[5] == "inflight_at_end"
@@ -357,9 +358,10 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
             wins = sum(1 for u in xs if u[3] and u[4] is not None
                        and u[4] <= float(dl) * 1000.0)
             bounds[sid] = round(st.wilson_lower(wins, len(xs), z), 4) if xs else 0.0
+            counts[sid] = [wins, len(xs)]     # so a set can pool its series' cohorts
         ok = (bool(bounds) and min(bounds.values()) >= target and keeps_up
               and generator_ok)
-        tiers[tier] = {"deadline_s": float(dl), "bounds": bounds,
+        tiers[tier] = {"deadline_s": float(dl), "bounds": bounds, "counts": counts,
                        "on_time_and_steady": ok}
     all_lats = sorted(u[4] for u in cohort if u[3] and u[4] is not None)
     med = (_pct(all_lats, 50) or 0.0) / 1000.0

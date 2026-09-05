@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 from backend.capacity.evidence import read_evidence
+from backend.capacity import stats
 from backend.capacity.judge import plateau
 
 
@@ -86,15 +87,26 @@ def main() -> None:
         # 0.95 jointly even with every unit on time (64 of 64 bounds at
         # 0.91 with five types); pooling the seeds is the set's evidence,
         # and it is post-processing of the same ledgers.
-        pooled = plateau([f for d in dirs if r in series[d]
-                          for f in sorted(glob.glob(f"{d}/rate-{r}-i*-evidence-*.jsonl.gz"))])
         all_keep = all(j["keeps_up"] and j["generator_ok"] for j in js)
-        # The pooled cohort spans three separate holds, so its own backlog
-        # arithmetic is meaningless; steadiness is the per-series verdict
-        # and the pooled plateau contributes only the joint on-time bounds.
+        # Pool each series' own cohort counts (its own warm-up and its own
+        # censoring of units in flight at its end); the joint Wilson bound
+        # over the pooled counts is the set's on-time evidence. Steadiness
+        # stays the per-series verdict.
         target = 0.95
-        sustained = [t for t in tiers if all_keep and t in (pooled.get("tiers") or {})
-                     and all(v >= target for v in pooled["tiers"][t]["bounds"].values())]
+        pooled = {}
+        for t in tiers:
+            wins = collections.Counter()
+            tot = collections.Counter()
+            for j in js:
+                for sid, (w, n) in (j["tiers"].get(t, {}).get("counts") or {}).items():
+                    wins[sid] += w
+                    tot[sid] += n
+            if tot:
+                z = stats.familywise_z(max(1, len(tot)), 0.95)
+                pooled[t] = {sid: round(stats.wilson_lower(wins[sid], tot[sid], z), 4) if tot[sid] else 0.0
+                             for sid in tot}
+        sustained = [t for t in tiers if all_keep and t in pooled
+                     and all(v >= target for v in pooled[t].values())]
         per_series_sustained = [t for t in tiers if all(t in j["sustained_tiers"] for j in js)]
 
         def lat(sid, q):
@@ -106,7 +118,7 @@ def main() -> None:
                "keeps_up_all": all(j["keeps_up"] for j in js),
                "tiers_sustained_all_series": sustained,
                "tiers_sustained_per_series": per_series_sustained,
-               "pooled_tiers": pooled.get("tiers"),
+               "pooled_bounds": pooled,
                "resident_median": int(st.median([j["resident_sessions"] for j in js])),
                "resident_range": [min(j["resident_sessions"] for j in js), max(j["resident_sessions"] for j in js)],
                "host_cpu_median": st.median([j["host_cpu_pct"] for j in js if j["host_cpu_pct"] is not None] or [0]),
