@@ -74,12 +74,23 @@ def main() -> None:
     lines = [f"# Plateau set {set_dir.name}", "", f"Series: {', '.join(Path(d).name for d in dirs)}", "",
              "| rate/inst | achieved (median, range) | gen ok | keeps up | "
              + " | ".join(f"{short[sid]} p50/p95" for sid in sids)
-             + " | tiers sustained (all series) | resident (median) | host CPU | retrieval CPU |",
+             + " | tiers sustained (series pooled) | resident (median) | host CPU | retrieval CPU |",
              "|---|---|---|---|" + "---|" * len(sids) + "---|---|---|---|"]
     for r in rates:
         js = [series[d][r] for d in dirs if r in series[d]]
         ach = [j["rate"] for j in js]
-        sustained = [t for t in tiers if all(t in j["sustained_tiers"] for j in js)]
+        # A tier is sustained by the SET when every series keeps up and the
+        # joint 95/95 bound holds over the three series' cohorts POOLED
+        # (the same rule plateau-1 applies within a series). At low rates a
+        # single ten-minute hold carries too few units per type to clear
+        # 0.95 jointly even with every unit on time (64 of 64 bounds at
+        # 0.91 with five types); pooling the seeds is the set's evidence,
+        # and it is post-processing of the same ledgers.
+        pooled = plateau([f for d in dirs if r in series[d]
+                          for f in sorted(glob.glob(f"{d}/rate-{r}-i*-evidence-*.jsonl.gz"))])
+        all_keep = all(j["keeps_up"] and j["generator_ok"] for j in js)
+        sustained = [t for t in tiers if all_keep and t in pooled.get("sustained_tiers", [])]
+        per_series_sustained = [t for t in tiers if all(t in j["sustained_tiers"] for j in js)]
 
         def lat(sid, q):
             xs = [j["per_type"].get(sid, {}).get(q) for j in js]
@@ -89,6 +100,8 @@ def main() -> None:
                "generator_ok_all": all(j["generator_ok"] for j in js),
                "keeps_up_all": all(j["keeps_up"] for j in js),
                "tiers_sustained_all_series": sustained,
+               "tiers_sustained_per_series": per_series_sustained,
+               "pooled_tiers": pooled.get("tiers"),
                "resident_median": int(st.median([j["resident_sessions"] for j in js])),
                "resident_range": [min(j["resident_sessions"] for j in js), max(j["resident_sessions"] for j in js)],
                "host_cpu_median": st.median([j["host_cpu_pct"] for j in js if j["host_cpu_pct"] is not None] or [0]),
@@ -109,7 +122,7 @@ def main() -> None:
                                       "fleet_rate_range": summary["per_rate"][r]["achieved_range"],
                                       "resident_median": summary["per_rate"][r]["resident_median"],
                                       "resident_range": summary["per_rate"][r]["resident_range"]}
-    lines += ["", "## Headline (highest rate every series sustains, per tier)", ""]
+    lines += ["", "## Headline (highest rate every series keeps up at and the pooled cohort sustains, per tier)", ""]
     for t, h in summary["headline"].items():
         lines.append(f"- **{t}**: {h['fleet_rate_median']} workflows/s box-wide (range {h['fleet_rate_range'][0]}-{h['fleet_rate_range'][1]}), "
                      f"{h['resident_median']} resident (range {h['resident_range'][0]}-{h['resident_range'][1]})")

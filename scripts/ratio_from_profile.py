@@ -68,19 +68,69 @@ def host_side(series_dir: str, rate: str) -> dict:
             "core_ms_per_token_cores": round(threads_busy / 2 * 1.3 * 1000 / max(1, gen_tok_s), 3)}
 
 
+def cores_busy_from_mpstat(series_dir: str, rate: str, log: str, cores: int) -> float | None:
+    """Physical-core occupancy over the plateau's steady window from an
+    mpstat -P ALL log: per core, the busier of its two threads, averaged
+    over the window (same rule as the per-core sampler)."""
+    import datetime as dt
+    import re as _re
+    f = sorted(glob.glob(f"{series_dir}/rate-{rate}-i1-evidence-*.jsonl.gz"))
+    if not f:
+        return None
+    stamp = _re.search(r"(\d{8}-\d{6})", f[0].split("/")[-1]).group(1)
+    t0 = dt.datetime.strptime(stamp, "%Y%m%d-%H%M%S").replace(tzinfo=dt.timezone.utc).timestamp()
+    lo, hi = t0 + 150, t0 + 690
+    sib: dict[int, list[int]] = {}
+    for p in glob.glob("/sys/devices/system/cpu/cpu[0-9]*/topology/core_id"):
+        cpu = int(p.split("/")[5][3:]); cid = int(open(p).read()); sib.setdefault(cid, []).append(cpu)
+    if not sib:
+        return None
+    day = dt.datetime.fromtimestamp(t0, dt.timezone.utc).date()
+    per_cpu: dict[int, list[float]] = {}
+    for line in open(log):
+        p = line.split()
+        if len(p) < 12 or not _re.match(r"\d\d:\d\d:\d\d", p[0]):
+            continue
+        t = p[0]
+        if p[1] in ("AM", "PM"):
+            h_ = int(t[:2]); h_ = h_ + 12 if p[1] == "PM" and h_ < 12 else (0 if p[1] == "AM" and h_ == 12 else h_)
+            t = f"{h_:02d}{t[2:]}"; p = p[:1] + p[2:]
+        if p[1] in ("all", "CPU"):
+            continue
+        ts = dt.datetime.strptime(f"{day} {t}", "%Y-%m-%d %H:%M:%S").replace(tzinfo=dt.timezone.utc).timestamp()
+        if not (lo <= ts < hi):
+            continue
+        try:
+            per_cpu.setdefault(int(p[1]), []).append(100.0 - float(p[-1]))
+        except ValueError:
+            continue
+    if not per_cpu:
+        return None
+    occ = [st.mean(max(st.mean(per_cpu.get(c, [0.0])) for c in cpus) for _ in [0]) for cid, cpus in sib.items()]
+    return sum(o / 100.0 for o in occ)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("series_dir")
     ap.add_argument("rate")
     ap.add_argument("profile")
     ap.add_argument("--cores", type=int, default=64)
+    ap.add_argument("--mpstat", help="mpstat -P ALL log covering the plateau: busy cores are then MEASURED per core "
+                                     "instead of estimated from thread-busy with an SMT factor")
     a = ap.parse_args()
     h = host_side(a.series_dir, a.rate)
+    if a.mpstat:
+        busy = cores_busy_from_mpstat(a.series_dir, a.rate, a.mpstat, a.cores)
+        if busy:
+            h["cores_busy_measured"] = round(busy, 1)
+            h["core_ms_per_token_cores"] = round(busy * 1000 / max(1, h["gen_tok_s"]), 3)
     prof = json.load(open(a.profile))
     per_gpu = prof.get("gen_tok_s_per_gpu")
     print(f"host: {h['wf_per_s']} wf/s, {h['gen_tokens_per_wf']} gen tokens/wf, {h['gen_tok_s']} gen tok/s, "
-          f"{h['threads_busy']} threads busy -> {h['core_ms_per_token_cores']} core-ms/token "
-          f"(thread basis {h['core_ms_per_token_threads']})")
+          f"{h['threads_busy']} threads busy"
+          + (f", {h['cores_busy_measured']} cores busy (measured)" if h.get("cores_busy_measured") else "")
+          + f" -> {h['core_ms_per_token_cores']} core-ms/token (thread basis {h['core_ms_per_token_threads']})")
     cm = h["core_ms_per_token_cores"]
     if per_gpu:
         print(f"serving: {prof['model']} on {prof['gpus']} GPU(s): ceiling {prof['gen_tok_s_ceiling']:.0f} gen tok/s "
