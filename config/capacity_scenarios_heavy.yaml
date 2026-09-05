@@ -23,7 +23,7 @@ e2e_tiles:
   # what sets it is that one agent in ten builds code or crunches data.
   enterprise:
     code_agent: 2
-    analyst_xl: 1
+    analyst_large: 1
     deep_research: 1
     ingestion: 1
     digest: 2
@@ -101,6 +101,29 @@ e2e_workflows:
       once and then bench_record exactly once, then writes the ingest
       summary and stops. Deliverable: pages parsed, chunks indexed, and the
       top hit for the check query.
+  analyst_large:
+    name: "Data analysis pipeline, large (e2e, enterprise mix)"
+    think_ms: 3000
+    # The data analyst with its three jobs at 40M rows each (a week of
+    # events; about 17 core-s per job, ~50 per workflow): the size a team
+    # runs daily, between the reference job and the month-end XL.
+    toolless: true
+    tools: [bench_execute, bench_record]
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [6000, 200000]}
+    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 12]}
+    budgets: {max_subagents: 4, max_tool_hops: 3}
+    query: >-
+      Using ONLY the dataset (L) available through the execution tool (do
+      not research further), analyze one week of service events for a
+      payments platform: per-merchant volume and value, the hourly load
+      profile, the value distribution and its tail, and anomalous
+      merchants. Plan EXACTLY three worker subtasks and no more: research
+      (profile the data), analysis (rank and explain the anomalies), and
+      writing (the report). Each worker runs bench_execute exactly once and
+      then bench_record exactly once, then writes its section and stops.
+      Deliverable: a summary table of the top merchants, the peak hour with
+      its load, the p95 and p99 transaction values, and a list of anomalies
+      with a one-line explanation each.
   analyst_xl:
     name: "Data analysis pipeline, XL (e2e, heavy mix)"
     think_ms: 3000

@@ -36,7 +36,7 @@ JOB_SCRIPT = Path(__file__).with_name("sandbox_job.py")
 # Rows per job, calibrated on the reference Xeon (one core, 3.6 GHz):
 # light ~0.25 core-seconds, heavy ~2 core-seconds, interpreter start and
 # numpy import included. The job reads this from argv - one source.
-SIZES = {"light": 450_000, "heavy": 3_300_000, "xl": 60_000_000}
+SIZES = {"light": 450_000, "heavy": 3_300_000, "large": 40_000_000, "xl": 60_000_000}
 # Job KINDS beyond the data job (CPU-heavy mix, see docs/plan-cpu-heavy-mix.md):
 #   build   build a real project from vendored source (Lua 5.4.7, plus the
 #           SQLite amalgamation when present) and run its test suite: the
@@ -44,7 +44,7 @@ SIZES = {"light": 450_000, "heavy": 3_300_000, "xl": 60_000_000}
 #   ingest  parse a set of PDF pages, normalize and chunk the text (the
 #           embedding and indexing happen on the executor, see toolbox)
 # Each kind has its own script; per-kind limits below.
-KINDS = ("light", "heavy", "xl", "build", "ingest")
+KINDS = ("light", "heavy", "large", "xl", "build", "ingest")
 KIND_SCRIPTS = {"build": Path(__file__).with_name("sandbox_build_job.py"),
                 "ingest": Path(__file__).with_name("sandbox_ingest_job.py")}
 BUILD_SRC = os.getenv("CAPACITY_BUILD_SRC", "data/capacity/build")   # vendored tarballs live here
@@ -57,9 +57,9 @@ INGEST_DOCS = os.getenv("CAPACITY_INGEST_DOCS", "data/capacity/ingest")
 CPU_LIMIT_S = int(os.getenv("CAPACITY_SANDBOX_CPU_S", "30") or 30)
 # Heavier kinds get proportionate limits; a limit is a runaway guard, never a
 # budget the job is expected to approach.
-KIND_LIMITS = {"xl": (300, 600), "build": (300, 600), "ingest": (300, 600)}
+KIND_LIMITS = {"large": (300, 600), "xl": (300, 600), "build": (300, 600), "ingest": (300, 600)}
 # Address-space cap per kind (bytes): the XL job holds ten 60M-element arrays.
-KIND_MEM = {"xl": 24 * 1024 ** 3}
+KIND_MEM = {"large": 24 * 1024 ** 3, "xl": 24 * 1024 ** 3}
 # Address-space limit, not resident: numpy + OpenBLAS reserve several GB of
 # virtual space at import even single-threaded, so the cap is 8 GB while a
 # heavy job's resident set is ~0.5 GB.

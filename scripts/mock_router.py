@@ -435,6 +435,7 @@ _ARCHETYPE_MARKERS: list[tuple[str, str]] = [
     ("rerank depth", "deep_research"),
     ("Using ONLY the document set", "ingestion"),
     ("Using ONLY the dataset (XL)", "analyst_xl"),
+    ("Using ONLY the dataset (L)", "analyst_large"),
     ("Using ONLY the dataset", "data_analysis"),
     ("Using ONLY the measurements", "comparison"),
     ("Using ONLY the field notes", "research_brief"),
@@ -805,6 +806,8 @@ async def _chat_impl(body: dict) -> JSONResponse:
         _kind = "ingest"
     elif "Using ONLY the dataset (XL)" in obj:
         _kind = "xl"
+    elif "Using ONLY the dataset (L)" in obj:
+        _kind = "large"
     elif "Using ONLY the dataset" in obj:
         _kind = "heavy"
     _wants_exec = ("bench_execute" in tools and (

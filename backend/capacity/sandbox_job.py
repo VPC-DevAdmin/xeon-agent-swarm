@@ -16,7 +16,7 @@ import sys
 import time
 
 size, seed, site = sys.argv[1], int(sys.argv[2]), sys.argv[3]
-ROWS = int(sys.argv[4]) if len(sys.argv) > 4 else {"light": 450_000, "heavy": 3_300_000}[size]
+ROWS = int(sys.argv[4]) if len(sys.argv) > 4 else {"light": 450_000, "heavy": 3_300_000, "large": 40_000_000, "xl": 60_000_000}[size]
 if site:
     sys.path.append(site)
 import numpy as np  # noqa: E402

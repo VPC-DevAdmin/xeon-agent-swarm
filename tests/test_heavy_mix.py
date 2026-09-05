@@ -34,7 +34,7 @@ def test_ingest_job_parses_and_chunks(tmp_path, monkeypatch):
 
 
 def test_xl_size_is_the_data_job_at_nine_times_the_rows():
-    assert sandbox.SIZES["xl"] == 60_000_000
+    assert sandbox.SIZES["xl"] == 60_000_000 and sandbox.SIZES["large"] == 40_000_000
     assert sandbox.wall_limit("xl") > sandbox.wall_limit("heavy")
 
 
@@ -76,6 +76,7 @@ def test_stand_in_policies_pick_the_kind_and_depth():
     for obj, kind in (("Research the topic: Using ONLY the build available through the execution tool", "build"),
                       ("Handle this task end to end: Using ONLY the document set available through the execution tool", "ingest"),
                       ("Research the topic: Using ONLY the dataset (XL) available through the execution tool", "xl"),
+                      ("Research the topic: Using ONLY the dataset (L) available through the execution tool", "large"),
                       ("Research the topic: Using ONLY the dataset available through the execution tool", "heavy")):
         name, args = first_call(general if "Handle" in obj else research, obj, exec_tools)
         assert (name, args["size"]) == ("bench_execute", kind), (obj, name, args)
@@ -99,7 +100,7 @@ def test_heavy_tile_is_selected_by_name(monkeypatch):
     monkeypatch.setenv("CAPACITY_E2E_TILE", "enterprise")
     sc._file_cache = None
     ent = sc.load_e2e_tile()
-    assert sum(ent.values()) == 20 and ent["task_ticket"] == 11 and ent["code_agent"] == 2 and "digest" in ent
+    assert sum(ent.values()) == 20 and ent["task_ticket"] == 11 and ent["code_agent"] == 2 and ent["analyst_large"] == 1
     monkeypatch.setenv("CAPACITY_E2E_TILE", "nope")
     sc._file_cache = None
     with pytest.raises(KeyError):

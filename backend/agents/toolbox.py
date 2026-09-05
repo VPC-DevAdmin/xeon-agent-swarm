@@ -209,7 +209,7 @@ def build_bench_tool() -> StructuredTool:
 class _BenchExecuteArgs(BaseModel):
     task: str = Field(description="what to compute over the dataset")
     size: str = Field(default="light",
-                      description="job: light, heavy or xl (data), build, or ingest")
+                      description="job: light, heavy, large or xl (data), build, or ingest")
 
 
 async def _finish_ingest(r: dict) -> str:

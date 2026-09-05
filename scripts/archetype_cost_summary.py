@@ -12,7 +12,7 @@ NCPU = 128
 RETRIEVALS = {"research_brief": 3, "comparison": 1, "digest": 0, "data_analysis": 0, "task_ticket": 0}
 # Heavy mix: retrievals per workflow and the declared rerank depth per call
 # (the reference archetypes rerank at depth 16).
-RETRIEVALS.update({"code_agent": 0, "analyst_xl": 0, "ingestion": 0, "deep_research": 3})
+RETRIEVALS.update({"code_agent": 0, "analyst_xl": 0, "analyst_large": 0, "ingestion": 0, "deep_research": 3})
 DEPTH = {"deep_research": 128}
 JOBS = {"research_brief": (0, 0), "comparison": (1, 0), "digest": (0, 0), "data_analysis": (0, 3), "task_ticket": (0, 0)}  # (light, heavy)
 
