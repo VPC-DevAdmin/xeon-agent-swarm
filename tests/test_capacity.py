@@ -445,7 +445,7 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
     synthetic profiles are calibrated against."""
     from backend.capacity.e2e import E2ERunner
     monkeypatch.setattr(ctl, "RESULTS_DIR", tmp_path)
-    test = ctl.CapacityTest("e2e", [], _fast_cfg(max_users=12, hold_s=1.5), mix="tile")
+    test = ctl.CapacityTest("e2e", [], _fast_cfg(max_users=24, hold_s=1.5), mix="tile")
     # Rungs must CERTIFY before the ramp advances, so the test workload must
     # produce samples densely enough for the short test windows to judge.
     for wf in test.scenarios.values():
