@@ -1,0 +1,3950 @@
+{
+ "set": "data/capacity/set-20260905-060903",
+ "series": [
+  "data/capacity/series-9901-20260905-060903",
+  "data/capacity/series-10001-20260905-070727",
+  "data/capacity/series-10101-20260905-080544"
+ ],
+ "rates": [
+  0.3,
+  0.4,
+  0.5,
+  0.6,
+  0.7
+ ],
+ "per_rate": {
+  "0.3": {
+   "achieved_median": 1.2,
+   "achieved_range": [
+    1.2,
+    1.2
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": true,
+   "tiers_sustained_all_series": [
+    "responsive",
+    "attended",
+    "queued",
+    "background"
+   ],
+   "tiers_sustained_per_series": [],
+   "pooled_bounds": {
+    "conversational": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "task_ticket": 0.9938
+    },
+    "interactive": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9556,
+     "task_ticket": 0.9938
+    },
+    "responsive": {
+     "analyst_large": 0.9503,
+     "code_agent": 0.9803,
+     "deep_research": 0.9556,
+     "task_ticket": 0.9938
+    },
+    "attended": {
+     "analyst_large": 0.9503,
+     "code_agent": 0.9803,
+     "deep_research": 0.9556,
+     "task_ticket": 0.9938
+    },
+    "queued": {
+     "analyst_large": 0.9503,
+     "code_agent": 0.9803,
+     "deep_research": 0.9556,
+     "task_ticket": 0.9938
+    },
+    "background": {
+     "analyst_large": 0.9503,
+     "code_agent": 0.9803,
+     "deep_research": 0.9556,
+     "task_ticket": 0.9938
+    }
+   },
+   "resident_median": 16,
+   "resident_range": [
+    16,
+    16
+   ],
+   "host_cpu_median": 32.3,
+   "retrieval_cpu_median": 0.0,
+   "per_series": {
+    "series-9901-20260905-060903": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 58,
+     "offered_rate": 1.2,
+     "achieved_ratio": 1.001,
+     "generator_ok": true,
+     "units": 716,
+     "units_per_ledger": [
+      179,
+      179,
+      179,
+      179
+     ],
+     "cohort_units": 474,
+     "warmup_s": 202.1,
+     "span_s": 394.8,
+     "rate": 1.201,
+     "backlog_start": 60,
+     "backlog_end": 60,
+     "backlog_delta": 0,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 40,
+       "ok": 32,
+       "p50_ms": 87053.1,
+       "p95_ms": 88039.5,
+       "failed": {
+        "inflight_at_end": 8
+       }
+      },
+      "code_agent": {
+       "n": 118,
+       "ok": 82,
+       "p50_ms": 121655.1,
+       "p95_ms": 125404.5,
+       "failed": {
+        "inflight_at_end": 36
+       }
+      },
+      "deep_research": {
+       "n": 40,
+       "ok": 36,
+       "p50_ms": 34244.4,
+       "p95_ms": 35176.9,
+       "failed": {
+        "inflight_at_end": 4
+       }
+      },
+      "task_ticket": {
+       "n": 276,
+       "ok": 266,
+       "p50_ms": 10120.3,
+       "p95_ms": 11076.2,
+       "failed": {
+        "inflight_at_end": 10
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9815
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         40
+        ],
+        "code_agent": [
+         0,
+         118
+        ],
+        "deep_research": [
+         0,
+         40
+        ],
+        "task_ticket": [
+         266,
+         266
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9815
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         106
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         266,
+         266
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9423,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9815
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         82,
+         82
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         266,
+         266
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9423,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9815
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         82,
+         82
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         266,
+         266
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9423,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9815
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         82,
+         82
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         266,
+         266
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9423,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9815
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         82,
+         82
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         266,
+         266
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 16,
+     "think_s": 3.0,
+     "host_cpu_pct": 32.3,
+     "retrieval_cpu_pct": 0.0,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.3
+    },
+    "series-10001-20260905-070727": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 59,
+     "offered_rate": 1.2,
+     "achieved_ratio": 1.002,
+     "generator_ok": true,
+     "units": 716,
+     "units_per_ledger": [
+      179,
+      179,
+      179,
+      179
+     ],
+     "cohort_units": 479,
+     "warmup_s": 196.8,
+     "span_s": 398.3,
+     "rate": 1.203,
+     "backlog_start": 60,
+     "backlog_end": 61,
+     "backlog_delta": 1,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 40,
+       "ok": 32,
+       "p50_ms": 87364.6,
+       "p95_ms": 88350.9,
+       "failed": {
+        "inflight_at_end": 8
+       }
+      },
+      "code_agent": {
+       "n": 120,
+       "ok": 84,
+       "p50_ms": 121669.7,
+       "p95_ms": 125201.4,
+       "failed": {
+        "inflight_at_end": 36
+       }
+      },
+      "deep_research": {
+       "n": 40,
+       "ok": 36,
+       "p50_ms": 34204.1,
+       "p95_ms": 35238.5,
+       "failed": {
+        "inflight_at_end": 4
+       }
+      },
+      "task_ticket": {
+       "n": 279,
+       "ok": 268,
+       "p50_ms": 10202.6,
+       "p95_ms": 11068.4,
+       "failed": {
+        "inflight_at_end": 11
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         40
+        ],
+        "code_agent": [
+         0,
+         120
+        ],
+        "deep_research": [
+         0,
+         40
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         108
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9436,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         84,
+         84
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9436,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         84,
+         84
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9436,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         84,
+         84
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9436,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         84,
+         84
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 16,
+     "think_s": 3.0,
+     "host_cpu_pct": 32.2,
+     "retrieval_cpu_pct": 0.0,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.3
+    },
+    "series-10101-20260905-080544": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 57,
+     "offered_rate": 1.2,
+     "achieved_ratio": 1.002,
+     "generator_ok": true,
+     "units": 716,
+     "units_per_ledger": [
+      179,
+      179,
+      179,
+      179
+     ],
+     "cohort_units": 477,
+     "warmup_s": 198.3,
+     "span_s": 396.8,
+     "rate": 1.202,
+     "backlog_start": 60,
+     "backlog_end": 61,
+     "backlog_delta": 1,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 40,
+       "ok": 32,
+       "p50_ms": 87448.9,
+       "p95_ms": 88625.6,
+       "failed": {
+        "inflight_at_end": 8
+       }
+      },
+      "code_agent": {
+       "n": 120,
+       "ok": 84,
+       "p50_ms": 121821.1,
+       "p95_ms": 125544.5,
+       "failed": {
+        "inflight_at_end": 36
+       }
+      },
+      "deep_research": {
+       "n": 40,
+       "ok": 36,
+       "p50_ms": 34065.8,
+       "p95_ms": 35031.7,
+       "failed": {
+        "inflight_at_end": 4
+       }
+      },
+      "task_ticket": {
+       "n": 277,
+       "ok": 268,
+       "p50_ms": 10097.7,
+       "p95_ms": 11065.1,
+       "failed": {
+        "inflight_at_end": 9
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         40
+        ],
+        "code_agent": [
+         0,
+         120
+        ],
+        "deep_research": [
+         0,
+         40
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         108
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9436,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         84,
+         84
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9436,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         84,
+         84
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9436,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         84,
+         84
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9436,
+        "deep_research": 0.8775,
+        "task_ticket": 0.9816
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         84,
+         84
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         268,
+         268
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 16,
+     "think_s": 3.0,
+     "host_cpu_pct": 32.3,
+     "retrieval_cpu_pct": 0.0,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.3
+    }
+   }
+  },
+  "0.4": {
+   "achieved_median": 1.6,
+   "achieved_range": [
+    1.6,
+    1.6
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": true,
+   "tiers_sustained_all_series": [
+    "responsive",
+    "attended",
+    "queued",
+    "background"
+   ],
+   "tiers_sustained_per_series": [],
+   "pooled_bounds": {
+    "conversational": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "task_ticket": 0.9953
+    },
+    "interactive": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9663,
+     "task_ticket": 0.9953
+    },
+    "responsive": {
+     "analyst_large": 0.9598,
+     "code_agent": 0.9848,
+     "deep_research": 0.9663,
+     "task_ticket": 0.9953
+    },
+    "attended": {
+     "analyst_large": 0.9598,
+     "code_agent": 0.9848,
+     "deep_research": 0.9663,
+     "task_ticket": 0.9953
+    },
+    "queued": {
+     "analyst_large": 0.9598,
+     "code_agent": 0.9848,
+     "deep_research": 0.9663,
+     "task_ticket": 0.9953
+    },
+    "background": {
+     "analyst_large": 0.9598,
+     "code_agent": 0.9848,
+     "deep_research": 0.9663,
+     "task_ticket": 0.9953
+    }
+   },
+   "resident_median": 21,
+   "resident_range": [
+    21,
+    21
+   ],
+   "host_cpu_median": 36.7,
+   "retrieval_cpu_median": 1.9,
+   "per_series": {
+    "series-9901-20260905-060903": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 78,
+     "offered_rate": 1.6,
+     "achieved_ratio": 0.999,
+     "generator_ok": true,
+     "units": 956,
+     "units_per_ledger": [
+      239,
+      239,
+      239,
+      239
+     ],
+     "cohort_units": 626,
+     "warmup_s": 207.1,
+     "span_s": 391.6,
+     "rate": 1.598,
+     "backlog_start": 79,
+     "backlog_end": 81,
+     "backlog_delta": 2,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 52,
+       "ok": 40,
+       "p50_ms": 89289.2,
+       "p95_ms": 90601.6,
+       "failed": {
+        "inflight_at_end": 12
+       }
+      },
+      "code_agent": {
+       "n": 156,
+       "ok": 108,
+       "p50_ms": 118091.5,
+       "p95_ms": 120496.3,
+       "failed": {
+        "inflight_at_end": 48
+       }
+      },
+      "deep_research": {
+       "n": 52,
+       "ok": 48,
+       "p50_ms": 33703.5,
+       "p95_ms": 34501.2,
+       "failed": {
+        "inflight_at_end": 4
+       }
+      },
+      "task_ticket": {
+       "n": 366,
+       "ok": 352,
+       "p50_ms": 10113.9,
+       "p95_ms": 10936.6,
+       "failed": {
+        "inflight_at_end": 14
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9859
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         52
+        ],
+        "code_agent": [
+         0,
+         156
+        ],
+        "deep_research": [
+         0,
+         52
+        ],
+        "task_ticket": [
+         352,
+         352
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9859
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         48
+        ],
+        "code_agent": [
+         0,
+         144
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         352,
+         352
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9556,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9859
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         108,
+         108
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         352,
+         352
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9556,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9859
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         108,
+         108
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         352,
+         352
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9556,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9859
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         108,
+         108
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         352,
+         352
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9556,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9859
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         108,
+         108
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         352,
+         352
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 21,
+     "think_s": 3.0,
+     "host_cpu_pct": 36.7,
+     "retrieval_cpu_pct": 1.9,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.4
+    },
+    "series-10001-20260905-070727": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 78,
+     "offered_rate": 1.6,
+     "achieved_ratio": 1.001,
+     "generator_ok": true,
+     "units": 956,
+     "units_per_ledger": [
+      239,
+      239,
+      239,
+      239
+     ],
+     "cohort_units": 630,
+     "warmup_s": 204.8,
+     "span_s": 393.4,
+     "rate": 1.601,
+     "backlog_start": 80,
+     "backlog_end": 81,
+     "backlog_delta": 1,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 52,
+       "ok": 40,
+       "p50_ms": 89454.5,
+       "p95_ms": 90713.0,
+       "failed": {
+        "inflight_at_end": 12
+       }
+      },
+      "code_agent": {
+       "n": 156,
+       "ok": 108,
+       "p50_ms": 117983.7,
+       "p95_ms": 120599.6,
+       "failed": {
+        "inflight_at_end": 48
+       }
+      },
+      "deep_research": {
+       "n": 52,
+       "ok": 48,
+       "p50_ms": 33683.1,
+       "p95_ms": 35225.8,
+       "failed": {
+        "inflight_at_end": 4
+       }
+      },
+      "task_ticket": {
+       "n": 370,
+       "ok": 356,
+       "p50_ms": 10073.6,
+       "p95_ms": 10959.1,
+       "failed": {
+        "inflight_at_end": 14
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9861
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         52
+        ],
+        "code_agent": [
+         0,
+         156
+        ],
+        "deep_research": [
+         0,
+         52
+        ],
+        "task_ticket": [
+         356,
+         356
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9861
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         48
+        ],
+        "code_agent": [
+         0,
+         144
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         356,
+         356
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9556,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9861
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         108,
+         108
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         356,
+         356
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9556,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9861
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         108,
+         108
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         356,
+         356
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9556,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9861
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         108,
+         108
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         356,
+         356
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9556,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9861
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         108,
+         108
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         356,
+         356
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 21,
+     "think_s": 3.0,
+     "host_cpu_pct": 36.7,
+     "retrieval_cpu_pct": 1.4,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.4
+    },
+    "series-10101-20260905-080544": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 77,
+     "offered_rate": 1.6,
+     "achieved_ratio": 0.997,
+     "generator_ok": true,
+     "units": 956,
+     "units_per_ledger": [
+      239,
+      239,
+      239,
+      239
+     ],
+     "cohort_units": 624,
+     "warmup_s": 207.8,
+     "span_s": 391.0,
+     "rate": 1.596,
+     "backlog_start": 80,
+     "backlog_end": 81,
+     "backlog_delta": 1,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 52,
+       "ok": 40,
+       "p50_ms": 89352.6,
+       "p95_ms": 91164.4,
+       "failed": {
+        "inflight_at_end": 12
+       }
+      },
+      "code_agent": {
+       "n": 156,
+       "ok": 110,
+       "p50_ms": 117863.5,
+       "p95_ms": 121100.5,
+       "failed": {
+        "inflight_at_end": 46
+       }
+      },
+      "deep_research": {
+       "n": 52,
+       "ok": 48,
+       "p50_ms": 33716.4,
+       "p95_ms": 34980.4,
+       "failed": {
+        "inflight_at_end": 4
+       }
+      },
+      "task_ticket": {
+       "n": 364,
+       "ok": 349,
+       "p50_ms": 10028.1,
+       "p95_ms": 11007.3,
+       "failed": {
+        "inflight_at_end": 15
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9858
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         52
+        ],
+        "code_agent": [
+         0,
+         156
+        ],
+        "deep_research": [
+         0,
+         52
+        ],
+        "task_ticket": [
+         349,
+         349
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9858
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         48
+        ],
+        "code_agent": [
+         0,
+         144
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         349,
+         349
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9563,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9858
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         110,
+         110
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         349,
+         349
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9563,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9858
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         110,
+         110
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         349,
+         349
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9563,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9858
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         110,
+         110
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         349,
+         349
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8884,
+        "code_agent": 0.9563,
+        "deep_research": 0.9053,
+        "task_ticket": 0.9858
+       },
+       "counts": {
+        "analyst_large": [
+         40,
+         40
+        ],
+        "code_agent": [
+         110,
+         110
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         349,
+         349
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 21,
+     "think_s": 3.0,
+     "host_cpu_pct": 36.8,
+     "retrieval_cpu_pct": 1.9,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.4
+    }
+   }
+  },
+  "0.5": {
+   "achieved_median": 2.0,
+   "achieved_range": [
+    2.0,
+    2.0
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": true,
+   "tiers_sustained_all_series": [
+    "responsive",
+    "attended",
+    "queued",
+    "background"
+   ],
+   "tiers_sustained_per_series": [],
+   "pooled_bounds": {
+    "conversational": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "task_ticket": 0.9961
+    },
+    "interactive": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9727,
+     "task_ticket": 0.9961
+    },
+    "responsive": {
+     "analyst_large": 0.9656,
+     "code_agent": 0.9816,
+     "deep_research": 0.9727,
+     "task_ticket": 0.9961
+    },
+    "attended": {
+     "analyst_large": 0.9656,
+     "code_agent": 0.9865,
+     "deep_research": 0.9727,
+     "task_ticket": 0.9961
+    },
+    "queued": {
+     "analyst_large": 0.9656,
+     "code_agent": 0.9865,
+     "deep_research": 0.9727,
+     "task_ticket": 0.9961
+    },
+    "background": {
+     "analyst_large": 0.9656,
+     "code_agent": 0.9865,
+     "deep_research": 0.9727,
+     "task_ticket": 0.9961
+    }
+   },
+   "resident_median": 26,
+   "resident_range": [
+    26,
+    26
+   ],
+   "host_cpu_median": 51.8,
+   "retrieval_cpu_median": 2.0,
+   "per_series": {
+    "series-9901-20260905-060903": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 100,
+     "offered_rate": 2.0,
+     "achieved_ratio": 0.998,
+     "generator_ok": true,
+     "units": 1196,
+     "units_per_ledger": [
+      299,
+      299,
+      299,
+      299
+     ],
+     "cohort_units": 756,
+     "warmup_s": 221.0,
+     "span_s": 378.7,
+     "rate": 1.997,
+     "backlog_start": 98,
+     "backlog_end": 102,
+     "backlog_delta": 4,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 64,
+       "ok": 48,
+       "p50_ms": 99594.9,
+       "p95_ms": 108252.1,
+       "failed": {
+        "inflight_at_end": 16
+       }
+      },
+      "code_agent": {
+       "n": 184,
+       "ok": 122,
+       "p50_ms": 130781.2,
+       "p95_ms": 140725.8,
+       "failed": {
+        "inflight_at_end": 62
+       }
+      },
+      "deep_research": {
+       "n": 64,
+       "ok": 60,
+       "p50_ms": 33588.6,
+       "p95_ms": 34893.2,
+       "failed": {
+        "inflight_at_end": 4
+       }
+      },
+      "task_ticket": {
+       "n": 444,
+       "ok": 426,
+       "p50_ms": 10048.4,
+       "p95_ms": 10906.1,
+       "failed": {
+        "inflight_at_end": 18
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9883
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         64
+        ],
+        "code_agent": [
+         0,
+         184
+        ],
+        "deep_research": [
+         0,
+         63
+        ],
+        "task_ticket": [
+         426,
+         426
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9227,
+        "task_ticket": 0.9883
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         56
+        ],
+        "code_agent": [
+         0,
+         168
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "task_ticket": [
+         426,
+         426
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.9053,
+        "code_agent": 0.9604,
+        "deep_research": 0.9227,
+        "task_ticket": 0.9883
+       },
+       "counts": {
+        "analyst_large": [
+         48,
+         48
+        ],
+        "code_agent": [
+         122,
+         122
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "task_ticket": [
+         426,
+         426
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.9053,
+        "code_agent": 0.9604,
+        "deep_research": 0.9227,
+        "task_ticket": 0.9883
+       },
+       "counts": {
+        "analyst_large": [
+         48,
+         48
+        ],
+        "code_agent": [
+         122,
+         122
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "task_ticket": [
+         426,
+         426
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.9053,
+        "code_agent": 0.9604,
+        "deep_research": 0.9227,
+        "task_ticket": 0.9883
+       },
+       "counts": {
+        "analyst_large": [
+         48,
+         48
+        ],
+        "code_agent": [
+         122,
+         122
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "task_ticket": [
+         426,
+         426
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.9053,
+        "code_agent": 0.9604,
+        "deep_research": 0.9227,
+        "task_ticket": 0.9883
+       },
+       "counts": {
+        "analyst_large": [
+         48,
+         48
+        ],
+        "code_agent": [
+         122,
+         122
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "task_ticket": [
+         426,
+         426
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 26,
+     "think_s": 3.0,
+     "host_cpu_pct": 51.5,
+     "retrieval_cpu_pct": 2.0,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.5
+    },
+    "series-10001-20260905-070727": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 97,
+     "offered_rate": 2.0,
+     "achieved_ratio": 0.998,
+     "generator_ok": true,
+     "units": 1196,
+     "units_per_ledger": [
+      299,
+      299,
+      299,
+      299
+     ],
+     "cohort_units": 759,
+     "warmup_s": 219.5,
+     "span_s": 380.3,
+     "rate": 1.996,
+     "backlog_start": 99,
+     "backlog_end": 99,
+     "backlog_delta": 0,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 64,
+       "ok": 48,
+       "p50_ms": 101226.7,
+       "p95_ms": 110740.7,
+       "failed": {
+        "inflight_at_end": 16
+       }
+      },
+      "code_agent": {
+       "n": 187,
+       "ok": 127,
+       "p50_ms": 130794.8,
+       "p95_ms": 142296.3,
+       "failed": {
+        "inflight_at_end": 60
+       }
+      },
+      "deep_research": {
+       "n": 64,
+       "ok": 60,
+       "p50_ms": 33729.0,
+       "p95_ms": 34759.3,
+       "failed": {
+        "inflight_at_end": 4
+       }
+      },
+      "task_ticket": {
+       "n": 444,
+       "ok": 427,
+       "p50_ms": 10058.0,
+       "p95_ms": 10950.6,
+       "failed": {
+        "inflight_at_end": 17
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         64
+        ],
+        "code_agent": [
+         0,
+         187
+        ],
+        "deep_research": [
+         0,
+         63
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9227,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         56
+        ],
+        "code_agent": [
+         0,
+         171
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.9053,
+        "code_agent": 0.9619,
+        "deep_research": 0.9227,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         48,
+         48
+        ],
+        "code_agent": [
+         127,
+         127
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.9053,
+        "code_agent": 0.9619,
+        "deep_research": 0.9227,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         48,
+         48
+        ],
+        "code_agent": [
+         127,
+         127
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.9053,
+        "code_agent": 0.9619,
+        "deep_research": 0.9227,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         48,
+         48
+        ],
+        "code_agent": [
+         127,
+         127
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.9053,
+        "code_agent": 0.9619,
+        "deep_research": 0.9227,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         48,
+         48
+        ],
+        "code_agent": [
+         127,
+         127
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 26,
+     "think_s": 3.0,
+     "host_cpu_pct": 51.8,
+     "retrieval_cpu_pct": 2.0,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.5
+    },
+    "series-10101-20260905-080544": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 98,
+     "offered_rate": 2.0,
+     "achieved_ratio": 0.999,
+     "generator_ok": true,
+     "units": 1196,
+     "units_per_ledger": [
+      299,
+      299,
+      299,
+      299
+     ],
+     "cohort_units": 748,
+     "warmup_s": 225.1,
+     "span_s": 374.5,
+     "rate": 1.997,
+     "backlog_start": 94,
+     "backlog_end": 99,
+     "backlog_delta": 5,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 61,
+       "ok": 45,
+       "p50_ms": 101485.1,
+       "p95_ms": 106956.1,
+       "failed": {
+        "inflight_at_end": 16
+       }
+      },
+      "code_agent": {
+       "n": 180,
+       "ok": 119,
+       "p50_ms": 131094.6,
+       "p95_ms": 139014.1,
+       "failed": {
+        "inflight_at_end": 61
+       }
+      },
+      "deep_research": {
+       "n": 63,
+       "ok": 59,
+       "p50_ms": 33575.3,
+       "p95_ms": 34685.3,
+       "failed": {
+        "inflight_at_end": 4
+       }
+      },
+      "task_ticket": {
+       "n": 444,
+       "ok": 427,
+       "p50_ms": 10019.3,
+       "p95_ms": 10891.2,
+       "failed": {
+        "inflight_at_end": 17
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         61
+        ],
+        "code_agent": [
+         0,
+         180
+        ],
+        "deep_research": [
+         0,
+         62
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9215,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         53
+        ],
+        "code_agent": [
+         0,
+         164
+        ],
+        "deep_research": [
+         59,
+         59
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.8996,
+        "code_agent": 0.9446,
+        "deep_research": 0.9215,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         45,
+         45
+        ],
+        "code_agent": [
+         118,
+         119
+        ],
+        "deep_research": [
+         59,
+         59
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.8996,
+        "code_agent": 0.9595,
+        "deep_research": 0.9215,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         45,
+         45
+        ],
+        "code_agent": [
+         119,
+         119
+        ],
+        "deep_research": [
+         59,
+         59
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8996,
+        "code_agent": 0.9595,
+        "deep_research": 0.9215,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         45,
+         45
+        ],
+        "code_agent": [
+         119,
+         119
+        ],
+        "deep_research": [
+         59,
+         59
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8996,
+        "code_agent": 0.9595,
+        "deep_research": 0.9215,
+        "task_ticket": 0.9884
+       },
+       "counts": {
+        "analyst_large": [
+         45,
+         45
+        ],
+        "code_agent": [
+         119,
+         119
+        ],
+        "deep_research": [
+         59,
+         59
+        ],
+        "task_ticket": [
+         427,
+         427
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 26,
+     "think_s": 3.0,
+     "host_cpu_pct": 52.0,
+     "retrieval_cpu_pct": 1.9,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.5
+    }
+   }
+  },
+  "0.6": {
+   "achieved_median": 2.39,
+   "achieved_range": [
+    2.39,
+    2.39
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": true,
+   "tiers_sustained_all_series": [
+    "attended",
+    "queued",
+    "background"
+   ],
+   "tiers_sustained_per_series": [],
+   "pooled_bounds": {
+    "conversational": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "task_ticket": 0.9958
+    },
+    "interactive": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9688,
+     "task_ticket": 0.9958
+    },
+    "responsive": {
+     "analyst_large": 0.9503,
+     "code_agent": 0.0,
+     "deep_research": 0.9688,
+     "task_ticket": 0.9958
+    },
+    "attended": {
+     "analyst_large": 0.9503,
+     "code_agent": 0.974,
+     "deep_research": 0.9688,
+     "task_ticket": 0.9958
+    },
+    "queued": {
+     "analyst_large": 0.9503,
+     "code_agent": 0.974,
+     "deep_research": 0.9688,
+     "task_ticket": 0.9958
+    },
+    "background": {
+     "analyst_large": 0.9503,
+     "code_agent": 0.974,
+     "deep_research": 0.9688,
+     "task_ticket": 0.9958
+    }
+   },
+   "resident_median": 32,
+   "resident_range": [
+    31,
+    32
+   ],
+   "host_cpu_median": 72.8,
+   "retrieval_cpu_median": 1.9,
+   "per_series": {
+    "series-9901-20260905-060903": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 177,
+     "offered_rate": 2.4,
+     "achieved_ratio": 0.996,
+     "generator_ok": true,
+     "units": 1436,
+     "units_per_ledger": [
+      359,
+      359,
+      359,
+      359
+     ],
+     "cohort_units": 718,
+     "warmup_s": 300.3,
+     "span_s": 300.3,
+     "rate": 2.391,
+     "backlog_start": 149,
+     "backlog_end": 177,
+     "backlog_delta": 28,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 60,
+       "ok": 32,
+       "p50_ms": 128475.0,
+       "p95_ms": 135180.9,
+       "failed": {
+        "inflight_at_end": 28
+       }
+      },
+      "code_agent": {
+       "n": 179,
+       "ok": 61,
+       "p50_ms": 188998.9,
+       "p95_ms": 198624.0,
+       "failed": {
+        "inflight_at_end": 118
+       }
+      },
+      "deep_research": {
+       "n": 60,
+       "ok": 52,
+       "p50_ms": 33889.6,
+       "p95_ms": 35568.4,
+       "failed": {
+        "inflight_at_end": 8
+       }
+      },
+      "task_ticket": {
+       "n": 419,
+       "ok": 396,
+       "p50_ms": 10097.3,
+       "p95_ms": 11001.1,
+       "failed": {
+        "inflight_at_end": 23
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         58
+        ],
+        "code_agent": [
+         0,
+         178
+        ],
+        "deep_research": [
+         0,
+         57
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         52
+        ],
+        "code_agent": [
+         0,
+         155
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.0,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         0,
+         95
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9239,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         61,
+         61
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9239,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         61,
+         61
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9239,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         61,
+         61
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 31,
+     "think_s": 3.0,
+     "host_cpu_pct": 72.7,
+     "retrieval_cpu_pct": 1.9,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.6
+    },
+    "series-10001-20260905-070727": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 176,
+     "offered_rate": 2.4,
+     "achieved_ratio": 0.997,
+     "generator_ok": true,
+     "units": 1436,
+     "units_per_ledger": [
+      359,
+      359,
+      359,
+      359
+     ],
+     "cohort_units": 718,
+     "warmup_s": 300.2,
+     "span_s": 300.2,
+     "rate": 2.392,
+     "backlog_start": 149,
+     "backlog_end": 177,
+     "backlog_delta": 28,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 60,
+       "ok": 32,
+       "p50_ms": 129150.5,
+       "p95_ms": 137584.5,
+       "failed": {
+        "inflight_at_end": 28
+       }
+      },
+      "code_agent": {
+       "n": 179,
+       "ok": 62,
+       "p50_ms": 189698.8,
+       "p95_ms": 198819.6,
+       "failed": {
+        "inflight_at_end": 117
+       }
+      },
+      "deep_research": {
+       "n": 60,
+       "ok": 52,
+       "p50_ms": 34038.9,
+       "p95_ms": 35406.1,
+       "failed": {
+        "inflight_at_end": 8
+       }
+      },
+      "task_ticket": {
+       "n": 419,
+       "ok": 396,
+       "p50_ms": 10205.8,
+       "p95_ms": 10979.4,
+       "failed": {
+        "inflight_at_end": 23
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         58
+        ],
+        "code_agent": [
+         0,
+         178
+        ],
+        "deep_research": [
+         0,
+         57
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         52
+        ],
+        "code_agent": [
+         0,
+         155
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.0,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         0,
+         95
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.925,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         62,
+         62
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.925,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         62,
+         62
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.925,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         62,
+         62
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 32,
+     "think_s": 3.0,
+     "host_cpu_pct": 73.2,
+     "retrieval_cpu_pct": 1.9,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.6
+    },
+    "series-10101-20260905-080544": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 174,
+     "offered_rate": 2.4,
+     "achieved_ratio": 0.996,
+     "generator_ok": true,
+     "units": 1436,
+     "units_per_ledger": [
+      359,
+      359,
+      359,
+      359
+     ],
+     "cohort_units": 719,
+     "warmup_s": 299.6,
+     "span_s": 300.6,
+     "rate": 2.392,
+     "backlog_start": 149,
+     "backlog_end": 174,
+     "backlog_delta": 25,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 60,
+       "ok": 32,
+       "p50_ms": 129138.9,
+       "p95_ms": 134436.5,
+       "failed": {
+        "inflight_at_end": 28
+       }
+      },
+      "code_agent": {
+       "n": 180,
+       "ok": 65,
+       "p50_ms": 188740.0,
+       "p95_ms": 197596.5,
+       "failed": {
+        "inflight_at_end": 115
+       }
+      },
+      "deep_research": {
+       "n": 60,
+       "ok": 52,
+       "p50_ms": 34028.3,
+       "p95_ms": 35377.4,
+       "failed": {
+        "inflight_at_end": 8
+       }
+      },
+      "task_ticket": {
+       "n": 419,
+       "ok": 396,
+       "p50_ms": 10128.6,
+       "p95_ms": 11066.8,
+       "failed": {
+        "inflight_at_end": 23
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         58
+        ],
+        "code_agent": [
+         0,
+         179
+        ],
+        "deep_research": [
+         0,
+         57
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         52
+        ],
+        "code_agent": [
+         0,
+         156
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.0,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         0,
+         96
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9283,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         65,
+         65
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9283,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         65,
+         65
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8643,
+        "code_agent": 0.9283,
+        "deep_research": 0.9119,
+        "task_ticket": 0.9875
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         65,
+         65
+        ],
+        "deep_research": [
+         52,
+         52
+        ],
+        "task_ticket": [
+         396,
+         396
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 32,
+     "think_s": 3.0,
+     "host_cpu_pct": 72.8,
+     "retrieval_cpu_pct": 1.9,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.6
+    }
+   }
+  },
+  "0.7": {
+   "achieved_median": 2.79,
+   "achieved_range": [
+    2.79,
+    2.79
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": false,
+   "tiers_sustained_all_series": [],
+   "tiers_sustained_per_series": [],
+   "pooled_bounds": {
+    "conversational": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "task_ticket": 0.9965
+    },
+    "interactive": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9733,
+     "task_ticket": 0.9965
+    },
+    "responsive": {
+     "analyst_large": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9733,
+     "task_ticket": 0.9965
+    },
+    "attended": {
+     "analyst_large": 0.8805,
+     "code_agent": 0.0,
+     "deep_research": 0.9733,
+     "task_ticket": 0.9965
+    },
+    "queued": {
+     "analyst_large": 0.8805,
+     "code_agent": 0.0,
+     "deep_research": 0.9733,
+     "task_ticket": 0.9965
+    },
+    "background": {
+     "analyst_large": 0.8805,
+     "code_agent": 0.0,
+     "deep_research": 0.9733,
+     "task_ticket": 0.9965
+    }
+   },
+   "resident_median": 37,
+   "resident_range": [
+    37,
+    37
+   ],
+   "host_cpu_median": 75.1,
+   "retrieval_cpu_median": 2.2,
+   "per_series": {
+    "series-9901-20260905-060903": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 292,
+     "offered_rate": 2.8,
+     "achieved_ratio": 0.996,
+     "generator_ok": true,
+     "units": 1676,
+     "units_per_ledger": [
+      419,
+      419,
+      419,
+      419
+     ],
+     "cohort_units": 838,
+     "warmup_s": 300.5,
+     "span_s": 300.5,
+     "rate": 2.788,
+     "backlog_start": 197,
+     "backlog_end": 324,
+     "backlog_delta": 127,
+     "keeps_up": false,
+     "per_type": {
+      "analyst_large": {
+       "n": 68,
+       "ok": 12,
+       "p50_ms": 221183.8,
+       "p95_ms": 235066.7,
+       "failed": {
+        "inflight_at_end": 56
+       }
+      },
+      "code_agent": {
+       "n": 204,
+       "ok": 0,
+       "p50_ms": null,
+       "p95_ms": null,
+       "failed": {
+        "inflight_at_end": 204
+       }
+      },
+      "deep_research": {
+       "n": 69,
+       "ok": 61,
+       "p50_ms": 34678.7,
+       "p95_ms": 35746.2,
+       "failed": {
+        "inflight_at_end": 8
+       }
+      },
+      "task_ticket": {
+       "n": 497,
+       "ok": 473,
+       "p50_ms": 10167.5,
+       "p95_ms": 11110.0,
+       "failed": {
+        "inflight_at_end": 24
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         65
+        ],
+        "code_agent": [
+         0,
+         201
+        ],
+        "deep_research": [
+         0,
+         65
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         60
+        ],
+        "code_agent": [
+         0,
+         180
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         34
+        ],
+        "code_agent": [
+         0,
+         108
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.7049,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         12,
+         12
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.7049,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         12,
+         12
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.7049,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         12,
+         12
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 37,
+     "think_s": 3.0,
+     "host_cpu_pct": 75.1,
+     "retrieval_cpu_pct": 2.2,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.7
+    },
+    "series-10001-20260905-070727": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 292,
+     "offered_rate": 2.8,
+     "achieved_ratio": 0.996,
+     "generator_ok": true,
+     "units": 1676,
+     "units_per_ledger": [
+      419,
+      419,
+      419,
+      419
+     ],
+     "cohort_units": 838,
+     "warmup_s": 300.5,
+     "span_s": 300.5,
+     "rate": 2.789,
+     "backlog_start": 196,
+     "backlog_end": 322,
+     "backlog_delta": 126,
+     "keeps_up": false,
+     "per_type": {
+      "analyst_large": {
+       "n": 68,
+       "ok": 12,
+       "p50_ms": 225266.9,
+       "p95_ms": 233908.6,
+       "failed": {
+        "inflight_at_end": 56
+       }
+      },
+      "code_agent": {
+       "n": 204,
+       "ok": 0,
+       "p50_ms": null,
+       "p95_ms": null,
+       "failed": {
+        "inflight_at_end": 204
+       }
+      },
+      "deep_research": {
+       "n": 69,
+       "ok": 61,
+       "p50_ms": 34697.1,
+       "p95_ms": 36263.3,
+       "failed": {
+        "inflight_at_end": 8
+       }
+      },
+      "task_ticket": {
+       "n": 497,
+       "ok": 473,
+       "p50_ms": 10248.8,
+       "p95_ms": 11130.0,
+       "failed": {
+        "inflight_at_end": 24
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         65
+        ],
+        "code_agent": [
+         0,
+         201
+        ],
+        "deep_research": [
+         0,
+         65
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         60
+        ],
+        "code_agent": [
+         0,
+         180
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         34
+        ],
+        "code_agent": [
+         0,
+         108
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.7049,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         12,
+         12
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.7049,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         12,
+         12
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.7049,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         12,
+         12
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 37,
+     "think_s": 3.0,
+     "host_cpu_pct": 75.1,
+     "retrieval_cpu_pct": 2.3,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.7
+    },
+    "series-10101-20260905-080544": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 291,
+     "offered_rate": 2.8,
+     "achieved_ratio": 0.996,
+     "generator_ok": true,
+     "units": 1676,
+     "units_per_ledger": [
+      419,
+      419,
+      419,
+      419
+     ],
+     "cohort_units": 838,
+     "warmup_s": 300.4,
+     "span_s": 300.4,
+     "rate": 2.789,
+     "backlog_start": 198,
+     "backlog_end": 323,
+     "backlog_delta": 125,
+     "keeps_up": false,
+     "per_type": {
+      "analyst_large": {
+       "n": 68,
+       "ok": 13,
+       "p50_ms": 229521.3,
+       "p95_ms": 233438.6,
+       "failed": {
+        "inflight_at_end": 55
+       }
+      },
+      "code_agent": {
+       "n": 204,
+       "ok": 0,
+       "p50_ms": null,
+       "p95_ms": null,
+       "failed": {
+        "inflight_at_end": 204
+       }
+      },
+      "deep_research": {
+       "n": 69,
+       "ok": 61,
+       "p50_ms": 34572.6,
+       "p95_ms": 35635.1,
+       "failed": {
+        "inflight_at_end": 8
+       }
+      },
+      "task_ticket": {
+       "n": 497,
+       "ok": 473,
+       "p50_ms": 10326.9,
+       "p95_ms": 11167.0,
+       "failed": {
+        "inflight_at_end": 24
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         65
+        ],
+        "code_agent": [
+         0,
+         201
+        ],
+        "deep_research": [
+         0,
+         65
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         60
+        ],
+        "code_agent": [
+         0,
+         180
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         34
+        ],
+        "code_agent": [
+         0,
+         108
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.7213,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         13,
+         13
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.7213,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         13,
+         13
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.7213,
+        "code_agent": 0.0,
+        "deep_research": 0.9239,
+        "task_ticket": 0.9895
+       },
+       "counts": {
+        "analyst_large": [
+         13,
+         13
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         61,
+         61
+        ],
+        "task_ticket": [
+         473,
+         473
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 37,
+     "think_s": 3.0,
+     "host_cpu_pct": 75.0,
+     "retrieval_cpu_pct": 2.1,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.7
+    }
+   }
+  }
+ },
+ "headline": {
+  "responsive": {
+   "per_instance_rate": 0.5,
+   "fleet_rate_median": 2.0,
+   "fleet_rate_range": [
+    2.0,
+    2.0
+   ],
+   "resident_median": 26,
+   "resident_range": [
+    26,
+    26
+   ]
+  },
+  "attended": {
+   "per_instance_rate": 0.6,
+   "fleet_rate_median": 2.39,
+   "fleet_rate_range": [
+    2.39,
+    2.39
+   ],
+   "resident_median": 32,
+   "resident_range": [
+    31,
+    32
+   ]
+  },
+  "queued": {
+   "per_instance_rate": 0.6,
+   "fleet_rate_median": 2.39,
+   "fleet_rate_range": [
+    2.39,
+    2.39
+   ],
+   "resident_median": 32,
+   "resident_range": [
+    31,
+    32
+   ]
+  },
+  "background": {
+   "per_instance_rate": 0.6,
+   "fleet_rate_median": 2.39,
+   "fleet_rate_range": [
+    2.39,
+    2.39
+   ],
+   "resident_median": 32,
+   "resident_range": [
+    31,
+    32
+   ]
+  }
+ }
+}
