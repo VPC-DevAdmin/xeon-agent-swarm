@@ -89,7 +89,12 @@ def main() -> None:
         pooled = plateau([f for d in dirs if r in series[d]
                           for f in sorted(glob.glob(f"{d}/rate-{r}-i*-evidence-*.jsonl.gz"))])
         all_keep = all(j["keeps_up"] and j["generator_ok"] for j in js)
-        sustained = [t for t in tiers if all_keep and t in pooled.get("sustained_tiers", [])]
+        # The pooled cohort spans three separate holds, so its own backlog
+        # arithmetic is meaningless; steadiness is the per-series verdict
+        # and the pooled plateau contributes only the joint on-time bounds.
+        target = 0.95
+        sustained = [t for t in tiers if all_keep and t in (pooled.get("tiers") or {})
+                     and all(v >= target for v in pooled["tiers"][t]["bounds"].values())]
         per_series_sustained = [t for t in tiers if all(t in j["sustained_tiers"] for j in js)]
 
         def lat(sid, q):

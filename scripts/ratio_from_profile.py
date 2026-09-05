@@ -86,7 +86,7 @@ def cores_busy_from_mpstat(series_dir: str, rate: str, log: str, cores: int) -> 
     if not sib:
         return None
     day = dt.datetime.fromtimestamp(t0, dt.timezone.utc).date()
-    per_cpu: dict[int, list[float]] = {}
+    per_cpu: dict[tuple[str, int], float] = {}
     for line in open(log):
         p = line.split()
         if len(p) < 12 or not _re.match(r"\d\d:\d\d:\d\d", p[0]):
@@ -101,13 +101,18 @@ def cores_busy_from_mpstat(series_dir: str, rate: str, log: str, cores: int) -> 
         if not (lo <= ts < hi):
             continue
         try:
-            per_cpu.setdefault(int(p[1]), []).append(100.0 - float(p[-1]))
+            per_cpu[(t, int(p[1]))] = 100.0 - float(p[-1])
         except ValueError:
             continue
     if not per_cpu:
         return None
-    occ = [st.mean(max(st.mean(per_cpu.get(c, [0.0])) for c in cpus) for _ in [0]) for cid, cpus in sib.items()]
-    return sum(o / 100.0 for o in occ)
+    # Per sample, a core is as busy as its busier thread; average those
+    # over the window (the per-core sampler's convention).
+    stamps = sorted({t for t, _ in per_cpu})
+    total = 0.0
+    for cid, cpus in sib.items():
+        total += st.mean(max(per_cpu.get((t, c), 0.0) for c in cpus) for t in stamps) / 100.0
+    return total
 
 
 def main() -> None:
