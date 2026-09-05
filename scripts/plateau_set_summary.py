@@ -67,9 +67,15 @@ def main() -> None:
     rates = sorted({r for s in series.values() for r in s})
     tiers = ["conversational", "interactive", "responsive", "attended", "queued", "background"]
     summary = {"set": str(set_dir), "series": dirs, "rates": rates, "per_rate": {}, "headline": {}}
+    # Per-type columns follow the archetypes present in the set (the
+    # reference tile and the CPU-heavy tile differ).
+    sids = sorted({sid for s in series.values() for j in s.values() for sid in (j.get("per_type") or {})})
+    short = {sid: sid.replace("_", " ")[:14] for sid in sids}
     lines = [f"# Plateau set {set_dir.name}", "", f"Series: {', '.join(Path(d).name for d in dirs)}", "",
-             "| rate/inst | achieved (median, range) | gen ok | keeps up | researcher p50/p95 | comparison p50/p95 | digest p50/p95 | analyst p50/p95 | task p50/p95 | tiers sustained (all series) | resident (median) | host CPU | retrieval CPU |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| rate/inst | achieved (median, range) | gen ok | keeps up | "
+             + " | ".join(f"{short[sid]} p50/p95" for sid in sids)
+             + " | tiers sustained (all series) | resident (median) | host CPU | retrieval CPU |",
+             "|---|---|---|---|" + "---|" * len(sids) + "---|---|---|---|"]
     for r in rates:
         js = [series[d][r] for d in dirs if r in series[d]]
         ach = [j["rate"] for j in js]
@@ -91,9 +97,7 @@ def main() -> None:
         summary["per_rate"][r] = row
         lines.append(f"| {r} | {row['achieved_median']} ({row['achieved_range'][0]}-{row['achieved_range'][1]}) | "
                      f"{'yes' if row['generator_ok_all'] else 'NO'} | {'yes' if row['keeps_up_all'] else 'NO'} | "
-                     f"{lat('research_brief', 'p50_ms')}/{lat('research_brief', 'p95_ms')} | "
-                     f"{lat('comparison', 'p50_ms')}/{lat('comparison', 'p95_ms')} | {lat('digest', 'p50_ms')}/{lat('digest', 'p95_ms')} | "
-                     f"{lat('data_analysis', 'p50_ms')}/{lat('data_analysis', 'p95_ms')} | {lat('task_ticket', 'p50_ms')}/{lat('task_ticket', 'p95_ms')} | "
+                     + " | ".join(f"{lat(sid, 'p50_ms')}/{lat(sid, 'p95_ms')}" for sid in sids) + " | "
                      f"{', '.join(sustained) or 'none'} | {row['resident_median']} ({row['resident_range'][0]}-{row['resident_range'][1]}) | "
                      f"{row['host_cpu_median']}% | {row['retrieval_cpu_median']}% |")
     for t in tiers:
