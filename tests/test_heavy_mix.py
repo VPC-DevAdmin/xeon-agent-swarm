@@ -86,17 +86,16 @@ def test_stand_in_policies_pick_the_kind_and_depth():
     assert name == "bench_retrieve" and "depth" not in args
 
 
-def test_heavy_tile_is_selected_by_name(monkeypatch):
+def test_organisation_tiles_are_selected_by_name(monkeypatch):
     from backend.capacity import scenarios as sc
-    monkeypatch.setenv("CAPACITY_E2E_TILE", "heavy")
-    sc._file_cache = None
-    tile = sc.load_e2e_tile()
-    assert tile == {"code_agent": 2, "deep_research": 1, "ingestion": 1, "analyst_xl": 1,
-                    "task_ticket": 1}
-    assert len(sc.e2e_tile_sessions()) == 6
     wfs = sc.load_e2e_workflows()
     assert wfs["code_agent"]["contract"]["llm_calls"] == [13, 13]
     assert wfs["ingestion"]["contract"]["tool_calls"] == [2, 2] and "ops_task" not in wfs
+    assert "analyst_xl" not in wfs
+    monkeypatch.setenv("CAPACITY_E2E_TILE", "heavy")       # the retired six-session tile is gone
+    sc._file_cache = None
+    with pytest.raises(KeyError):
+        sc.load_e2e_tile()
     monkeypatch.setenv("CAPACITY_E2E_TILE", "enterprise")
     sc._file_cache = None
     ent = sc.load_e2e_tile()
@@ -120,8 +119,8 @@ def test_fingerprint_names_the_tile(monkeypatch):
     monkeypatch.delenv("CAPACITY_E2E_TILE", raising=False)
     base = CapacityTest._serving_tier_tag()
     assert "|tile=" not in base
-    monkeypatch.setenv("CAPACITY_E2E_TILE", "heavy")
-    assert CapacityTest._serving_tier_tag().endswith("|tile=heavy")
+    monkeypatch.setenv("CAPACITY_E2E_TILE", "enterprise")
+    assert CapacityTest._serving_tier_tag().endswith("|tile=enterprise")
 
 
 def test_ingest_embedding_prefers_the_ingest_embedder(monkeypatch):

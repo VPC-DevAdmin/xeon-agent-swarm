@@ -10,17 +10,6 @@
 # per workflow stay in the reference range and only the host work per
 # token changes. Validations stay on the serving tier.
 e2e_tiles:
-  heavy:
-    code_agent: 2
-    deep_research: 1
-    ingestion: 1
-    analyst_xl: 1
-    task_ticket: 1
-  # The ENTERPRISE tile: the same compute-carrying agents as a tenth of a
-  # fleet in which small agents dominate by count (eleven task tickets,
-  # two digests, a research brief and a comparison). Dilution by small
-  # agents barely moves the ratio, because they are cheap on both axes;
-  # what sets it is that one agent in ten builds code or crunches data.
   # Three organisation-shaped tiles of twelve sessions from the five
   # archetypes: task agent (task_ticket), research agent at depth 128
   # (deep_research), data analyst at 40M rows (analyst_large), code agent,
@@ -127,29 +116,6 @@ e2e_workflows:
     query: >-
       Using ONLY the dataset (L) available through the execution tool (do
       not research further), analyze one week of service events for a
-      payments platform: per-merchant volume and value, the hourly load
-      profile, the value distribution and its tail, and anomalous
-      merchants. Plan EXACTLY three worker subtasks and no more: research
-      (profile the data), analysis (rank and explain the anomalies), and
-      writing (the report). Each worker runs bench_execute exactly once and
-      then bench_record exactly once, then writes its section and stops.
-      Deliverable: a summary table of the top merchants, the peak hour with
-      its load, the p95 and p99 transaction values, and a list of anomalies
-      with a one-line explanation each.
-  analyst_xl:
-    name: "Data analysis pipeline, XL (e2e, heavy mix)"
-    think_ms: 3000
-    # The data analyst with its three heavy jobs at the XL size (60M rows
-    # each, eighteen times the reference job): the same aggregation, the same
-    # report, nine times the sandbox work per workflow.
-    toolless: true
-    tools: [bench_execute, bench_record]
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [6000, 200000]}
-    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 12]}
-    budgets: {max_subagents: 4, max_tool_hops: 3}
-    query: >-
-      Using ONLY the dataset (XL) available through the execution tool (do
-      not research further), analyze one month of service events for a
       payments platform: per-merchant volume and value, the hourly load
       profile, the value distribution and its tail, and anomalous
       merchants. Plan EXACTLY three worker subtasks and no more: research

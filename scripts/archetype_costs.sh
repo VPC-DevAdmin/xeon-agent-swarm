@@ -17,7 +17,7 @@ echo "archetype costs -> $OUT (rates $LO $HI, hold $HOLD)" | tee "$OUT/log"
 # their two rates sit well under that; give them a longer hold (4th arg).
 rates_for() { case "$1" in
   research_brief) echo "1 2";; task_ticket) echo "4 8";;
-  code_agent) echo "0.04 0.08";; analyst_xl) echo "0.05 0.1";; analyst_large) echo "0.08 0.16";; deep_research) echo "0.15 0.3";;
+  code_agent) echo "0.04 0.08";; analyst_large) echo "0.08 0.16";; deep_research) echo "0.15 0.3";;
   ingestion) echo "0.03 0.06";;   # ~480 chunks per workflow at ~22 chunks/s per embedder core: keep the ingest tier under ~65%
   *) echo "$LO $HI";; esac; }
 for sid in ${ARCHETYPES:-task_ticket digest comparison research_brief data_analysis}; do
