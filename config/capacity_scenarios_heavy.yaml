@@ -21,30 +21,27 @@ e2e_tiles:
   # two digests, a research brief and a comparison). Dilution by small
   # agents barely moves the ratio, because they are cheap on both axes;
   # what sets it is that one agent in ten builds code or crunches data.
-  # Three organisation-shaped tiles from the five personas (task agent,
-  # research agent, data analyst, code agent, ingestion agent; sizes are
-  # declared parameters). Small agents dominate by count; the compute-
-  # carrying personas set the host work per token.
-  enterprise:          # a company: one agent in ten builds or crunches
-    code_agent: 2
+  # Three organisation-shaped tiles of twelve sessions from the five
+  # personas (task agent, research agent, data analyst, code agent,
+  # ingestion agent; sizes are declared parameters). Small agents dominate
+  # by count; the compute-carrying personas set the host work per token.
+  enterprise:          # a company: one coder and one analyst in twelve
+    code_agent: 1
     analyst_large: 1
-    research_brief: 2
+    research_brief: 1
     ingestion: 1
-    digest: 3
-    task_ticket: 11
+    task_ticket: 8
   engineering:         # an engineering organisation
     code_agent: 3
     analyst_large: 1
     deep_research: 1
-    digest: 1
-    task_ticket: 6
+    task_ticket: 7
   analytics:           # a data and research organisation
     analyst_large: 2
     analyst_xl: 1
     ingestion: 1
     deep_research: 2
-    digest: 2
-    task_ticket: 4
+    task_ticket: 6
 
 e2e_workflows:
   code_agent:
