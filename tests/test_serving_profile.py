@@ -60,8 +60,8 @@ def test_trace_then_capture_then_replay(tmp_path, monkeypatch):
     assert abs(float(r.headers["x-mock-wait-s"]) - 0.03) < 1e-6
     assert r.json()["usage"] == {"prompt_tokens": 2300, "completion_tokens": 95, "total_tokens": 2395}
     # an unrecorded archetype falls back to the same role in any archetype
-    r = client.post("/v1/chat/completions", json=_body("You are a technical writing specialist.", "Write the final brief for: Using ONLY the four items below"))
-    assert r.headers["x-mock-profile"] == "task_ticket/writing/0" and r.json()["usage"]["completion_tokens"] == 300
+    r = client.post("/v1/chat/completions", json=_body("You are a technical writing specialist.", "Write the ingest summary for: Using ONLY the document set available"))
+    assert r.headers["x-mock-profile"] == "ingestion/writing/0" and r.json()["usage"]["completion_tokens"] == 300
     monkeypatch.delenv("CAPACITY_SERVING_PROFILE")
 
 
