@@ -25,12 +25,12 @@ e2e_tiles:
   # personas (task agent, research agent, data analyst, code agent,
   # ingestion agent; sizes are declared parameters). Small agents dominate
   # by count; the compute-carrying personas set the host work per token.
-  enterprise:          # a company: one coder and one analyst in twelve
+  enterprise:          # a company: a coder, two analysts and two researchers in twelve
     code_agent: 1
-    analyst_large: 1
-    research_brief: 1
+    analyst_large: 2
+    research_brief: 2
     ingestion: 1
-    task_ticket: 8
+    task_ticket: 6
   engineering:         # an engineering organisation
     code_agent: 3
     analyst_large: 1
