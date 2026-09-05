@@ -1,0 +1,7 @@
+archetype costs -> data/capacity/archetypes-9430-20260904-211346 (rates 2 4, hold 480)
+=== ingestion (21:13:46)
+  -> data/capacity/series-9430-20260904-211346
+| archetype | p50 / p95 (s) | host core-s/wf | of which sandbox | reranker (pair law) | executors + search + records + orchestration | notes |
+|---|---|---|---|---|---|---|
+| ingestion | 25 / 26 | -41.72 | 0.00 | 0.00 | 3.48 | slope over 0.1 to 0.2 wf/s |
+ARCHETYPES DONE data/capacity/archetypes-9430-20260904-211346

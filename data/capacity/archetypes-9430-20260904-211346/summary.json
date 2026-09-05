@@ -1,0 +1,14 @@
+{
+ "ingestion": {
+  "p50_s": 24.920900000000003,
+  "p95_s": 25.8922,
+  "host_core_s_per_wf": -41.72,
+  "sandbox": 0.0,
+  "reranker_consumed": 0.0,
+  "executor_side": 3.48,
+  "rates": [
+   0.12922680997056352,
+   0.24888336355914017
+  ]
+ }
+}
