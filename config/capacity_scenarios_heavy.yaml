@@ -22,13 +22,14 @@ e2e_tiles:
   # agents barely moves the ratio, because they are cheap on both axes;
   # what sets it is that one agent in ten builds code or crunches data.
   # Three organisation-shaped tiles of twelve sessions from the five
-  # personas (task agent, research agent, data analyst, code agent,
-  # ingestion agent; sizes are declared parameters). Small agents dominate
-  # by count; the compute-carrying personas set the host work per token.
-  enterprise:          # a company: a coder, two analysts and two researchers in twelve
-    code_agent: 1
+  # archetypes: task agent (task_ticket), research agent at depth 128
+  # (deep_research), data analyst at 40M rows (analyst_large), code agent,
+  # ingestion agent. Small agents dominate by count; the compute-carrying
+  # archetypes set the host work per token.
+  enterprise:          # a technology-forward company: two coders, two analysts in twelve
+    code_agent: 2
     analyst_large: 2
-    research_brief: 2
+    deep_research: 1
     ingestion: 1
     task_ticket: 6
   engineering:         # an engineering organisation
@@ -37,8 +38,7 @@ e2e_tiles:
     deep_research: 1
     task_ticket: 7
   analytics:           # a data and research organisation
-    analyst_large: 2
-    analyst_xl: 1
+    analyst_large: 3
     ingestion: 1
     deep_research: 2
     task_ticket: 6

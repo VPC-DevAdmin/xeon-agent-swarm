@@ -100,8 +100,8 @@ def test_heavy_tile_is_selected_by_name(monkeypatch):
     monkeypatch.setenv("CAPACITY_E2E_TILE", "enterprise")
     sc._file_cache = None
     ent = sc.load_e2e_tile()
-    assert sum(ent.values()) == 12 and ent["task_ticket"] == 6 and ent["code_agent"] == 1 and ent["analyst_large"] == 2
-    assert "comparison" not in ent and "digest" not in ent
+    assert sum(ent.values()) == 12 and ent["task_ticket"] == 6 and ent["code_agent"] == 2 and ent["analyst_large"] == 2 and ent["deep_research"] == 1
+    assert not {"comparison", "digest", "research_brief", "analyst_xl", "data_analysis"} & set(ent)
     for name, n in (("engineering", 12), ("analytics", 12)):
         monkeypatch.setenv("CAPACITY_E2E_TILE", name)
         sc._file_cache = None
