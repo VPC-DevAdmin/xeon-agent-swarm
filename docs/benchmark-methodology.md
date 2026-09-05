@@ -27,7 +27,7 @@ server sustains, and reports three numbers from one curve:
   capacity also holds. A tier's certified rate is where the latency curve
   crosses that tier's line.
 - **Resident sessions**: how many agents the server is carrying at a rate,
-  by Little's law (rate x median workflow time plus a 3 s think time). It is
+  by Little's law (rate x mean workflow time plus a 3 s think time). It is
   derived at any stable operating point; a closed-loop confirmation run at
   the certified point ("residency photograph") remains available.
 
@@ -35,14 +35,84 @@ Every number is published with the whole curve behind it: each plateau's
 per-type latency, its tier verdicts, its backlog verdict, and the failed
 level above the last good one.
 
-## 2. The workload: five archetypes and a tile
+## 2. The workload: five archetypes and three organisation tiles
 
 A benchmark unit must be the same size on every repetition, so each
 archetype declares a **contract** (subtasks, model calls, validations, tool
 calls, an input-token floor) and every completed unit is held to it; a unit
 outside its contract is invalid, never counted as a success or a failure.
-The five archetypes differ in which kinds of work they contain, in graded
-amounts, so that each cost term in the system is identifiable from the data.
+The five archetypes are roles an enterprise deploys, at the sizes it runs
+them: sizes are declared parameters and are stated with every result. The
+contract shapes and model-call sizes are shared, so tokens per workflow
+stay in the same range across archetypes and only the host work per
+token changes.
+
+| Archetype | Declared size | Workers | Model calls | Host work per workflow | Generated tokens | Core-ms per token |
+|---|---|---|---|---|---|---|
+| Task agent | unchanged from the reference | 1 | 4 | 0.5 core-s | 550 | 0.9 |
+| Research agent | three retrievals at rerank depth 128 | 3 | 13 | 8.5 core-s | 1,800 | 4.7 |
+| Data analyst | three sandboxed jobs over 40 million rows each | 3 | 13 | 54 core-s | 1,790 | 30 |
+| Ingestion agent | 100 PDF pages parsed, about 480 chunks embedded and indexed | 1 | 5 | 24 core-s | 550 | 44 |
+| Code agent | three build-and-test steps over Lua 5.4.7 and the SQLite 3.50.4 amalgamation | 3 | 13 | 92 core-s | 1,800 | 51 |
+
+Host work is the stand-alone measurement from each archetype's cost run
+(the method of section 8); in a mix, busy cores run at about 0.8 times
+the summed weights because sibling threads share physical cores.
+
+- **Research agent**: the research brief with its three retrievals at
+  rerank depth 128 over the same corpus. The cross-encoder scores eight
+  times the candidates per call; 128-pair calls batch better than 16-pair
+  ones, so the reranking costs about 7 core-s per workflow rather than
+  eight times the reference. Latency 34 s at every load below the cliff.
+- **Data analyst**: the pipeline agent with its three jobs at 40 million
+  rows each, a week of payment events; about 17 core-s per job stand-alone,
+  21 to 23 in a mix. The three jobs run one after another, so the
+  archetype takes about 90 s at light load; that is its shape, not a
+  queue.
+- **Ingestion agent**: one worker parses 100 PDF pages in the sandbox
+  (about 1 core-s), then the executor embeds the chunks on the CPU
+  embedder (about 22 core-s; MiniLM-L6 in FP32 does about 22 chunks per
+  second per core) and indexes them; the check query is the verifier.
+  Ingestion is embedding-bound, which is why the ingest embedder is its
+  own tier.
+- **Code agent**: three workers each build a real working tree from
+  vendored source in the sandbox, Lua 5.4.7 through its own Makefile and
+  the SQLite amalgamation, both with gcc -O2, and run both suites (Lua's
+  own tests; an integration script against the built engine). About 33
+  core-s per step, in three sequential steps; nothing in the tree is
+  generated.
+- **Task agent**: unchanged, the short-lived agent every deployment has.
+
+Two roles from the reference tile are not in the catalog: the digest (a
+summarizer with three workers) and the comparison (a blend of one
+retrieval and one light job). They isolate cost terms in the reference
+tile and stay there; as personas a reader would deploy, they are the task
+agent and the analyst respectively at other sizes. An ops-style
+archetype modeled on the lab study's install-configure-verify tasks was
+built and dropped: at 0.4 core-s per task it only waited, and an agent
+that waits does not belong in a mix whose purpose is host work.
+
+### The tiles
+
+Twelve sessions each, small agents dominating by count as they do in a
+deployment; the compute-carrying archetypes set the host work per token.
+
+| Tile | Code agents | Data analysts | Research agents | Ingestion agents | Task agents |
+|---|---|---|---|---|---|
+| Enterprise (a technology-forward company) | 2 | 2 | 1 | 1 | 6 |
+| Engineering (an engineering organisation) | 3 | 1 | 1 | 0 | 7 |
+| Analytics (a data and research organisation) | 0 | 3 | 2 | 1 | 6 |
+
+
+Twelve positions describe the arrival mix, not resident concurrency.
+Workflow duration determines how many agents remain active at once.
+
+### The reference tile
+
+Before the catalog was fixed, a lighter six-position tile was used to
+find and remove the software limits (section 3) and to derive the cost
+laws (section 8): each of its archetypes differs from every other in one
+component count, so each cost term is identifiable from the data.
 
 | Archetype | Role it represents | Workers | Retrievals | Sandboxed jobs | Records | Contract (calls / validations / tools) | Tokens moved per workflow | What it isolates |
 |---|---|---|---|---|---|---|---|---|
@@ -52,25 +122,12 @@ amounts, so that each cost term in the system is identifiable from the data.
 | Data analyst | a pipeline agent over data | 3 | 0 | 3 heavy | 3 | 13 / 7 / 6 | ~24,000 | the heavy job |
 | Task agent | a trigger, triage, or routing agent: born, does one thing, dies | 1 | 0 | 0 | 1 | 4 / 3 / 1 | ~7,000 | per-agent lifecycle cost (planner plus synthesis, little between) |
 
-Why these five: each is a role an enterprise actually deploys, and each
-differs from every other in at least one component count. Retrieval appears
-3 / 1 / 0 times across the researcher, comparison, and digest; execution
-appears 3 heavy / 1 light / 0 across the analyst, comparison, and the rest;
-the digest carries orchestration alone; the task agent carries the fixed
-per-agent cost with almost nothing else. The comparison deliberately carries
-two components so the mixed case exists in the data. Five roles is already
-a lot for a reader; a sixth would not add an identifiable term.
-
-**The tile** is the unit of load: one research brief, one comparison, one
-digest, one data analyst, and two task agents (six workflow arrivals). The task
-agent is weighted twice because short-lived agents are most of a
-deployment. That weight is a declared assumption; the per-component cost
-table (section 8) lets a reader rescale to any mix. At the reference mix a
-workflow moves about 20,000 tokens through the model tier and generates
-about 1,300.
-
-The six positions describe the arrival mix, not resident concurrency.
-Workflow duration determines how many sessions remain active at once.
+Its digest and comparison are not in the catalog (as personas a reader
+would deploy they are the task agent and the analyst at other sizes),
+and its research brief and data analyst are the catalog's research agent
+and data analyst at smaller sizes (rerank depth 16; 3.3 million rows per
+job). Its sets are kept as the cost-law and software-limit record; the
+results of record are the organisation tiles' (section 11).
 
 Every workflow runs the production orchestrator end to end: a planner
 delegates the declared subtasks to specialist workers (one, for the task
@@ -149,10 +206,12 @@ reference server has 64 cores with two SMT threads each and an irregular
 sibling map, so allocations are never written as logical ranges. The
 reranker's runtime gets one thread per physical core (the first sibling);
 two runtime threads on one core's siblings were measured to halve each
-other. The reference allocation is 16 cores for the reranker, 2 for the
+other. The allocation of record is 8 cores for the reranker (one process,
+eight inference threads), 2 for the query embedder, 8 for the ingestion
 embedder, and the remaining 46 for the four instances, their executors,
 stand-ins, databases, and sandboxed jobs, which are pinned there so nothing
-shares AMX units with the tier. Pinning is by cpuset, not quota: a CPU quota on a
+shares AMX units with the tiers. The reference tile, whose workflows
+rerank far more per unit of host work, ran on 16 + 2 + 46. Pinning is by cpuset, not quota: a CPU quota on a
 128-thread host lets a many-threaded process burn its allowance in
 milliseconds and sleep for the rest of the period.
 
@@ -163,14 +222,16 @@ tier sized to saturate exactly at the target queues at the target (a
 14-core reranker sat at ~90% of its pair budget at 40 workflows/s and
 queued 13 s per call); a tier sized generously starves the other side (at
 20 cores the remaining 42 collapsed at the same rate, sandbox jobs alone
-taking half of all hardware threads). At the reference allocation and
+taking half of all hardware threads). At the reference tile's allocation and
 mix, 40 workflows/s has the executors' 46 cores 56% occupied (time-averaged
 per core, busier sibling) and the tier at about three quarters of its pair
 budget; at 44 the executors' side is 96% occupied and full on both
 threads of every core and the sandbox's CPU per workflow
 nearly doubles (0.84 to 1.62 core-seconds) as sibling threads contend,
-which is what makes the cliff sharp. The box's limit is just above 40
-workflows/s whatever the split. The sizing arithmetic is in section 8.
+which is what makes the cliff sharp. The reference tile's limit is just above 40
+workflows/s whatever the split; the organisation tiles' limits (section
+11) are the executors' 46 cores at 2.0 to 2.6 workflows/s, with the
+tiers at half their budget or less. The sizing arithmetic is in section 8.
 
 The reranker tier is four independent server processes, each pinned to
 four whole cores of its own and each with its own queue, and every
@@ -271,7 +332,7 @@ fleet's ledgers, pooled:
   date) grows by at most five units or 5% of the cohort across the
   cohort's span, and the generator delivered at least 95% of the offered
   rate.
-- Resident sessions are rate x (median latency + 3 s think).
+- Resident sessions are rate x (mean latency + 3 s think).
 
 A unit succeeds only if it completed inside its contract; a workflow
 running longer than the patience ceiling (900 s under the modeled tier) is
@@ -427,6 +488,13 @@ be rescaled to a different mix, depth, or job size.
   three calls), data analyst 6.74 (4.68 in three heavy jobs). Measured at
   light load, so upper bounds; the mixed tile's marginal cost at the
   certified point runs about a third lower.
+- **Per archetype at production sizes** (the catalog, section 2; measured
+  the same way): task agent 0.5 core-seconds per workflow, research agent
+  at depth 128 8.5 (about 7 of reranking), ingestion agent 24 (about 22
+  of embedding, 1 of parsing), data analyst at 40 million rows 54 (three
+  jobs of about 17), code agent 92 (three build-and-test steps of about
+  31 to 39). In a mix, busy cores run at about 0.8 times the summed
+  weights because sibling threads share physical cores.
 
 `scripts/cost_table.py` produces the per-component table from any series;
 `scripts/plateau_set_summary.py` produces the certified set summary.
@@ -440,30 +508,26 @@ the process topology, the host profile, and the ledger's SHA-256. Ledgers,
 judgments, set summaries, and per-core samples are committed under
 `data/capacity/`. Two results compare only when their fingerprints match.
 
-The certified set of record on the reference server is
-`data/capacity/set-20260904-070910` (seeds 8801, 8901, 9001; 4, 6, 8, 10,
-11, and 12 per instance; ten-minute holds; run commit 4a81e9f, evidence
-commit 43abb89): 39.8 workflows/s box-wide (39.83 to 39.86 across the
-series) for every tier from interactive up, 1,274 resident (1,273 to
-1,277), latencies flat from 16 to 40 workflows/s, zero failures through
-40; 44 offered delivered 43.5 with the backlog doubling inside the hold,
-48 delivered 44.2 with the generator shedding. The per-core samples for
-the set are `data/capacity/set-8800-mpstat.log`.
+The results of record are the three organisation tiles' certified sets
+(section 11): enterprise `data/capacity/set-20260905-031403` (seeds 9801,
+9901, 10001), engineering `set-20260905-060903` (9901, 10001, 10101),
+analytics `set-20260905-090413` (10001, 10101, 10201); three seeds each,
+ten-minute holds, run commits b86e16e and b68360b, evidence commits
+8420fc7 and 7385a53. Their per-core samples are
+`data/capacity/set-9800-mpstat.log`, `set-9900-mpstat.log`, and
+`set-10000-mpstat.log` (kept on the reference server; the logs are not
+committed).
 
-The same set re-run with the stand-in at a serving tier's density
-boundary (`data/capacity/set-20260904-140358`, seeds 9101, 9201, 9301:
-500 ms to first token, 2,000 prompt tokens per second and 20 output
-tokens per second per request, the rates a lab measurement of a single
-GPU serving a 35B mixture-of-experts model showed at its boundary)
-certifies the same 39.8 workflows/s (39.77 to 39.84) with the same cliff
-at 44, now with 4,334 resident sessions (4,331 to 4,338), 109 GB of host
-memory, and the responsive tier (150 s) as the certified one: every
-workflow carries about 110 s of modeled model wait, latencies are flat
-from 16 to 40 workflows/s, and the host's capacity does not move. Serving
-speed sets residency and the tier; the host sets the rate. The two earlier sets
-kept alongside it (`set-20260904-034441` on a shared-socket tier,
-`set-20260903-152713` on a 14-core tier) are the record of the two
-software limits found and removed on the way, not results.
+The reference tile's sets are kept as the record of the cost laws and of
+the two software limits found and removed on the way, not as results:
+`set-20260904-070910` (seeds 8801, 8901, 9001; run commit 4a81e9f) and
+its re-run at a serving tier's density boundary `set-20260904-140358`
+(seeds 9101, 9201, 9301), which showed that serving speed sets residency
+and the certified tier while the host sets the rate; `set-20260904-034441`
+on a shared-socket reranker tier and `set-20260903-152713` on a 14-core
+tier are the two limits. The six-position CPU-heavy tile measured before
+the catalog was fixed (`set-20260904-213229`, analyst at 60 million rows)
+is superseded by the organisation tiles.
 
 ## 10. Known limits
 
@@ -480,99 +544,103 @@ software limits found and removed on the way, not results.
 - Depths other than sixteen and job sizes other than the two declared are
   checked at one seed, not certified.
 
-## 11. The CPU-heavy mix
+## 11. The organisation mixes and the ratio
 
-The typical mix fixes one constant, host work per generated token, and
-the ratio of orchestration sockets to GPUs follows from it. The heavy mix
-is a second tile built from archetypes whose steps are compute-shaped,
-measured under the same method, so the paper can show the ratio as a
-function of what agents do rather than as one number.
-
-### Archetypes and tile
-
-Six sessions per tile, same contract shapes and model-call sizes as the
-reference archetypes, validations on the serving tier as before:
-
-- **Code agent** (two per tile): three workers each build a real working
-  tree from vendored source in the sandbox, Lua 5.4.7 through its own
-  Makefile and the SQLite 3.50.4 amalgamation, both with gcc -O2, and run
-  both suites (Lua's own tests; an integration script against the built
-  engine). 13 calls, 7 validations, 6 tool calls. About 91 core-s per
-  workflow at the certified point, in three sequential 30 s steps.
-- **Deep research**: the research brief at rerank depth 128 over the
-  same corpus. About 7 core-s of reranking per workflow at that depth
-  (128-pair calls batch better than 16-pair ones); 34 s latency.
-- **Ingestion agent**: one worker parses 100 PDF pages in the sandbox,
-  then the executor embeds the ~480 chunks and indexes them; the check
-  query is the verifier. Ingestion is embedding-bound: the parse is about
-  1 core-s and the embedding about 22 core-s (the CPU embedder does about
-  22 chunks per second per core in FP32), so the embedding has its own
-  tier.
-- **Analyst XL**: the data analyst with its three jobs at 60M rows each
-  (eighteen times the reference job). About 93 core-s per workflow at the
-  certified point; under contention the jobs' CPU rises further, since
-  concurrent 60M-row sorts contend for memory bandwidth.
-- **Task ticket**: unchanged.
-
-An ops-style archetype modeled on the lab study's install-configure-verify
-tasks was built and dropped: at 0.4 core-s per task it only waited, and an
-agent that waits does not belong in a mix whose purpose is host work.
+The reference tile fixes one constant, host work per generated token, and
+the ratio of orchestration sockets to GPUs follows from it. The three
+organisation tiles of section 2 were measured under the same method, so
+the paper shows the ratio as a function of what agents do rather than as
+one number; their sets are the results of record.
 
 ### Allocation
 
 Derived from the measured costs the same way as the reference: reranker
-4 cores (one process), query embedder 2, ingest embedder 8, and 50 for
-the instances, executors, and jobs. At the certified point the ingest
-tier is 51% busy and the reranker 25%; the executors' side is the limit.
-Provisioning selects it with `RERANK_PHYS_CORES=4 RERANK_WORKERS=1
-RERANK_THREADS=4 EMBED_PHYS_CORES=2 INGEST_EMBED_PHYS_CORES=8`, and the
-tile with `CAPACITY_E2E_TILE=heavy`; both ride the run fingerprint.
+8 cores (one process, eight threads), query embedder 2, ingest embedder
+8, and 46 for the instances, executors, and jobs. Provisioning selects
+it with `RERANK_PHYS_CORES=8 RERANK_WORKERS=1 RERANK_THREADS=8
+EMBED_PHYS_CORES=2 INGEST_EMBED_PHYS_CORES=8`, and the tile with
+`CAPACITY_E2E_TILE=enterprise`, `engineering`, or `analytics`; both ride
+the run fingerprint. In every tile the executors' 46 cores are the
+limit: 83 to 84% occupied at the certified points, 97 to 100% past the
+cliff. The reranker never passes 36% and the ingest tier sits at about
+50% at the certified points, reaching 94% only past the analytics cliff.
 
-### Result of record
+### Results of record
 
-`data/capacity/set-20260904-213229` (seeds 9501, 9601, 9701; 0.15, 0.2,
-0.25, 0.3, 0.35 and 0.4 per instance; ten-minute holds; run commit
-9944f29). Latencies are p50 / p95 in seconds, medians of three series;
-the tier verdict pools the three series' cohorts for the joint bound
-(each series keeps its own warm-up and censoring) and requires every
-series to keep up.
+Three sets, three seeds each, ten-minute holds (run commits b86e16e and
+b68360b, the second a judge-only change): enterprise
+`data/capacity/set-20260905-031403` (seeds 9801, 9901, 10001; 0.3 to 0.7
+per instance, 1.2 to 2.8 workflows/s box-wide), engineering
+`set-20260905-060903` (9901, 10001, 10101; same ladder), analytics
+`set-20260905-090413` (10001, 10101, 10201; 0.5 to 1.1 per instance, 2.0
+to 4.4 box-wide). Latencies are p50 / p95 in seconds, medians of three
+series; host cores busy is the time-averaged per-core occupancy of the
+first series (section 7); the tier verdict pools the three series'
+cohorts for the joint bound (each series keeps its own warm-up and
+censoring) and requires every series to keep up. Zero failures through
+every certified rate in every series.
 
-| Offered (box-wide) | Delivered | Code agent | Analyst XL | Deep research | Ingestion | Task | Backlog | Resident | Host cores busy | Verdict |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 0.6/s | 0.60 | 128 / 130 | 119 / 121 | 35 / 36 | 24 / 25 | 11 / 11 | flat | 22 | 42% | keeps up; too few units per type to certify a tier |
-| 0.8/s | 0.80 | 127 / 128 | 120 / 122 | 34 / 36 | 22 / 23 | 10 / 11 | flat | 30 | 54% | responsive and longer |
-| 1.0/s | 1.00 | 122 / 125 | 124 / 125 | 34 / 35 | 22 / 24 | 10 / 11 | flat | 37 | 65% | responsive (150 s): certified |
-| 1.2/s | 1.20 | 147 / 159 | 157 / 171 | 34 / 35 | 23 / 24 | 10 / 11 | flat | 43 | 79% | attended (450 s): certified; capacity holds |
-| 1.4/s | 1.40 | 228 / 234 | 221 / 231 | 34 / 36 | 25 / 27 | 10 / 11 | grows | — | 88% | past the cliff |
-| 1.6/s | 1.60 | — | — | 35 / 36 | 33 / 37 | 10 / 11 | grows | — | 92% | past the cliff |
+**Enterprise.** Capacity 2.0 workflows/s; the responsive tier certifies
+at 2.0 with 87 resident.
 
-Capacity is 1.2 workflows/s box-wide: the last offered rate at which
-completions kept pace in every series; at 1.4 the executors' 50 cores are
-97% occupied and the backlog grows. The responsive tier certifies at 1.0
-(37 resident, range 36 to 37), the attended tier at 1.2 (43 resident).
-The code agent and the analyst each take about two minutes at light load
-because their three compute steps run one after another; that is the
-archetype, not a queue. Zero failures through 1.2 in every series.
+| Offered (box-wide) | Code agent | Data analyst | Research | Ingestion | Task | Resident | Host cores busy | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| 1.2/s | 125 / 127 | 89 / 90 | 34 / 35 | 23 / 24 | 10 / 11 | 52 | 45% | responsive and longer |
+| 1.6/s | 122 / 126 | 94 / 96 | 34 / 35 | 23 / 24 | 10 / 11 | 68 | 57% | responsive |
+| 2.0/s | 133 / 145 | 104 / 112 | 34 / 35 | 23 / 24 | 10 / 11 | 87 | 70% | responsive (150 s): certified; capacity holds |
+| 2.4/s | 232 / 242 | 159 / 172 | 34 / 35 | 25 / 26 | 10 / 11 | — | 82% | past the cliff (executors 97%) |
+| 2.8/s | — | — | 35 / 36 | 27 / 30 | 10 / 11 | — | 86% | past the cliff |
 
-Per unit at 1.0 workflows/s (first series, medians of per-unit sums):
-code agent 121.5 s of which 91 s in three build steps and 27 s model
-wait; analyst XL 123.7 s of which 93 s in three jobs; deep research
-34.1 s with 1.3 s of retrieval; ingestion 21.9 s with 1.2 s of parsing
-and 9.9 s of embedding; task ticket 10.1 s.
+**Engineering.** Capacity 2.4 workflows/s; responsive certifies at 2.0
+(88 resident), attended at 2.4 (102).
+
+| Offered (box-wide) | Code agent | Data analyst | Research | Task | Resident | Host cores busy | Verdict |
+|---|---|---|---|---|---|---|---|
+| 1.2/s | 122 / 125 | 87 / 88 | 34 / 35 | 10 / 11 | 52 | 43% | responsive and longer |
+| 1.6/s | 118 / 121 | 89 / 91 | 34 / 35 | 10 / 11 | 67 | 55% | responsive |
+| 2.0/s | 131 / 141 | 101 / 108 | 34 / 35 | 10 / 11 | 88 | 64% | responsive (150 s): certified |
+| 2.4/s | 189 / 199 | 129 / 135 | 34 / 35 | 10 / 11 | 102 | 74% | attended (450 s): certified; capacity holds |
+| 2.8/s | — | 225 / 234 | 35 / 36 | 10 / 11 | — | 77% | past the cliff (executors 100%) |
+
+**Analytics.** Capacity 2.6 workflows/s; responsive certifies at 2.0
+(72 resident), attended at 2.6 (106).
+
+| Offered (box-wide) | Data analyst | Research | Ingestion | Task | Resident | Host cores busy | Verdict |
+|---|---|---|---|---|---|---|---|
+| 2.0/s | 96 / 97 | 34 / 35 | 22 / 24 | 10 / 11 | 72 | 54% | responsive (150 s): certified |
+| 2.6/s | 173 / 183 | 34 / 36 | 26 / 28 | 10 / 11 | 106 | 82% | attended (450 s): certified; capacity holds |
+| 3.2/s | — | 35 / 36 | 82 / 100 | 10 / 11 | — | 91% | past the cliff (executors 100%, ingest tier 94%) |
+| 3.8/s | — | 35 / 37 | 114 / 217 | 10 / 11 | — | 92% | past the cliff |
+| 4.4/s | — | 37 / 40 | 150 / 218 | 11 / 12 | — | 93% | past the cliff |
+
+Per unit at 2.0 workflows/s (first series, medians of per-unit sums):
+code agent 131 to 133 s, of which 100 to 102 s in three build steps and
+27 s of model wait; data analyst 96 to 104 s, of which 63 to 68 s in
+three jobs and 28 s of model wait; research agent 34 s with 1.2 to 1.4 s
+of retrieval; ingestion agent 23 s with 1.2 s of parsing and 10 s of
+embedding; task agent 10 s, of which 8.4 s is model wait. Resident agents
+are rate times mean time in system (Little's law) plus think time; the
+mean, not the median, because in a tile that is half task agents the
+median unit is a 10 s task agent and would understate the agents alive by
+about four times.
 
 ### The ratio
 
 GPUs per 64-core socket = 64,000 / (core-ms per generated token × generation tokens per second per GPU)
 
 Host work per generated token is measured at the certified point of each
-mix from the plateau's ledgers and per-core samples
+tile from the plateau's ledgers and per-core samples
 (`scripts/ratio_from_profile.py --mpstat`): busy physical cores over the
-steady window, divided by generated tokens per second.
+steady window, divided by generated tokens per second. It is a property
+of the mix, not of the load: across each ladder it moves within a few
+core-ms.
 
-| Mix | Certified point | Busy cores | Generated tokens/s | Core-ms per token |
-|---|---|---|---|---|
-| Typical | 40 wf/s | 39.4 | 53,200 | 0.74 |
-| Heavy | 1.2 wf/s | 50.4 | 1,610 | 31.2 |
+| Mix | Certified point | Busy cores | Generated tokens/s | Core-ms per token | Across the ladder |
+|---|---|---|---|---|---|
+| Reference tile (light agents) | 40 wf/s | 39.4 | 53,200 | 0.74 | |
+| Enterprise | 2.0 wf/s | 44.7 | 2,076 | 21.5 | 21.5 to 22.7 |
+| Engineering | 2.0 wf/s | 41.1 | 2,058 | 20.0 | 19.0 to 22.4 |
+| Analytics | 2.0 wf/s | 34.4 | 2,110 | 16.3 | 16.3 to 19.8 |
 
 The GPU side is not measured here. The reference band is a lab
 measurement of one RTX PRO 6000 serving a 35B mixture-of-experts model
@@ -582,15 +650,18 @@ single-GPU recording that replaces it with our own measurement on this
 workload's calls is described in section 6 and is an enhancement, not
 part of this result.
 
-| Generation tokens/s per GPU | Typical mix | Heavy mix |
-|---|---|---|
-| 1,300 | 1 : 66 | 1 : 1.6 |
-| 2,400 | 1 : 36 | 1 : 0.9 |
-| 3,800 | 1 : 23 | 1 : 0.5 |
+| Generation tokens/s per GPU | Reference tile | Enterprise | Engineering | Analytics |
+|---|---|---|---|---|
+| 1,300 | 1 : 66 | 1 : 2.3 | 1 : 2.5 | 1 : 3.0 |
+| 2,400 | 1 : 36 | 1 : 1.2 | 1 : 1.3 | 1 : 1.6 |
+| 3,800 | 1 : 23 | 1 : 0.8 | 1 : 0.8 | 1 : 1.0 |
 
-The heavy mix crosses 1:1 inside the band: one orchestration socket per
-GPU at the lab's conservative peak, and 1.6 GPUs per socket at its window
-average. What moves the ratio is the host work per token, which the mix
-sets, and the tokens per GPU, which the model and accelerator set; a
-slower serving tier changes residency and the certified tier, never the
-ratio.
+All three organisation mixes cross 1:1 inside the band: about one
+orchestration socket per GPU at the lab's conservative peak, and two to
+three GPUs per socket at its window average. A tile of twelve task
+agents, the support-desk case, would sit near the reference tile (about 0.7
+to 0.9 core-ms per token, 1:30 to 1:40 at 2,400 tokens/s; an estimate
+from the weights, not a certified set). What moves the ratio is the host
+work per token, which the mix sets, and the tokens per GPU, which the
+model and accelerator set; a slower serving tier changes residency and
+the certified tier, never the ratio.

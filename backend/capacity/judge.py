@@ -282,7 +282,7 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
     deadline take the joint Wilson bound over that whole cohort; steady
     state is backlog growth across the cohort span (arrivals-to-date minus
     completions-to-date at the end of the span versus its start), within
-    max(5, 5% of cohort arrivals). Sessions resident = rate x (median
+    max(5, 5% of cohort arrivals). Sessions resident = rate x (mean
     latency + think), Little's law."""
     from backend.capacity.scenarios import service_ladder
     units = []
@@ -364,7 +364,10 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
         tiers[tier] = {"deadline_s": float(dl), "bounds": bounds, "counts": counts,
                        "on_time_and_steady": ok}
     all_lats = sorted(u[4] for u in cohort if u[3] and u[4] is not None)
-    med = (_pct(all_lats, 50) or 0.0) / 1000.0
+    # Little's law takes the MEAN time in system. The median would land on
+    # the most numerous archetype (a 10 s task agent in a tile that is
+    # half task agents) and understate the agents alive by several times.
+    med = (sum(all_lats) / len(all_lats) if all_lats else 0.0) / 1000.0
     # The generator's receipt: the cohort's achieved arrival rate against
     # the rate the ledgers say was offered (unit rows carry it). A plateau
     # whose generator fell behind describes load nobody offered, and its

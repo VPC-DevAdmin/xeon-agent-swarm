@@ -66,10 +66,10 @@
      "task_ticket": 0.9938
     }
    },
-   "resident_median": 16,
+   "resident_median": 52,
    "resident_range": [
-    16,
-    16
+    51,
+    52
    ],
    "host_cpu_median": 32.3,
    "retrieval_cpu_median": 0.0,
@@ -305,7 +305,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 16,
+     "resident_sessions": 51,
      "think_s": 3.0,
      "host_cpu_pct": 32.3,
      "retrieval_cpu_pct": 0.0,
@@ -543,7 +543,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 16,
+     "resident_sessions": 52,
      "think_s": 3.0,
      "host_cpu_pct": 32.2,
      "retrieval_cpu_pct": 0.0,
@@ -781,7 +781,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 16,
+     "resident_sessions": 52,
      "think_s": 3.0,
      "host_cpu_pct": 32.3,
      "retrieval_cpu_pct": 0.0,
@@ -843,10 +843,10 @@
      "task_ticket": 0.9953
     }
    },
-   "resident_median": 21,
+   "resident_median": 67,
    "resident_range": [
-    21,
-    21
+    67,
+    68
    ],
    "host_cpu_median": 36.7,
    "retrieval_cpu_median": 1.9,
@@ -1082,7 +1082,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 21,
+     "resident_sessions": 67,
      "think_s": 3.0,
      "host_cpu_pct": 36.7,
      "retrieval_cpu_pct": 1.9,
@@ -1320,7 +1320,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 21,
+     "resident_sessions": 67,
      "think_s": 3.0,
      "host_cpu_pct": 36.7,
      "retrieval_cpu_pct": 1.4,
@@ -1558,7 +1558,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 21,
+     "resident_sessions": 68,
      "think_s": 3.0,
      "host_cpu_pct": 36.8,
      "retrieval_cpu_pct": 1.9,
@@ -1620,10 +1620,10 @@
      "task_ticket": 0.9961
     }
    },
-   "resident_median": 26,
+   "resident_median": 88,
    "resident_range": [
-    26,
-    26
+    86,
+    89
    ],
    "host_cpu_median": 51.8,
    "retrieval_cpu_median": 2.0,
@@ -1859,7 +1859,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 26,
+     "resident_sessions": 88,
      "think_s": 3.0,
      "host_cpu_pct": 51.5,
      "retrieval_cpu_pct": 2.0,
@@ -2097,7 +2097,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 26,
+     "resident_sessions": 89,
      "think_s": 3.0,
      "host_cpu_pct": 51.8,
      "retrieval_cpu_pct": 2.0,
@@ -2335,7 +2335,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 26,
+     "resident_sessions": 86,
      "think_s": 3.0,
      "host_cpu_pct": 52.0,
      "retrieval_cpu_pct": 1.9,
@@ -2396,10 +2396,10 @@
      "task_ticket": 0.9958
     }
    },
-   "resident_median": 32,
+   "resident_median": 102,
    "resident_range": [
-    31,
-    32
+    102,
+    104
    ],
    "host_cpu_median": 72.8,
    "retrieval_cpu_median": 1.9,
@@ -2635,7 +2635,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 31,
+     "resident_sessions": 102,
      "think_s": 3.0,
      "host_cpu_pct": 72.7,
      "retrieval_cpu_pct": 1.9,
@@ -2873,7 +2873,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 32,
+     "resident_sessions": 102,
      "think_s": 3.0,
      "host_cpu_pct": 73.2,
      "retrieval_cpu_pct": 1.9,
@@ -3111,7 +3111,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 32,
+     "resident_sessions": 104,
      "think_s": 3.0,
      "host_cpu_pct": 72.8,
      "retrieval_cpu_pct": 1.9,
@@ -3168,10 +3168,10 @@
      "task_ticket": 0.9965
     }
    },
-   "resident_median": 37,
+   "resident_median": 57,
    "resident_range": [
-    37,
-    37
+    57,
+    58
    ],
    "host_cpu_median": 75.1,
    "retrieval_cpu_median": 2.2,
@@ -3407,7 +3407,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 37,
+     "resident_sessions": 57,
      "think_s": 3.0,
      "host_cpu_pct": 75.1,
      "retrieval_cpu_pct": 2.2,
@@ -3645,7 +3645,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 37,
+     "resident_sessions": 57,
      "think_s": 3.0,
      "host_cpu_pct": 75.1,
      "retrieval_cpu_pct": 2.3,
@@ -3883,7 +3883,7 @@
       }
      },
      "sustained_tiers": [],
-     "resident_sessions": 37,
+     "resident_sessions": 58,
      "think_s": 3.0,
      "host_cpu_pct": 75.0,
      "retrieval_cpu_pct": 2.1,
@@ -3901,10 +3901,10 @@
     2.0,
     2.0
    ],
-   "resident_median": 26,
+   "resident_median": 88,
    "resident_range": [
-    26,
-    26
+    86,
+    89
    ]
   },
   "attended": {
@@ -3914,10 +3914,10 @@
     2.39,
     2.39
    ],
-   "resident_median": 32,
+   "resident_median": 102,
    "resident_range": [
-    31,
-    32
+    102,
+    104
    ]
   },
   "queued": {
@@ -3927,10 +3927,10 @@
     2.39,
     2.39
    ],
-   "resident_median": 32,
+   "resident_median": 102,
    "resident_range": [
-    31,
-    32
+    102,
+    104
    ]
   },
   "background": {
@@ -3940,10 +3940,10 @@
     2.39,
     2.39
    ],
-   "resident_median": 32,
+   "resident_median": 102,
    "resident_range": [
-    31,
-    32
+    102,
+    104
    ]
   }
  }

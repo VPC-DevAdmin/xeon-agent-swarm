@@ -31,6 +31,9 @@ same evidence.
 
 ## The CPU-heavy tile
 
+*Superseded by the three organisation tiles of five archetypes; see the
+Result at the end. Kept as the plan that was executed.*
+
 Every archetype keeps the existing contract shape (declared subtasks,
 model calls, validations, tool calls) and the same model-call sizes, so the
 tokens per workflow stay in the same range and only the host work per
@@ -193,20 +196,28 @@ not move the ratio (it multiplies resident sessions instead); faster
 serving moves it toward 1:1, because the host work per token is fixed by
 the workflow while the GPU's tokens per second are not.
 
-## Result (4 September 2026)
+## Result (5 September 2026)
 
-Certified set `data/capacity/set-20260904-213229`, three seeds, ten-minute
-holds at 0.6 to 1.6 workflows/s box-wide: capacity 1.2 workflows/s (1.4
-falls behind with the executors' 50 cores at 97%), responsive tier
-certified at 1.0 (37 resident), attended tier at 1.2 (43 resident), zero
-failures through 1.2. Measured host work per generated token at the
-certified point: 31 core-ms, against 0.74 for the typical mix. The
-estimated ratio table above is replaced by the measurement:
+The six-session heavy tile above was measured first (set
+`data/capacity/set-20260904-213229`: capacity 1.2 workflows/s, 31
+core-ms per token, 1:0.9 at 2,400 tokens/s). It was then superseded when
+the catalog settled on five archetypes with no size variants (research
+agent at depth 128, data analyst at 40 million rows, code agent,
+ingestion agent, task agent) and three organisation-shaped tiles of
+twelve sessions, all certified with three seeds and ten-minute holds:
 
-| Generation tokens/s per GPU | Typical mix (measured) | Heavy mix (measured) |
-|---|---|---|
-| 1,300 (lab window average) | 1 : 66 | 1 : 1.6 |
-| 2,400 (lab peak, conservative) | 1 : 36 | 1 : 0.9 |
-| 3,800 (lab peak, best) | 1 : 23 | 1 : 0.5 |
+| Tile | Composition (of twelve) | Capacity | Responsive certified | Core-ms per token | 1,300 tok/s per GPU | 2,400 | 3,800 |
+|---|---|---|---|---|---|---|---|
+| Enterprise | 2 code, 2 analyst, 1 research, 1 ingestion, 6 task | 2.0 wf/s | 2.0 (87 resident) | 21.5 | 1 : 2.3 | 1 : 1.2 | 1 : 0.8 |
+| Engineering | 3 code, 1 analyst, 1 research, 7 task | 2.4 wf/s | 2.0 (88 resident); attended 2.4 (102) | 20.0 | 1 : 2.5 | 1 : 1.3 | 1 : 0.8 |
+| Analytics | 3 analyst, 2 research, 1 ingestion, 6 task | 2.6 wf/s | 2.0 (72 resident); attended 2.6 (106) | 16.3 | 1 : 3.0 | 1 : 1.6 | 1 : 1.0 |
+| Reference tile (light agents) | reference archetypes | 40 wf/s | 39.8 | 0.74 | 1 : 66 | 1 : 36 | 1 : 23 |
 
-Full detail is section 11 of `docs/benchmark-methodology.md`.
+Every organisation mix crosses 1:1 inside the lab's band; the constant
+is flat across each ladder (enterprise 21.5 to 22.7 core-ms per token
+from 1.2 to 2.8 workflows/s). Sets `set-20260905-031403`,
+`set-20260905-060903`, `set-20260905-090413`. Full detail is section 11
+of `docs/benchmark-methodology.md`. Resident agents are rate times mean
+time in system (Little's law); the judge used the median until 5 September,
+which in a tile that is half task agents understated residency about four
+times.

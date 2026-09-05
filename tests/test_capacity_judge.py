@@ -224,7 +224,7 @@ def test_plateau_judges_one_held_rate_as_a_cohort(tmp_path):
     assert p["keeps_up"] is True
     assert "interactive" in p["sustained_tiers"]   # 45 s deadline, 30-33 s latency
     assert "conversational" not in p["sustained_tiers"]
-    # Little's law: ~4/s x (31.5 s median + 3 s think) ~ 138 resident
+    # Little's law: ~4/s x (31.5 s mean + 3 s think) ~ 138 resident
     assert 120 <= p["resident_sessions"] <= 150
 
 
