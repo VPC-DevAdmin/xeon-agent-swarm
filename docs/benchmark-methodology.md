@@ -164,9 +164,10 @@ tier sized to saturate exactly at the target queues at the target (a
 queued 13 s per call); a tier sized generously starves the other side (at
 20 cores the remaining 42 collapsed at the same rate, sandbox jobs alone
 taking half of all hardware threads). At the reference allocation and
-mix, 40 workflows/s has the executors' 46 cores 60% occupied and the tier
-at about three quarters of its pair budget; at 44 the executors' side is
-full on both threads of every core and the sandbox's CPU per workflow
+mix, 40 workflows/s has the executors' 46 cores 56% occupied (time-averaged
+per core, busier sibling) and the tier at about three quarters of its pair
+budget; at 44 the executors' side is 96% occupied and full on both
+threads of every core and the sandbox's CPU per workflow
 nearly doubles (0.84 to 1.62 core-seconds) as sibling threads contend,
 which is what makes the cliff sharp. The box's limit is just above 40
 workflows/s whatever the split. The sizing arithmetic is in section 8.
@@ -478,3 +479,118 @@ software limits found and removed on the way, not results.
   and recovery after overload are not measured.
 - Depths other than sixteen and job sizes other than the two declared are
   checked at one seed, not certified.
+
+## 11. The CPU-heavy mix
+
+The typical mix fixes one constant, host work per generated token, and
+the ratio of orchestration sockets to GPUs follows from it. The heavy mix
+is a second tile built from archetypes whose steps are compute-shaped,
+measured under the same method, so the paper can show the ratio as a
+function of what agents do rather than as one number.
+
+### Archetypes and tile
+
+Six sessions per tile, same contract shapes and model-call sizes as the
+reference archetypes, validations on the serving tier as before:
+
+- **Code agent** (two per tile): three workers each build a real working
+  tree from vendored source in the sandbox, Lua 5.4.7 through its own
+  Makefile and the SQLite 3.50.4 amalgamation, both with gcc -O2, and run
+  both suites (Lua's own tests; an integration script against the built
+  engine). 13 calls, 7 validations, 6 tool calls. About 91 core-s per
+  workflow at the certified point, in three sequential 30 s steps.
+- **Deep research**: the research brief at rerank depth 128 over the
+  same corpus. About 7 core-s of reranking per workflow at that depth
+  (128-pair calls batch better than 16-pair ones); 34 s latency.
+- **Ingestion agent**: one worker parses 100 PDF pages in the sandbox,
+  then the executor embeds the ~480 chunks and indexes them; the check
+  query is the verifier. Ingestion is embedding-bound: the parse is about
+  1 core-s and the embedding about 22 core-s (the CPU embedder does about
+  22 chunks per second per core in FP32), so the embedding has its own
+  tier.
+- **Analyst XL**: the data analyst with its three jobs at 60M rows each
+  (eighteen times the reference job). About 93 core-s per workflow at the
+  certified point; under contention the jobs' CPU rises further, since
+  concurrent 60M-row sorts contend for memory bandwidth.
+- **Task ticket**: unchanged.
+
+An ops-style archetype modeled on the lab study's install-configure-verify
+tasks was built and dropped: at 0.4 core-s per task it only waited, and an
+agent that waits does not belong in a mix whose purpose is host work.
+
+### Allocation
+
+Derived from the measured costs the same way as the reference: reranker
+4 cores (one process), query embedder 2, ingest embedder 8, and 50 for
+the instances, executors, and jobs. At the certified point the ingest
+tier is 51% busy and the reranker 25%; the executors' side is the limit.
+Provisioning selects it with `RERANK_PHYS_CORES=4 RERANK_WORKERS=1
+RERANK_THREADS=4 EMBED_PHYS_CORES=2 INGEST_EMBED_PHYS_CORES=8`, and the
+tile with `CAPACITY_E2E_TILE=heavy`; both ride the run fingerprint.
+
+### Result of record
+
+`data/capacity/set-20260904-213229` (seeds 9501, 9601, 9701; 0.15, 0.2,
+0.25, 0.3, 0.35 and 0.4 per instance; ten-minute holds; run commit
+9944f29). Latencies are p50 / p95 in seconds, medians of three series;
+the tier verdict pools the three series' cohorts for the joint bound
+(each series keeps its own warm-up and censoring) and requires every
+series to keep up.
+
+| Offered (box-wide) | Delivered | Code agent | Analyst XL | Deep research | Ingestion | Task | Backlog | Resident | Host cores busy | Verdict |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.6/s | 0.60 | 128 / 130 | 119 / 121 | 35 / 36 | 24 / 25 | 11 / 11 | flat | 22 | 42% | keeps up; too few units per type to certify a tier |
+| 0.8/s | 0.80 | 127 / 128 | 120 / 122 | 34 / 36 | 22 / 23 | 10 / 11 | flat | 30 | 54% | responsive and longer |
+| 1.0/s | 1.00 | 122 / 125 | 124 / 125 | 34 / 35 | 22 / 24 | 10 / 11 | flat | 37 | 65% | responsive (150 s): certified |
+| 1.2/s | 1.20 | 147 / 159 | 157 / 171 | 34 / 35 | 23 / 24 | 10 / 11 | flat | 43 | 79% | attended (450 s): certified; capacity holds |
+| 1.4/s | 1.40 | 228 / 234 | 221 / 231 | 34 / 36 | 25 / 27 | 10 / 11 | grows | — | 88% | past the cliff |
+| 1.6/s | 1.60 | — | — | 35 / 36 | 33 / 37 | 10 / 11 | grows | — | 92% | past the cliff |
+
+Capacity is 1.2 workflows/s box-wide: the last offered rate at which
+completions kept pace in every series; at 1.4 the executors' 50 cores are
+97% occupied and the backlog grows. The responsive tier certifies at 1.0
+(37 resident, range 36 to 37), the attended tier at 1.2 (43 resident).
+The code agent and the analyst each take about two minutes at light load
+because their three compute steps run one after another; that is the
+archetype, not a queue. Zero failures through 1.2 in every series.
+
+Per unit at 1.0 workflows/s (first series, medians of per-unit sums):
+code agent 121.5 s of which 91 s in three build steps and 27 s model
+wait; analyst XL 123.7 s of which 93 s in three jobs; deep research
+34.1 s with 1.3 s of retrieval; ingestion 21.9 s with 1.2 s of parsing
+and 9.9 s of embedding; task ticket 10.1 s.
+
+### The ratio
+
+GPUs per 64-core socket = 64,000 / (core-ms per generated token × generation tokens per second per GPU)
+
+Host work per generated token is measured at the certified point of each
+mix from the plateau's ledgers and per-core samples
+(`scripts/ratio_from_profile.py --mpstat`): busy physical cores over the
+steady window, divided by generated tokens per second.
+
+| Mix | Certified point | Busy cores | Generated tokens/s | Core-ms per token |
+|---|---|---|---|---|
+| Typical | 40 wf/s | 39.4 | 53,200 | 0.74 |
+| Heavy | 1.2 wf/s | 50.4 | 1,610 | 31.2 |
+
+The GPU side is not measured here. The reference band is a lab
+measurement of one RTX PRO 6000 serving a 35B mixture-of-experts model
+with 3B active in FP8 (window average 1,300 generation tokens/s over a
+draining fleet; peaks 2,400 to 3,800), stated with that provenance; the
+single-GPU recording that replaces it with our own measurement on this
+workload's calls is described in section 6 and is an enhancement, not
+part of this result.
+
+| Generation tokens/s per GPU | Typical mix | Heavy mix |
+|---|---|---|
+| 1,300 | 1 : 66 | 1 : 1.6 |
+| 2,400 | 1 : 36 | 1 : 0.9 |
+| 3,800 | 1 : 23 | 1 : 0.5 |
+
+The heavy mix crosses 1:1 inside the band: one orchestration socket per
+GPU at the lab's conservative peak, and 1.6 GPUs per socket at its window
+average. What moves the ratio is the host work per token, which the mix
+sets, and the tokens per GPU, which the model and accelerator set; a
+slower serving tier changes residency and the certified tier, never the
+ratio.

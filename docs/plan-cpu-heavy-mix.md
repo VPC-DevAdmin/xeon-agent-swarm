@@ -192,3 +192,21 @@ our shapes will differ until phase 4 measures them. Slower serving does
 not move the ratio (it multiplies resident sessions instead); faster
 serving moves it toward 1:1, because the host work per token is fixed by
 the workflow while the GPU's tokens per second are not.
+
+## Result (4 September 2026)
+
+Certified set `data/capacity/set-20260904-213229`, three seeds, ten-minute
+holds at 0.6 to 1.6 workflows/s box-wide: capacity 1.2 workflows/s (1.4
+falls behind with the executors' 50 cores at 97%), responsive tier
+certified at 1.0 (37 resident), attended tier at 1.2 (43 resident), zero
+failures through 1.2. Measured host work per generated token at the
+certified point: 31 core-ms, against 0.74 for the typical mix. The
+estimated ratio table above is replaced by the measurement:
+
+| Generation tokens/s per GPU | Typical mix (measured) | Heavy mix (measured) |
+|---|---|---|
+| 1,300 (lab window average) | 1 : 66 | 1 : 1.6 |
+| 2,400 (lab peak, conservative) | 1 : 36 | 1 : 0.9 |
+| 3,800 (lab peak, best) | 1 : 23 | 1 : 0.5 |
+
+Full detail is section 11 of `docs/benchmark-methodology.md`.
