@@ -24,72 +24,48 @@
    "keeps_up_all": true,
    "tiers_sustained_all_series": [],
    "tiers_sustained_per_series": [],
-   "pooled_tiers": {
+   "pooled_bounds": {
     "conversational": {
-     "deadline_s": 15.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.0,
-      "ingestion": 0.0,
-      "task_ticket": 0.9647
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "ingestion": 0.0,
+     "task_ticket": 0.9523
     },
     "interactive": {
-     "deadline_s": 45.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.8906,
-      "ingestion": 0.8906,
-      "task_ticket": 0.9647
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9523,
+     "ingestion": 0.9523,
+     "task_ticket": 0.9523
     },
     "responsive": {
-     "deadline_s": 150.0,
-     "bounds": {
-      "analyst_xl": 0.7557,
-      "code_agent": 0.7791,
-      "deep_research": 0.8906,
-      "ingestion": 0.8906,
-      "task_ticket": 0.9647
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9395,
+     "code_agent": 0.9667,
+     "deep_research": 0.9523,
+     "ingestion": 0.9523,
+     "task_ticket": 0.9523
     },
     "attended": {
-     "deadline_s": 450.0,
-     "bounds": {
-      "analyst_xl": 0.7557,
-      "code_agent": 0.7791,
-      "deep_research": 0.8906,
-      "ingestion": 0.8906,
-      "task_ticket": 0.9647
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9395,
+     "code_agent": 0.9667,
+     "deep_research": 0.9523,
+     "ingestion": 0.9523,
+     "task_ticket": 0.9523
     },
     "queued": {
-     "deadline_s": 1200.0,
-     "bounds": {
-      "analyst_xl": 0.7557,
-      "code_agent": 0.7791,
-      "deep_research": 0.8906,
-      "ingestion": 0.8906,
-      "task_ticket": 0.9647
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9395,
+     "code_agent": 0.9667,
+     "deep_research": 0.9523,
+     "ingestion": 0.9523,
+     "task_ticket": 0.9523
     },
     "background": {
-     "deadline_s": 3600.0,
-     "bounds": {
-      "analyst_xl": 0.7557,
-      "code_agent": 0.7791,
-      "deep_research": 0.8906,
-      "ingestion": 0.8906,
-      "task_ticket": 0.9647
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9395,
+     "code_agent": 0.9667,
+     "deep_research": 0.9523,
+     "ingestion": 0.9523,
+     "task_ticket": 0.9523
     }
    },
    "resident_median": 22,
@@ -177,6 +153,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.8693
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         77
+        ],
+        "deep_research": [
+         0,
+         40
+        ],
+        "ingestion": [
+         0,
+         38
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -187,6 +185,28 @@
         "deep_research": 0.8693,
         "ingestion": 0.8693,
         "task_ticket": 0.8693
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         69
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
        },
        "on_time_and_steady": false
       },
@@ -199,6 +219,28 @@
         "ingestion": 0.8693,
         "task_ticket": 0.8693
        },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         53,
+         53
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -209,6 +251,28 @@
         "deep_research": 0.8693,
         "ingestion": 0.8693,
         "task_ticket": 0.8693
+       },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         53,
+         53
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
        },
        "on_time_and_steady": false
       },
@@ -221,6 +285,28 @@
         "ingestion": 0.8693,
         "task_ticket": 0.8693
        },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         53,
+         53
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -231,6 +317,28 @@
         "deep_research": 0.8693,
         "ingestion": 0.8693,
         "task_ticket": 0.8693
+       },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         53,
+         53
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
        },
        "on_time_and_steady": false
       }
@@ -320,6 +428,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.8693
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         76
+        ],
+        "deep_research": [
+         0,
+         40
+        ],
+        "ingestion": [
+         0,
+         37
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -330,6 +460,28 @@
         "deep_research": 0.8693,
         "ingestion": 0.8693,
         "task_ticket": 0.8693
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         68
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
        },
        "on_time_and_steady": false
       },
@@ -342,6 +494,28 @@
         "ingestion": 0.8693,
         "task_ticket": 0.8693
        },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -352,6 +526,28 @@
         "deep_research": 0.8693,
         "ingestion": 0.8693,
         "task_ticket": 0.8693
+       },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
        },
        "on_time_and_steady": false
       },
@@ -364,6 +560,28 @@
         "ingestion": 0.8693,
         "task_ticket": 0.8693
        },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -374,6 +592,28 @@
         "deep_research": 0.8693,
         "ingestion": 0.8693,
         "task_ticket": 0.8693
+       },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
        },
        "on_time_and_steady": false
       }
@@ -463,6 +703,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.8693
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         76
+        ],
+        "deep_research": [
+         0,
+         40
+        ],
+        "ingestion": [
+         0,
+         37
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -473,6 +735,28 @@
         "deep_research": 0.8693,
         "ingestion": 0.8693,
         "task_ticket": 0.8693
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         68
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
        },
        "on_time_and_steady": false
       },
@@ -485,6 +769,28 @@
         "ingestion": 0.8693,
         "task_ticket": 0.8693
        },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -495,6 +801,28 @@
         "deep_research": 0.8693,
         "ingestion": 0.8693,
         "task_ticket": 0.8693
+       },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
        },
        "on_time_and_steady": false
       },
@@ -507,6 +835,28 @@
         "ingestion": 0.8693,
         "task_ticket": 0.8693
        },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -517,6 +867,28 @@
         "deep_research": 0.8693,
         "ingestion": 0.8693,
         "task_ticket": 0.8693
+       },
+       "counts": {
+        "analyst_xl": [
+         28,
+         28
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         36,
+         36
+        ],
+        "ingestion": [
+         36,
+         36
+        ],
+        "task_ticket": [
+         36,
+         36
+        ]
        },
        "on_time_and_steady": false
       }
@@ -539,74 +911,55 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [],
+   "tiers_sustained_all_series": [
+    "responsive",
+    "attended",
+    "queued",
+    "background"
+   ],
    "tiers_sustained_per_series": [],
-   "pooled_tiers": {
+   "pooled_bounds": {
     "conversational": {
-     "deadline_s": 15.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.0,
-      "ingestion": 0.0,
-      "task_ticket": 0.9742
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "ingestion": 0.0,
+     "task_ticket": 0.9665
     },
     "interactive": {
-     "deadline_s": 45.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.917,
-      "ingestion": 0.917,
-      "task_ticket": 0.9742
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9638,
+     "ingestion": 0.9638,
+     "task_ticket": 0.9665
     },
     "responsive": {
-     "deadline_s": 150.0,
-     "bounds": {
-      "analyst_xl": 0.7687,
-      "code_agent": 0.7888,
-      "deep_research": 0.917,
-      "ingestion": 0.917,
-      "task_ticket": 0.9742
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9554,
+     "code_agent": 0.9756,
+     "deep_research": 0.9638,
+     "ingestion": 0.9638,
+     "task_ticket": 0.9665
     },
     "attended": {
-     "deadline_s": 450.0,
-     "bounds": {
-      "analyst_xl": 0.7687,
-      "code_agent": 0.7888,
-      "deep_research": 0.917,
-      "ingestion": 0.917,
-      "task_ticket": 0.9742
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9554,
+     "code_agent": 0.9756,
+     "deep_research": 0.9638,
+     "ingestion": 0.9638,
+     "task_ticket": 0.9665
     },
     "queued": {
-     "deadline_s": 1200.0,
-     "bounds": {
-      "analyst_xl": 0.7687,
-      "code_agent": 0.7888,
-      "deep_research": 0.917,
-      "ingestion": 0.917,
-      "task_ticket": 0.9742
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9554,
+     "code_agent": 0.9756,
+     "deep_research": 0.9638,
+     "ingestion": 0.9638,
+     "task_ticket": 0.9665
     },
     "background": {
-     "deadline_s": 3600.0,
-     "bounds": {
-      "analyst_xl": 0.7687,
-      "code_agent": 0.7888,
-      "deep_research": 0.917,
-      "ingestion": 0.917,
-      "task_ticket": 0.9742
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9554,
+     "code_agent": 0.9756,
+     "deep_research": 0.9638,
+     "ingestion": 0.9638,
+     "task_ticket": 0.9665
     }
    },
    "resident_median": 30,
@@ -694,6 +1047,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.9057
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         50
+        ],
+        "code_agent": [
+         0,
+         104
+        ],
+        "deep_research": [
+         0,
+         51
+        ],
+        "ingestion": [
+         0,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -704,6 +1079,28 @@
         "deep_research": 0.8987,
         "ingestion": 0.8987,
         "task_ticket": 0.9057
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         46
+        ],
+        "code_agent": [
+         0,
+         96
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
        },
        "on_time_and_steady": false
       },
@@ -716,6 +1113,28 @@
         "ingestion": 0.8987,
         "task_ticket": 0.9057
        },
+       "counts": {
+        "analyst_xl": [
+         38,
+         38
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -726,6 +1145,28 @@
         "deep_research": 0.8987,
         "ingestion": 0.8987,
         "task_ticket": 0.9057
+       },
+       "counts": {
+        "analyst_xl": [
+         38,
+         38
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
        },
        "on_time_and_steady": false
       },
@@ -738,6 +1179,28 @@
         "ingestion": 0.8987,
         "task_ticket": 0.9057
        },
+       "counts": {
+        "analyst_xl": [
+         38,
+         38
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -748,6 +1211,28 @@
         "deep_research": 0.8987,
         "ingestion": 0.8987,
         "task_ticket": 0.9057
+       },
+       "counts": {
+        "analyst_xl": [
+         38,
+         38
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
        },
        "on_time_and_steady": false
       }
@@ -837,6 +1322,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.9057
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         51
+        ],
+        "code_agent": [
+         0,
+         104
+        ],
+        "deep_research": [
+         0,
+         52
+        ],
+        "ingestion": [
+         0,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -847,6 +1354,28 @@
         "deep_research": 0.8987,
         "ingestion": 0.8987,
         "task_ticket": 0.9057
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         47
+        ],
+        "code_agent": [
+         0,
+         96
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
        },
        "on_time_and_steady": false
       },
@@ -859,6 +1388,28 @@
         "ingestion": 0.8987,
         "task_ticket": 0.9057
        },
+       "counts": {
+        "analyst_xl": [
+         39,
+         39
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -869,6 +1420,28 @@
         "deep_research": 0.8987,
         "ingestion": 0.8987,
         "task_ticket": 0.9057
+       },
+       "counts": {
+        "analyst_xl": [
+         39,
+         39
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
        },
        "on_time_and_steady": false
       },
@@ -881,6 +1454,28 @@
         "ingestion": 0.8987,
         "task_ticket": 0.9057
        },
+       "counts": {
+        "analyst_xl": [
+         39,
+         39
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -891,6 +1486,28 @@
         "deep_research": 0.8987,
         "ingestion": 0.8987,
         "task_ticket": 0.9057
+       },
+       "counts": {
+        "analyst_xl": [
+         39,
+         39
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
        },
        "on_time_and_steady": false
       }
@@ -980,6 +1597,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.9057
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         51
+        ],
+        "code_agent": [
+         0,
+         104
+        ],
+        "deep_research": [
+         0,
+         51
+        ],
+        "ingestion": [
+         0,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -990,6 +1629,28 @@
         "deep_research": 0.8987,
         "ingestion": 0.8987,
         "task_ticket": 0.9057
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         47
+        ],
+        "code_agent": [
+         0,
+         96
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1002,6 +1663,28 @@
         "ingestion": 0.8987,
         "task_ticket": 0.9057
        },
+       "counts": {
+        "analyst_xl": [
+         39,
+         39
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -1012,6 +1695,28 @@
         "deep_research": 0.8987,
         "ingestion": 0.8987,
         "task_ticket": 0.9057
+       },
+       "counts": {
+        "analyst_xl": [
+         39,
+         39
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1024,6 +1729,28 @@
         "ingestion": 0.8987,
         "task_ticket": 0.9057
        },
+       "counts": {
+        "analyst_xl": [
+         39,
+         39
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -1034,6 +1761,28 @@
         "deep_research": 0.8987,
         "ingestion": 0.8987,
         "task_ticket": 0.9057
+       },
+       "counts": {
+        "analyst_xl": [
+         39,
+         39
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         48,
+         48
+        ],
+        "ingestion": [
+         48,
+         48
+        ],
+        "task_ticket": [
+         52,
+         52
+        ]
        },
        "on_time_and_steady": false
       }
@@ -1056,74 +1805,55 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [],
+   "tiers_sustained_all_series": [
+    "responsive",
+    "attended",
+    "queued",
+    "background"
+   ],
    "tiers_sustained_per_series": [],
-   "pooled_tiers": {
+   "pooled_bounds": {
     "conversational": {
-     "deadline_s": 15.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.0,
-      "ingestion": 0.0,
-      "task_ticket": 0.9722
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "ingestion": 0.0,
+     "task_ticket": 0.9726
     },
     "interactive": {
-     "deadline_s": 45.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.9332,
-      "ingestion": 0.934,
-      "task_ticket": 0.9793
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9716,
+     "ingestion": 0.9724,
+     "task_ticket": 0.9726
     },
     "responsive": {
-     "deadline_s": 150.0,
-     "bounds": {
-      "analyst_xl": 0.7506,
-      "code_agent": 0.7934,
-      "deep_research": 0.9332,
-      "ingestion": 0.934,
-      "task_ticket": 0.9793
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9623,
+     "code_agent": 0.9799,
+     "deep_research": 0.9716,
+     "ingestion": 0.9724,
+     "task_ticket": 0.9726
     },
     "attended": {
-     "deadline_s": 450.0,
-     "bounds": {
-      "analyst_xl": 0.7506,
-      "code_agent": 0.7934,
-      "deep_research": 0.9332,
-      "ingestion": 0.934,
-      "task_ticket": 0.9793
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9623,
+     "code_agent": 0.9799,
+     "deep_research": 0.9716,
+     "ingestion": 0.9724,
+     "task_ticket": 0.9726
     },
     "queued": {
-     "deadline_s": 1200.0,
-     "bounds": {
-      "analyst_xl": 0.7506,
-      "code_agent": 0.7934,
-      "deep_research": 0.9332,
-      "ingestion": 0.934,
-      "task_ticket": 0.9793
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9623,
+     "code_agent": 0.9799,
+     "deep_research": 0.9716,
+     "ingestion": 0.9724,
+     "task_ticket": 0.9726
     },
     "background": {
-     "deadline_s": 3600.0,
-     "bounds": {
-      "analyst_xl": 0.7506,
-      "code_agent": 0.7934,
-      "deep_research": 0.9332,
-      "ingestion": 0.934,
-      "task_ticket": 0.9793
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9623,
+     "code_agent": 0.9799,
+     "deep_research": 0.9716,
+     "ingestion": 0.9724,
+     "task_ticket": 0.9726
     }
    },
    "resident_median": 37,
@@ -1211,6 +1941,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         64
+        ],
+        "code_agent": [
+         0,
+         128
+        ],
+        "deep_research": [
+         0,
+         61
+        ],
+        "ingestion": [
+         0,
+         63
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -1221,6 +1973,28 @@
         "deep_research": 0.9173,
         "ingestion": 0.9209,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         60
+        ],
+        "code_agent": [
+         0,
+         115
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         63,
+         63
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1233,6 +2007,28 @@
         "ingestion": 0.9209,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         44,
+         44
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         63,
+         63
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -1243,6 +2039,28 @@
         "deep_research": 0.9173,
         "ingestion": 0.9209,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         44,
+         44
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         63,
+         63
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1255,6 +2073,28 @@
         "ingestion": 0.9209,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         44,
+         44
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         63,
+         63
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -1265,6 +2105,28 @@
         "deep_research": 0.9173,
         "ingestion": 0.9209,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         44,
+         44
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         63,
+         63
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       }
@@ -1354,6 +2216,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         64
+        ],
+        "code_agent": [
+         0,
+         128
+        ],
+        "deep_research": [
+         0,
+         64
+        ],
+        "ingestion": [
+         0,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -1364,6 +2248,28 @@
         "deep_research": 0.9209,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         60
+        ],
+        "code_agent": [
+         0,
+         115
+        ],
+        "deep_research": [
+         63,
+         63
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1376,6 +2282,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         46,
+         46
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         63,
+         63
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -1386,6 +2314,28 @@
         "deep_research": 0.9209,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         46,
+         46
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         63,
+         63
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1398,6 +2348,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         46,
+         46
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         63,
+         63
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -1408,6 +2380,28 @@
         "deep_research": 0.9209,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         46,
+         46
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         63,
+         63
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       }
@@ -1497,6 +2491,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         64
+        ],
+        "code_agent": [
+         0,
+         128
+        ],
+        "deep_research": [
+         0,
+         63
+        ],
+        "ingestion": [
+         0,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -1507,6 +2523,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         60
+        ],
+        "code_agent": [
+         0,
+         115
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1519,6 +2557,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         48,
+         48
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -1529,6 +2589,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         48,
+         48
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1541,6 +2623,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         48,
+         48
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -1551,6 +2655,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         48,
+         48
+        ],
+        "code_agent": [
+         88,
+         88
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       }
@@ -1573,74 +2699,54 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [],
+   "tiers_sustained_all_series": [
+    "attended",
+    "queued",
+    "background"
+   ],
    "tiers_sustained_per_series": [],
-   "pooled_tiers": {
+   "pooled_bounds": {
     "conversational": {
-     "deadline_s": 15.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.0,
-      "ingestion": 0.0,
-      "task_ticket": 0.9759
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "ingestion": 0.0,
+     "task_ticket": 0.9729
     },
     "interactive": {
-     "deadline_s": 45.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.9069,
-      "ingestion": 0.9427,
-      "task_ticket": 0.982
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9703,
+     "ingestion": 0.9726,
+     "task_ticket": 0.9729
     },
     "responsive": {
-     "deadline_s": 150.0,
-     "bounds": {
-      "analyst_xl": 0.2542,
-      "code_agent": 0.5676,
-      "deep_research": 0.9069,
-      "ingestion": 0.9427,
-      "task_ticket": 0.982
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0996,
+     "code_agent": 0.5577,
+     "deep_research": 0.9703,
+     "ingestion": 0.9726,
+     "task_ticket": 0.9729
     },
     "attended": {
-     "deadline_s": 450.0,
-     "bounds": {
-      "analyst_xl": 0.6926,
-      "code_agent": 0.7526,
-      "deep_research": 0.9069,
-      "ingestion": 0.9427,
-      "task_ticket": 0.982
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.951,
+     "code_agent": 0.9764,
+     "deep_research": 0.9703,
+     "ingestion": 0.9726,
+     "task_ticket": 0.9729
     },
     "queued": {
-     "deadline_s": 1200.0,
-     "bounds": {
-      "analyst_xl": 0.6926,
-      "code_agent": 0.7526,
-      "deep_research": 0.9069,
-      "ingestion": 0.9427,
-      "task_ticket": 0.982
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.951,
+     "code_agent": 0.9764,
+     "deep_research": 0.9703,
+     "ingestion": 0.9726,
+     "task_ticket": 0.9729
     },
     "background": {
-     "deadline_s": 3600.0,
-     "bounds": {
-      "analyst_xl": 0.6926,
-      "code_agent": 0.7526,
-      "deep_research": 0.9069,
-      "ingestion": 0.9427,
-      "task_ticket": 0.982
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.951,
+     "code_agent": 0.9764,
+     "deep_research": 0.9703,
+     "ingestion": 0.9726,
+     "task_ticket": 0.9729
     }
    },
    "resident_median": 43,
@@ -1728,6 +2834,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         64
+        ],
+        "code_agent": [
+         0,
+         126
+        ],
+        "deep_research": [
+         0,
+         61
+        ],
+        "ingestion": [
+         0,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -1738,6 +2866,28 @@
         "deep_research": 0.9133,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         58
+        ],
+        "code_agent": [
+         0,
+         112
+        ],
+        "deep_research": [
+         57,
+         57
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1750,6 +2900,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         3,
+         36
+        ],
+        "code_agent": [
+         45,
+         73
+        ],
+        "deep_research": [
+         57,
+         57
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -1760,6 +2932,28 @@
         "deep_research": 0.9133,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         36,
+         36
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         57,
+         57
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1772,6 +2966,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         36,
+         36
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         57,
+         57
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -1782,6 +2998,28 @@
         "deep_research": 0.9133,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         36,
+         36
+        ],
+        "code_agent": [
+         72,
+         72
+        ],
+        "deep_research": [
+         57,
+         57
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       }
@@ -1871,6 +3109,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.9242
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         64
+        ],
+        "code_agent": [
+         0,
+         134
+        ],
+        "deep_research": [
+         0,
+         64
+        ],
+        "ingestion": [
+         0,
+         64
+        ],
+        "task_ticket": [
+         66,
+         66
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -1881,6 +3141,28 @@
         "deep_research": 0.9173,
         "ingestion": 0.922,
         "task_ticket": 0.9242
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         58
+        ],
+        "code_agent": [
+         0,
+         120
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         66,
+         66
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1893,6 +3175,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.9242
        },
+       "counts": {
+        "analyst_xl": [
+         7,
+         36
+        ],
+        "code_agent": [
+         45,
+         80
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         66,
+         66
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -1903,6 +3207,28 @@
         "deep_research": 0.9173,
         "ingestion": 0.922,
         "task_ticket": 0.9242
+       },
+       "counts": {
+        "analyst_xl": [
+         33,
+         33
+        ],
+        "code_agent": [
+         79,
+         79
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         66,
+         66
+        ]
        },
        "on_time_and_steady": false
       },
@@ -1915,6 +3241,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.9242
        },
+       "counts": {
+        "analyst_xl": [
+         33,
+         33
+        ],
+        "code_agent": [
+         79,
+         79
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         66,
+         66
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -1925,6 +3273,28 @@
         "deep_research": 0.9173,
         "ingestion": 0.922,
         "task_ticket": 0.9242
+       },
+       "counts": {
+        "analyst_xl": [
+         33,
+         33
+        ],
+        "code_agent": [
+         79,
+         79
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         66,
+         66
+        ]
        },
        "on_time_and_steady": false
       }
@@ -2014,6 +3384,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         64
+        ],
+        "code_agent": [
+         0,
+         127
+        ],
+        "deep_research": [
+         0,
+         64
+        ],
+        "ingestion": [
+         0,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -2024,6 +3416,28 @@
         "deep_research": 0.9173,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         58
+        ],
+        "code_agent": [
+         0,
+         113
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2036,6 +3450,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         8,
+         36
+        ],
+        "code_agent": [
+         54,
+         74
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -2046,6 +3482,28 @@
         "deep_research": 0.9173,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         36,
+         36
+        ],
+        "code_agent": [
+         73,
+         73
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2058,6 +3516,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.922
        },
+       "counts": {
+        "analyst_xl": [
+         36,
+         36
+        ],
+        "code_agent": [
+         73,
+         73
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -2068,6 +3548,28 @@
         "deep_research": 0.9173,
         "ingestion": 0.922,
         "task_ticket": 0.922
+       },
+       "counts": {
+        "analyst_xl": [
+         36,
+         36
+        ],
+        "code_agent": [
+         73,
+         73
+        ],
+        "deep_research": [
+         60,
+         60
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         64,
+         64
+        ]
        },
        "on_time_and_steady": false
       }
@@ -2092,72 +3594,48 @@
    "keeps_up_all": false,
    "tiers_sustained_all_series": [],
    "tiers_sustained_per_series": [],
-   "pooled_tiers": {
+   "pooled_bounds": {
     "conversational": {
-     "deadline_s": 15.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.0,
-      "ingestion": 0.0,
-      "task_ticket": 0.9837
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "ingestion": 0.0,
+     "task_ticket": 0.9742
     },
     "interactive": {
-     "deadline_s": 45.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.9155,
-      "ingestion": 0.9193,
-      "task_ticket": 0.9837
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9717,
+     "ingestion": 0.9727,
+     "task_ticket": 0.9742
     },
     "responsive": {
-     "deadline_s": 150.0,
-     "bounds": {
-      "analyst_xl": 0.0428,
-      "code_agent": 0.0785,
-      "deep_research": 0.9155,
-      "ingestion": 0.9193,
-      "task_ticket": 0.9837
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9717,
+     "ingestion": 0.9727,
+     "task_ticket": 0.9742
     },
     "attended": {
-     "deadline_s": 450.0,
-     "bounds": {
-      "analyst_xl": 0.5337,
-      "code_agent": 0.5714,
-      "deep_research": 0.9155,
-      "ingestion": 0.9193,
-      "task_ticket": 0.9837
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9023,
+     "code_agent": 0.9421,
+     "deep_research": 0.9717,
+     "ingestion": 0.9727,
+     "task_ticket": 0.9742
     },
     "queued": {
-     "deadline_s": 1200.0,
-     "bounds": {
-      "analyst_xl": 0.5337,
-      "code_agent": 0.5714,
-      "deep_research": 0.9155,
-      "ingestion": 0.9193,
-      "task_ticket": 0.9837
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9023,
+     "code_agent": 0.9421,
+     "deep_research": 0.9717,
+     "ingestion": 0.9727,
+     "task_ticket": 0.9742
     },
     "background": {
-     "deadline_s": 3600.0,
-     "bounds": {
-      "analyst_xl": 0.5337,
-      "code_agent": 0.5714,
-      "deep_research": 0.9155,
-      "ingestion": 0.9193,
-      "task_ticket": 0.9837
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.9023,
+     "code_agent": 0.9421,
+     "deep_research": 0.9717,
+     "ingestion": 0.9727,
+     "task_ticket": 0.9742
     }
    },
    "resident_median": 40,
@@ -2245,6 +3723,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.9263
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         68
+        ],
+        "code_agent": [
+         0,
+         132
+        ],
+        "deep_research": [
+         0,
+         66
+        ],
+        "ingestion": [
+         0,
+         68
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -2255,6 +3755,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.922,
         "task_ticket": 0.9263
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         60
+        ],
+        "code_agent": [
+         0,
+         120
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2267,6 +3789,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.9263
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         70
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -2277,6 +3821,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.922,
         "task_ticket": 0.9263
+       },
+       "counts": {
+        "analyst_xl": [
+         16,
+         16
+        ],
+        "code_agent": [
+         26,
+         26
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2289,6 +3855,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.9263
        },
+       "counts": {
+        "analyst_xl": [
+         16,
+         16
+        ],
+        "code_agent": [
+         26,
+         26
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -2299,6 +3887,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.922,
         "task_ticket": 0.9263
+       },
+       "counts": {
+        "analyst_xl": [
+         16,
+         16
+        ],
+        "code_agent": [
+         26,
+         26
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
        },
        "on_time_and_steady": false
       }
@@ -2388,6 +3998,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.9263
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         68
+        ],
+        "code_agent": [
+         0,
+         132
+        ],
+        "deep_research": [
+         0,
+         66
+        ],
+        "ingestion": [
+         0,
+         68
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -2398,6 +4030,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.9231,
         "task_ticket": 0.9263
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         60
+        ],
+        "code_agent": [
+         0,
+         120
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         65,
+         65
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2410,6 +4064,28 @@
         "ingestion": 0.9231,
         "task_ticket": 0.9263
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         70
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         65,
+         65
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -2420,6 +4096,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.9231,
         "task_ticket": 0.9263
+       },
+       "counts": {
+        "analyst_xl": [
+         16,
+         16
+        ],
+        "code_agent": [
+         30,
+         30
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         65,
+         65
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2432,6 +4130,28 @@
         "ingestion": 0.9231,
         "task_ticket": 0.9263
        },
+       "counts": {
+        "analyst_xl": [
+         16,
+         16
+        ],
+        "code_agent": [
+         30,
+         30
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         65,
+         65
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -2442,6 +4162,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.9231,
         "task_ticket": 0.9263
+       },
+       "counts": {
+        "analyst_xl": [
+         16,
+         16
+        ],
+        "code_agent": [
+         30,
+         30
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         65,
+         65
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
        },
        "on_time_and_steady": false
       }
@@ -2531,6 +4273,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.9263
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         68
+        ],
+        "code_agent": [
+         0,
+         132
+        ],
+        "deep_research": [
+         0,
+         66
+        ],
+        "ingestion": [
+         0,
+         68
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -2541,6 +4305,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.922,
         "task_ticket": 0.9263
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         60
+        ],
+        "code_agent": [
+         0,
+         120
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2553,6 +4339,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.9263
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         36
+        ],
+        "code_agent": [
+         0,
+         70
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -2563,6 +4371,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.922,
         "task_ticket": 0.9263
+       },
+       "counts": {
+        "analyst_xl": [
+         18,
+         18
+        ],
+        "code_agent": [
+         32,
+         32
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2575,6 +4405,28 @@
         "ingestion": 0.922,
         "task_ticket": 0.9263
        },
+       "counts": {
+        "analyst_xl": [
+         18,
+         18
+        ],
+        "code_agent": [
+         32,
+         32
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -2585,6 +4437,28 @@
         "deep_research": 0.9197,
         "ingestion": 0.922,
         "task_ticket": 0.9263
+       },
+       "counts": {
+        "analyst_xl": [
+         18,
+         18
+        ],
+        "code_agent": [
+         32,
+         32
+        ],
+        "deep_research": [
+         62,
+         62
+        ],
+        "ingestion": [
+         64,
+         64
+        ],
+        "task_ticket": [
+         68,
+         68
+        ]
        },
        "on_time_and_steady": false
       }
@@ -2609,72 +4483,48 @@
    "keeps_up_all": false,
    "tiers_sustained_all_series": [],
    "tiers_sustained_per_series": [],
-   "pooled_tiers": {
+   "pooled_bounds": {
     "conversational": {
-     "deadline_s": 15.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.0,
-      "ingestion": 0.0,
-      "task_ticket": 0.9684
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.0,
+     "ingestion": 0.0,
+     "task_ticket": 0.9774
     },
     "interactive": {
-     "deadline_s": 45.0,
-     "bounds": {
-      "analyst_xl": 0.0,
-      "code_agent": 0.0,
-      "deep_research": 0.9165,
-      "ingestion": 0.8873,
-      "task_ticket": 0.9838
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9756,
+     "ingestion": 0.9746,
+     "task_ticket": 0.9774
     },
     "responsive": {
-     "deadline_s": 150.0,
-     "bounds": {
-      "analyst_xl": 0.0044,
-      "code_agent": 0.0278,
-      "deep_research": 0.9165,
-      "ingestion": 0.8873,
-      "task_ticket": 0.9838
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9756,
+     "ingestion": 0.9746,
+     "task_ticket": 0.9774
     },
     "attended": {
-     "deadline_s": 450.0,
-     "bounds": {
-      "analyst_xl": 0.4766,
-      "code_agent": 0.5032,
-      "deep_research": 0.9165,
-      "ingestion": 0.8873,
-      "task_ticket": 0.9838
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9756,
+     "ingestion": 0.9746,
+     "task_ticket": 0.9774
     },
     "queued": {
-     "deadline_s": 1200.0,
-     "bounds": {
-      "analyst_xl": 0.4766,
-      "code_agent": 0.5032,
-      "deep_research": 0.9165,
-      "ingestion": 0.8873,
-      "task_ticket": 0.9838
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9756,
+     "ingestion": 0.9746,
+     "task_ticket": 0.9774
     },
     "background": {
-     "deadline_s": 3600.0,
-     "bounds": {
-      "analyst_xl": 0.4766,
-      "code_agent": 0.5032,
-      "deep_research": 0.9165,
-      "ingestion": 0.8873,
-      "task_ticket": 0.9838
-     },
-     "on_time_and_steady": false
+     "analyst_xl": 0.0,
+     "code_agent": 0.0,
+     "deep_research": 0.9756,
+     "ingestion": 0.9746,
+     "task_ticket": 0.9774
     }
    },
    "resident_median": 56,
@@ -2762,6 +4612,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.9351
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         76
+        ],
+        "code_agent": [
+         0,
+         154
+        ],
+        "deep_research": [
+         0,
+         76
+        ],
+        "ingestion": [
+         0,
+         76
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -2772,6 +4644,28 @@
         "deep_research": 0.9301,
         "ingestion": 0.9263,
         "task_ticket": 0.9351
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         68
+        ],
+        "code_agent": [
+         0,
+         138
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         68,
+         68
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2784,6 +4678,28 @@
         "ingestion": 0.9263,
         "task_ticket": 0.9351
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         40
+        ],
+        "code_agent": [
+         0,
+         82
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         68,
+         68
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -2794,6 +4710,28 @@
         "deep_research": 0.9301,
         "ingestion": 0.9263,
         "task_ticket": 0.9351
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         0
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         68,
+         68
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2806,6 +4744,28 @@
         "ingestion": 0.9263,
         "task_ticket": 0.9351
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         0
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         68,
+         68
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -2816,6 +4776,28 @@
         "deep_research": 0.9301,
         "ingestion": 0.9263,
         "task_ticket": 0.9351
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         0
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         68,
+         68
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
        },
        "on_time_and_steady": false
       }
@@ -2905,6 +4887,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.9351
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         76
+        ],
+        "code_agent": [
+         0,
+         153
+        ],
+        "deep_research": [
+         0,
+         76
+        ],
+        "ingestion": [
+         0,
+         76
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -2915,6 +4919,28 @@
         "deep_research": 0.9301,
         "ingestion": 0.9263,
         "task_ticket": 0.9351
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         68
+        ],
+        "code_agent": [
+         0,
+         137
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         68,
+         68
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2927,6 +4953,28 @@
         "ingestion": 0.9263,
         "task_ticket": 0.9351
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         40
+        ],
+        "code_agent": [
+         0,
+         81
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         68,
+         68
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -2937,6 +4985,28 @@
         "deep_research": 0.9301,
         "ingestion": 0.9263,
         "task_ticket": 0.9351
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         0
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         68,
+         68
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
        },
        "on_time_and_steady": false
       },
@@ -2949,6 +5019,28 @@
         "ingestion": 0.9263,
         "task_ticket": 0.9351
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         0
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         68,
+         68
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -2959,6 +5051,28 @@
         "deep_research": 0.9301,
         "ingestion": 0.9263,
         "task_ticket": 0.9351
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         0
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         68,
+         68
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
        },
        "on_time_and_steady": false
       }
@@ -3048,6 +5162,28 @@
         "ingestion": 0.0,
         "task_ticket": 0.9351
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         76
+        ],
+        "code_agent": [
+         0,
+         154
+        ],
+        "deep_research": [
+         0,
+         76
+        ],
+        "ingestion": [
+         0,
+         76
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
+       },
        "on_time_and_steady": false
       },
       "interactive": {
@@ -3058,6 +5194,28 @@
         "deep_research": 0.9301,
         "ingestion": 0.9301,
         "task_ticket": 0.9351
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         68
+        ],
+        "code_agent": [
+         0,
+         138
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         72,
+         72
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
        },
        "on_time_and_steady": false
       },
@@ -3070,6 +5228,28 @@
         "ingestion": 0.9301,
         "task_ticket": 0.9351
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         40
+        ],
+        "code_agent": [
+         0,
+         81
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         72,
+         72
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
+       },
        "on_time_and_steady": false
       },
       "attended": {
@@ -3080,6 +5260,28 @@
         "deep_research": 0.9301,
         "ingestion": 0.9301,
         "task_ticket": 0.9351
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         0
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         72,
+         72
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
        },
        "on_time_and_steady": false
       },
@@ -3092,6 +5294,28 @@
         "ingestion": 0.9301,
         "task_ticket": 0.9351
        },
+       "counts": {
+        "analyst_xl": [
+         0,
+         0
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         72,
+         72
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
+       },
        "on_time_and_steady": false
       },
       "background": {
@@ -3102,6 +5326,28 @@
         "deep_research": 0.9301,
         "ingestion": 0.9301,
         "task_ticket": 0.9351
+       },
+       "counts": {
+        "analyst_xl": [
+         0,
+         0
+        ],
+        "code_agent": [
+         0,
+         0
+        ],
+        "deep_research": [
+         72,
+         72
+        ],
+        "ingestion": [
+         72,
+         72
+        ],
+        "task_ticket": [
+         78,
+         78
+        ]
        },
        "on_time_and_steady": false
       }
@@ -3117,5 +5363,58 @@
    }
   }
  },
- "headline": {}
+ "headline": {
+  "responsive": {
+   "per_instance_rate": 0.25,
+   "fleet_rate_median": 1.0,
+   "fleet_rate_range": [
+    1.0,
+    1.0
+   ],
+   "resident_median": 37,
+   "resident_range": [
+    36,
+    37
+   ]
+  },
+  "attended": {
+   "per_instance_rate": 0.3,
+   "fleet_rate_median": 1.2,
+   "fleet_rate_range": [
+    1.2,
+    1.2
+   ],
+   "resident_median": 43,
+   "resident_range": [
+    43,
+    43
+   ]
+  },
+  "queued": {
+   "per_instance_rate": 0.3,
+   "fleet_rate_median": 1.2,
+   "fleet_rate_range": [
+    1.2,
+    1.2
+   ],
+   "resident_median": 43,
+   "resident_range": [
+    43,
+    43
+   ]
+  },
+  "background": {
+   "per_instance_rate": 0.3,
+   "fleet_rate_median": 1.2,
+   "fleet_rate_range": [
+    1.2,
+    1.2
+   ],
+   "resident_median": 43,
+   "resident_range": [
+    43,
+    43
+   ]
+  }
+ }
 }
