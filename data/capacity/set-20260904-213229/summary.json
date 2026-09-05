@@ -23,6 +23,75 @@
    "generator_ok_all": true,
    "keeps_up_all": true,
    "tiers_sustained_all_series": [],
+   "tiers_sustained_per_series": [],
+   "pooled_tiers": {
+    "conversational": {
+     "deadline_s": 15.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.0,
+      "ingestion": 0.0,
+      "task_ticket": 0.9647
+     },
+     "on_time_and_steady": false
+    },
+    "interactive": {
+     "deadline_s": 45.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.8906,
+      "ingestion": 0.8906,
+      "task_ticket": 0.9647
+     },
+     "on_time_and_steady": false
+    },
+    "responsive": {
+     "deadline_s": 150.0,
+     "bounds": {
+      "analyst_xl": 0.7557,
+      "code_agent": 0.7791,
+      "deep_research": 0.8906,
+      "ingestion": 0.8906,
+      "task_ticket": 0.9647
+     },
+     "on_time_and_steady": false
+    },
+    "attended": {
+     "deadline_s": 450.0,
+     "bounds": {
+      "analyst_xl": 0.7557,
+      "code_agent": 0.7791,
+      "deep_research": 0.8906,
+      "ingestion": 0.8906,
+      "task_ticket": 0.9647
+     },
+     "on_time_and_steady": false
+    },
+    "queued": {
+     "deadline_s": 1200.0,
+     "bounds": {
+      "analyst_xl": 0.7557,
+      "code_agent": 0.7791,
+      "deep_research": 0.8906,
+      "ingestion": 0.8906,
+      "task_ticket": 0.9647
+     },
+     "on_time_and_steady": false
+    },
+    "background": {
+     "deadline_s": 3600.0,
+     "bounds": {
+      "analyst_xl": 0.7557,
+      "code_agent": 0.7791,
+      "deep_research": 0.8906,
+      "ingestion": 0.8906,
+      "task_ticket": 0.9647
+     },
+     "on_time_and_steady": false
+    }
+   },
    "resident_median": 22,
    "resident_range": [
     22,
@@ -471,6 +540,75 @@
    "generator_ok_all": true,
    "keeps_up_all": true,
    "tiers_sustained_all_series": [],
+   "tiers_sustained_per_series": [],
+   "pooled_tiers": {
+    "conversational": {
+     "deadline_s": 15.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.0,
+      "ingestion": 0.0,
+      "task_ticket": 0.9742
+     },
+     "on_time_and_steady": false
+    },
+    "interactive": {
+     "deadline_s": 45.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.917,
+      "ingestion": 0.917,
+      "task_ticket": 0.9742
+     },
+     "on_time_and_steady": false
+    },
+    "responsive": {
+     "deadline_s": 150.0,
+     "bounds": {
+      "analyst_xl": 0.7687,
+      "code_agent": 0.7888,
+      "deep_research": 0.917,
+      "ingestion": 0.917,
+      "task_ticket": 0.9742
+     },
+     "on_time_and_steady": false
+    },
+    "attended": {
+     "deadline_s": 450.0,
+     "bounds": {
+      "analyst_xl": 0.7687,
+      "code_agent": 0.7888,
+      "deep_research": 0.917,
+      "ingestion": 0.917,
+      "task_ticket": 0.9742
+     },
+     "on_time_and_steady": false
+    },
+    "queued": {
+     "deadline_s": 1200.0,
+     "bounds": {
+      "analyst_xl": 0.7687,
+      "code_agent": 0.7888,
+      "deep_research": 0.917,
+      "ingestion": 0.917,
+      "task_ticket": 0.9742
+     },
+     "on_time_and_steady": false
+    },
+    "background": {
+     "deadline_s": 3600.0,
+     "bounds": {
+      "analyst_xl": 0.7687,
+      "code_agent": 0.7888,
+      "deep_research": 0.917,
+      "ingestion": 0.917,
+      "task_ticket": 0.9742
+     },
+     "on_time_and_steady": false
+    }
+   },
    "resident_median": 30,
    "resident_range": [
     30,
@@ -919,6 +1057,75 @@
    "generator_ok_all": true,
    "keeps_up_all": true,
    "tiers_sustained_all_series": [],
+   "tiers_sustained_per_series": [],
+   "pooled_tiers": {
+    "conversational": {
+     "deadline_s": 15.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.0,
+      "ingestion": 0.0,
+      "task_ticket": 0.9722
+     },
+     "on_time_and_steady": false
+    },
+    "interactive": {
+     "deadline_s": 45.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.9332,
+      "ingestion": 0.934,
+      "task_ticket": 0.9793
+     },
+     "on_time_and_steady": false
+    },
+    "responsive": {
+     "deadline_s": 150.0,
+     "bounds": {
+      "analyst_xl": 0.7506,
+      "code_agent": 0.7934,
+      "deep_research": 0.9332,
+      "ingestion": 0.934,
+      "task_ticket": 0.9793
+     },
+     "on_time_and_steady": false
+    },
+    "attended": {
+     "deadline_s": 450.0,
+     "bounds": {
+      "analyst_xl": 0.7506,
+      "code_agent": 0.7934,
+      "deep_research": 0.9332,
+      "ingestion": 0.934,
+      "task_ticket": 0.9793
+     },
+     "on_time_and_steady": false
+    },
+    "queued": {
+     "deadline_s": 1200.0,
+     "bounds": {
+      "analyst_xl": 0.7506,
+      "code_agent": 0.7934,
+      "deep_research": 0.9332,
+      "ingestion": 0.934,
+      "task_ticket": 0.9793
+     },
+     "on_time_and_steady": false
+    },
+    "background": {
+     "deadline_s": 3600.0,
+     "bounds": {
+      "analyst_xl": 0.7506,
+      "code_agent": 0.7934,
+      "deep_research": 0.9332,
+      "ingestion": 0.934,
+      "task_ticket": 0.9793
+     },
+     "on_time_and_steady": false
+    }
+   },
    "resident_median": 37,
    "resident_range": [
     36,
@@ -1367,6 +1574,75 @@
    "generator_ok_all": true,
    "keeps_up_all": true,
    "tiers_sustained_all_series": [],
+   "tiers_sustained_per_series": [],
+   "pooled_tiers": {
+    "conversational": {
+     "deadline_s": 15.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.0,
+      "ingestion": 0.0,
+      "task_ticket": 0.9759
+     },
+     "on_time_and_steady": false
+    },
+    "interactive": {
+     "deadline_s": 45.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.9069,
+      "ingestion": 0.9427,
+      "task_ticket": 0.982
+     },
+     "on_time_and_steady": false
+    },
+    "responsive": {
+     "deadline_s": 150.0,
+     "bounds": {
+      "analyst_xl": 0.2542,
+      "code_agent": 0.5676,
+      "deep_research": 0.9069,
+      "ingestion": 0.9427,
+      "task_ticket": 0.982
+     },
+     "on_time_and_steady": false
+    },
+    "attended": {
+     "deadline_s": 450.0,
+     "bounds": {
+      "analyst_xl": 0.6926,
+      "code_agent": 0.7526,
+      "deep_research": 0.9069,
+      "ingestion": 0.9427,
+      "task_ticket": 0.982
+     },
+     "on_time_and_steady": false
+    },
+    "queued": {
+     "deadline_s": 1200.0,
+     "bounds": {
+      "analyst_xl": 0.6926,
+      "code_agent": 0.7526,
+      "deep_research": 0.9069,
+      "ingestion": 0.9427,
+      "task_ticket": 0.982
+     },
+     "on_time_and_steady": false
+    },
+    "background": {
+     "deadline_s": 3600.0,
+     "bounds": {
+      "analyst_xl": 0.6926,
+      "code_agent": 0.7526,
+      "deep_research": 0.9069,
+      "ingestion": 0.9427,
+      "task_ticket": 0.982
+     },
+     "on_time_and_steady": false
+    }
+   },
    "resident_median": 43,
    "resident_range": [
     43,
@@ -1815,6 +2091,75 @@
    "generator_ok_all": true,
    "keeps_up_all": false,
    "tiers_sustained_all_series": [],
+   "tiers_sustained_per_series": [],
+   "pooled_tiers": {
+    "conversational": {
+     "deadline_s": 15.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.0,
+      "ingestion": 0.0,
+      "task_ticket": 0.9837
+     },
+     "on_time_and_steady": false
+    },
+    "interactive": {
+     "deadline_s": 45.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.9155,
+      "ingestion": 0.9193,
+      "task_ticket": 0.9837
+     },
+     "on_time_and_steady": false
+    },
+    "responsive": {
+     "deadline_s": 150.0,
+     "bounds": {
+      "analyst_xl": 0.0428,
+      "code_agent": 0.0785,
+      "deep_research": 0.9155,
+      "ingestion": 0.9193,
+      "task_ticket": 0.9837
+     },
+     "on_time_and_steady": false
+    },
+    "attended": {
+     "deadline_s": 450.0,
+     "bounds": {
+      "analyst_xl": 0.5337,
+      "code_agent": 0.5714,
+      "deep_research": 0.9155,
+      "ingestion": 0.9193,
+      "task_ticket": 0.9837
+     },
+     "on_time_and_steady": false
+    },
+    "queued": {
+     "deadline_s": 1200.0,
+     "bounds": {
+      "analyst_xl": 0.5337,
+      "code_agent": 0.5714,
+      "deep_research": 0.9155,
+      "ingestion": 0.9193,
+      "task_ticket": 0.9837
+     },
+     "on_time_and_steady": false
+    },
+    "background": {
+     "deadline_s": 3600.0,
+     "bounds": {
+      "analyst_xl": 0.5337,
+      "code_agent": 0.5714,
+      "deep_research": 0.9155,
+      "ingestion": 0.9193,
+      "task_ticket": 0.9837
+     },
+     "on_time_and_steady": false
+    }
+   },
    "resident_median": 40,
    "resident_range": [
     40,
@@ -2263,6 +2608,75 @@
    "generator_ok_all": true,
    "keeps_up_all": false,
    "tiers_sustained_all_series": [],
+   "tiers_sustained_per_series": [],
+   "pooled_tiers": {
+    "conversational": {
+     "deadline_s": 15.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.0,
+      "ingestion": 0.0,
+      "task_ticket": 0.9684
+     },
+     "on_time_and_steady": false
+    },
+    "interactive": {
+     "deadline_s": 45.0,
+     "bounds": {
+      "analyst_xl": 0.0,
+      "code_agent": 0.0,
+      "deep_research": 0.9165,
+      "ingestion": 0.8873,
+      "task_ticket": 0.9838
+     },
+     "on_time_and_steady": false
+    },
+    "responsive": {
+     "deadline_s": 150.0,
+     "bounds": {
+      "analyst_xl": 0.0044,
+      "code_agent": 0.0278,
+      "deep_research": 0.9165,
+      "ingestion": 0.8873,
+      "task_ticket": 0.9838
+     },
+     "on_time_and_steady": false
+    },
+    "attended": {
+     "deadline_s": 450.0,
+     "bounds": {
+      "analyst_xl": 0.4766,
+      "code_agent": 0.5032,
+      "deep_research": 0.9165,
+      "ingestion": 0.8873,
+      "task_ticket": 0.9838
+     },
+     "on_time_and_steady": false
+    },
+    "queued": {
+     "deadline_s": 1200.0,
+     "bounds": {
+      "analyst_xl": 0.4766,
+      "code_agent": 0.5032,
+      "deep_research": 0.9165,
+      "ingestion": 0.8873,
+      "task_ticket": 0.9838
+     },
+     "on_time_and_steady": false
+    },
+    "background": {
+     "deadline_s": 3600.0,
+     "bounds": {
+      "analyst_xl": 0.4766,
+      "code_agent": 0.5032,
+      "deep_research": 0.9165,
+      "ingestion": 0.8873,
+      "task_ticket": 0.9838
+     },
+     "on_time_and_steady": false
+    }
+   },
    "resident_median": 56,
    "resident_range": [
     48,
