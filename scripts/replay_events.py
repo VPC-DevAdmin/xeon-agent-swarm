@@ -181,9 +181,13 @@ def main():
         caps = sorted(glob.glob(os.path.join(a.series_dir, f"rate-{r:g}-i*-capacity-*.json")))
         tok = defaultdict(lambda: [0, 0])
         out_total = 0
+        in_total = 0
+        calls_total = 0
         for cp in caps:
             d = json.load(open(cp))
             out_total += d.get("total_tokens_out") or 0
+            in_total += d.get("total_tokens_in") or 0
+            calls_total += sum((row.get("calls") or 0) for row in (d.get("per_scenario") or {}).values())
             for sid, row in (d.get("per_scenario") or {}).items():
                 tok[sid][0] += row.get("tokens_out") or 0
                 tok[sid][1] += row.get("calls") or 0
@@ -192,7 +196,8 @@ def main():
         sustained = next((v for k, v in srow.items() if "sustain" in k and isinstance(v, list)), [])
         plateaus.append({"rate_per_instance": r, "rate": round(r * a.instances, 2), "t0": round(offset, 1),
                          "t1": round(offset + span, 1), "gen_tokens_per_wf": gen_per_wf,
-                         "gen_tokens_total": out_total,
+                         "gen_tokens_total": out_total, "prompt_tokens_total": in_total,
+                         "workflows_completed": calls_total, "span_s": round(span, 1),
                          "sustained": sustained, "resident": srow.get("resident_median"),
                          "keeps_up": srow.get("keeps_up")})
         offset += span

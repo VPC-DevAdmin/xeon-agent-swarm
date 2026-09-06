@@ -1,0 +1,363 @@
+<meta charset="utf-8">
+<title>R470 Steady State</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&family=Roboto+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg0: #0d2447; --bg1: #061225;
+    --glass: rgba(255,255,255,0.045); --glass2: rgba(255,255,255,0.025);
+    --edge: rgba(170,205,240,0.18); --edge2: rgba(170,205,240,0.10);
+    --ink: #f2f6fb; --muted: #9fb6cf; --dim: #6b83a0;
+    --eyebrow: #7cc2ee; --accent: #4fb0f0;
+    --rerank: #d2a66a; --embed: #5fc9c2; --warn: #ef8a5c; --sandbox: #dfe9f5;
+    --sans: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Roboto Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; color: var(--ink); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased;
+    background: radial-gradient(120% 90% at 20% 0%, #163b6b 0%, var(--bg0) 38%, var(--bg1) 100%) fixed; }
+  .app { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; padding: 16px 22px 16px; height: 100vh; max-width: 1920px; margin: 0 auto; }
+  .card { background: var(--glass); border: 1px solid var(--edge); border-radius: 18px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 18px 40px rgba(0,0,0,0.28); position: relative; overflow: hidden; min-height: 0; }
+  .card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0) 40%); }
+  .eyebrow { font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--eyebrow); font-weight: 500; }
+  .k { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  header.top { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 20px; padding: 4px 4px 0; }
+  header h1 { font-size: 22px; font-weight: 400; margin: 4px 0 0; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 4px; max-width: 70ch; }
+  .heads { display: flex; gap: 28px; align-items: flex-end; }
+  .head { text-align: right; }
+  .head .v { font-size: 30px; font-weight: 300; line-height: 1; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .head .v small { font-size: 13px; color: var(--muted); margin-left: 5px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--edge); border-radius: 999px; background: var(--glass2); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; margin-left: 8px; }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+  main.grid { display: grid; grid-template-columns: minmax(0, 8.4fr) minmax(0, 3.6fr); gap: 14px; min-height: 0; }
+
+  /* the archetype board: one row per archetype */
+  .board { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .board-head { display: grid; grid-template-columns: 300px minmax(0, 1fr) 210px; padding: 16px 22px 0; gap: 18px; align-items: end; }
+  .board-head .stages { display: grid; grid-template-columns: repeat(5, 1fr); }
+  .board-head .stages div, .board-head .dem { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); text-align: center; padding-bottom: 8px; border-bottom: 1px solid var(--edge2); }
+  .board-head .dem { display: grid; grid-template-columns: 1fr 1fr; }
+  .board-head .first { padding-bottom: 8px; border-bottom: 1px solid var(--edge2); }
+  .rows { position: relative; display: grid; grid-template-rows: 0.9fr 0.95fr 0.95fr 1.1fr 1.1fr; padding: 4px 22px 14px; gap: 0; min-height: 0; }
+  .row { display: grid; grid-template-columns: 300px minmax(0, 1fr) 210px; gap: 18px; align-items: center; border-bottom: 1px solid var(--edge2); min-height: 0; padding: 6px 0; }
+  .row:last-child { border-bottom: 0; }
+  .who .name { font-size: 15px; font-weight: 400; display: flex; justify-content: space-between; align-items: baseline; }
+  .who .name .n { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+  .who .does { color: var(--muted); font-size: 12.5px; line-height: 1.35; margin-top: 3px; }
+  .who .foot { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 5px; letter-spacing: 0.02em; }
+  .lane { position: relative; height: 100%; min-height: 54px; }
+  .dem { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .dem .m { text-align: center; }
+  .dem .m .v { font-family: var(--mono); font-size: 17px; }
+  .dem .m .v small { font-size: 10.5px; color: var(--dim); margin-left: 3px; }
+  .dem .bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.07); margin-top: 6px; overflow: hidden; }
+  .dem .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .6s ease; }
+  .dem .m.llm .bar i { background: #9fb6cf; }
+  canvas#lanes { position: absolute; inset: 0; pointer-events: none; }
+
+  /* totals */
+  .totals { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
+  .tblock { padding: 16px 22px 12px; border-bottom: 1px solid var(--edge2); }
+  .tblock:last-child { border-bottom: 0; }
+  .tblock .big { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+  .tblock .big .v { font-size: 38px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; }
+  .tblock .big .u { color: var(--muted); font-size: 13px; }
+  .stack { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: rgba(255,255,255,0.06); margin-top: 12px; }
+  .stack span { display: block; height: 100%; transition: width .6s ease; }
+  .keys { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+  .keys i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+  .coregrid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; padding: 14px 22px 14px; height: 100%; min-height: 0; align-items: stretch; }
+  .coremap { display: grid; gap: 4px; flex: none; }
+  .core { border-radius: 4px; border: 1px solid var(--edge2); background: rgba(79,176,240,calc(var(--b, 0) * 0.85)); transition: background .5s linear; }
+  .core.tier-rerank { background: rgba(210,166,106,calc(var(--b, 0) * 0.85)); }
+  .core.tier-embed, .core.tier-ingest { background: rgba(95,201,194,calc(var(--b, 0) * 0.85)); }
+  .tiers { display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 4px; min-height: 0; }
+  .tier { border-top: 1px solid var(--edge2); padding-top: 6px; min-height: 0; }
+  .tier .v { font-family: var(--mono); font-size: 18px; margin-top: 1px; }
+  .tier .v small { font-size: 11px; color: var(--muted); margin-left: 4px; }
+  .gpu { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; }
+  .gauge { height: 10px; border-radius: 5px; background: rgba(255,255,255,0.07); overflow: hidden; margin-top: 10px; }
+  .gauge i { display: block; height: 100%; background: linear-gradient(90deg, #2a7fc4, var(--accent)); width: 0; transition: width .6s ease; }
+  .llm3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  .llm3 .v { font-family: var(--mono); font-size: 18px; }
+  .llm3 .v small { font-size: 10.5px; color: var(--dim); margin-left: 3px; }
+
+  .ticker { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 12px 22px; }
+  .ticker .list { display: flex; gap: 22px; overflow: hidden; white-space: nowrap; font-size: 12.5px; color: var(--muted); }
+  .ticker .list span b { color: var(--ink); font-weight: 400; }
+  .ticker .list span i { font-style: normal; font-family: var(--mono); color: var(--dim); margin-right: 8px; }
+  .note { font-size: 11.5px; color: var(--dim); }
+  @media (max-width: 1200px) { .app { height: auto; } main.grid { grid-template-columns: 1fr; } .rows { min-height: 520px; } }
+  @media (prefers-reduced-motion: reduce) { .pill .dot { animation: none; } .core, .stack span, .gauge i, .dem .bar i { transition: none; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Dell PowerEdge R470 &middot; agent execution tier &middot; steady state</div>
+      <h1>An enterprise agent fleet, running</h1>
+      <div class="sub" id="subtitle"></div>
+    </div>
+    <div class="heads">
+      <div class="head"><div class="k">Arrivals</div><div class="v">2.0<small>workflows / s</small></div></div>
+      <div class="head"><div class="k">Agents resident</div><div class="v" id="h-res">&ndash;</div></div>
+      <div class="head"><div class="k">Busy cores</div><div class="v" id="h-cores">&ndash;<small>of 64</small></div></div>
+      <div class="head"><div class="k">CPU : GPU</div><div class="v" id="h-gpu">&ndash;</div></div>
+      <span class="pill"><span class="dot"></span><span id="clock">live</span></span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card board" aria-label="Agents by archetype">
+      <div class="board-head">
+        <div class="first eyebrow">What each agent is doing</div>
+        <div class="stages"><div>Plan</div><div>Workers</div><div>Tools</div><div>Validate</div><div>Synthesize</div></div>
+        <div class="dem"><div>CPU demand</div><div>LLM demand</div></div>
+      </div>
+      <div class="rows" id="rows"><canvas id="lanes"></canvas></div>
+    </section>
+
+    <section class="card totals" aria-label="Demand on the server and the serving tier">
+      <div class="tblock">
+        <div class="eyebrow">CPU demand on this server</div>
+        <div class="big"><div class="v" id="t-cores">&ndash;</div><div class="u">busy physical cores of 64 &middot; <span id="t-attr"></span> attributed to the archetypes</div></div>
+        <div class="stack" id="cpustack"></div>
+        <div class="keys" id="cpukeys"></div>
+      </div>
+      <div class="tblock">
+        <div class="eyebrow">LLM demand on the serving tier</div>
+        <div class="llm3">
+          <div><div class="k">Calls</div><div class="v"><span id="l-calls">&ndash;</span><small>/ s</small></div></div>
+          <div><div class="k">Prompt tokens</div><div class="v"><span id="l-in">&ndash;</span><small>/ s</small></div></div>
+          <div><div class="k">Generated</div><div class="v"><span id="l-out">&ndash;</span><small>tok / s</small></div></div>
+        </div>
+        <div class="stack" id="llmstack"></div>
+        <div class="gpu">
+          <div><div class="k" style="margin-top:12px">GPU kept busy, at 2,400 generated tokens / s per GPU</div><div class="gauge"><i id="gauge"></i></div></div>
+          <div class="big" style="margin-top:8px"><div class="v mono" id="t-gpu" style="font-size:30px">&ndash;</div></div>
+        </div>
+        <div class="note" style="margin-top:8px" id="gpunote"></div>
+      </div>
+      <div class="coregrid">
+        <div class="coremap" id="coremap"></div>
+        <div class="tiers">
+          <div class="tier"><div class="k">Application &middot; 46 cores</div><div class="v"><span id="t-app">&ndash;</span><small>%</small></div></div>
+          <div class="tier"><div class="k">Reranker &middot; 8</div><div class="v"><span id="t-rerank">&ndash;</span><small>%</small></div></div>
+          <div class="tier"><div class="k">Ingest embedder &middot; 8</div><div class="v"><span id="t-ingest">&ndash;</span><small>%</small></div></div>
+          <div class="tier"><div class="k">Query embedder &middot; 2</div><div class="v"><span id="t-embed">&ndash;</span><small>%</small></div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <section class="card ticker" aria-label="Recent completions">
+    <div class="eyebrow">Just finished</div>
+    <div class="list" id="ticker"></div>
+    <div class="note" id="foot">Replayed from the certified set's steady window at 2.0 workflows per second, looped. Every arrival, completion, core reading and sample is measured; positions within a workflow follow its recorded stage times.</div>
+  </section>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const PLATEAU = 2;              // 2.0 workflows/s box-wide: the certified steady point
+const WARMUP_S = 240;           // steady window starts after the slowest archetype has completed at least once
+const GPU_TOKS = 2400;
+const SMT_SHARE = 0.8;          // busy cores in a mix run at ~0.8 x the summed stand-alone weights
+const ARCH = {
+  task_ticket:  { name: "Task agent",      does: "Reads one request, files one durable record, writes the reply. Born, does one thing, gone in ten seconds.", workers: 1, calls: 4,  gen: 550,  coreS: 0.5, lat: "10 s",  phrase: "ticket classified, record filed, reply written" },
+  deep_research:{ name: "Research agent",  does: "Three workers each search 120,000 passages and rerank 128 candidates on the AMX cross-encoder; synthesis writes the brief.", workers: 3, calls: 13, gen: 1800, coreS: 8.5, lat: "34 s",  phrase: "brief assembled from three reranked searches" },
+  ingestion:    { name: "Ingestion agent", does: "Parses 100 PDF pages in a sandbox, embeds about 480 chunks on the CPU embedder, indexes them, verifies with a query.", workers: 1, calls: 5,  gen: 610,  coreS: 24,  lat: "23 s",  phrase: "100 pages parsed, 480 chunks embedded and indexed" },
+  analyst_large:{ name: "Data analyst",    does: "Three workers each aggregate 40 million payment events in a sandbox, one after another; the report ranks the anomalies.", workers: 3, calls: 13, gen: 1790, coreS: 54,  lat: "104 s", phrase: "three 40 M-row jobs run, anomalies ranked" },
+  code_agent:   { name: "Code agent",      does: "Three workers each build Lua 5.4.7 and SQLite 3.50.4 with gcc -O2 in a sandbox and run both test suites.", workers: 3, calls: 13, gen: 1800, coreS: 92,  lat: "133 s", phrase: "Lua and SQLite built, both suites passed" },
+};
+
+(function () {
+  const M = DATA.meta, P = DATA.plateaus[PLATEAU], C = DATA.cores[PLATEAU];
+  const sids = M.sids, tile = M.tile;
+  const a = P.t0 + WARMUP_S, b = P.t1, L = b - a;
+  const genPerWf = P.gen_tokens_per_wf;
+  const promptPerS = P.prompt_tokens_total / P.span_s;
+  document.getElementById("subtitle").textContent =
+    `Twelve arrivals in every twelve: ${tile.task_ticket} task agents, ${tile.code_agent} code agents, ${tile.analyst_large} data analysts, ${tile.deep_research} research agent, ${tile.ingestion} ingestion agent. ` +
+    `Everything around the model runs here; the model runs on a GPU tier reached over an API.`;
+
+  // ---------- units inside the steady window, wrapped onto a loop of length L
+  // Units that arrive inside the window. A unit still in flight when the
+  // recording ended has no completion time; in a steady loop it gets its
+  // archetype's median lifetime, so it completes and is replaced like the rest.
+  const raw = DATA.units.filter(u => u[0] === PLATEAU && u[2] >= a && u[2] < b);
+  const medLife = sids.map((s, li) => { const xs = raw.filter(u => u[1] === li && u[3] != null).map(u => u[3] - u[2]).sort((x, y) => x - y); return xs.length ? xs[xs.length >> 1] : 60; });
+  const units = raw.map((u, i) => {
+    const [pl, sid, t0, t1, ok, mw, ret, sb, emb] = u;
+    const end = t1 == null ? t0 + medLife[sid] : t1;
+    const life = Math.max(1, end - t0);
+    const ft = Math.min(0.6, (ret + sb + emb) / life);
+    return { i, sid, t0: t0 - a, end: end - a, life, ft, w: (0.72 - ft) / 2, ok: t1 == null ? 1 : ok,
+             tool: sb > ret && sb > emb ? "sandbox" : (emb > ret ? "embed" : (ret > 0 ? "retrieval" : "none")), lane: sid, slot: -1, lat: life };
+  });
+  const isActive = (u, tau) => (tau >= u.t0 && tau < u.end) || (u.end > L && tau < u.end - L);
+  // per-second completion counts by archetype, wrapped
+  const secs = Math.ceil(L);
+  const comp = sids.map(() => new Uint16Array(secs));
+  const compList = [];
+  for (const u of units) { const e = ((u.end % L) + L) % L; comp[u.sid][Math.min(secs - 1, Math.floor(e))]++; compList.push([e, u]); }
+  compList.sort((x, y) => x[0] - y[0]);
+  const roll = (arr, tau, n) => { let s = 0; for (let k = 0; k < n; k++) { let i = Math.floor(tau) - k; i = ((i % secs) + secs) % secs; s += arr[i]; } return s; };
+
+  // ---------- rows
+  const rowsEl = document.getElementById("rows");
+  const rowEls = sids.map((sid, li) => {
+    const A = ARCH[sid];
+    const r = document.createElement("div"); r.className = "row";
+    r.innerHTML = `<div class="who"><div class="name"><span>${A.name}</span><span class="n" id="n-${li}">0</span></div><div class="does">${A.does}</div>
+      <div class="foot">${A.workers} worker${A.workers > 1 ? "s" : ""} &middot; ${A.calls} LLM calls &middot; ${A.gen.toLocaleString()} tokens &middot; ${A.coreS} core-s &middot; ${A.lat} &middot; ${tile[sid]} in 12</div></div>
+      <div class="lane"></div>
+      <div class="dem"><div class="m"><div class="v"><span id="c-${li}">&ndash;</span><small>cores</small></div><div class="bar"><i id="cb-${li}"></i></div></div>
+      <div class="m llm"><div class="v"><span id="l-${li}">&ndash;</span><small>tok/s</small></div><div class="bar"><i id="lb-${li}"></i></div></div></div>`;
+    rowsEl.appendChild(r); return r;
+  });
+  const cv = document.getElementById("lanes"), ctx = cv.getContext("2d");
+  let cw = 0, ch = 0, ox = 0, lanes = [];
+  function resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const rr = rowsEl.getBoundingClientRect(); cw = rr.width; ch = rr.height;
+    cv.width = cw * dpr; cv.height = ch * dpr; cv.style.width = cw + "px"; cv.style.height = ch + "px"; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    lanes = rowEls.map(r => { const l = r.querySelector(".lane").getBoundingClientRect(); return { x: l.left - rr.left, y: l.top - rr.top, w: l.width, h: l.height }; });
+    sizeCoreMap();
+  }
+  function sizeCoreMap() {
+    const cg = document.querySelector(".coregrid"), cm = document.getElementById("coremap");
+    const size = Math.max(96, Math.min(cg.clientHeight - 28, 240));
+    const cell = Math.floor((size - 7 * 4) / 8);
+    cm.style.gridTemplateColumns = `repeat(8, ${cell}px)`; cm.style.gridTemplateRows = `repeat(8, ${cell}px)`;
+    cm.style.width = (cell * 8 + 28) + "px"; cm.style.height = (cell * 8 + 28) + "px";
+  }
+  window.addEventListener("resize", resize);
+
+  // ---------- core map and stacks
+  const coremap = document.getElementById("coremap");
+  const coreEls = M.tiers.map(t => { const d = document.createElement("div"); d.className = "core tier-" + t; coremap.appendChild(d); return d; });
+  const archColors = ["#4fb0f0", "#7cc2ee", "#5fc9c2", "#a9c4e2", "#dfe9f5"];
+  const cpustack = document.getElementById("cpustack"), llmstack = document.getElementById("llmstack");
+  const cpuSpans = sids.map((s, i) => { const e = document.createElement("span"); e.style.background = archColors[i]; cpustack.appendChild(e); return e; });
+  const llmSpans = sids.map((s, i) => { const e = document.createElement("span"); e.style.background = archColors[i]; llmstack.appendChild(e); return e; });
+  document.getElementById("cpukeys").innerHTML = sids.map((s, i) => `<span><i style="background:${archColors[i]}"></i>${ARCH[s].name}</span>`).join("");
+
+  // ---------- swarm
+  const colors = { agent: "#4fb0f0", sandbox: "#dfe9f5", retrieval: "#d2a66a", embed: "#5fc9c2", late: "#ef8a5c" };
+  const rowsPerLane = [7, 3, 3, 5, 5];
+  const slotsFree = sids.map(() => []), slotsNext = sids.map(() => 0);
+  const takeSlot = l => slotsFree[l].length ? slotsFree[l].pop() : slotsNext[l]++;
+  const active = new Map();   // unit -> true
+  const counts = sids.map(() => 0);
+  const fades = [];
+  let tau = 0, last = performance.now(), lastPanel = -10, playing = true;
+
+  function xOf(u, prog, lane) {
+    const bw = lane.w / 5;
+    const seg = [[0.08, 0], [u.w, 1], [u.ft, 2], [u.w, 1.5], [0.12, 3], [0.08, 4]];
+    let acc = 0;
+    for (const [len, band] of seg) {
+      if (len <= 0) continue;
+      if (prog <= acc + len || band === 4) {
+        const f = Math.max(0, Math.min(1, (prog - acc) / len));
+        if (band === 1.5) return lane.x + bw * (1.5 + f * 0.44);
+        if (band === 1) return lane.x + bw * (1.06 + f * 0.44);
+        return lane.x + bw * (band + 0.08 + f * 0.84);
+      }
+      acc += len;
+    }
+    return lane.x + bw * 4.9;
+  }
+
+  function step(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (playing) tau = (tau + dt) % L;
+    // membership
+    for (const u of units) {
+      const on = isActive(u, tau);
+      if (on && !active.has(u)) { u.slot = takeSlot(u.lane); active.set(u, true); counts[u.lane]++; }
+      else if (!on && active.has(u)) { active.delete(u); counts[u.lane]--; slotsFree[u.lane].push(u.slot); if (u._x) fades.push({ x: u._x, y: u._y, age: 0, ok: u.ok }); }
+    }
+    render();
+    requestAnimationFrame(step);
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, cw, ch);
+    lanes.forEach(lane => { for (let bnd = 1; bnd < 5; bnd++) { ctx.strokeStyle = "rgba(170,205,240,0.07)"; ctx.beginPath(); ctx.moveTo(lane.x + lane.w * bnd / 5, lane.y); ctx.lineTo(lane.x + lane.w * bnd / 5, lane.y + lane.h); ctx.stroke(); } });
+    for (const u of active.keys()) {
+      const lane = lanes[u.lane]; if (!lane) continue;
+      const rows = rowsPerLane[u.lane], row = u.slot % rows, col = Math.floor(u.slot / rows);
+      const age = ((tau - u.t0) % L + L) % L;
+      const prog = Math.min(1, age / u.life);
+      const x = xOf(u, prog, lane) + (col % 3) * 3;
+      const y = lane.y + 8 + (row + 0.5) * ((lane.h - 16) / rows);
+      u._x = x; u._y = y;
+      const inTools = prog > 0.08 + u.w && prog <= 0.08 + u.w + u.ft;
+      const color = inTools && u.tool !== "none" ? colors[u.tool] : colors.agent;
+      const r = u.sid === 0 ? 2.6 : 3.4;
+      ctx.fillStyle = color;
+      if (ARCH[sids[u.sid]].workers === 3 && prog > 0.08 && prog < 0.8) {
+        for (let k = 0; k < 3; k++) { const an = (k / 3) * Math.PI * 2 + prog * 2; ctx.beginPath(); ctx.arc(x + Math.cos(an) * 3.2, y + Math.sin(an) * 3.2, r * 0.6, 0, Math.PI * 2); ctx.fill(); }
+      } else { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+    }
+    for (let i = fades.length - 1; i >= 0; i--) { const f = fades[i]; f.age += 0.05; if (f.age >= 1) { fades.splice(i, 1); continue; } ctx.globalAlpha = 1 - f.age; ctx.strokeStyle = f.ok ? colors.agent : colors.late; ctx.beginPath(); ctx.arc(f.x, f.y, 3 + f.age * 9, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+    updatePanels();
+  }
+
+  const tickerEl = document.getElementById("ticker");
+  let tickerSeen = -1, tickerItems = [];
+  function updatePanels() {
+    const jump = tau - lastPanel; if (jump > -1 && jump < 0.5) return; lastPanel = tau;
+    // per-archetype demand from the last 60 s of completions
+    let attr = 0, genTot = 0, callsTot = 0;
+    const cores = [], gens = [];
+    sids.forEach((sid, li) => {
+      const done = roll(comp[li], tau, 60) / 60;          // completions per second
+      const c = done * ARCH[sid].coreS * SMT_SHARE, g = done * (genPerWf[sid] || ARCH[sid].gen);
+      cores.push(c); gens.push(g); attr += c; genTot += g; callsTot += done * ARCH[sid].calls;
+      document.getElementById(`n-${li}`).textContent = counts[li];
+      document.getElementById(`c-${li}`).textContent = c.toFixed(1);
+      document.getElementById(`l-${li}`).textContent = Math.round(g);
+    });
+    sids.forEach((s, li) => { document.getElementById(`cb-${li}`).style.width = (100 * cores[li] / 34).toFixed(1) + "%"; document.getElementById(`lb-${li}`).style.width = (100 * gens[li] / 700).toFixed(1) + "%"; });
+    cpuSpans.forEach((e, i) => e.style.width = (attr ? 100 * cores[i] / attr : 0).toFixed(1) + "%");
+    llmSpans.forEach((e, i) => e.style.width = (genTot ? 100 * gens[i] / genTot : 0).toFixed(1) + "%");
+    // measured cores at this moment
+    const k = Math.min(C.length - 1, Math.floor((tau + WARMUP_S) / 10)); const row = C[k];
+    let busy = 0; const ts = { app: 0, rerank: 0, embed: 0, ingest: 0 };
+    if (row) row.forEach((v, i) => { coreEls[i].style.setProperty("--b", (v / 100).toFixed(2)); busy += v / 100; ts[M.tiers[i]] += v; });
+    const resident = active.size;
+    set("h-res", resident);
+    document.getElementById("h-cores").innerHTML = `${busy.toFixed(0)}<small>of 64</small>`;
+    set("t-cores", busy.toFixed(1)); set("t-attr", attr.toFixed(0));
+    set("t-app", Math.round(ts.app / 46)); set("t-rerank", Math.round(ts.rerank / 8)); set("t-ingest", Math.round(ts.ingest / 8)); set("t-embed", Math.round(ts.embed / 2));
+    set("l-calls", callsTot.toFixed(1)); set("l-in", Math.round(promptPerS / 1000) + "k"); set("l-out", Math.round(genTot).toLocaleString());
+    const gpus = genTot / GPU_TOKS, perSocket = busy > 0 ? gpus * 64 / busy : 0;
+    document.getElementById("gauge").style.width = Math.min(100, 100 * gpus).toFixed(1) + "%";
+    set("t-gpu", gpus.toFixed(2)); set("h-gpu", "1 : " + perSocket.toFixed(1));
+    document.getElementById("gpunote").textContent = `This server's ${busy.toFixed(0)} busy cores keep ${gpus.toFixed(2)} of a GPU generating; a full 64-core socket at the same work keeps ${perSocket.toFixed(1)}. Host work per token: ${genTot > 0 ? (busy * 1000 / genTot).toFixed(1) : "–"} core-ms.`;
+    // ticker: completions in the last second(s)
+    const s0 = Math.floor(tau);
+    if (s0 !== tickerSeen) {
+      tickerSeen = s0;
+      for (const [e, u] of compList) if (e >= s0 && e < s0 + 1) tickerItems.unshift({ u, at: tau });
+      tickerItems = tickerItems.slice(0, 5);
+      tickerEl.innerHTML = tickerItems.map(({ u }) => `<span><i>${u.lat.toFixed(0)} s</i><b>${ARCH[sids[u.sid]].name}</b> &middot; ${ARCH[sids[u.sid]].phrase}</span>`).join("");
+    }
+    document.getElementById("clock").textContent = "live · " + String(Math.floor(tau / 60)).padStart(2, "0") + ":" + String(Math.floor(tau % 60)).padStart(2, "0");
+  }
+  function set(id, v) { const e = document.getElementById(id); if (e && e.textContent !== String(v)) e.textContent = v; }
+
+  window.addEventListener("keydown", ev => { if (ev.code === "Space" && ev.target === document.body) { ev.preventDefault(); playing = !playing; } });
+  resize(); requestAnimationFrame(() => { resize(); tau = 30; step(performance.now()); });
+  window.__steady = { seek: t => { tau = ((t % L) + L) % L; lastPanel = -10; render(); }, time: () => tau, pause: () => playing = false, play: () => playing = true };
+})();
+</script>
