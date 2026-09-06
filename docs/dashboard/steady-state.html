@@ -143,7 +143,7 @@
     <div class="arrow">&rarr;</div>
     <div class="step"><div><div class="num">02</div><div class="big" id="s-run">&ndash;<small>running</small></div></div><div><div class="t">Agents work on this server</div><div class="d">Each request becomes an agent that plans, runs its workers, uses tools (sandboxes, retrieval, embedding), is validated, and writes its result. That work is what the CPU does.</div></div></div>
     <div class="arrow">&rarr;</div>
-    <div class="step"><div><div class="num">03</div><div class="big" id="s-calls">&ndash;<small>calls / s</small></div></div><div><div class="t">Model calls go to the GPU tier</div><div class="d">Every plan, worker turn and validation is a model call. Together they keep <span id="s-gpu">&ndash;</span> of one GPU generating, so this CPU pairs with about <span id="s-ratio">&ndash;</span> GPUs.</div></div></div>
+    <div class="step"><div><div class="num">03</div><div class="big" id="s-calls">&ndash;<small>calls / s</small></div></div><div><div class="t">Model calls go to the GPU tier</div><div class="d">Every plan, worker turn and validation is a model call. Together they keep <span id="s-gpu">&ndash;</span> of one GPU generating: this server pairs with one GPU of the reference class.</div></div></div>
   </section>
 
   <main class="grid">
@@ -190,7 +190,8 @@
           <div><div class="k">Generated</div><div class="v"><span id="l-out">&ndash;</span><small>tok / s</small></div></div>
         </div>
         <div class="stack" id="llmstack"></div>
-        <div class="gpu"><div><div class="k">GPU kept generating, at 2,400 tokens / s per GPU</div><div class="gauge"><i id="gauge"></i></div></div><div class="v" id="t-gpu">&ndash;</div></div>
+        <div class="keys" id="llmkeys"></div>
+        <div class="gpu"><div><div class="k">GPUs this server keeps generating, at 2,400 tokens / s per GPU</div><div class="gauge"><i id="gauge"></i></div></div><div class="v" id="t-gpu">&ndash;</div></div>
         <div class="note" style="margin-top:8px" id="gpunote"></div>
       </div>
     </section>
@@ -291,6 +292,7 @@ const ARCH = {
   const cpuSpans = sids.map((s, i) => { const e = document.createElement("span"); e.style.background = archColors[i]; document.getElementById("cpustack").appendChild(e); return e; });
   const llmSpans = sids.map((s, i) => { const e = document.createElement("span"); e.style.background = archColors[i]; document.getElementById("llmstack").appendChild(e); return e; });
   document.getElementById("cpukeys").innerHTML = sids.map((s, i) => `<span><i style="background:${archColors[i]}"></i>${ARCH[s].name}</span>`).join("");
+  document.getElementById("llmkeys").innerHTML = document.getElementById("cpukeys").innerHTML;
 
   const colors = { agent: "#4fb0f0", sandbox: "#dfe9f5", retrieval: "#d2a66a", embed: "#5fc9c2" };
   const rowsPerLane = [6, 3, 3, 5, 5];
@@ -365,7 +367,7 @@ const ARCH = {
     document.getElementById("census-total").textContent = `${active.size} agents on the server`;
     let attr = 0, genTot = 0, callsTot = 0; const cores = [], gens = [];
     sids.forEach((sid, li) => {
-      const done = roll(comp[li], tau, 60) / 60;
+      const done = roll(comp[li], tau, 120) / 120;
       const c = done * ARCH[sid].coreS * SMT_SHARE, g = done * (genPerWf[sid] || ARCH[sid].gen);
       cores.push(c); gens.push(g); attr += c; genTot += g; callsTot += done * ARCH[sid].calls;
       set(`n-${li}`, counts[li]);
@@ -378,13 +380,13 @@ const ARCH = {
     set("t-cores", busy.toFixed(0));
     set("t-app", Math.round(ts.app / 46)); set("t-rerank", Math.round(ts.rerank / 8)); set("t-ingest", Math.round(ts.ingest / 8)); set("t-embed", Math.round(ts.embed / 2));
     set("l-calls", callsTot.toFixed(1)); set("l-in", Math.round(promptPerS / 1000) + "k"); set("l-out", Math.round(genTot).toLocaleString());
-    const gpus = genTot / GPU_TOKS, perSocket = busy > 0 ? gpus * 64 / busy : 0;
+    const gpus = genTot / GPU_TOKS;
     document.getElementById("gauge").style.width = Math.min(100, 100 * gpus).toFixed(1) + "%";
     set("t-gpu", gpus.toFixed(2));
-    document.getElementById("gpunote").textContent = `${busy.toFixed(0)} busy cores behind ${Math.round(genTot).toLocaleString()} generated tokens a second is ${genTot > 0 ? (busy * 1000 / genTot).toFixed(1) : "–"} core-ms of CPU per token; a full 64-core socket at this work keeps ${perSocket.toFixed(1)} GPUs busy.`;
+    document.getElementById("gpunote").textContent = `The whole server, tiers and headroom included, generating ${Math.round(genTot).toLocaleString()} tokens a second against a GPU that generates 2,400: one server to ${gpus.toFixed(2)} GPUs. Averaged over the last two minutes.`;
     document.getElementById("s-run").innerHTML = `${active.size}<small>running</small>`;
     document.getElementById("s-calls").innerHTML = `${callsTot.toFixed(1)}<small>calls / s</small>`;
-    set("s-gpu", gpus.toFixed(2)); set("s-ratio", perSocket.toFixed(1));
+    set("s-gpu", gpus.toFixed(2));
     const s0 = Math.floor(tau);
     if (s0 !== tickerSeen) {
       const from = tickerSeen < 0 || s0 < tickerSeen ? s0 : tickerSeen + 1;
