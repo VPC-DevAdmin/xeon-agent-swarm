@@ -63,28 +63,30 @@ and the compute-carrying archetypes set the constant.
 | Engineering (an engineering organisation) | 7 | 3 | 1 | 1 | 0 | 21 |
 | Analytics (a data and research organisation) | 6 | 0 | 3 | 2 | 1 | 13 |
 
-## Result (5 September 2026)
+## Result (6 September 2026)
 
-Each tile was measured with three seeds and ten-minute holds on the
-allocation of record (reranker 8 cores, query embedder 2, ingest embedder
-8, 46 for the instances and their jobs):
+Each tile was measured with three seeds and ten-minute holds; the
+enterprise tile on its allocation of record (reranker 4 cores, query
+embedder 1, ingest embedder 8, 51 for the instances and their jobs), the
+others with the reranker on 8, the query embedder on 2 and 46 application
+cores:
 
-| Tile | Capacity | Resident agents at capacity | Core-ms per token (measured at 2.0/s) | 1,300 tok/s per GPU | 2,400 | 3,800 |
-|---|---|---|---|---|---|---|---|
-| Enterprise | 2.0 wf/s | 87 | 21.5 | 1 : 2.3 | 1 : 1.2 | 1 : 0.8 |
-| Engineering | 2.4 wf/s | 102 | 20.0 | 1 : 2.5 | 1 : 1.3 | 1 : 0.8 |
-| Analytics | 2.6 wf/s | 106 | 16.3 | 1 : 3.0 | 1 : 1.6 | 1 : 1.0 |
-| Twelve task agents (estimate from the weights) | | | 0.9 | 1 : 55 | 1 : 30 | 1 : 19 |
+| Tile | Capacity | Resident agents, measured | Generated tokens/s at capacity | Core-ms per token | GPUs the server keeps busy at 1,300 / 2,400 / 3,800 tok/s per GPU |
+|---|---|---|---|---|---|
+| Enterprise | 2.4 wf/s (2.6 falls behind) | 151 | 2,418 | 23.1 | 1.86 / 1.01 / 0.64 |
+| Engineering | 2.4 wf/s (2.8 falls behind) | 150 | 2,387 | 19.8 | 1.84 / 0.99 / 0.63 |
+| Analytics | 2.6 wf/s (3.2 falls behind) | 137 | 2,658 | 19.8 | 2.04 / 1.11 / 0.70 |
 
-Every organisation tile crosses 1:1 inside the lab's band. The constant
-is flat across each ladder (enterprise 21.5 to 22.7 core-ms per token
-from 1.2 to 2.8 workflows/s; engineering 19.0 to 22.4; analytics 16.3 to
-19.8), which is what a property of the tile rather than of the load
-should do. In every tile the executors' 46 cores are the limit, 83%
-occupied at 2.0 workflows/s and 97 to 100% past the cliff; the
-reranker never passes 36% and the ingest embedder sits near 50%. Sets
-`data/capacity/set-20260905-031403`, `set-20260905-060903`,
-`set-20260905-090413`; full curves in section 11 of the methodology.
+The ratio is the server's own: its generated tokens per second against
+one GPU's, with no scaling to busy cores. At capacity each server keeps
+one GPU of the reference class busy at the lab's conservative peak. The
+enterprise tile's residency was confirmed the other way round: 152
+sessions held in a closed loop completed 2.30 workflows a second at the
+ladder's latencies with no drift over ten minutes, in all three seeds.
+Sets `data/capacity/set-20260906-163941`, `set-20260906-182610`,
+`set-20260905-060903`, `set-20260905-090413`; photographs
+`photo-10301-20260906-213254`, `photo-10401-20260906-215815`, `photo-10501-20260906-222336`; full curves in section 11 of the
+methodology.
 
 ## What this does not claim
 

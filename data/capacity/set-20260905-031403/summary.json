@@ -38,6 +38,7 @@
      3
     ]
    ],
+   "resident_measured_median": 54,
    "resident_median": 52,
    "resident_range": [
     52,
@@ -317,6 +318,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 52,
+     "resident_measured": 54,
      "think_s": 3.0,
      "host_cpu_pct": 30.4,
      "retrieval_cpu_pct": 2.5,
@@ -594,6 +596,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 52,
+     "resident_measured": 54,
      "think_s": 3.0,
      "host_cpu_pct": 30.3,
      "retrieval_cpu_pct": 2.1,
@@ -871,6 +874,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 52,
+     "resident_measured": 54,
      "think_s": 3.0,
      "host_cpu_pct": 30.6,
      "retrieval_cpu_pct": 2.3,
@@ -904,6 +908,7 @@
      0
     ]
    ],
+   "resident_measured_median": 72,
    "resident_median": 68,
    "resident_range": [
     68,
@@ -1183,6 +1188,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 68,
+     "resident_measured": 72,
      "think_s": 3.0,
      "host_cpu_pct": 42.0,
      "retrieval_cpu_pct": 4.9,
@@ -1460,6 +1466,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 68,
+     "resident_measured": 73,
      "think_s": 3.0,
      "host_cpu_pct": 41.7,
      "retrieval_cpu_pct": 4.8,
@@ -1737,6 +1744,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 69,
+     "resident_measured": 72,
      "think_s": 3.0,
      "host_cpu_pct": 41.5,
      "retrieval_cpu_pct": 4.1,
@@ -1770,6 +1778,7 @@
      5
     ]
    ],
+   "resident_measured_median": 98,
    "resident_median": 87,
    "resident_range": [
     87,
@@ -2049,6 +2058,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 87,
+     "resident_measured": 98,
      "think_s": 3.0,
      "host_cpu_pct": 56.9,
      "retrieval_cpu_pct": 12.5,
@@ -2326,6 +2336,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 87,
+     "resident_measured": 98,
      "think_s": 3.0,
      "host_cpu_pct": 56.3,
      "retrieval_cpu_pct": 12.5,
@@ -2603,6 +2614,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 88,
+     "resident_measured": 98,
      "think_s": 3.0,
      "host_cpu_pct": 56.2,
      "retrieval_cpu_pct": 12.4,
@@ -2636,6 +2648,7 @@
      49
     ]
    ],
+   "resident_measured_median": 163,
    "resident_median": 100,
    "resident_range": [
     99,
@@ -2915,6 +2928,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 100,
+     "resident_measured": 163,
      "think_s": 3.0,
      "host_cpu_pct": 83.7,
      "retrieval_cpu_pct": 12.6,
@@ -3192,6 +3206,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 100,
+     "resident_measured": 163,
      "think_s": 3.0,
      "host_cpu_pct": 83.8,
      "retrieval_cpu_pct": 12.6,
@@ -3469,6 +3484,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 99,
+     "resident_measured": 163,
      "think_s": 3.0,
      "host_cpu_pct": 83.9,
      "retrieval_cpu_pct": 12.5,
@@ -3502,6 +3518,7 @@
      154
     ]
    ],
+   "resident_measured_median": 258,
    "resident_median": 50,
    "resident_range": [
     50,
@@ -3781,6 +3798,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 50,
+     "resident_measured": 258,
      "think_s": 3.0,
      "host_cpu_pct": 86.8,
      "retrieval_cpu_pct": 14.2,
@@ -4058,6 +4076,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 50,
+     "resident_measured": 258,
      "think_s": 3.0,
      "host_cpu_pct": 86.8,
      "retrieval_cpu_pct": 14.1,
@@ -4335,6 +4354,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 50,
+     "resident_measured": 262,
      "think_s": 3.0,
      "host_cpu_pct": 86.7,
      "retrieval_cpu_pct": 14.1,
@@ -4352,6 +4372,7 @@
     1.99,
     2.0
    ],
+   "resident_measured": 98,
    "resident_median": 87,
    "resident_range": [
     87,

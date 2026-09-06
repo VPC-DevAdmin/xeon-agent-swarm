@@ -283,14 +283,17 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
     state is backlog growth across the cohort span (arrivals-to-date minus
     completions-to-date at the end of the span versus its start), within
     max(5, 5% of cohort arrivals). Sessions resident = rate x (mean
-    latency + think), Little's law."""
+    latency + think), Little's law, and measured: the fleet's in-flight
+    samples over the span."""
     from backend.capacity.scenarios import service_ladder
     units = []
     per_ledger = []
     offered = []
     ended_at = None
+    sample_rows = []
     for path in paths:
         ev = read_evidence(path)
+        sample_rows += ev.get("samples") or []
         rs = sorted(float(u["r"]) for u in ev["units"] if u.get("r") is not None)
         offered.append(rs[len(rs) // 2] if rs else None)
         ft = ev.get("footer") or {}
@@ -389,7 +392,26 @@ def plateau(paths: list, think_s: float = 3.0, target: float = 0.95,
             "sustained_tiers": [t for t, v in tiers.items()
                                 if v["on_time_and_steady"]],
             "resident_sessions": int(rate * (med + think_s)),
+            "resident_measured": _measured_inflight(sample_rows, start, start + span),
             "think_s": think_s}
+
+
+def _measured_inflight(samples: list, a: float, b: float) -> int | None:
+    """Agents resident as the fleet actually carried them: the median over
+    the cohort span of the instances' in-flight counts summed per two-second
+    bucket. Little's law from completed units understates residency near
+    the cliff, where the slowest units are censored; the samples do not."""
+    buckets: dict = {}
+    for smp in samples:
+        ts = smp.get("ts")
+        if ts is None or ts < a or ts > b or smp.get("in_flight") is None:
+            continue
+        k = int((ts - a) // 2)
+        buckets[k] = buckets.get(k, 0) + int(smp["in_flight"])
+    if not buckets:
+        return None
+    xs = sorted(buckets.values())
+    return int(xs[len(xs) // 2])
 
 
 def summarize(judgment: dict) -> dict:

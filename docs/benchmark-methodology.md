@@ -28,8 +28,11 @@ server sustains, and reports three numbers from one curve:
   starts to rise is the knee; a reader with a latency requirement of
   their own reads their rate off the curve.
 - **Resident agents**: how many agents the server is carrying at a rate,
-  by Little's law (rate x mean time in system plus a 3 s think time). It
-  is derived at any stable operating point.
+  measured: the median of the fleet's in-flight counts over the steady
+  window. Little's law (rate x mean time in system) is the check on it;
+  near the cliff the law understates residency, because the slowest units
+  have not completed when the hold ends and drop out of the mean, and the
+  samples do not.
 
 A fourth number follows from the first: **host work per generated
 token**, the busy cores behind the tokens the tile makes the serving tier
@@ -214,14 +217,16 @@ reference server has 64 cores with two SMT threads each and an irregular
 sibling map, so allocations are never written as logical ranges. The
 reranker's runtime gets one thread per physical core (the first sibling);
 two runtime threads on one core's siblings were measured to halve each
-other. The allocation of record is 8 cores for the reranker (one process,
-eight inference threads), 2 for the query embedder, 8 for the ingest
-embedder, and the remaining 46 for the four instances, their executors,
-stand-ins, databases, and sandboxed jobs, which are pinned there so nothing
-shares AMX units with the tiers. Provisioning selects it with
-`RERANK_PHYS_CORES=8 RERANK_WORKERS=1 RERANK_THREADS=8 EMBED_PHYS_CORES=2
-INGEST_EMBED_PHYS_CORES=8`, and it rides the run fingerprint
-(`allocation.env`). Pinning is by cpuset, not quota: a CPU quota on a
+other. The allocation of record for the enterprise tile is 4 cores for the
+reranker (one process, four inference threads), 1 for the query embedder,
+8 for the ingest embedder, and the remaining 51 for the four instances,
+their executors, stand-ins, databases, and sandboxed jobs, which are
+pinned there so nothing shares AMX units with the tiers. Provisioning
+selects it with `RERANK_PHYS_CORES=4 RERANK_WORKERS=1 RERANK_THREADS=4
+EMBED_PHYS_CORES=1 INGEST_EMBED_PHYS_CORES=8`, and it rides the run
+fingerprint (`allocation.env`). The engineering and analytics tiles ran
+with the reranker on 8 cores, the query embedder on 2 and 46 application
+cores, the sizing their heavier retrieval share called for. Pinning is by cpuset, not quota: a CPU quota on a
 128-thread host lets a many-threaded process burn its allowance in
 milliseconds and sleep for the rest of the period.
 
@@ -340,10 +345,11 @@ fleet's ledgers, pooled:
   date) grows by at most five units or 5% of the cohort across the
   cohort's span, and the generator delivered at least 95% of the offered
   rate.
-- Resident agents are rate x (mean time in system + 3 s think). The mean,
-  not the median: in a tile that is half task agents the median unit is a
-  10 s task agent, and a median-based figure would understate the agents
-  alive by about four times.
+- Resident agents are measured: the median over the cohort span of the
+  instances' in-flight counts summed per two-second bucket. Little's law,
+  rate x (mean time in system + 3 s think), is reported beside it as the
+  check; it agrees within ten percent below the knee and understates near
+  the cliff, where the slowest units are censored out of the mean.
 
 A unit succeeds only if it completed inside its contract; a workflow
 running longer than the patience ceiling (900 s under the modeled tier) is
@@ -498,10 +504,12 @@ be rescaled to a different mix, depth, or job size.
   under contention; in a mix, busy cores run at about 0.8 times the
   summed weights because sibling threads share physical cores.
 - **Allocation.** Cores are divided so that the tiers keep headroom past
-  the rate at which the executors' side runs out; with these tiles that is
-  8 + 2 + 8 cores for the tiers and 46 for everything else, and the box is
-  full at 2.0 to 2.6 workflows/s depending on the tile, whatever the
-  split.
+  the rate at which the executors' side runs out; for the enterprise tile
+  that is 4 + 1 + 8 cores for the tiers and 51 for everything else, and
+  the box is full at 2.4 workflows/s. Every core moved from a tier with
+  headroom to the application pool buys capacity at the same host work
+  per token: the enterprise tile's capacity went from 2.0 to 2.4
+  workflows/s when five cores moved.
 
 `scripts/archetype_costs.sh` runs an archetype alone at two rates and
 `scripts/archetype_cost_summary.py` reads its cost; `scripts/cost_table.py`
@@ -520,14 +528,21 @@ the ledger's SHA-256. Ledgers, judgments, and set summaries are committed
 under `data/capacity/`. Two results compare only when their fingerprints
 match.
 
-The results of record are the three organisation tiles' sets
-(section 11): enterprise `data/capacity/set-20260905-031403` (seeds 9801,
-9901, 10001), engineering `set-20260905-060903` (9901, 10001, 10101),
-analytics `set-20260905-090413` (10001, 10101, 10201); three seeds each,
-ten-minute holds, run commits b86e16e and b68360b (the second a judge-only
-change), evidence commits 8420fc7 and 7385a53. Their per-core samples are
-`data/capacity/set-9800-mpstat.log`, `set-9900-mpstat.log`, and
-`set-10000-mpstat.log` on the reference server.
+The results of record are the three organisation tiles' sets (section
+11): enterprise `data/capacity/set-20260906-163941` (seeds 10301, 10401,
+10501; 2.0, 2.2, 2.4 workflows/s) with its cliff rung
+`set-20260906-182610` (same seeds, 2.6) and its residency photographs
+`photo-10301-20260906-213254`, `photo-10401-20260906-215815`,
+`photo-10501-20260906-222336` (152 sessions) and
+`photo-10301-20260906-202031`, `photo-10401-20260906-204350`,
+`photo-10501-20260906-210709` (116 sessions); engineering
+`set-20260905-060903` (9901, 10001, 10101); analytics
+`set-20260905-090413` (10001, 10101, 10201). Three seeds each, ten-minute
+holds; run commits 0accca3 (enterprise) and b86e16e (the others),
+evidence commits 907964d, 79dff1e, 5ede7c9, 5a138ba and 7385a53. Their
+per-core samples are `data/capacity/set-10300-mpstat.log`,
+`set-10300b-mpstat.log`, `set-9900-mpstat.log` and `set-10000-mpstat.log`
+on the reference server.
 
 ## 10. Known limits
 
@@ -558,96 +573,132 @@ function of what agents do rather than as one number.
 ### Results of record
 
 Three sets, three seeds each, ten-minute holds: enterprise
-`data/capacity/set-20260905-031403` (0.3 to 0.7 per instance, 1.2 to 2.8
-workflows/s box-wide), engineering `set-20260905-060903` (same ladder),
+`data/capacity/set-20260906-163941` with its cliff rung
+`set-20260906-182610` (0.5 to 0.65 per instance, 2.0 to 2.6 workflows/s
+box-wide, on the allocation of record), engineering
+`set-20260905-060903` (0.3 to 0.7 per instance, 1.2 to 2.8 box-wide),
 analytics `set-20260905-090413` (0.5 to 1.1 per instance, 2.0 to 4.4
 box-wide). Latencies are p50 / p95 in seconds, medians of three series;
 host cores busy is the time-averaged per-core occupancy of the first
-series (section 7); resident agents are rate x (mean time in system + 3 s
-think), median of the three series. Zero failures through capacity in
-every series.
+series (section 7); resident agents are measured from the fleet's
+in-flight samples. Zero failures through capacity in every series.
 
-**Enterprise.** Capacity 2.0 workflows/s with 87 resident agents; the
-next rung falls behind.
+**Enterprise.** Capacity 2.4 workflows/s with 151 resident agents; 2.6
+falls behind in every seed.
 
-| Offered (box-wide) | Code agent | Data analyst | Research | Ingestion | Task | Resident | Host cores busy | Verdict |
-|---|---|---|---|---|---|---|---|---|
-| 1.2/s | 125 / 127 | 89 / 90 | 34 / 35 | 23 / 24 | 10 / 11 | 52 | 45% | keeps up |
-| 1.6/s | 122 / 126 | 94 / 96 | 34 / 35 | 23 / 24 | 10 / 11 | 68 | 57% | keeps up |
-| 2.0/s | 133 / 145 | 104 / 112 | 34 / 35 | 23 / 24 | 10 / 11 | 87 | 70% | keeps up: capacity |
-| 2.4/s | 232 / 242 | 159 / 172 | 34 / 35 | 25 / 26 | 10 / 11 | — | 82% | past the cliff (executors 97%) |
-| 2.8/s | — | — | 35 / 36 | 27 / 30 | 10 / 11 | — | 86% | past the cliff |
+| Offered (box-wide) | Code agent | Data analyst | Research | Ingestion | Task | Resident | Backlog over the hold | Host cores busy | Verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| 2.0/s | 123 / 126 | 95 / 99 | 34 / 35 | 23 / 24 | 10 / 11 | 93 | 89 → 100 | 70% | keeps up |
+| 2.2/s | 151 / 161 | 116 / 125 | 34 / 35 | 24 / 25 | 10 / 11 | 118 | 111 → 115 | 79% | keeps up |
+| 2.4/s | 195 / 201 | 142 / 146 | 34 / 35 | 25 / 26 | 10 / 11 | 151 | 142 → 168 | 87% | keeps up: capacity |
+| 2.6/s | 286 / 286, two completed in the hold | 195 / 211 | 35 / 36 | 26 / 28 | 10 / 11 | 196 and climbing | 169 → 240 | 91% | past the cliff (application cores 100%) |
 
-**Engineering.** Capacity 2.4 workflows/s with 102 resident agents; at
-2.0 (88 resident) the heavy agents are still at their light-load latency.
+The response curve is the two heavy archetypes': analysts 95 to 142 s and
+coders 123 to 195 s from 2.0 to 2.4, while task, research and ingestion
+agents hold 10, 34 and 25 s at every rate including past the cliff. At
+2.6 arrivals exceed completions by about seven a minute for the whole
+hold and the code agents stop completing inside it.
+
+**Engineering.** Capacity 2.4 workflows/s with 150 resident agents; 2.8
+falls behind.
 
 | Offered (box-wide) | Code agent | Data analyst | Research | Task | Resident | Host cores busy | Verdict |
 |---|---|---|---|---|---|---|---|
 | 1.2/s | 122 / 125 | 87 / 88 | 34 / 35 | 10 / 11 | 52 | 43% | keeps up |
-| 1.6/s | 118 / 121 | 89 / 91 | 34 / 35 | 10 / 11 | 67 | 55% | keeps up |
-| 2.0/s | 131 / 141 | 101 / 108 | 34 / 35 | 10 / 11 | 88 | 64% | keeps up |
-| 2.4/s | 189 / 199 | 129 / 135 | 34 / 35 | 10 / 11 | 102 | 74% | keeps up: capacity |
-| 2.8/s | — | 225 / 234 | 35 / 36 | 10 / 11 | — | 77% | past the cliff (executors 100%) |
+| 1.6/s | 118 / 121 | 89 / 91 | 34 / 35 | 10 / 11 | 68 | 55% | keeps up |
+| 2.0/s | 131 / 141 | 101 / 108 | 34 / 35 | 10 / 11 | 100 | 64% | keeps up |
+| 2.4/s | 189 / 199 | 129 / 135 | 34 / 35 | 10 / 11 | 150 | 74% | keeps up: capacity |
+| 2.8/s | — | 225 / 234 | 35 / 36 | 10 / 11 | — | 77% | past the cliff (application cores 100%) |
 
-**Analytics.** Capacity 2.6 workflows/s with 106 resident agents; at 2.0
-(72 resident) the analysts are still at their light-load latency.
+**Analytics.** Capacity 2.6 workflows/s with 137 resident agents; 3.2
+falls behind.
 
 | Offered (box-wide) | Data analyst | Research | Ingestion | Task | Resident | Host cores busy | Verdict |
 |---|---|---|---|---|---|---|---|
-| 2.0/s | 96 / 97 | 34 / 35 | 22 / 24 | 10 / 11 | 72 | 54% | keeps up |
-| 2.6/s | 173 / 183 | 34 / 36 | 26 / 28 | 10 / 11 | 106 | 82% | keeps up: capacity |
-| 3.2/s | — | 35 / 36 | 82 / 100 | 10 / 11 | — | 91% | past the cliff (executors 100%, ingest tier 94%) |
+| 2.0/s | 96 / 97 | 34 / 35 | 22 / 24 | 10 / 11 | 73 | 54% | keeps up |
+| 2.6/s | 173 / 183 | 34 / 36 | 26 / 28 | 10 / 11 | 137 | 82% | keeps up: capacity |
+| 3.2/s | — | 35 / 36 | 82 / 100 | 10 / 11 | — | 91% | past the cliff (application cores 100%, ingest tier 94%) |
 | 3.8/s | — | 35 / 37 | 114 / 217 | 10 / 11 | — | 92% | past the cliff |
 | 4.4/s | — | 37 / 40 | 150 / 218 | 11 / 12 | — | 93% | past the cliff |
 
-Per unit at 2.0 workflows/s (first series, medians of per-unit sums):
-code agent 131 to 133 s, of which 100 to 102 s in three build steps and
-27 s of model wait; data analyst 96 to 104 s, of which 63 to 72 s in
-three jobs and 28 s of model wait; research agent 34 s with 1.2 to 1.4 s
-of retrieval; ingestion agent 23 s with 1.2 s of parsing and 10 s of
-embedding; task agent 10 s, of which 8.4 s is model wait.
+Per unit at the enterprise tile's 2.2 workflows/s (first series, medians
+of per-unit sums): code agent 150 s, of which 119 s in three build steps
+and 27 s of model wait; data analyst 115 s, of which 83 s in three jobs
+and 28 s of model wait; research agent 34 s with 1.5 s of retrieval;
+ingestion agent 24 s with 1.7 s of parsing and 11 s of embedding; task
+agent 10 s, of which 8.3 s is model wait.
+
+### The residency photograph
+
+Residency in the tables above is derived from an open-loop run: agents
+arrive on a schedule and the count on the server follows. The photograph
+is the closed-loop confirmation: the fleet holds a fixed number of
+sessions, each of which submits a workflow, waits for it, thinks three
+seconds and submits the next, drawing the next slot of the tile's mix
+each time so the completed mix is the declared mix
+(`scripts/residency_photo.sh`, `scripts/residency_summary.py`). The
+server then shows what it sustains with that many agents on it.
+
+| Sessions held | In flight, measured | Completions / s | Code agent p50 / p95 | Data analyst | Research / ingestion / task | Drift, first to second half of the hold | Host threads busy | Host memory |
+|---|---|---|---|---|---|---|---|---|
+| 152 | 145 | 2.30 | 185 / 189 s | 136 / 139 s | 34 / 20 / 10 s | within 1% for every type | 90% | 158 GB |
+| 116 | 110 | 2.13 | 141 / 152 s | 109 / 119 s | 34 / 20 / 10 s | within 1% | 64% | 128 GB |
+
+Three seeds each, ten-minute holds, zero failures in 4,100 and 3,800
+workflows; the seeds agree to the second decimal on throughput and to the
+second on every latency. Little's law closes both: 2.30 a second times
+65 seconds is 149 against 152 held. The 152-session photograph is the
+2.4 workflows/s point seen from the other side: the same server, holding
+145 agents in flight, completes 2.3 workflows a second at the latencies
+the open-loop ladder measured between its 2.2 and 2.4 rungs, and holds
+them for ten minutes without drift. "This server carries about 150
+working agents" is therefore a measurement, not a derivation.
 
 ### The ratio
 
-GPUs per 64-core socket = 64,000 / (core-ms per generated token × generation tokens per second per GPU)
+One server, as configured and measured, generates a certain number of
+tokens per second through its agents' model calls; a GPU of a given
+class generates a certain number per second. The ratio is the quotient:
 
-Host work per generated token is measured at 2.0 workflows/s in each
-tile from the plateau's ledgers and per-core samples
-(`scripts/ratio_from_profile.py --mpstat`): busy physical cores over the
-steady window, divided by generated tokens per second. It is a property
-of the tile, not of the load: across each ladder it moves within a few
-core-ms.
+GPUs one server keeps busy = generated tokens per second, measured on the server / generation tokens per second per GPU
 
-| Tile | Measured at | Busy cores | Generated tokens/s | Core-ms per token | Across the ladder |
+Generated tokens per second come from the run records at each plateau
+(tokens per completed workflow by archetype, times the achieved rate);
+they are the whole server's, tiers and headroom included, with no scaling
+to busy cores. Host work per generated token, busy physical cores over
+the steady window divided by generated tokens per second
+(`scripts/ratio_from_profile.py --mpstat`), is reported beside it as the
+constant that explains it: it is a property of the tile, not of the load,
+and moves within a few core-ms across each ladder.
+
+| Tile | At capacity | Generated tokens/s | Busy cores | Core-ms per token | GPUs the server keeps busy at 1,300 / 2,400 / 3,800 tokens/s per GPU |
 |---|---|---|---|---|---|
-| Enterprise | 2.0 wf/s | 44.7 | 2,076 | 21.5 | 21.5 to 22.7 |
-| Engineering | 2.0 wf/s | 41.1 | 2,058 | 20.0 | 19.0 to 22.4 |
-| Analytics | 2.0 wf/s | 34.4 | 2,110 | 16.3 | 16.3 to 19.8 |
+| Enterprise | 2.4 wf/s | 2,418 | 55.8 | 23.1 | 1.86 / 1.01 / 0.64 |
+| Engineering | 2.4 wf/s | 2,387 | 47.4 | 19.8 | 1.84 / 0.99 / 0.63 |
+| Analytics | 2.6 wf/s | 2,658 | 52.7 | 19.8 | 2.04 / 1.11 / 0.70 |
+| Enterprise, at 2.0 wf/s | | 2,081 | 44.8 | 21.5 | 1.60 / 0.87 / 0.55 |
 
 The GPU side is not measured here. The reference band is a lab
 measurement of one RTX PRO 6000 serving a 35B mixture-of-experts model
 with 3B active in FP8 (window average 1,300 generation tokens/s over a
-draining fleet; peaks 2,400 to 3,800), stated with that provenance; the
-single-GPU recording that replaces it with our own measurement on this
-workload's calls is described in section 6 and is an enhancement, not
-part of this result.
+draining fleet; peaks 2,400 to 3,800), stated with that provenance. The
+same lab's fleet-scale figure at its own density boundary was about 390
+generated tokens/s per GPU with the GPUs 46% busy and nothing queued, an
+untuned serving tier rather than a hardware limit; against it one server
+would keep about six GPUs busy. The single-GPU recording that replaces
+the band with our own measurement on this workload's calls is described
+in section 6 and is an enhancement, not part of this result.
 
-| Generation tokens/s per GPU | Enterprise | Engineering | Analytics | Twelve task agents (estimate) |
-|---|---|---|---|---|
-| 1,300 | 1 : 2.3 | 1 : 2.5 | 1 : 3.0 | 1 : 55 |
-| 2,400 | 1 : 1.2 | 1 : 1.3 | 1 : 1.6 | 1 : 30 |
-| 3,800 | 1 : 0.8 | 1 : 0.8 | 1 : 1.0 | 1 : 19 |
-
-All three organisation tiles cross 1:1 inside the band: about one
-orchestration socket per GPU at the lab's conservative peak, and two to
-three GPUs per socket at its window average. The last column is the
-support-desk case, a tile of task agents alone, at the task agent's
-measured weight (0.9 core-ms per token); it is an estimate from the
-catalog, not a measured set, and shows what agents that only wait on the
-model do to the ratio. What moves the ratio is the host work per token,
-which the tile sets, and the tokens per GPU, which the model and
-accelerator set; a slower serving tier changes residency and the
-response curve, never the ratio.
+At capacity every organisation tile keeps one GPU of the reference class
+busy at its conservative peak: one server, one GPU. A tile of twelve
+task agents alone, the support-desk case, would generate about 550
+tokens per workflow at a far higher rate and keep several GPUs busy per
+server; it is an estimate from the catalog's weights, not a measured set.
+What moves the ratio is what agents do between model calls, which sets
+the tokens a server generates per second for a given amount of host
+work, and the tokens per GPU, which the model and accelerator set; a
+slower serving tier changes residency and the response curve, never the
+ratio.
 
 ### Where small-model inference runs is a sensitivity, not the result
 

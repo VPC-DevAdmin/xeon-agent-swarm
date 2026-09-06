@@ -91,22 +91,30 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("series_dir")
     ap.add_argument("out")
-    ap.add_argument("--mpstat")
+    ap.add_argument("--extra-series", action="append", default=[], help="another series dir whose rates join the ladder (a rung measured in a later set)")
+    ap.add_argument("--mpstat", action="append", default=[], help="mpstat -P ALL log(s) covering the series; may repeat")
     ap.add_argument("--topology")
     ap.add_argument("--rerank-cpus", default="")
     ap.add_argument("--embed-cpus", default="")
     ap.add_argument("--ingest-cpus", default="")
-    ap.add_argument("--summary")
+    ap.add_argument("--summary", action="append", default=[], help="set summary.json(s) with the per-rate verdicts; may repeat")
     ap.add_argument("--instances", type=int, default=4)
     a = ap.parse_args()
 
-    files = sorted(glob.glob(os.path.join(a.series_dir, "rate-*-i*-evidence-*.jsonl.gz")), key=_rate_of)
+    files = []
+    for d in [a.series_dir, *a.extra_series]:
+        files += glob.glob(os.path.join(d, "rate-*-i*-evidence-*.jsonl.gz"))
+    files = sorted(files, key=_rate_of)
     by_rate = defaultdict(list)
     for f in files:
         by_rate[_rate_of(f)[0]].append(f)
     rates = sorted(by_rate)
-    summary = json.load(open(a.summary)) if a.summary else {}
-    per_rate_summary = summary.get("per_rate", {})
+    summary = {}
+    per_rate_summary = {}
+    for path in a.summary:
+        sj = json.load(open(path))
+        summary = summary or sj
+        per_rate_summary.update(sj.get("per_rate", {}))
 
     topo = parse_topology(a.topology) if a.topology else [[i, i + 64] for i in range(64)]
     thread_core = {}
@@ -121,7 +129,9 @@ def main():
     if a.mpstat:
         hdr = json.loads(next(_open(files[0])))
         day = dt.datetime.fromtimestamp(hdr["started_at"], dt.timezone.utc).date()
-        mp = parse_mpstat(a.mpstat, day)
+        mp = {}
+        for path in a.mpstat:
+            mp.update(parse_mpstat(path, day))
         mp_times = sorted(mp)
 
     plateaus, units_out, samples_out, cores_out = [], [], [], []
@@ -178,7 +188,7 @@ def main():
                 grid.append(row)
             cores_out.append(grid)
         # per-plateau record
-        caps = sorted(glob.glob(os.path.join(a.series_dir, f"rate-{r:g}-i*-capacity-*.json")))
+        caps = sorted(c for d in [a.series_dir, *a.extra_series] for c in glob.glob(os.path.join(d, f"rate-{r:g}-i*-capacity-*.json")))
         tok = defaultdict(lambda: [0, 0])
         out_total = 0
         in_total = 0
@@ -197,7 +207,7 @@ def main():
                          "t1": round(offset + span, 1), "gen_tokens_per_wf": gen_per_wf,
                          "gen_tokens_total": out_total, "prompt_tokens_total": in_total,
                          "workflows_completed": calls_total, "span_s": round(span, 1),
-                         "resident": srow.get("resident_median"),
+                         "resident": srow.get("resident_measured_median") or srow.get("resident_median"),
                          "keeps_up": bool(srow.get("keeps_up_all")) if srow else None})
         offset += span
 

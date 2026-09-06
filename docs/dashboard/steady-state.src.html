@@ -124,7 +124,7 @@
     <div>
       <div class="eyebrow">Dell PowerEdge R470 &middot; agent execution tier &middot; steady state</div>
       <h1>An enterprise agent fleet, running on one server</h1>
-      <div class="sub">One server runs everything the agents do between their model calls; the model itself answers from a GPU tier. This is a measured steady state at 2.0 workflow arrivals per second, replayed at <span id="speedword">8&times;</span> speed.</div>
+      <div class="sub">One server runs everything the agents do between their model calls; the model itself answers from a GPU tier. This is a measured steady state at <span id="hdr-rate">&ndash;</span> workflow arrivals per second, replayed at <span id="speedword">8&times;</span> speed.</div>
     </div>
     <div class="controls">
       <span class="pill" id="pill"><span class="dot"></span><span id="clock">live</span></span>
@@ -139,7 +139,7 @@
   </header>
 
   <section class="card concept" aria-label="How the system fits together">
-    <div class="step"><div><div class="num">01</div><div class="big" id="s-arr">2.0<small>/ s</small></div></div><div><div class="t">Requests arrive</div><div class="d">A fixed mix: in every twelve, six are quick tasks, two code builds, two data analyses, one research brief, one document ingestion. <span id="s-arr-min"></span></div></div></div>
+    <div class="step"><div><div class="num">01</div><div class="big" id="s-arr">&ndash;<small>/ s</small></div></div><div><div class="t">Requests arrive</div><div class="d">A fixed mix: in every twelve, six are quick tasks, two code builds, two data analyses, one research brief, one document ingestion. <span id="s-arr-min"></span></div></div></div>
     <div class="arrow">&rarr;</div>
     <div class="step"><div><div class="num">02</div><div class="big" id="s-run">&ndash;<small>running</small></div></div><div><div class="t">Agents work on this server</div><div class="d">Each request becomes an agent that plans, runs its workers, uses tools (sandboxes, retrieval, embedding), is validated, and writes its result. That work is what the CPU does.</div></div></div>
     <div class="arrow">&rarr;</div>
@@ -175,10 +175,10 @@
         <div class="cores2">
           <div class="coremap" id="coremap"></div>
           <div class="tiers">
-            <div class="tier"><div class="k">Application &middot; 46 cores</div><div class="v"><span id="t-app">&ndash;</span><small>%</small></div></div>
-            <div class="tier"><div class="k">Reranker &middot; 8</div><div class="v"><span id="t-rerank">&ndash;</span><small>%</small></div></div>
-            <div class="tier"><div class="k">Ingest embedder &middot; 8</div><div class="v"><span id="t-ingest">&ndash;</span><small>%</small></div></div>
-            <div class="tier"><div class="k">Query embedder &middot; 2</div><div class="v"><span id="t-embed">&ndash;</span><small>%</small></div></div>
+            <div class="tier"><div class="k">Application &middot; <span id="n-app"></span> cores</div><div class="v"><span id="t-app">&ndash;</span><small>%</small></div></div>
+            <div class="tier"><div class="k">Reranker &middot; <span id="n-rerank"></span></div><div class="v"><span id="t-rerank">&ndash;</span><small>%</small></div></div>
+            <div class="tier"><div class="k">Ingest embedder &middot; <span id="n-ingest"></span></div><div class="v"><span id="t-ingest">&ndash;</span><small>%</small></div></div>
+            <div class="tier"><div class="k">Query embedder &middot; <span id="n-embed"></span></div><div class="v"><span id="t-embed">&ndash;</span><small>%</small></div></div>
           </div>
         </div>
       </div>
@@ -200,13 +200,13 @@
   <section class="card ticker" aria-label="Recent completions">
     <div class="eyebrow">Just finished</div>
     <div class="list" id="ticker"></div>
-    <div class="note">Measured on the server: every arrival, completion, core reading and sample. Looped from the run of record's steady window at capacity's edge, 2.0 workflows a second.</div>
+    <div class="note">Measured on the server: every arrival, completion, core reading and sample. Looped from the run of record's steady window at capacity.</div>
   </section>
 </div>
 
 <script>
 const DATA = /*__DATA__*/null;
-const PLATEAU = 2;
+const PLATEAU = 2;              // the capacity point of the ladder in the event file
 const WARMUP_S = 240;
 const GPU_TOKS = 2400;
 const SMT_SHARE = 0.8;
@@ -224,7 +224,11 @@ const ARCH = {
   const a = P.t0 + WARMUP_S, b = P.t1, L = b - a;
   const genPerWf = P.gen_tokens_per_wf;
   const promptPerS = P.prompt_tokens_total / P.span_s;
-  document.getElementById("s-arr-min").textContent = "That is about 120 arrivals a minute.";
+  const tierN = { app: 0, rerank: 0, embed: 0, ingest: 0 }; M.tiers.forEach(t => tierN[t]++);
+  for (const k in tierN) document.getElementById("n-" + k).textContent = tierN[k];
+  document.getElementById("hdr-rate").textContent = P.rate.toFixed(1);
+  document.getElementById("s-arr").innerHTML = `${P.rate.toFixed(1)}<small>/ s</small>`;
+  document.getElementById("s-arr-min").textContent = `That is about ${Math.round(P.rate * 60)} arrivals a minute.`;
 
   const raw = DATA.units.filter(u => u[0] === PLATEAU && u[2] >= a && u[2] < b);
   // Units still in flight when the recording ended carry no completion time
@@ -378,7 +382,7 @@ const ARCH = {
     let busy = 0; const ts = { app: 0, rerank: 0, embed: 0, ingest: 0 };
     if (row) row.forEach((v, i) => { coreEls[i].style.setProperty("--b", (v / 100).toFixed(2)); busy += v / 100; ts[M.tiers[i]] += v; });
     set("t-cores", busy.toFixed(0));
-    set("t-app", Math.round(ts.app / 46)); set("t-rerank", Math.round(ts.rerank / 8)); set("t-ingest", Math.round(ts.ingest / 8)); set("t-embed", Math.round(ts.embed / 2));
+    set("t-app", Math.round(ts.app / tierN.app)); set("t-rerank", Math.round(ts.rerank / tierN.rerank)); set("t-ingest", Math.round(ts.ingest / tierN.ingest)); set("t-embed", Math.round(ts.embed / tierN.embed));
     set("l-calls", callsTot.toFixed(1)); set("l-in", Math.round(promptPerS / 1000) + "k"); set("l-out", Math.round(genTot).toLocaleString());
     const gpus = genTot / GPU_TOKS;
     document.getElementById("gauge").style.width = Math.min(100, 100 * gpus).toFixed(1) + "%";

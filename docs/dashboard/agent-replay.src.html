@@ -136,9 +136,9 @@
       <div class="coregrid">
         <div class="coremap" id="coremap"></div>
         <div class="tiers">
-          <div class="tier"><div class="k">Application &middot; 46</div><div class="v"><span id="t-app">&ndash;</span><small>%</small></div></div>
-          <div class="tier"><div class="k">Reranker &middot; 8</div><div class="v"><span id="t-rerank">&ndash;</span><small>%</small></div></div>
-          <div class="tier"><div class="k">Embedders &middot; 10</div><div class="v"><span id="t-embed">&ndash;</span><small>%</small></div></div>
+          <div class="tier"><div class="k">Application &middot; <span id="n-app"></span></div><div class="v"><span id="t-app">&ndash;</span><small>%</small></div></div>
+          <div class="tier"><div class="k">Reranker &middot; <span id="n-rerank"></span></div><div class="v"><span id="t-rerank">&ndash;</span><small>%</small></div></div>
+          <div class="tier"><div class="k">Embedders &middot; <span id="n-embedders"></span></div><div class="v"><span id="t-embed">&ndash;</span><small>%</small></div></div>
         </div>
       </div>
       <div class="fam">
@@ -169,7 +169,7 @@
 
 <script>
 const DATA = /*__DATA__*/null;
-const CERTIFIED_CORE_MS = [22.7, 21.8, 21.5, 22.0, 21.6];   // steady-window measurement per plateau (scripts/ratio_from_profile.py --mpstat)
+const CERTIFIED_CORE_MS = [21.5, 22.5, 23.1, 23.2];   // steady-window measurement per plateau (scripts/ratio_from_profile.py --mpstat)
 const GPU_TOKS = 2400;
 
 (function () {
@@ -216,6 +216,8 @@ const GPU_TOKS = 2400;
   const plateauAt = t => { for (let i = P.length - 1; i >= 0; i--) if (t >= P[i].t0) return i; return 0; };
 
   // ---------- core map DOM
+  const tierN = { app: 0, rerank: 0, embed: 0, ingest: 0 }; M.tiers.forEach(t => tierN[t]++);
+  document.getElementById("n-app").textContent = tierN.app; document.getElementById("n-rerank").textContent = tierN.rerank; document.getElementById("n-embedders").textContent = tierN.embed + tierN.ingest;
   const coremap = document.getElementById("coremap");
   const coreEls = M.tiers.map(tier => { const d = document.createElement("div"); d.className = "core tier-" + tier; d.title = tier; coremap.appendChild(d); return d; });
   const fambar = document.getElementById("fambar");
@@ -226,17 +228,19 @@ const GPU_TOKS = 2400;
   const NS = "http://www.w3.org/2000/svg";
   const W = 1200, H = 150, L = 46, R = 20, T = 14, Bm = 26;
   const xs = t => L + (t / M.duration) * (W - L - R);
-  const maxRate = 4.2;
+  const rMin = P[0].rate, rMax = P[P.length - 1].rate;
+  const maxRate = Math.ceil(rMax + 0.6);
   const ys = r => T + (1 - r / maxRate) * (H - T - Bm);
   function el(n, a, txt) { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; svg.appendChild(e); return e; }
   P.forEach((p, i) => {
     el("rect", { x: xs(p.t0), y: T, width: xs(p.t1) - xs(p.t0), height: H - T - Bm, fill: p.keeps_up ? "rgba(79,176,240,0.06)" : "rgba(239,138,92,0.07)" });
     el("line", { x1: xs(p.t0), x2: xs(p.t1), y1: ys(p.rate), y2: ys(p.rate), stroke: "rgba(255,255,255,0.35)", "stroke-width": 1.2, "stroke-dasharray": "4 4" });
     el("text", { x: xs(p.t0) + 8, y: ys(p.rate) - 5, fill: "#9fb6cf", "font-size": 11, "font-family": "Roboto Mono, monospace" }, `${p.rate.toFixed(1)}/s`);
-    const tag = i === 2 ? "capacity: keeps up" : (i === 3 ? "cliff: backlog grows, executors 97%" : null);
+    const lastOk = P.map(q => q.keeps_up).lastIndexOf(true);
+    const tag = i === lastOk ? "capacity: keeps up" : (i === lastOk + 1 ? "cliff: backlog grows, application cores 100%" : null);
     if (tag) el("text", { x: xs(p.t0) + 8, y: H - Bm - 8, fill: i === 2 ? "#7cc2ee" : "#ef8a5c", "font-size": 11, "font-family": "Roboto, sans-serif", "letter-spacing": "0.08em" }, tag.toUpperCase());
   });
-  [1, 2, 3, 4].forEach(r => { el("line", { x1: L, x2: W - R, y1: ys(r), y2: ys(r), stroke: "rgba(255,255,255,0.06)" }); el("text", { x: L - 8, y: ys(r) + 4, fill: "#6b83a0", "font-size": 10, "text-anchor": "end", "font-family": "Roboto Mono, monospace" }, r); });
+  Array.from({ length: Math.floor(maxRate) }, (_, k) => k + 1).forEach(r => { el("line", { x1: L, x2: W - R, y1: ys(r), y2: ys(r), stroke: "rgba(255,255,255,0.06)" }); el("text", { x: L - 8, y: ys(r) + 4, fill: "#6b83a0", "font-size": 10, "text-anchor": "end", "font-family": "Roboto Mono, monospace" }, r); });
   const backlogPath = el("path", { fill: "rgba(239,138,92,0.25)", stroke: "none" });
   const arrPath = el("path", { fill: "none", stroke: "rgba(159,182,207,0.6)", "stroke-width": 1.4 });
   const compPath = el("path", { fill: "none", stroke: "#4fb0f0", "stroke-width": 2 });
@@ -356,12 +360,12 @@ const GPU_TOKS = 2400;
     chipEls.forEach((c, i) => c.setAttribute("aria-current", i === pl ? "true" : "false"));
     // cores
     const row = coresAt(t);
-    let busy = 0; const tierSum = { app: 0, rerank: 0, embed: 0, ingest: 0 }, tierN = { app: 46, rerank: 8, embed: 2, ingest: 8 };
+    let busy = 0; const tierSum = { app: 0, rerank: 0, embed: 0, ingest: 0 };
     if (row) row.forEach((b, i) => { coreEls[i].style.setProperty("--b", (b / 100).toFixed(2)); busy += b / 100; tierSum[M.tiers[i]] += b; });
     document.getElementById("corecount").textContent = row ? `${busy.toFixed(1)} busy` : "";
     document.getElementById("t-app").textContent = row ? Math.round(tierSum.app / tierN.app) : "\u2013";
     document.getElementById("t-rerank").textContent = row ? Math.round(tierSum.rerank / tierN.rerank) : "\u2013";
-    document.getElementById("t-embed").textContent = row ? Math.round((tierSum.embed + tierSum.ingest) / 10) : "\u2013";
+    document.getElementById("t-embed").textContent = row ? Math.round((tierSum.embed + tierSum.ingest) / (tierN.embed + tierN.ingest)) : "\u2013";
     // families
     const smp = sampleAt(t); const fam = smp[5];
     if (fam) { const idx = M.families; const g = k => fam[idx.indexOf(k)] || 0;

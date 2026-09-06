@@ -17,52 +17,24 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": false,
-   "tiers_sustained_all_series": [],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.9953
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9708,
-     "ingestion": 0.9708,
-     "task_ticket": 0.9953
-    },
-    "responsive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9708,
-     "ingestion": 0.9708,
-     "task_ticket": 0.9953
-    },
-    "attended": {
-     "analyst_large": 0.9543,
-     "code_agent": 0.425,
-     "deep_research": 0.9708,
-     "ingestion": 0.9708,
-     "task_ticket": 0.9953
-    },
-    "queued": {
-     "analyst_large": 0.9543,
-     "code_agent": 0.425,
-     "deep_research": 0.9708,
-     "ingestion": 0.9708,
-     "task_ticket": 0.9953
-    },
-    "background": {
-     "analyst_large": 0.9543,
-     "code_agent": 0.425,
-     "deep_research": 0.9708,
-     "ingestion": 0.9708,
-     "task_ticket": 0.9953
-    }
-   },
+   "backlog_per_series": [
+    [
+     169,
+     240,
+     71
+    ],
+    [
+     174,
+     243,
+     69
+    ],
+    [
+     173,
+     244,
+     71
+    ]
+   ],
+   "resident_measured_median": 196,
    "resident_median": 81,
    "resident_range": [
     80,
@@ -342,6 +314,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 81,
+     "resident_measured": 194,
      "think_s": 3.0,
      "host_cpu_pct": 92.9,
      "retrieval_cpu_pct": 12.6,
@@ -619,6 +592,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 82,
+     "resident_measured": 196,
      "think_s": 3.0,
      "host_cpu_pct": 93.0,
      "retrieval_cpu_pct": 12.9,
@@ -896,6 +870,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 80,
+     "resident_measured": 198,
      "think_s": 3.0,
      "host_cpu_pct": 93.0,
      "retrieval_cpu_pct": 13.0,

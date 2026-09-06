@@ -73,8 +73,8 @@ def main() -> None:
     lines = [f"# Plateau set {set_dir.name}", "", f"Series: {', '.join(Path(d).name for d in dirs)}", "",
              "| rate/inst | achieved (median, range) | gen ok | keeps up | "
              + " | ".join(f"{short[sid]} p50/p95" for sid in sids)
-             + " | backlog over the hold (per series) | resident (median) | host CPU | retrieval CPU |",
-             "|---|---|---|---|" + "---|" * len(sids) + "---|---|---|---|"]
+             + " | backlog over the hold (per series) | resident, measured (median) | resident, Little | host CPU | retrieval CPU |",
+             "|---|---|---|---|" + "---|" * len(sids) + "---|---|---|---|---|"]
     for r in rates:
         js = [series[d][r] for d in dirs if r in series[d]]
         ach = [j["rate"] for j in js]
@@ -88,6 +88,8 @@ def main() -> None:
                "generator_ok_all": all(j["generator_ok"] for j in js),
                "keeps_up_all": all(j["keeps_up"] for j in js),
                "backlog_per_series": [[j["backlog_start"], j["backlog_end"], j["backlog_delta"]] for j in js],
+               "resident_measured_median": (int(st.median([j["resident_measured"] for j in js if j.get("resident_measured") is not None]))
+                                            if any(j.get("resident_measured") is not None for j in js) else None),
                "resident_median": int(st.median([j["resident_sessions"] for j in js])),
                "resident_range": [min(j["resident_sessions"] for j in js), max(j["resident_sessions"] for j in js)],
                "host_cpu_median": st.median([j["host_cpu_pct"] for j in js if j["host_cpu_pct"] is not None] or [0]),
@@ -97,7 +99,7 @@ def main() -> None:
         lines.append(f"| {r} | {row['achieved_median']} ({row['achieved_range'][0]}-{row['achieved_range'][1]}) | "
                      f"{'yes' if row['generator_ok_all'] else 'NO'} | {'yes' if row['keeps_up_all'] else 'NO'} | "
                      + " | ".join(f"{lat(sid, 'p50_ms')}/{lat(sid, 'p95_ms')}" for sid in sids) + " | "
-                     f"{backlog} | {row['resident_median']} ({row['resident_range'][0]}-{row['resident_range'][1]}) | "
+                     f"{backlog} | {row['resident_measured_median']} | {row['resident_median']} ({row['resident_range'][0]}-{row['resident_range'][1]}) | "
                      f"{row['host_cpu_median']}% | {row['retrieval_cpu_median']}% |")
     ok = [r for r in rates if summary["per_rate"][r]["keeps_up_all"] and summary["per_rate"][r]["generator_ok_all"]]
     if ok:
@@ -105,6 +107,7 @@ def main() -> None:
         summary["headline"]["capacity"] = {"per_instance_rate": r,
                                            "fleet_rate_median": summary["per_rate"][r]["achieved_median"],
                                            "fleet_rate_range": summary["per_rate"][r]["achieved_range"],
+                                           "resident_measured": summary["per_rate"][r]["resident_measured_median"],
                                            "resident_median": summary["per_rate"][r]["resident_median"],
                                            "resident_range": summary["per_rate"][r]["resident_range"],
                                            "first_failing_rate": next((x for x in rates if x > r), None)}
@@ -112,7 +115,7 @@ def main() -> None:
     for t, h in summary["headline"].items():
         above = f"; the next rung, {h['first_failing_rate']} per instance, falls behind" if h.get("first_failing_rate") else "; no higher rung was offered"
         lines.append(f"- **{t}**: {h['fleet_rate_median']} workflows/s box-wide (range {h['fleet_rate_range'][0]}-{h['fleet_rate_range'][1]}), "
-                     f"{h['resident_median']} resident (range {h['resident_range'][0]}-{h['resident_range'][1]}){above}")
+                     f"{h['resident_measured']} resident as measured, {h['resident_median']} by Little's law (range {h['resident_range'][0]}-{h['resident_range'][1]}){above}")
     (set_dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
     (set_dir / "summary.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))

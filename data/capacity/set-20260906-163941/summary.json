@@ -36,6 +36,7 @@
      13
     ]
    ],
+   "resident_measured_median": 93,
    "resident_median": 85,
    "resident_range": [
     84,
@@ -315,6 +316,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 85,
+     "resident_measured": 92,
      "think_s": 3.0,
      "host_cpu_pct": 52.6,
      "retrieval_cpu_pct": 12.2,
@@ -592,6 +594,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 86,
+     "resident_measured": 93,
      "think_s": 3.0,
      "host_cpu_pct": 53.5,
      "retrieval_cpu_pct": 12.4,
@@ -869,6 +872,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 84,
+     "resident_measured": 93,
      "think_s": 3.0,
      "host_cpu_pct": 53.8,
      "retrieval_cpu_pct": 12.5,
@@ -902,6 +906,7 @@
      4
     ]
    ],
+   "resident_measured_median": 118,
    "resident_median": 98,
    "resident_range": [
     98,
@@ -1179,6 +1184,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 98,
+     "resident_measured": 118,
      "think_s": 3.0,
      "host_cpu_pct": 66.2,
      "retrieval_cpu_pct": 12.5,
@@ -1454,6 +1460,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 99,
+     "resident_measured": 118,
      "think_s": 3.0,
      "host_cpu_pct": 67.4,
      "retrieval_cpu_pct": 12.5,
@@ -1729,6 +1736,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 98,
+     "resident_measured": 118,
      "think_s": 3.0,
      "host_cpu_pct": 67.2,
      "retrieval_cpu_pct": 12.5,
@@ -1762,6 +1770,7 @@
      22
     ]
    ],
+   "resident_measured_median": 151,
    "resident_median": 108,
    "resident_range": [
     108,
@@ -2041,6 +2050,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 108,
+     "resident_measured": 151,
      "think_s": 3.0,
      "host_cpu_pct": 85.2,
      "retrieval_cpu_pct": 12.5,
@@ -2318,6 +2328,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 108,
+     "resident_measured": 150,
      "think_s": 3.0,
      "host_cpu_pct": 84.0,
      "retrieval_cpu_pct": 12.5,
@@ -2595,6 +2606,7 @@
      },
      "sustained_tiers": [],
      "resident_sessions": 108,
+     "resident_measured": 152,
      "think_s": 3.0,
      "host_cpu_pct": 84.4,
      "retrieval_cpu_pct": 12.6,
@@ -2612,6 +2624,7 @@
     2.39,
     2.39
    ],
+   "resident_measured": 151,
    "resident_median": 108,
    "resident_range": [
     108,
