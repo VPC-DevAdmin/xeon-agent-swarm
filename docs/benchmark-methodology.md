@@ -21,14 +21,12 @@ tier reached over an API). The benchmark asks how much of that work one
 server sustains, and reports three numbers from one curve:
 
 - **Capacity** (the cliff): the highest offered rate at which completions
-  keep pace with arrivals. Past it the backlog grows without bound whatever
-  deadline anyone chooses, so no service-level choice can inflate a claim
-  beyond it.
-- **Certified service level** (the knee crossings): for each deadline tier,
-  the highest plateau at which at least 95% of every workflow type finishes
-  inside the tier's deadline, at 95% confidence jointly across types, while
-  capacity also holds. A tier's certified rate is where the latency curve
-  crosses that tier's line.
+  keep pace with arrivals. Past it the backlog grows without bound, so no
+  latency allowance can inflate a claim beyond it.
+- **The response curve** (the knee): completion latency by agent type,
+  p50 and p95, at every offered rate up to and past capacity. Where it
+  starts to rise is the knee; a reader with a latency requirement of
+  their own reads their rate off the curve.
 - **Resident agents**: how many agents the server is carrying at a rate,
   by Little's law (rate x mean time in system plus a 3 s think time). It
   is derived at any stable operating point.
@@ -39,8 +37,8 @@ generate, which sets how many GPUs one orchestration server keeps busy
 (section 11).
 
 Every number is published with the whole curve behind it: each plateau's
-per-type latency, its tier verdicts, its backlog verdict, and the failed
-level above the last good one.
+per-type latency, its backlog verdict, and the failed level above the
+last good one.
 
 ## 2. The workload: five archetypes and three organisation tiles
 
@@ -231,8 +229,8 @@ The allocation is set from measured costs so that the tiers keep headroom
 past the rate at which the executors' side runs out, which is what makes
 the server, rather than an allocation, the limit: a tier sized to
 saturate at the target queues at the target and shows a knee the cores do
-not have, and a tier sized generously starves the other side. At the
-certified points of all three tiles the executors' 46 cores are 83 to 84%
+not have, and a tier sized generously starves the other side. At
+2.0 workflows/s in all three tiles the executors' 46 cores are 83 to 84%
 occupied (time-averaged per core, busier sibling), the reranker at most
 36% of its cores, and the ingest embedder about 50%; past the cliff the
 executors' side is 97 to 100% occupied and full on both threads of every
@@ -280,14 +278,14 @@ agent unloaded, more under load) rivals any level's dwell: a cohort
 admitted at one rate would otherwise finish under the next. Holding one
 rate for ten minutes lets every cohort complete under the rate that
 admitted it, and the latency-versus-rate curve is read across plateaus.
-Exploration uses five-minute holds to find the region; certification uses
-ten-minute holds under three seeds that differ by 100. Rates are offered
+Exploration uses five-minute holds to find the region; the result of
+record uses ten-minute holds under three seeds that differ by 100. Rates are offered
 per instance (four instances, so 0.5 per instance is 2.0 box-wide) and
 may be fractional.
 
 The generator keeps its own receipt in every ledger sample: arrivals shed
 by its stall clamp and ticks fired late. A plateau whose achieved arrival
-rate is under 95% of the offered rate is generator-limited and certifies
+rate is under 95% of the offered rate is generator-limited and counts for
 nothing.
 
 ## 5. Finding the knee and the cliff
@@ -298,25 +296,25 @@ The search has three stages, all producing evidence for the same judge.
    to 0.7 per instance) until latency rises and then the backlog grows.
    This locates the band between the last flat plateau and the first
    collapsing one, and its stage timings say which component queues first.
-2. **Certification.** Ten-minute plateaus under three seeds at the rates
-   that bracket the band, judged offline. A tier's certified rate is the
-   highest plateau every series sustains for that tier.
+2. **The result of record.** Ten-minute plateaus under three seeds at the
+   rates that bracket the band, judged offline. Capacity is the highest
+   plateau at which every series keeps up.
 3. **The cliff.** One or two plateaus above the last keeping-up rate under
    the same seeds, so the capacity claim is a measured level with a failed
-   level above it, the same standard as the certified rows.
+   level above it, the same standard as the rows below it.
 
 On the reference server the curve has two distinct features. The **knee**
 is where response time starts rising while completions still keep pace,
 because some resource queues: the code agents' and data analysts' 95th
-percentile leaves the responsive line first, since their steps run on the
+percentile rises first, since their steps run on the
 executors' cores. The **cliff** is where arrivals outrun completions: the
 compute-carrying archetypes stop completing inside the hold while the
 executors' cores are full on both threads. The task, research, and
 ingestion agents, whose steps hardly touch those cores, keep their
 light-load latency even past the cliff, so the cliff shows in the backlog
-and in the two heavy archetypes' curves rather than in every curve. A
-lenient deadline can certify a higher rate inside the band between the
-two; nothing can certify past the cliff.
+and in the two heavy archetypes' curves rather than in every curve.
+Between the two, a higher rate buys throughput at the cost of the heavy
+agents' latency; nothing past the cliff is capacity.
 
 ## 6. Judging from evidence
 
@@ -335,13 +333,9 @@ fleet's ledgers, pooled:
 - The cohort is every generator-admitted unit after a warm-up of 1.5 times
   the slowest completed latency (so the queue has filled to its steady
   depth) and before the last arrival.
-- For each deadline tier, each workflow type's on-time fraction takes a
-  Wilson lower bound at a Bonferroni-split confidence (95% jointly across
-  types); the tier is sustained when every type's bound clears 95%.
-  Censored units count as pending while younger than the tier's deadline
-  and as late once older. A certified set pools the three series' per-type
-  counts for the joint bound (each series keeps its own warm-up and
-  censoring) and requires every series to keep up.
+- For each workflow type, completion latency p50 and p95 over the cohort;
+  a unit still in flight when the run stops is censored and counts with
+  its age so far, never as complete.
 - Capacity holds when the backlog (arrivals to date minus completions to
   date) grows by at most five units or 5% of the cohort across the
   cohort's span, and the generator delivered at least 95% of the offered
@@ -353,18 +347,10 @@ fleet's ledgers, pooled:
 
 A unit succeeds only if it completed inside its contract; a workflow
 running longer than the patience ceiling (900 s under the modeled tier) is
-a counted failure. The certified figure for a tier is the median across
-the three series of the highest plateau every series sustains, with the
-range reported. Rule changes are applied to history by re-judging stored
-ledgers, never by re-running load.
-
-**Deadline tiers.** Six declared tiers, each named for the use case its
-deadline serves: conversational 15 s, interactive 45 s, responsive 150 s,
-attended 450 s, queued 1,200 s, background 3,600 s. Every plateau is
-judged against all six; the paper reports the tiers a reader is likely to
-size against and prints the whole curve. With code agents and data
-analysts in every tile, the responsive tier is the one their two-minute
-shape can meet, and it is the certified one.
+a counted failure. The capacity of record is the highest plateau every
+series keeps up at, with the range of achieved rates and of residency
+across the three series reported. Rule changes are applied to history by
+re-judging stored ledgers, never by re-running load.
 
 ### Per-unit stage accounting
 
@@ -382,8 +368,8 @@ where that archetype's slowdown lives, and what is left after the model
 wait and the stages is the orchestration work the executors did for the
 unit, which is where CPU starvation shows.
 
-Enterprise tile, first series of the certified set, at the certified rate
-and the first failed one (seconds per unit, medians):
+Enterprise tile, first series of the set of record, at capacity and one
+rung above it (seconds per unit, medians):
 
 | Archetype | Latency p50, 2.0 → 2.4 wf/s | Model wait (modeled) | Retrieval, sum (calls) | Rerank call, sum | Sandbox wall / CPU, sum (jobs) | Embedding | Remainder: orchestration on the executors |
 |---|---|---|---|---|---|---|---|
@@ -432,7 +418,7 @@ overshoot drains. The drain takes longer as the rate nears the cliff,
 because the excess capacity that drains it shrinks; past the cliff it
 never drains. The judge's warm-up rule (units admitted before 1.5 times
 the slowest completed latency are not in the cohort) and the ten-minute
-hold are what keep it out of a certified number; a short check hold sits
+hold are what keep it out of a number of record; a short check hold sits
 inside it and must not be read as steady state.
 
 ### The serving side as recorded data
@@ -483,7 +469,7 @@ latencies include a ramp of tens of milliseconds.
 
 ## 8. Cost laws: the sizing tools
 
-Each component's cost is measured on the fleet so the certified rate can
+Each component's cost is measured on the fleet so the capacity can
 be rescaled to a different mix, depth, or job size.
 
 - **Reranker.** The tier's ceiling is a pair budget: about 35 scored pairs
@@ -520,7 +506,7 @@ be rescaled to a different mix, depth, or job size.
 `scripts/archetype_costs.sh` runs an archetype alone at two rates and
 `scripts/archetype_cost_summary.py` reads its cost; `scripts/cost_table.py`
 produces the per-component table from any series;
-`scripts/plateau_set_summary.py` produces the certified set summary;
+`scripts/plateau_set_summary.py` produces the set summary;
 `scripts/ratio_from_profile.py --mpstat` computes host work per generated
 token from a plateau and its per-core samples.
 
@@ -534,7 +520,7 @@ the ledger's SHA-256. Ledgers, judgments, and set summaries are committed
 under `data/capacity/`. Two results compare only when their fingerprints
 match.
 
-The results of record are the three organisation tiles' certified sets
+The results of record are the three organisation tiles' sets
 (section 11): enterprise `data/capacity/set-20260905-031403` (seeds 9801,
 9901, 10001), engineering `set-20260905-060903` (9901, 10001, 10101),
 analytics `set-20260905-090413` (10001, 10101, 10201); three seeds each,
@@ -557,7 +543,7 @@ change), evidence commits 8420fc7 and 7385a53. Their per-core samples are
 - Runs cover a single host; multi-node coordination, failover, long soaks,
   and recovery after overload are not measured.
 - Depths other than 128 and job sizes other than the declared ones are
-  not certified.
+  not measured.
 - The GPU side of the ratio is a lab measurement of one accelerator and
   model, stated with its provenance, not a measurement made here.
 
@@ -578,38 +564,38 @@ analytics `set-20260905-090413` (0.5 to 1.1 per instance, 2.0 to 4.4
 box-wide). Latencies are p50 / p95 in seconds, medians of three series;
 host cores busy is the time-averaged per-core occupancy of the first
 series (section 7); resident agents are rate x (mean time in system + 3 s
-think), median of the three series. Zero failures through every certified
-rate in every series.
+think), median of the three series. Zero failures through capacity in
+every series.
 
-**Enterprise.** Capacity 2.0 workflows/s; the responsive tier certifies
-at 2.0 with 87 resident agents.
+**Enterprise.** Capacity 2.0 workflows/s with 87 resident agents; the
+next rung falls behind.
 
 | Offered (box-wide) | Code agent | Data analyst | Research | Ingestion | Task | Resident | Host cores busy | Verdict |
 |---|---|---|---|---|---|---|---|---|
-| 1.2/s | 125 / 127 | 89 / 90 | 34 / 35 | 23 / 24 | 10 / 11 | 52 | 45% | responsive and longer |
-| 1.6/s | 122 / 126 | 94 / 96 | 34 / 35 | 23 / 24 | 10 / 11 | 68 | 57% | responsive |
-| 2.0/s | 133 / 145 | 104 / 112 | 34 / 35 | 23 / 24 | 10 / 11 | 87 | 70% | responsive (150 s): certified; capacity holds |
+| 1.2/s | 125 / 127 | 89 / 90 | 34 / 35 | 23 / 24 | 10 / 11 | 52 | 45% | keeps up |
+| 1.6/s | 122 / 126 | 94 / 96 | 34 / 35 | 23 / 24 | 10 / 11 | 68 | 57% | keeps up |
+| 2.0/s | 133 / 145 | 104 / 112 | 34 / 35 | 23 / 24 | 10 / 11 | 87 | 70% | keeps up: capacity |
 | 2.4/s | 232 / 242 | 159 / 172 | 34 / 35 | 25 / 26 | 10 / 11 | — | 82% | past the cliff (executors 97%) |
 | 2.8/s | — | — | 35 / 36 | 27 / 30 | 10 / 11 | — | 86% | past the cliff |
 
-**Engineering.** Capacity 2.4 workflows/s; responsive certifies at 2.0
-(88 resident), attended at 2.4 (102).
+**Engineering.** Capacity 2.4 workflows/s with 102 resident agents; at
+2.0 (88 resident) the heavy agents are still at their light-load latency.
 
 | Offered (box-wide) | Code agent | Data analyst | Research | Task | Resident | Host cores busy | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.2/s | 122 / 125 | 87 / 88 | 34 / 35 | 10 / 11 | 52 | 43% | responsive and longer |
-| 1.6/s | 118 / 121 | 89 / 91 | 34 / 35 | 10 / 11 | 67 | 55% | responsive |
-| 2.0/s | 131 / 141 | 101 / 108 | 34 / 35 | 10 / 11 | 88 | 64% | responsive (150 s): certified |
-| 2.4/s | 189 / 199 | 129 / 135 | 34 / 35 | 10 / 11 | 102 | 74% | attended (450 s): certified; capacity holds |
+| 1.2/s | 122 / 125 | 87 / 88 | 34 / 35 | 10 / 11 | 52 | 43% | keeps up |
+| 1.6/s | 118 / 121 | 89 / 91 | 34 / 35 | 10 / 11 | 67 | 55% | keeps up |
+| 2.0/s | 131 / 141 | 101 / 108 | 34 / 35 | 10 / 11 | 88 | 64% | keeps up |
+| 2.4/s | 189 / 199 | 129 / 135 | 34 / 35 | 10 / 11 | 102 | 74% | keeps up: capacity |
 | 2.8/s | — | 225 / 234 | 35 / 36 | 10 / 11 | — | 77% | past the cliff (executors 100%) |
 
-**Analytics.** Capacity 2.6 workflows/s; responsive certifies at 2.0
-(72 resident), attended at 2.6 (106).
+**Analytics.** Capacity 2.6 workflows/s with 106 resident agents; at 2.0
+(72 resident) the analysts are still at their light-load latency.
 
 | Offered (box-wide) | Data analyst | Research | Ingestion | Task | Resident | Host cores busy | Verdict |
 |---|---|---|---|---|---|---|---|
-| 2.0/s | 96 / 97 | 34 / 35 | 22 / 24 | 10 / 11 | 72 | 54% | responsive (150 s): certified |
-| 2.6/s | 173 / 183 | 34 / 36 | 26 / 28 | 10 / 11 | 106 | 82% | attended (450 s): certified; capacity holds |
+| 2.0/s | 96 / 97 | 34 / 35 | 22 / 24 | 10 / 11 | 72 | 54% | keeps up |
+| 2.6/s | 173 / 183 | 34 / 36 | 26 / 28 | 10 / 11 | 106 | 82% | keeps up: capacity |
 | 3.2/s | — | 35 / 36 | 82 / 100 | 10 / 11 | — | 91% | past the cliff (executors 100%, ingest tier 94%) |
 | 3.8/s | — | 35 / 37 | 114 / 217 | 10 / 11 | — | 92% | past the cliff |
 | 4.4/s | — | 37 / 40 | 150 / 218 | 11 / 12 | — | 93% | past the cliff |
@@ -625,14 +611,14 @@ embedding; task agent 10 s, of which 8.4 s is model wait.
 
 GPUs per 64-core socket = 64,000 / (core-ms per generated token × generation tokens per second per GPU)
 
-Host work per generated token is measured at the certified point of each
+Host work per generated token is measured at 2.0 workflows/s in each
 tile from the plateau's ledgers and per-core samples
 (`scripts/ratio_from_profile.py --mpstat`): busy physical cores over the
 steady window, divided by generated tokens per second. It is a property
 of the tile, not of the load: across each ladder it moves within a few
 core-ms.
 
-| Tile | Certified point | Busy cores | Generated tokens/s | Core-ms per token | Across the ladder |
+| Tile | Measured at | Busy cores | Generated tokens/s | Core-ms per token | Across the ladder |
 |---|---|---|---|---|---|
 | Enterprise | 2.0 wf/s | 44.7 | 2,076 | 21.5 | 21.5 to 22.7 |
 | Engineering | 2.0 wf/s | 41.1 | 2,058 | 20.0 | 19.0 to 22.4 |
@@ -657,11 +643,11 @@ orchestration socket per GPU at the lab's conservative peak, and two to
 three GPUs per socket at its window average. The last column is the
 support-desk case, a tile of task agents alone, at the task agent's
 measured weight (0.9 core-ms per token); it is an estimate from the
-catalog, not a certified set, and shows what agents that only wait on the
+catalog, not a measured set, and shows what agents that only wait on the
 model do to the ratio. What moves the ratio is the host work per token,
 which the tile sets, and the tokens per GPU, which the model and
 accelerator set; a slower serving tier changes residency and the
-certified tier, never the ratio.
+response curve, never the ratio.
 
 ### Where small-model inference runs is a sensitivity, not the result
 

@@ -193,13 +193,12 @@ def main():
                 tok[sid][1] += row.get("calls") or 0
         gen_per_wf = {sid: (round(v[0] / v[1]) if v[1] else None) for sid, v in tok.items()}
         srow = per_rate_summary.get(f"{r:g}") or per_rate_summary.get(str(r)) or {}
-        sustained = next((v for k, v in srow.items() if "sustain" in k and isinstance(v, list)), [])
         plateaus.append({"rate_per_instance": r, "rate": round(r * a.instances, 2), "t0": round(offset, 1),
                          "t1": round(offset + span, 1), "gen_tokens_per_wf": gen_per_wf,
                          "gen_tokens_total": out_total, "prompt_tokens_total": in_total,
                          "workflows_completed": calls_total, "span_s": round(span, 1),
-                         "sustained": sustained, "resident": srow.get("resident_median"),
-                         "keeps_up": srow.get("keeps_up")})
+                         "resident": srow.get("resident_median"),
+                         "keeps_up": bool(srow.get("keeps_up_all")) if srow else None})
         offset += span
 
     out = {"meta": {"series": os.path.basename(a.series_dir.rstrip("/")), "set": summary.get("set"),

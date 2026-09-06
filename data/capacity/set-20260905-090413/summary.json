@@ -21,51 +21,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [
-    "responsive",
-    "attended",
-    "queued",
-    "background"
+   "backlog_per_series": [
+    [
+     66,
+     79,
+     13
+    ],
+    [
+     81,
+     79,
+     -2
+    ],
+    [
+     77,
+     80,
+     3
+    ]
    ],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.9941
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "deep_research": 0.987,
-     "ingestion": 0.9737,
-     "task_ticket": 0.9957
-    },
-    "responsive": {
-     "analyst_large": 0.9888,
-     "deep_research": 0.987,
-     "ingestion": 0.9737,
-     "task_ticket": 0.9957
-    },
-    "attended": {
-     "analyst_large": 0.9888,
-     "deep_research": 0.987,
-     "ingestion": 0.9737,
-     "task_ticket": 0.9957
-    },
-    "queued": {
-     "analyst_large": 0.9888,
-     "deep_research": 0.987,
-     "ingestion": 0.9737,
-     "task_ticket": 0.9957
-    },
-    "background": {
-     "analyst_large": 0.9888,
-     "deep_research": 0.987,
-     "ingestion": 0.9737,
-     "task_ticket": 0.9957
-    }
-   },
    "resident_median": 72,
    "resident_range": [
     70,
@@ -798,50 +770,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [
-    "attended",
-    "queued",
-    "background"
+   "backlog_per_series": [
+    [
+     125,
+     147,
+     22
+    ],
+    [
+     123,
+     145,
+     22
+    ],
+    [
+     127,
+     146,
+     19
+    ]
    ],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.9959
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9871,
-     "ingestion": 0.9745,
-     "task_ticket": 0.9959
-    },
-    "responsive": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9871,
-     "ingestion": 0.9745,
-     "task_ticket": 0.9959
-    },
-    "attended": {
-     "analyst_large": 0.9826,
-     "deep_research": 0.9871,
-     "ingestion": 0.9745,
-     "task_ticket": 0.9959
-    },
-    "queued": {
-     "analyst_large": 0.9826,
-     "deep_research": 0.9871,
-     "ingestion": 0.9745,
-     "task_ticket": 0.9959
-    },
-    "background": {
-     "analyst_large": 0.9826,
-     "deep_research": 0.9871,
-     "ingestion": 0.9745,
-     "task_ticket": 0.9959
-    }
-   },
    "resident_median": 106,
    "resident_range": [
     106,
@@ -1574,46 +1519,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": false,
-   "tiers_sustained_all_series": [],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.9964
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9885,
-     "ingestion": 0.0,
-     "task_ticket": 0.9964
-    },
-    "responsive": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9885,
-     "ingestion": 0.9412,
-     "task_ticket": 0.9964
-    },
-    "attended": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9885,
-     "ingestion": 0.9598,
-     "task_ticket": 0.9964
-    },
-    "queued": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9885,
-     "ingestion": 0.9598,
-     "task_ticket": 0.9964
-    },
-    "background": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9885,
-     "ingestion": 0.9598,
-     "task_ticket": 0.9964
-    }
-   },
+   "backlog_per_series": [
+    [
+     203,
+     327,
+     124
+    ],
+    [
+     207,
+     331,
+     124
+    ],
+    [
+     207,
+     331,
+     124
+    ]
+   ],
    "resident_median": 78,
    "resident_range": [
     77,
@@ -2347,46 +2269,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": false,
-   "tiers_sustained_all_series": [],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.9969
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9901,
-     "ingestion": 0.0,
-     "task_ticket": 0.9969
-    },
-    "responsive": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9901,
-     "ingestion": 0.3382,
-     "task_ticket": 0.9969
-    },
-    "attended": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9901,
-     "ingestion": 0.7023,
-     "task_ticket": 0.9969
-    },
-    "queued": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9901,
-     "ingestion": 0.7023,
-     "task_ticket": 0.9969
-    },
-    "background": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9901,
-     "ingestion": 0.7023,
-     "task_ticket": 0.9969
-    }
-   },
+   "backlog_per_series": [
+    [
+     301,
+     528,
+     227
+    ],
+    [
+     301,
+     520,
+     219
+    ],
+    [
+     306,
+     513,
+     207
+    ]
+   ],
    "resident_median": 91,
    "resident_range": [
     89,
@@ -3122,46 +3021,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": false,
-   "tiers_sustained_all_series": [],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.9948
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9881,
-     "ingestion": 0.0,
-     "task_ticket": 0.9974
-    },
-    "responsive": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9913,
-     "ingestion": 0.0635,
-     "task_ticket": 0.9974
-    },
-    "attended": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9913,
-     "ingestion": 0.3229,
-     "task_ticket": 0.9974
-    },
-    "queued": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9913,
-     "ingestion": 0.3229,
-     "task_ticket": 0.9974
-    },
-    "background": {
-     "analyst_large": 0.0,
-     "deep_research": 0.9913,
-     "ingestion": 0.3229,
-     "task_ticket": 0.9974
-    }
-   },
+   "backlog_per_series": [
+    [
+     443,
+     580,
+     137
+    ],
+    [
+     442,
+     586,
+     144
+    ],
+    [
+     449,
+     580,
+     131
+    ]
+   ],
    "resident_median": 95,
    "resident_range": [
     93,
@@ -3894,20 +3770,7 @@
   }
  },
  "headline": {
-  "responsive": {
-   "per_instance_rate": 0.5,
-   "fleet_rate_median": 1.99,
-   "fleet_rate_range": [
-    1.99,
-    2.0
-   ],
-   "resident_median": 72,
-   "resident_range": [
-    70,
-    72
-   ]
-  },
-  "attended": {
+  "capacity": {
    "per_instance_rate": 0.65,
    "fleet_rate_median": 2.59,
    "fleet_rate_range": [
@@ -3918,33 +3781,8 @@
    "resident_range": [
     106,
     106
-   ]
-  },
-  "queued": {
-   "per_instance_rate": 0.65,
-   "fleet_rate_median": 2.59,
-   "fleet_rate_range": [
-    2.59,
-    2.59
    ],
-   "resident_median": 106,
-   "resident_range": [
-    106,
-    106
-   ]
-  },
-  "background": {
-   "per_instance_rate": 0.65,
-   "fleet_rate_median": 2.59,
-   "fleet_rate_range": [
-    2.59,
-    2.59
-   ],
-   "resident_median": 106,
-   "resident_range": [
-    106,
-    106
-   ]
+   "first_failing_rate": 0.8
   }
  }
 }

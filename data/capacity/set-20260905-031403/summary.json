@@ -21,57 +21,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [
-    "responsive",
-    "attended",
-    "queued",
-    "background"
+   "backlog_per_series": [
+    [
+     60,
+     60,
+     0
+    ],
+    [
+     60,
+     61,
+     1
+    ],
+    [
+     59,
+     62,
+     3
+    ]
    ],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.9921
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9523,
-     "ingestion": 0.9523,
-     "task_ticket": 0.9921
-    },
-    "responsive": {
-     "analyst_large": 0.9726,
-     "code_agent": 0.9684,
-     "deep_research": 0.9523,
-     "ingestion": 0.9523,
-     "task_ticket": 0.9921
-    },
-    "attended": {
-     "analyst_large": 0.9726,
-     "code_agent": 0.9684,
-     "deep_research": 0.9523,
-     "ingestion": 0.9523,
-     "task_ticket": 0.9921
-    },
-    "queued": {
-     "analyst_large": 0.9726,
-     "code_agent": 0.9684,
-     "deep_research": 0.9523,
-     "ingestion": 0.9523,
-     "task_ticket": 0.9921
-    },
-    "background": {
-     "analyst_large": 0.9726,
-     "code_agent": 0.9684,
-     "deep_research": 0.9523,
-     "ingestion": 0.9523,
-     "task_ticket": 0.9921
-    }
-   },
    "resident_median": 52,
    "resident_range": [
     52,
@@ -921,57 +887,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [
-    "responsive",
-    "attended",
-    "queued",
-    "background"
+   "backlog_per_series": [
+    [
+     77,
+     80,
+     3
+    ],
+    [
+     76,
+     82,
+     6
+    ],
+    [
+     81,
+     81,
+     0
+    ]
    ],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.9941
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9638,
-     "ingestion": 0.9638,
-     "task_ticket": 0.9941
-    },
-    "responsive": {
-     "analyst_large": 0.9779,
-     "code_agent": 0.9756,
-     "deep_research": 0.9638,
-     "ingestion": 0.9638,
-     "task_ticket": 0.9941
-    },
-    "attended": {
-     "analyst_large": 0.9779,
-     "code_agent": 0.9756,
-     "deep_research": 0.9638,
-     "ingestion": 0.9638,
-     "task_ticket": 0.9941
-    },
-    "queued": {
-     "analyst_large": 0.9779,
-     "code_agent": 0.9756,
-     "deep_research": 0.9638,
-     "ingestion": 0.9638,
-     "task_ticket": 0.9941
-    },
-    "background": {
-     "analyst_large": 0.9779,
-     "code_agent": 0.9756,
-     "deep_research": 0.9638,
-     "ingestion": 0.9638,
-     "task_ticket": 0.9941
-    }
-   },
    "resident_median": 68,
    "resident_range": [
     68,
@@ -1821,57 +1753,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [
-    "responsive",
-    "attended",
-    "queued",
-    "background"
+   "backlog_per_series": [
+    [
+     95,
+     100,
+     5
+    ],
+    [
+     99,
+     99,
+     0
+    ],
+    [
+     97,
+     102,
+     5
+    ]
    ],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.995
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9703,
-     "ingestion": 0.9707,
-     "task_ticket": 0.995
-    },
-    "responsive": {
-     "analyst_large": 0.9801,
-     "code_agent": 0.9701,
-     "deep_research": 0.9703,
-     "ingestion": 0.9707,
-     "task_ticket": 0.995
-    },
-    "attended": {
-     "analyst_large": 0.9801,
-     "code_agent": 0.9778,
-     "deep_research": 0.9703,
-     "ingestion": 0.9707,
-     "task_ticket": 0.995
-    },
-    "queued": {
-     "analyst_large": 0.9801,
-     "code_agent": 0.9778,
-     "deep_research": 0.9703,
-     "ingestion": 0.9707,
-     "task_ticket": 0.995
-    },
-    "background": {
-     "analyst_large": 0.9801,
-     "code_agent": 0.9778,
-     "deep_research": 0.9703,
-     "ingestion": 0.9707,
-     "task_ticket": 0.995
-    }
-   },
    "resident_median": 87,
    "resident_range": [
     87,
@@ -2721,52 +2619,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": false,
-   "tiers_sustained_all_series": [],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.9947
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9665,
-     "ingestion": 0.9688,
-     "task_ticket": 0.9947
-    },
-    "responsive": {
-     "analyst_large": 0.0554,
-     "code_agent": 0.0,
-     "deep_research": 0.9665,
-     "ingestion": 0.9688,
-     "task_ticket": 0.9947
-    },
-    "attended": {
-     "analyst_large": 0.9669,
-     "code_agent": 0.9273,
-     "deep_research": 0.9665,
-     "ingestion": 0.9688,
-     "task_ticket": 0.9947
-    },
-    "queued": {
-     "analyst_large": 0.9669,
-     "code_agent": 0.9273,
-     "deep_research": 0.9665,
-     "ingestion": 0.9688,
-     "task_ticket": 0.9947
-    },
-    "background": {
-     "analyst_large": 0.9669,
-     "code_agent": 0.9273,
-     "deep_research": 0.9665,
-     "ingestion": 0.9688,
-     "task_ticket": 0.9947
-    }
-   },
+   "backlog_per_series": [
+    [
+     146,
+     195,
+     49
+    ],
+    [
+     145,
+     195,
+     50
+    ],
+    [
+     147,
+     196,
+     49
+    ]
+   ],
    "resident_median": 100,
    "resident_range": [
     99,
@@ -3616,52 +3485,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": false,
-   "tiers_sustained_all_series": [],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "ingestion": 0.0,
-     "task_ticket": 0.9956
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9713,
-     "ingestion": 0.9719,
-     "task_ticket": 0.9956
-    },
-    "responsive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9713,
-     "ingestion": 0.9719,
-     "task_ticket": 0.9956
-    },
-    "attended": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9713,
-     "ingestion": 0.9719,
-     "task_ticket": 0.9956
-    },
-    "queued": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9713,
-     "ingestion": 0.9719,
-     "task_ticket": 0.9956
-    },
-    "background": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9713,
-     "ingestion": 0.9719,
-     "task_ticket": 0.9956
-    }
-   },
+   "backlog_per_series": [
+    [
+     206,
+     357,
+     151
+    ],
+    [
+     208,
+     355,
+     147
+    ],
+    [
+     205,
+     359,
+     154
+    ]
+   ],
    "resident_median": 50,
    "resident_range": [
     50,
@@ -4505,7 +4345,7 @@
   }
  },
  "headline": {
-  "responsive": {
+  "capacity": {
    "per_instance_rate": 0.5,
    "fleet_rate_median": 1.99,
    "fleet_rate_range": [
@@ -4516,46 +4356,8 @@
    "resident_range": [
     87,
     88
-   ]
-  },
-  "attended": {
-   "per_instance_rate": 0.5,
-   "fleet_rate_median": 1.99,
-   "fleet_rate_range": [
-    1.99,
-    2.0
    ],
-   "resident_median": 87,
-   "resident_range": [
-    87,
-    88
-   ]
-  },
-  "queued": {
-   "per_instance_rate": 0.5,
-   "fleet_rate_median": 1.99,
-   "fleet_rate_range": [
-    1.99,
-    2.0
-   ],
-   "resident_median": 87,
-   "resident_range": [
-    87,
-    88
-   ]
-  },
-  "background": {
-   "per_instance_rate": 0.5,
-   "fleet_rate_median": 1.99,
-   "fleet_rate_range": [
-    1.99,
-    2.0
-   ],
-   "resident_median": 87,
-   "resident_range": [
-    87,
-    88
-   ]
+   "first_failing_rate": 0.6
   }
  }
 }

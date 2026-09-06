@@ -21,51 +21,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [
-    "responsive",
-    "attended",
-    "queued",
-    "background"
+   "backlog_per_series": [
+    [
+     60,
+     60,
+     0
+    ],
+    [
+     60,
+     61,
+     1
+    ],
+    [
+     60,
+     61,
+     1
+    ]
    ],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "task_ticket": 0.9938
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9556,
-     "task_ticket": 0.9938
-    },
-    "responsive": {
-     "analyst_large": 0.9503,
-     "code_agent": 0.9803,
-     "deep_research": 0.9556,
-     "task_ticket": 0.9938
-    },
-    "attended": {
-     "analyst_large": 0.9503,
-     "code_agent": 0.9803,
-     "deep_research": 0.9556,
-     "task_ticket": 0.9938
-    },
-    "queued": {
-     "analyst_large": 0.9503,
-     "code_agent": 0.9803,
-     "deep_research": 0.9556,
-     "task_ticket": 0.9938
-    },
-    "background": {
-     "analyst_large": 0.9503,
-     "code_agent": 0.9803,
-     "deep_research": 0.9556,
-     "task_ticket": 0.9938
-    }
-   },
    "resident_median": 52,
    "resident_range": [
     51,
@@ -798,51 +770,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [
-    "responsive",
-    "attended",
-    "queued",
-    "background"
+   "backlog_per_series": [
+    [
+     79,
+     81,
+     2
+    ],
+    [
+     80,
+     81,
+     1
+    ],
+    [
+     80,
+     81,
+     1
+    ]
    ],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "task_ticket": 0.9953
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9663,
-     "task_ticket": 0.9953
-    },
-    "responsive": {
-     "analyst_large": 0.9598,
-     "code_agent": 0.9848,
-     "deep_research": 0.9663,
-     "task_ticket": 0.9953
-    },
-    "attended": {
-     "analyst_large": 0.9598,
-     "code_agent": 0.9848,
-     "deep_research": 0.9663,
-     "task_ticket": 0.9953
-    },
-    "queued": {
-     "analyst_large": 0.9598,
-     "code_agent": 0.9848,
-     "deep_research": 0.9663,
-     "task_ticket": 0.9953
-    },
-    "background": {
-     "analyst_large": 0.9598,
-     "code_agent": 0.9848,
-     "deep_research": 0.9663,
-     "task_ticket": 0.9953
-    }
-   },
    "resident_median": 67,
    "resident_range": [
     67,
@@ -1575,51 +1519,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [
-    "responsive",
-    "attended",
-    "queued",
-    "background"
+   "backlog_per_series": [
+    [
+     98,
+     102,
+     4
+    ],
+    [
+     99,
+     99,
+     0
+    ],
+    [
+     94,
+     99,
+     5
+    ]
    ],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "task_ticket": 0.9961
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9727,
-     "task_ticket": 0.9961
-    },
-    "responsive": {
-     "analyst_large": 0.9656,
-     "code_agent": 0.9816,
-     "deep_research": 0.9727,
-     "task_ticket": 0.9961
-    },
-    "attended": {
-     "analyst_large": 0.9656,
-     "code_agent": 0.9865,
-     "deep_research": 0.9727,
-     "task_ticket": 0.9961
-    },
-    "queued": {
-     "analyst_large": 0.9656,
-     "code_agent": 0.9865,
-     "deep_research": 0.9727,
-     "task_ticket": 0.9961
-    },
-    "background": {
-     "analyst_large": 0.9656,
-     "code_agent": 0.9865,
-     "deep_research": 0.9727,
-     "task_ticket": 0.9961
-    }
-   },
    "resident_median": 88,
    "resident_range": [
     86,
@@ -2352,50 +2268,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": true,
-   "tiers_sustained_all_series": [
-    "attended",
-    "queued",
-    "background"
+   "backlog_per_series": [
+    [
+     149,
+     177,
+     28
+    ],
+    [
+     149,
+     177,
+     28
+    ],
+    [
+     149,
+     174,
+     25
+    ]
    ],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "task_ticket": 0.9958
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9688,
-     "task_ticket": 0.9958
-    },
-    "responsive": {
-     "analyst_large": 0.9503,
-     "code_agent": 0.0,
-     "deep_research": 0.9688,
-     "task_ticket": 0.9958
-    },
-    "attended": {
-     "analyst_large": 0.9503,
-     "code_agent": 0.974,
-     "deep_research": 0.9688,
-     "task_ticket": 0.9958
-    },
-    "queued": {
-     "analyst_large": 0.9503,
-     "code_agent": 0.974,
-     "deep_research": 0.9688,
-     "task_ticket": 0.9958
-    },
-    "background": {
-     "analyst_large": 0.9503,
-     "code_agent": 0.974,
-     "deep_research": 0.9688,
-     "task_ticket": 0.9958
-    }
-   },
    "resident_median": 102,
    "resident_range": [
     102,
@@ -3128,46 +3017,23 @@
    ],
    "generator_ok_all": true,
    "keeps_up_all": false,
-   "tiers_sustained_all_series": [],
-   "tiers_sustained_per_series": [],
-   "pooled_bounds": {
-    "conversational": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.0,
-     "task_ticket": 0.9965
-    },
-    "interactive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9733,
-     "task_ticket": 0.9965
-    },
-    "responsive": {
-     "analyst_large": 0.0,
-     "code_agent": 0.0,
-     "deep_research": 0.9733,
-     "task_ticket": 0.9965
-    },
-    "attended": {
-     "analyst_large": 0.8805,
-     "code_agent": 0.0,
-     "deep_research": 0.9733,
-     "task_ticket": 0.9965
-    },
-    "queued": {
-     "analyst_large": 0.8805,
-     "code_agent": 0.0,
-     "deep_research": 0.9733,
-     "task_ticket": 0.9965
-    },
-    "background": {
-     "analyst_large": 0.8805,
-     "code_agent": 0.0,
-     "deep_research": 0.9733,
-     "task_ticket": 0.9965
-    }
-   },
+   "backlog_per_series": [
+    [
+     197,
+     324,
+     127
+    ],
+    [
+     196,
+     322,
+     126
+    ],
+    [
+     198,
+     323,
+     125
+    ]
+   ],
    "resident_median": 57,
    "resident_range": [
     57,
@@ -3894,20 +3760,7 @@
   }
  },
  "headline": {
-  "responsive": {
-   "per_instance_rate": 0.5,
-   "fleet_rate_median": 2.0,
-   "fleet_rate_range": [
-    2.0,
-    2.0
-   ],
-   "resident_median": 88,
-   "resident_range": [
-    86,
-    89
-   ]
-  },
-  "attended": {
+  "capacity": {
    "per_instance_rate": 0.6,
    "fleet_rate_median": 2.39,
    "fleet_rate_range": [
@@ -3918,33 +3771,8 @@
    "resident_range": [
     102,
     104
-   ]
-  },
-  "queued": {
-   "per_instance_rate": 0.6,
-   "fleet_rate_median": 2.39,
-   "fleet_rate_range": [
-    2.39,
-    2.39
    ],
-   "resident_median": 102,
-   "resident_range": [
-    102,
-    104
-   ]
-  },
-  "background": {
-   "per_instance_rate": 0.6,
-   "fleet_rate_median": 2.39,
-   "fleet_rate_range": [
-    2.39,
-    2.39
-   ],
-   "resident_median": 102,
-   "resident_range": [
-    102,
-    104
-   ]
+   "first_failing_rate": 0.7
   }
  }
 }

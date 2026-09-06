@@ -20,7 +20,7 @@ document is the ratio's own account.
 The ratio moves only through work nobody can call a lever: builds, data
 jobs, embedding, and reranking, the things an agent does that a GPU would
 not do for it. It does not move with the serving tier's speed: a slower
-tier multiplies resident agents and lowers the certified tier, and leaves
+tier multiplies resident agents and stretches the response curve, and leaves
 host work per token where it was. Faster GPUs push the ratio toward 1:1
 for a fixed tile; a heavier tile pushes it toward 1:1 for a fixed GPU.
 
@@ -65,23 +65,23 @@ and the compute-carrying archetypes set the constant.
 
 ## Result (5 September 2026)
 
-Each tile was certified with three seeds and ten-minute holds on the
+Each tile was measured with three seeds and ten-minute holds on the
 allocation of record (reranker 8 cores, query embedder 2, ingest embedder
 8, 46 for the instances and their jobs):
 
-| Tile | Capacity | Responsive tier certified | Resident agents | Core-ms per token (measured) | 1,300 tok/s per GPU | 2,400 | 3,800 |
+| Tile | Capacity | Resident agents at capacity | Core-ms per token (measured at 2.0/s) | 1,300 tok/s per GPU | 2,400 | 3,800 |
 |---|---|---|---|---|---|---|---|
-| Enterprise | 2.0 wf/s | 2.0 | 87 | 21.5 | 1 : 2.3 | 1 : 1.2 | 1 : 0.8 |
-| Engineering | 2.4 wf/s | 2.0; attended 2.4 | 88; 102 at 2.4 | 20.0 | 1 : 2.5 | 1 : 1.3 | 1 : 0.8 |
-| Analytics | 2.6 wf/s | 2.0; attended 2.6 | 72; 106 at 2.6 | 16.3 | 1 : 3.0 | 1 : 1.6 | 1 : 1.0 |
-| Twelve task agents (estimate from the weights) | | | | 0.9 | 1 : 55 | 1 : 30 | 1 : 19 |
+| Enterprise | 2.0 wf/s | 87 | 21.5 | 1 : 2.3 | 1 : 1.2 | 1 : 0.8 |
+| Engineering | 2.4 wf/s | 102 | 20.0 | 1 : 2.5 | 1 : 1.3 | 1 : 0.8 |
+| Analytics | 2.6 wf/s | 106 | 16.3 | 1 : 3.0 | 1 : 1.6 | 1 : 1.0 |
+| Twelve task agents (estimate from the weights) | | | 0.9 | 1 : 55 | 1 : 30 | 1 : 19 |
 
 Every organisation tile crosses 1:1 inside the lab's band. The constant
 is flat across each ladder (enterprise 21.5 to 22.7 core-ms per token
 from 1.2 to 2.8 workflows/s; engineering 19.0 to 22.4; analytics 16.3 to
 19.8), which is what a property of the tile rather than of the load
 should do. In every tile the executors' 46 cores are the limit, 83%
-occupied at the certified points and 97 to 100% past the cliff; the
+occupied at 2.0 workflows/s and 97 to 100% past the cliff; the
 reranker never passes 36% and the ingest embedder sits near 50%. Sets
 `data/capacity/set-20260905-031403`, `set-20260905-060903`,
 `set-20260905-090413`; full curves in section 11 of the methodology.

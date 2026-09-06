@@ -109,7 +109,7 @@
   <header class="top">
     <div>
       <div class="eyebrow">Dell PowerEdge R470 &middot; agent execution tier</div>
-      <h1 class="title">Enterprise agent mix, replayed from the certified set</h1>
+      <h1 class="title">Enterprise agent mix, replayed from the set of record</h1>
       <div class="sub" id="subtitle"></div>
     </div>
     <div class="controls">
@@ -171,7 +171,6 @@
 const DATA = /*__DATA__*/null;
 const CERTIFIED_CORE_MS = [22.7, 21.8, 21.5, 22.0, 21.6];   // steady-window measurement per plateau (scripts/ratio_from_profile.py --mpstat)
 const GPU_TOKS = 2400;
-const DEADLINE_S = 150;
 
 (function () {
   const M = DATA.meta, P = DATA.plateaus, U = DATA.units, S = DATA.samples, C = DATA.cores;
@@ -231,10 +230,10 @@ const DEADLINE_S = 150;
   const ys = r => T + (1 - r / maxRate) * (H - T - Bm);
   function el(n, a, txt) { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; svg.appendChild(e); return e; }
   P.forEach((p, i) => {
-    el("rect", { x: xs(p.t0), y: T, width: xs(p.t1) - xs(p.t0), height: H - T - Bm, fill: p.sustained.length ? "rgba(79,176,240,0.06)" : "rgba(239,138,92,0.07)" });
+    el("rect", { x: xs(p.t0), y: T, width: xs(p.t1) - xs(p.t0), height: H - T - Bm, fill: p.keeps_up ? "rgba(79,176,240,0.06)" : "rgba(239,138,92,0.07)" });
     el("line", { x1: xs(p.t0), x2: xs(p.t1), y1: ys(p.rate), y2: ys(p.rate), stroke: "rgba(255,255,255,0.35)", "stroke-width": 1.2, "stroke-dasharray": "4 4" });
     el("text", { x: xs(p.t0) + 8, y: ys(p.rate) - 5, fill: "#9fb6cf", "font-size": 11, "font-family": "Roboto Mono, monospace" }, `${p.rate.toFixed(1)}/s`);
-    const tag = i === 2 ? "responsive tier certified" : (i === 3 ? "cliff: executors 97%" : null);
+    const tag = i === 2 ? "capacity: keeps up" : (i === 3 ? "cliff: backlog grows, executors 97%" : null);
     if (tag) el("text", { x: xs(p.t0) + 8, y: H - Bm - 8, fill: i === 2 ? "#7cc2ee" : "#ef8a5c", "font-size": 11, "font-family": "Roboto, sans-serif", "letter-spacing": "0.08em" }, tag.toUpperCase());
   });
   [1, 2, 3, 4].forEach(r => { el("line", { x1: L, x2: W - R, y1: ys(r), y2: ys(r), stroke: "rgba(255,255,255,0.06)" }); el("text", { x: L - 8, y: ys(r) + 4, fill: "#6b83a0", "font-size": 10, "text-anchor": "end", "font-family": "Roboto Mono, monospace" }, r); });
@@ -336,15 +335,13 @@ const DEADLINE_S = 150;
       const age = t - u.t0;
       const inTools = prog > 0.08 + u.w && prog <= 0.08 + u.w + u.ft;
       let color = colors.agent;
-      if (age > DEADLINE_S) color = colors.late;
-      else if (inTools && u.tool !== "none") color = colors[u.tool];
+      if (inTools && u.tool !== "none") color = colors[u.tool];
       const r = u.sid === 0 ? 2.6 : 3.4;
       const nW = workersOf[sids[u.sid]];
       ctx.fillStyle = color;
       if (nW === 3 && prog > 0.08 && prog < 0.8) {
         for (let k = 0; k < 3; k++) { const a = (k / 3) * Math.PI * 2 + prog * 2; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 3.2, y + Math.sin(a) * 3.2, r * 0.6, 0, Math.PI * 2); ctx.fill(); }
       } else { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
-      if (age > DEADLINE_S) { ctx.strokeStyle = "rgba(239,138,92,0.5)"; ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI * 2); ctx.stroke(); }
     }
     for (let i = fades.length - 1; i >= 0; i--) { const f = fades[i]; f.age += 0.04; if (f.age >= 1) { fades.splice(i, 1); continue; } ctx.globalAlpha = 1 - f.age; ctx.strokeStyle = f.color; ctx.beginPath(); ctx.arc(f.x, f.y, 3 + f.age * 10, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     updatePanels();
@@ -374,13 +371,13 @@ const DEADLINE_S = 150;
     const b = Math.min(NB - 1, Math.floor(t / B));
     const comp60 = rolling(compB, b, 6) / 60, tok60 = rolling(tokB, b, 6) / 60;
     const coreMs = tok60 > 0 && row ? (busy * 1000) / tok60 : null;
-    set("r-rate", p.rate.toFixed(1)); document.getElementById("r-rate-n").textContent = `${p.rate_per_instance} per instance \u00d7 4 \u00b7 ${p.sustained.length ? p.sustained[0] + " tier sustained" : "backlog grows"}`;
+    set("r-rate", p.rate.toFixed(1)); document.getElementById("r-rate-n").textContent = `${p.rate_per_instance} per instance \u00d7 4 \u00b7 ${p.keeps_up ? "keeps up" : "backlog grows"}`;
     set("r-res", active.size); document.getElementById("r-res-n").textContent = `Little's law at this plateau: ${p.resident ?? "\u2013"} \u00b7 host memory ${smp[4] ? smp[4].toFixed(0) + " GB" : "\u2013"}`;
     set("r-cores", row ? busy.toFixed(1) : "\u2013"); document.getElementById("r-cores-n").textContent = smp[3] != null ? `host threads ${smp[3].toFixed(0)}% \u00b7 busier sibling per core` : "";
     set("r-cms", coreMs ? coreMs.toFixed(1) : "\u2013"); document.getElementById("r-cms-n").textContent = `rolling 60 s \u00b7 steady-window measurement ${CERTIFIED_CORE_MS[pl]}`;
     const gpu = coreMs ? 64000 / (coreMs * GPU_TOKS) : null;
     set("r-gpu", gpu ? "1 : " + gpu.toFixed(1) : "\u2013");
-    const v = document.getElementById("r-rate").parentElement; v.classList.toggle("warn", !p.sustained.length);
+    const v = document.getElementById("r-rate").parentElement; v.classList.toggle("warn", !p.keeps_up);
     // ladder paths
     let dA = "", dC = "", dB = "";
     const bs = Math.floor(t / B);
