@@ -376,11 +376,11 @@ const GPU_TOKS = 2400;
     const comp60 = rolling(compB, b, 6) / 60, tok60 = rolling(tokB, b, 6) / 60;
     const coreMs = tok60 > 0 && row ? (busy * 1000) / tok60 : null;
     set("r-rate", p.rate.toFixed(1)); document.getElementById("r-rate-n").textContent = `${p.rate_per_instance} per instance \u00d7 4 \u00b7 ${p.keeps_up ? "keeps up" : "backlog grows"}`;
-    set("r-res", active.size); document.getElementById("r-res-n").textContent = `Little's law at this plateau: ${p.resident ?? "\u2013"} \u00b7 host memory ${smp[4] ? smp[4].toFixed(0) + " GB" : "\u2013"}`;
+    set("r-res", active.size); document.getElementById("r-res-n").textContent = `measured over the hold: ${p.resident ?? "\u2013"} \u00b7 host memory ${smp[4] ? smp[4].toFixed(0) + " GB" : "\u2013"}`;
     set("r-cores", row ? busy.toFixed(1) : "\u2013"); document.getElementById("r-cores-n").textContent = smp[3] != null ? `host threads ${smp[3].toFixed(0)}% \u00b7 busier sibling per core` : "";
     set("r-cms", coreMs ? coreMs.toFixed(1) : "\u2013"); document.getElementById("r-cms-n").textContent = `rolling 60 s \u00b7 steady-window measurement ${CERTIFIED_CORE_MS[pl]}`;
-    const gpu = coreMs ? 64000 / (coreMs * GPU_TOKS) : null;
-    set("r-gpu", gpu ? "1 : " + gpu.toFixed(1) : "\u2013");
+    const gpu = tok60 > 0 ? tok60 / GPU_TOKS : null;
+    set("r-gpu", gpu ? gpu.toFixed(2) : "\u2013");
     const v = document.getElementById("r-rate").parentElement; v.classList.toggle("warn", !p.keeps_up);
     // ladder paths
     let dA = "", dC = "", dB = "";
