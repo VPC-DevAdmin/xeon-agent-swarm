@@ -178,6 +178,7 @@ DEFAULTS = dict(
     cache_mode="warm",     # warm: shared system preamble | cold: nothing prefix-cacheable
     e2e_timeout_s=300.0,   # per-workflow ceiling in end-to-end mode
     plateau_frac=0.25,     # gain < 25% of the expected linear gain, twice = knee
+    rotate_scenarios=False,  # closed loop: each session draws the next scenario from the mix per workflow (the completed mix then equals the arrival mix)
     error_rate_limit=0.10, # hard stop
 
     sample_interval_s=2.0,
@@ -562,7 +563,17 @@ class CapacityTest:
         oscillating 63<->771 while the latency body pulsed with the wave. A
         pulsing workload cannot pass a drift test; decohered timers can."""
         rng = random.Random((self.seed or 0) ^ (idx * 2654435761))
+        rotate = bool(self.cfg.get("rotate_scenarios")) and len(self.scenario_ids) > 1
         while not self._stop.is_set():
+            if rotate:
+                # A session that kept one archetype would complete it at 1 /
+                # lifetime: fifteen task sessions would then do most of the
+                # fleet's work. Drawing the next slot of the mix per workflow
+                # makes the completed mix the declared mix, as in open loop.
+                self._rotation = getattr(self, "_rotation", 0)
+                wid = self.scenario_ids[self._rotation % len(self.scenario_ids)]
+                self._rotation += 1
+                wf = self.scenarios[wid]
             # Reserve a conservative workflow envelope before launch. Actual
             # usage replaces it on completion; this constrains concurrent spend.
             token_envelope = int((wf.get("budgets") or {}).get("max_total_tokens")

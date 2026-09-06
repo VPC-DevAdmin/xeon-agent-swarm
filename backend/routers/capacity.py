@@ -76,6 +76,7 @@ class StartBody(BaseModel):
     start_users: int | None = Field(None, ge=1, le=512)
     max_users: int | None = Field(None, ge=1, le=512)
     hold_s: float | None = Field(None, ge=10, le=3600)
+    rotate_scenarios: bool | None = None
     agent_definitions: list[str] = Field(default_factory=list)  # e2e custom mix
     seed: int | None = Field(None, ge=0)             # reproducible corpus + report
     cache_mode: str = Field("warm", pattern="^(warm|cold)$")
@@ -218,7 +219,7 @@ async def _prepare(body: StartBody) -> dict:
            "step_interval_s": body.step_interval_s,
            "step_users": body.step_users, "seed": body.seed,
            "start_users": body.start_users, "max_users": body.max_users,
-           "hold_s": body.hold_s,
+           "hold_s": body.hold_s, "rotate_scenarios": body.rotate_scenarios,
            "cache_mode": body.cache_mode, "warmup_s": body.warmup_s,
            "max_cost_usd": body.max_cost_usd}
     e2e_router: dict | None = None

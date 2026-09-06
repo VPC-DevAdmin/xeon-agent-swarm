@@ -29,11 +29,16 @@ def main(d):
     per_ledger = []
     for path in ledgers:
         ev = read_evidence(path)
-        w = ev["windows"][0] if ev.get("windows") else None
-        # fall back: the hold is the last HOLD seconds before the footer
+        # The hold is the hold_s before the "steady" level record (the
+        # controller measures the steady state at the end of its hold).
+        steady = next((l for l in reversed(ev.get("levels") or []) if l.get("phase") == "steady"), None)
         ft = ev.get("footer") or {}
-        end = float(ft.get("ended_at") or max(u["end"] for u in ev["units"] if u.get("end")))
-        start = float(w["a"]) if w and w.get("a") else end - 600.0
+        hold = 600.0
+        cap = sorted(glob.glob(path.replace("-evidence-", "-capacity-").replace(".jsonl.gz", ".json")))
+        if cap:
+            hold = float((json.load(open(cap[0])).get("config") or {}).get("hold_s") or hold)
+        end = float(steady["ts"]) if steady else float(ft.get("ended_at") or max(u["end"] for u in ev["units"] if u.get("end")))
+        start = end - hold
         a = start if a is None else max(a, start)
         b = end if b is None else min(b, end)
         per_ledger.append((ev, start, end))
