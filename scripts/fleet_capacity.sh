@@ -16,7 +16,11 @@ EXTRA=""
 # protocol, for workloads whose latency rivals level dwell: cohorts must
 # complete under the rate that admitted them, which a doubling climb
 # cannot guarantee). Without it, the doubling sweep schedule applies.
-if [ -n "${PLATEAU_RATE:-}" ]; then
+# RESIDENT_USERS holds ONE fixed session count per instance (closed loop)
+# for PLATEAU_HOLD seconds: the residency photograph at a certified point.
+if [ -n "${RESIDENT_USERS:-}" ]; then
+  EXTRA=',"load_model":"closed","start_users":'"$RESIDENT_USERS"',"max_users":'"$RESIDENT_USERS"',"hold_s":'"${PLATEAU_HOLD:-600}"',"step_interval_s":30'
+elif [ -n "${PLATEAU_RATE:-}" ]; then
   EXTRA=',"load_model":"open","sweep":true,"arrival_start_rate":'"$PLATEAU_RATE"',"arrival_step_factor":2.0,"arrival_max_rate":'"$PLATEAU_RATE"',"arrival_hold_s":'"${PLATEAU_HOLD:-600}"
 elif [ "$LOAD" = "open" ]; then
   EXTRA=',"load_model":"open","sweep":true,"arrival_start_rate":4,"arrival_step_factor":2.0,"arrival_max_rate":1000'

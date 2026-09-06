@@ -70,6 +70,12 @@ class StartBody(BaseModel):
     mock_sigma: float | None = Field(None, ge=0, le=20_000)
     step_interval_s: float | None = Field(None, ge=3, le=120)
     step_users: int | None = Field(None, ge=1, le=8)
+    # Residency photograph: hold a fixed session count (closed loop) for
+    # hold_s and measure. start_users = max_users pins the level; the ramp
+    # then caps at once and holds.
+    start_users: int | None = Field(None, ge=1, le=512)
+    max_users: int | None = Field(None, ge=1, le=512)
+    hold_s: float | None = Field(None, ge=10, le=3600)
     agent_definitions: list[str] = Field(default_factory=list)  # e2e custom mix
     seed: int | None = Field(None, ge=0)             # reproducible corpus + report
     cache_mode: str = Field("warm", pattern="^(warm|cold)$")
@@ -211,6 +217,8 @@ async def _prepare(body: StartBody) -> dict:
            "mock_ms": body.mock_ms, "mock_sigma": body.mock_sigma,
            "step_interval_s": body.step_interval_s,
            "step_users": body.step_users, "seed": body.seed,
+           "start_users": body.start_users, "max_users": body.max_users,
+           "hold_s": body.hold_s,
            "cache_mode": body.cache_mode, "warmup_s": body.warmup_s,
            "max_cost_usd": body.max_cost_usd}
     e2e_router: dict | None = None
