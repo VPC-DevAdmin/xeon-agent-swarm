@@ -16,142 +16,181 @@
   html, body { height: 100%; }
   body { margin: 0; color: var(--ink); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased;
     background: radial-gradient(120% 90% at 20% 0%, #163b6b 0%, var(--bg0) 38%, var(--bg1) 100%) fixed; }
-  .app { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; padding: 16px 22px 16px; height: 100vh; max-width: 1920px; margin: 0 auto; }
-  .card { background: var(--glass); border: 1px solid var(--edge); border-radius: 18px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  .app { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 12px; padding: 14px 20px 14px; height: 100vh; max-width: 1920px; margin: 0 auto; }
+  .card { background: var(--glass); border: 1px solid var(--edge); border-radius: 16px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
     box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 18px 40px rgba(0,0,0,0.28); position: relative; overflow: hidden; min-height: 0; }
   .card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0) 40%); }
-  .eyebrow { font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--eyebrow); font-weight: 500; }
-  .k { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--eyebrow); font-weight: 500; }
+  .k { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
   .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .lead { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+  .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 18px 0; }
+  .panel-head .lead { margin-top: 3px; }
+  .panel-head .right { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
 
-  header.top { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 20px; padding: 4px 4px 0; }
-  header h1 { font-size: 22px; font-weight: 400; margin: 4px 0 0; }
-  header .sub { color: var(--muted); font-size: 13px; margin-top: 4px; max-width: 70ch; }
-  .heads { display: flex; gap: 28px; align-items: flex-end; }
-  .head { text-align: right; }
-  .head .v { font-size: 30px; font-weight: 300; line-height: 1; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .head .v small { font-size: 13px; color: var(--muted); margin-left: 5px; }
-  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--edge); border-radius: 999px; background: var(--glass2); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; margin-left: 8px; }
+  header.top { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 20px; padding: 2px 4px 0; }
+  header h1 { font-size: 21px; font-weight: 400; margin: 3px 0 0; }
+  header .sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; max-width: 78ch; }
+  .controls { display: flex; gap: 10px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--edge); border-radius: 999px; background: var(--glass2); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
   .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 2.4s ease-in-out infinite; }
+  .pill.paused .dot { background: var(--dim); box-shadow: none; animation: none; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+  .btn { font: inherit; font-weight: 400; font-size: 12.5px; color: var(--ink); background: var(--glass2); border: 1px solid var(--edge); border-radius: 10px; padding: 7px 13px; cursor: pointer; }
+  .btn:hover { background: rgba(255,255,255,0.08); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; }
+  .seg .btn { border: 0; border-radius: 0; background: transparent; padding: 7px 10px; font-family: var(--mono); font-size: 12px; }
+  .seg .btn[aria-pressed="true"] { background: rgba(79,176,240,0.18); color: #fff; }
 
-  main.grid { display: grid; grid-template-columns: minmax(0, 8.4fr) minmax(0, 3.6fr); gap: 14px; min-height: 0; }
+  /* concept strip: the three-step picture */
+  .concept { display: grid; grid-template-columns: 1fr 28px 1.25fr 28px 1fr; align-items: stretch; gap: 8px; padding: 12px 18px; }
+  .step { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
+  .step .num { font-family: var(--mono); font-size: 11px; color: var(--eyebrow); letter-spacing: 0.12em; }
+  .step .t { font-size: 14px; font-weight: 400; }
+  .step .d { color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.35; }
+  .step .big { font-size: 28px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .step .big small { font-size: 12px; color: var(--muted); margin-left: 5px; }
+  .arrow { display: grid; place-items: center; color: var(--dim); font-size: 18px; }
 
-  /* the archetype board: one row per archetype */
-  .board { display: grid; grid-template-rows: auto minmax(0, 1fr); }
-  .board-head { display: grid; grid-template-columns: 300px minmax(0, 1fr) 210px; padding: 16px 22px 0; gap: 18px; align-items: end; }
-  .board-head .stages { display: grid; grid-template-columns: repeat(5, 1fr); }
-  .board-head .stages div, .board-head .dem { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); text-align: center; padding-bottom: 8px; border-bottom: 1px solid var(--edge2); }
-  .board-head .dem { display: grid; grid-template-columns: 1fr 1fr; }
-  .board-head .first { padding-bottom: 8px; border-bottom: 1px solid var(--edge2); }
-  .rows { position: relative; display: grid; grid-template-rows: 0.9fr 0.95fr 0.95fr 1.1fr 1.1fr; padding: 4px 22px 14px; gap: 0; min-height: 0; }
-  .row { display: grid; grid-template-columns: 300px minmax(0, 1fr) 210px; gap: 18px; align-items: center; border-bottom: 1px solid var(--edge2); min-height: 0; padding: 6px 0; }
-  .row:last-child { border-bottom: 0; }
-  .who .name { font-size: 15px; font-weight: 400; display: flex; justify-content: space-between; align-items: baseline; }
-  .who .name .n { font-family: var(--mono); font-size: 13px; color: var(--accent); }
-  .who .does { color: var(--muted); font-size: 12.5px; line-height: 1.35; margin-top: 3px; }
-  .who .foot { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 5px; letter-spacing: 0.02em; }
-  .lane { position: relative; height: 100%; min-height: 54px; }
-  .dem { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .dem .m { text-align: center; }
-  .dem .m .v { font-family: var(--mono); font-size: 17px; }
-  .dem .m .v small { font-size: 10.5px; color: var(--dim); margin-left: 3px; }
-  .dem .bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.07); margin-top: 6px; overflow: hidden; }
-  .dem .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .6s ease; }
-  .dem .m.llm .bar i { background: #9fb6cf; }
-  canvas#lanes { position: absolute; inset: 0; pointer-events: none; }
+  main.grid { display: grid; grid-template-columns: minmax(0, 3.1fr) minmax(0, 5.4fr) minmax(0, 3.5fr); gap: 12px; min-height: 0; }
 
-  /* totals */
-  .totals { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
-  .tblock { padding: 16px 22px 12px; border-bottom: 1px solid var(--edge2); }
-  .tblock:last-child { border-bottom: 0; }
-  .tblock .big { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
-  .tblock .big .v { font-size: 38px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; }
-  .tblock .big .u { color: var(--muted); font-size: 13px; }
-  .stack { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: rgba(255,255,255,0.06); margin-top: 12px; }
+  /* the agents */
+  .agents { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .alist { display: grid; grid-template-rows: repeat(5, minmax(0, 1fr)); padding: 6px 18px 12px; min-height: 0; }
+  .agent { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center; border-bottom: 1px solid var(--edge2); padding: 6px 0; min-height: 0; }
+  .agent:last-child { border-bottom: 0; }
+  .glyph { width: 30px; height: 30px; display: grid; place-items: center; }
+  .agent .name { font-size: 13.5px; font-weight: 400; }
+  .agent .does { color: var(--muted); font-size: 11.5px; line-height: 1.3; margin-top: 1px; }
+  .agent .facts { font-family: var(--mono); font-size: 10.5px; color: var(--dim); margin-top: 3px; }
+  .agent .now { text-align: right; }
+  .agent .now .v { font-family: var(--mono); font-size: 20px; line-height: 1; }
+  .agent .now .l { font-size: 10px; color: var(--dim); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
+
+  /* on the server now */
+  .server { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .census { display: grid; grid-template-columns: 96px repeat(5, 1fr); gap: 8px; padding: 10px 18px 0; align-items: end; }
+  .census .c { text-align: center; padding-bottom: 8px; border-bottom: 1px solid var(--edge2); }
+  .census .c .v { font-family: var(--mono); font-size: 22px; line-height: 1; }
+  .census .c .l { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); margin-top: 5px; }
+  .census .c .h { font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+  .census .first { padding-bottom: 8px; border-bottom: 1px solid var(--edge2); }
+  .flowwrap { position: relative; min-height: 0; margin: 4px 18px 6px; }
+  canvas#flow { position: absolute; inset: 0; }
+  .flowkey { display: flex; gap: 16px; padding: 0 18px 12px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+  .flowkey i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+
+  /* demand */
+  .demand { display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  .dblock { padding: 12px 18px 12px; min-height: 0; overflow: hidden; }
+  .dblock + .dblock { border-top: 1px solid var(--edge2); }
+  .dblock .big { display: flex; align-items: baseline; gap: 10px; margin-top: 4px; }
+  .dblock .big .v { font-size: 34px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; }
+  .dblock .big .u { color: var(--muted); font-size: 12px; }
+  .stack { display: flex; height: 9px; border-radius: 5px; overflow: hidden; background: rgba(255,255,255,0.06); margin-top: 10px; }
   .stack span { display: block; height: 100%; transition: width .6s ease; }
-  .keys { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
-  .keys i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
-  .coregrid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; padding: 14px 22px 14px; height: 100%; min-height: 0; align-items: stretch; }
-  .coremap { display: grid; gap: 4px; flex: none; }
-  .core { border-radius: 4px; border: 1px solid var(--edge2); background: rgba(79,176,240,calc(var(--b, 0) * 0.85)); transition: background .5s linear; }
+  .keys { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 11px; color: var(--muted); }
+  .keys i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+  .cores2 { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; margin-top: 10px; }
+  .coremap { display: grid; gap: 3px; }
+  .core { border-radius: 3px; border: 1px solid var(--edge2); background: rgba(79,176,240,calc(var(--b, 0) * 0.85)); transition: background .5s linear; }
   .core.tier-rerank { background: rgba(210,166,106,calc(var(--b, 0) * 0.85)); }
   .core.tier-embed, .core.tier-ingest { background: rgba(95,201,194,calc(var(--b, 0) * 0.85)); }
-  .tiers { display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 4px; min-height: 0; }
-  .tier { border-top: 1px solid var(--edge2); padding-top: 6px; min-height: 0; }
-  .tier .v { font-family: var(--mono); font-size: 18px; margin-top: 1px; }
-  .tier .v small { font-size: 11px; color: var(--muted); margin-left: 4px; }
-  .gpu { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; }
-  .gauge { height: 10px; border-radius: 5px; background: rgba(255,255,255,0.07); overflow: hidden; margin-top: 10px; }
+  .tiers { display: grid; gap: 5px; }
+  .tier { display: grid; grid-template-columns: 1fr auto; align-items: baseline; border-top: 1px solid var(--edge2); padding-top: 4px; }
+  .tier .v { font-family: var(--mono); font-size: 15px; }
+  .tier .v small { font-size: 10px; color: var(--muted); margin-left: 3px; }
+  .llm3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .llm3 .v { font-family: var(--mono); font-size: 17px; }
+  .llm3 .v small { font-size: 10px; color: var(--dim); margin-left: 3px; }
+  .gauge { height: 9px; border-radius: 5px; background: rgba(255,255,255,0.07); overflow: hidden; margin-top: 8px; }
   .gauge i { display: block; height: 100%; background: linear-gradient(90deg, #2a7fc4, var(--accent)); width: 0; transition: width .6s ease; }
-  .llm3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
-  .llm3 .v { font-family: var(--mono); font-size: 18px; }
-  .llm3 .v small { font-size: 10.5px; color: var(--dim); margin-left: 3px; }
+  .gpu { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; margin-top: 8px; }
+  .gpu .v { font-size: 26px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; }
+  .note { font-size: 11px; color: var(--dim); line-height: 1.35; }
 
-  .ticker { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 12px 22px; }
-  .ticker .list { display: flex; gap: 22px; overflow: hidden; white-space: nowrap; font-size: 12.5px; color: var(--muted); }
+  .ticker { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 10px 18px; }
+  .ticker .list { display: flex; gap: 20px; overflow: hidden; white-space: nowrap; font-size: 12px; color: var(--muted); }
   .ticker .list span b { color: var(--ink); font-weight: 400; }
-  .ticker .list span i { font-style: normal; font-family: var(--mono); color: var(--dim); margin-right: 8px; }
-  .note { font-size: 11.5px; color: var(--dim); }
-  @media (max-width: 1200px) { .app { height: auto; } main.grid { grid-template-columns: 1fr; } .rows { min-height: 520px; } }
-  @media (prefers-reduced-motion: reduce) { .pill .dot { animation: none; } .core, .stack span, .gauge i, .dem .bar i { transition: none; } }
+  .ticker .list span i { font-style: normal; font-family: var(--mono); color: var(--dim); margin-right: 7px; }
+  @media (max-width: 1250px) { .app { height: auto; } main.grid { grid-template-columns: 1fr; } .flowwrap { min-height: 300px; } .demand { grid-template-rows: auto auto; } }
+  @media (prefers-reduced-motion: reduce) { .pill .dot { animation: none; } .core, .stack span, .gauge i { transition: none; } }
 </style>
 
 <div class="app">
   <header class="top">
     <div>
       <div class="eyebrow">Dell PowerEdge R470 &middot; agent execution tier &middot; steady state</div>
-      <h1>An enterprise agent fleet, running</h1>
-      <div class="sub" id="subtitle"></div>
+      <h1>An enterprise agent fleet, running on one server</h1>
+      <div class="sub">One server runs everything the agents do between their model calls; the model itself answers from a GPU tier. This is a measured steady state at 2.0 workflow arrivals per second, replayed at <span id="speedword">8&times;</span> speed.</div>
     </div>
-    <div class="heads">
-      <div class="head"><div class="k">Arrivals</div><div class="v">2.0<small>workflows / s</small></div></div>
-      <div class="head"><div class="k">Agents resident</div><div class="v" id="h-res">&ndash;</div></div>
-      <div class="head"><div class="k">Busy cores</div><div class="v" id="h-cores">&ndash;<small>of 64</small></div></div>
-      <div class="head"><div class="k">CPU : GPU</div><div class="v" id="h-gpu">&ndash;</div></div>
-      <span class="pill"><span class="dot"></span><span id="clock">live</span></span>
+    <div class="controls">
+      <span class="pill" id="pill"><span class="dot"></span><span id="clock">live</span></span>
+      <div class="seg" role="group" aria-label="Replay speed">
+        <button class="btn" data-speed="1" aria-pressed="false">1&times;</button>
+        <button class="btn" data-speed="4" aria-pressed="false">4&times;</button>
+        <button class="btn" data-speed="8" aria-pressed="true">8&times;</button>
+        <button class="btn" data-speed="16" aria-pressed="false">16&times;</button>
+      </div>
+      <button class="btn" id="play" aria-label="Pause">Pause</button>
     </div>
   </header>
 
+  <section class="card concept" aria-label="How the system fits together">
+    <div class="step"><div><div class="num">01</div><div class="big" id="s-arr">2.0<small>/ s</small></div></div><div><div class="t">Requests arrive</div><div class="d">A fixed mix: in every twelve, six are quick tasks, two code builds, two data analyses, one research brief, one document ingestion. <span id="s-arr-min"></span></div></div></div>
+    <div class="arrow">&rarr;</div>
+    <div class="step"><div><div class="num">02</div><div class="big" id="s-run">&ndash;<small>running</small></div></div><div><div class="t">Agents work on this server</div><div class="d">Each request becomes an agent that plans, runs its workers, uses tools (sandboxes, retrieval, embedding), is validated, and writes its result. That work is what the CPU does.</div></div></div>
+    <div class="arrow">&rarr;</div>
+    <div class="step"><div><div class="num">03</div><div class="big" id="s-calls">&ndash;<small>calls / s</small></div></div><div><div class="t">Model calls go to the GPU tier</div><div class="d">Every plan, worker turn and validation is a model call. Together they keep <span id="s-gpu">&ndash;</span> of one GPU generating, so this CPU pairs with about <span id="s-ratio">&ndash;</span> GPUs.</div></div></div>
+  </section>
+
   <main class="grid">
-    <section class="card board" aria-label="Agents by archetype">
-      <div class="board-head">
-        <div class="first eyebrow">What each agent is doing</div>
-        <div class="stages"><div>Plan</div><div>Workers</div><div>Tools</div><div>Validate</div><div>Synthesize</div></div>
-        <div class="dem"><div>CPU demand</div><div>LLM demand</div></div>
-      </div>
-      <div class="rows" id="rows"><canvas id="lanes"></canvas></div>
+    <section class="card agents" aria-label="The five agent types">
+      <div class="panel-head"><div><div class="eyebrow">The five agents</div><div class="lead">What each one does, and how many are on the server right now.</div></div></div>
+      <div class="alist" id="alist"></div>
     </section>
 
-    <section class="card totals" aria-label="Demand on the server and the serving tier">
-      <div class="tblock">
-        <div class="eyebrow">CPU demand on this server</div>
-        <div class="big"><div class="v" id="t-cores">&ndash;</div><div class="u">busy physical cores of 64 &middot; <span id="t-attr"></span> attributed to the archetypes</div></div>
+    <section class="card server" aria-label="On the server now">
+      <div class="panel-head"><div><div class="eyebrow">On the server now</div><div class="lead">Every dot is one agent, moving left to right through its stages. Lanes are the five agent types.</div></div><div class="right" id="census-total"></div></div>
+      <div class="census">
+        <div class="first k">Stage</div>
+        <div class="c"><div class="v" id="st-0">0</div><div class="l">Planning</div><div class="h">first model call</div></div>
+        <div class="c"><div class="v" id="st-1">0</div><div class="l">Working</div><div class="h">workers draft</div></div>
+        <div class="c"><div class="v" id="st-2">0</div><div class="l">Using tools</div><div class="h">CPU-heavy</div></div>
+        <div class="c"><div class="v" id="st-3">0</div><div class="l">Validating</div><div class="h">model checks</div></div>
+        <div class="c"><div class="v" id="st-4">0</div><div class="l">Finishing</div><div class="h">synthesis, record</div></div>
+      </div>
+      <div class="flowwrap"><canvas id="flow"></canvas></div>
+      <div class="flowkey"><span><i style="background:var(--accent)"></i>waiting on the model</span><span><i style="background:var(--sandbox)"></i>sandbox: build or data job</span><span><i style="background:var(--rerank)"></i>retrieval and reranking</span><span><i style="background:var(--embed)"></i>embedding</span><span><i style="background:transparent;border:1px solid var(--accent)"></i>ring: finished</span></div>
+    </section>
+
+    <section class="card demand" aria-label="What this costs">
+      <div class="dblock">
+        <div class="eyebrow">What the agents cost this server</div>
+        <div class="big"><div class="v" id="t-cores">&ndash;</div><div class="u">of 64 physical cores busy</div></div>
         <div class="stack" id="cpustack"></div>
         <div class="keys" id="cpukeys"></div>
+        <div class="cores2">
+          <div class="coremap" id="coremap"></div>
+          <div class="tiers">
+            <div class="tier"><div class="k">Application &middot; 46 cores</div><div class="v"><span id="t-app">&ndash;</span><small>%</small></div></div>
+            <div class="tier"><div class="k">Reranker &middot; 8</div><div class="v"><span id="t-rerank">&ndash;</span><small>%</small></div></div>
+            <div class="tier"><div class="k">Ingest embedder &middot; 8</div><div class="v"><span id="t-ingest">&ndash;</span><small>%</small></div></div>
+            <div class="tier"><div class="k">Query embedder &middot; 2</div><div class="v"><span id="t-embed">&ndash;</span><small>%</small></div></div>
+          </div>
+        </div>
       </div>
-      <div class="tblock">
-        <div class="eyebrow">LLM demand on the serving tier</div>
+      <div class="dblock">
+        <div class="eyebrow">What the agents ask of the GPU tier</div>
         <div class="llm3">
-          <div><div class="k">Calls</div><div class="v"><span id="l-calls">&ndash;</span><small>/ s</small></div></div>
+          <div><div class="k">Model calls</div><div class="v"><span id="l-calls">&ndash;</span><small>/ s</small></div></div>
           <div><div class="k">Prompt tokens</div><div class="v"><span id="l-in">&ndash;</span><small>/ s</small></div></div>
           <div><div class="k">Generated</div><div class="v"><span id="l-out">&ndash;</span><small>tok / s</small></div></div>
         </div>
         <div class="stack" id="llmstack"></div>
-        <div class="gpu">
-          <div><div class="k" style="margin-top:12px">GPU kept busy, at 2,400 generated tokens / s per GPU</div><div class="gauge"><i id="gauge"></i></div></div>
-          <div class="big" style="margin-top:8px"><div class="v mono" id="t-gpu" style="font-size:30px">&ndash;</div></div>
-        </div>
+        <div class="gpu"><div><div class="k">GPU kept generating, at 2,400 tokens / s per GPU</div><div class="gauge"><i id="gauge"></i></div></div><div class="v" id="t-gpu">&ndash;</div></div>
         <div class="note" style="margin-top:8px" id="gpunote"></div>
-      </div>
-      <div class="coregrid">
-        <div class="coremap" id="coremap"></div>
-        <div class="tiers">
-          <div class="tier"><div class="k">Application &middot; 46 cores</div><div class="v"><span id="t-app">&ndash;</span><small>%</small></div></div>
-          <div class="tier"><div class="k">Reranker &middot; 8</div><div class="v"><span id="t-rerank">&ndash;</span><small>%</small></div></div>
-          <div class="tier"><div class="k">Ingest embedder &middot; 8</div><div class="v"><span id="t-ingest">&ndash;</span><small>%</small></div></div>
-          <div class="tier"><div class="k">Query embedder &middot; 2</div><div class="v"><span id="t-embed">&ndash;</span><small>%</small></div></div>
-        </div>
       </div>
     </section>
   </main>
@@ -159,22 +198,22 @@
   <section class="card ticker" aria-label="Recent completions">
     <div class="eyebrow">Just finished</div>
     <div class="list" id="ticker"></div>
-    <div class="note" id="foot">Replayed from the certified set's steady window at 2.0 workflows per second, looped. Every arrival, completion, core reading and sample is measured; positions within a workflow follow its recorded stage times.</div>
+    <div class="note">Measured on the server: every arrival, completion, core reading and sample. Looped from the certified run's steady window.</div>
   </section>
 </div>
 
 <script>
 const DATA = /*__DATA__*/null;
-const PLATEAU = 2;              // 2.0 workflows/s box-wide: the certified steady point
-const WARMUP_S = 240;           // steady window starts after the slowest archetype has completed at least once
+const PLATEAU = 2;
+const WARMUP_S = 240;
 const GPU_TOKS = 2400;
-const SMT_SHARE = 0.8;          // busy cores in a mix run at ~0.8 x the summed stand-alone weights
+const SMT_SHARE = 0.8;
 const ARCH = {
-  task_ticket:  { name: "Task agent",      does: "Reads one request, files one durable record, writes the reply. Born, does one thing, gone in ten seconds.", workers: 1, calls: 4,  gen: 550,  coreS: 0.5, lat: "10 s",  phrase: "ticket classified, record filed, reply written" },
-  deep_research:{ name: "Research agent",  does: "Three workers each search 120,000 passages and rerank 128 candidates on the AMX cross-encoder; synthesis writes the brief.", workers: 3, calls: 13, gen: 1800, coreS: 8.5, lat: "34 s",  phrase: "brief assembled from three reranked searches" },
-  ingestion:    { name: "Ingestion agent", does: "Parses 100 PDF pages in a sandbox, embeds about 480 chunks on the CPU embedder, indexes them, verifies with a query.", workers: 1, calls: 5,  gen: 610,  coreS: 24,  lat: "23 s",  phrase: "100 pages parsed, 480 chunks embedded and indexed" },
-  analyst_large:{ name: "Data analyst",    does: "Three workers each aggregate 40 million payment events in a sandbox, one after another; the report ranks the anomalies.", workers: 3, calls: 13, gen: 1790, coreS: 54,  lat: "104 s", phrase: "three 40 M-row jobs run, anomalies ranked" },
-  code_agent:   { name: "Code agent",      does: "Three workers each build Lua 5.4.7 and SQLite 3.50.4 with gcc -O2 in a sandbox and run both test suites.", workers: 3, calls: 13, gen: 1800, coreS: 92,  lat: "133 s", phrase: "Lua and SQLite built, both suites passed" },
+  task_ticket:  { name: "Task agent",      does: "Handles one request: reads it, files a record, writes the reply.", workers: 1, calls: 4,  gen: 550,  coreS: 0.5, lat: "10 s",  phrase: "ticket classified, record filed, reply written" },
+  deep_research:{ name: "Research agent",  does: "Three workers search 120,000 passages, rerank 128 candidates each, and draft; the brief is assembled.", workers: 3, calls: 13, gen: 1800, coreS: 8.5, lat: "34 s",  phrase: "brief assembled from three reranked searches" },
+  ingestion:    { name: "Ingestion agent", does: "Parses 100 PDF pages, embeds about 480 chunks, indexes them, checks with a query.", workers: 1, calls: 5,  gen: 610,  coreS: 24,  lat: "23 s",  phrase: "100 pages parsed, 480 chunks embedded and indexed" },
+  analyst_large:{ name: "Data analyst",    does: "Three workers each aggregate 40 million events in a sandbox; the report ranks anomalies.", workers: 3, calls: 13, gen: 1790, coreS: 54,  lat: "104 s", phrase: "three 40 M-row jobs run, anomalies ranked" },
+  code_agent:   { name: "Code agent",      does: "Three workers each build Lua and SQLite with gcc and run both test suites.", workers: 3, calls: 13, gen: 1800, coreS: 92,  lat: "133 s", phrase: "Lua and SQLite built, both suites passed" },
 };
 
 (function () {
@@ -183,132 +222,137 @@ const ARCH = {
   const a = P.t0 + WARMUP_S, b = P.t1, L = b - a;
   const genPerWf = P.gen_tokens_per_wf;
   const promptPerS = P.prompt_tokens_total / P.span_s;
-  document.getElementById("subtitle").textContent =
-    `Twelve arrivals in every twelve: ${tile.task_ticket} task agents, ${tile.code_agent} code agents, ${tile.analyst_large} data analysts, ${tile.deep_research} research agent, ${tile.ingestion} ingestion agent. ` +
-    `Everything around the model runs here; the model runs on a GPU tier reached over an API.`;
+  document.getElementById("s-arr-min").textContent = "That is about 120 arrivals a minute.";
 
-  // ---------- units inside the steady window, wrapped onto a loop of length L
-  // Units that arrive inside the window. A unit still in flight when the
-  // recording ended has no completion time; in a steady loop it gets its
-  // archetype's median lifetime, so it completes and is replaced like the rest.
   const raw = DATA.units.filter(u => u[0] === PLATEAU && u[2] >= a && u[2] < b);
-  const medLife = sids.map((s, li) => { const xs = raw.filter(u => u[1] === li && u[3] != null).map(u => u[3] - u[2]).sort((x, y) => x - y); return xs.length ? xs[xs.length >> 1] : 60; });
+  // Units still in flight when the recording ended carry no completion time
+  // and no stage sums; in a steady loop they take their archetype's median
+  // lifetime and median stage shares, so they complete and are replaced.
+  const med = xs => { xs = xs.slice().sort((x, y) => x - y); return xs.length ? xs[xs.length >> 1] : 0; };
+  const done = sids.map((s, li) => raw.filter(u => u[1] === li && u[3] != null));
+  const medLife = done.map(xs => med(xs.map(u => u[3] - u[2])) || 60);
+  const medStage = done.map(xs => [5, 6, 7, 8].map(k => med(xs.map(u => u[k]))));
   const units = raw.map((u, i) => {
-    const [pl, sid, t0, t1, ok, mw, ret, sb, emb] = u;
-    const end = t1 == null ? t0 + medLife[sid] : t1;
+    const [pl, sid, t0, t1, ok] = u;
+    const censored = t1 == null;
+    const [mw, ret, sb, emb] = censored ? medStage[sid] : u.slice(5, 9);
+    const end = censored ? t0 + medLife[sid] : t1;
     const life = Math.max(1, end - t0);
     const ft = Math.min(0.6, (ret + sb + emb) / life);
-    return { i, sid, t0: t0 - a, end: end - a, life, ft, w: (0.72 - ft) / 2, ok: t1 == null ? 1 : ok,
+    return { i, sid, t0: t0 - a, end: end - a, life, ft, w: (0.72 - ft) / 2, ok: censored ? 1 : ok,
              tool: sb > ret && sb > emb ? "sandbox" : (emb > ret ? "embed" : (ret > 0 ? "retrieval" : "none")), lane: sid, slot: -1, lat: life };
   });
   const isActive = (u, tau) => (tau >= u.t0 && tau < u.end) || (u.end > L && tau < u.end - L);
-  // per-second completion counts by archetype, wrapped
   const secs = Math.ceil(L);
-  const comp = sids.map(() => new Uint16Array(secs));
+  const comp = sids.map(() => new Uint16Array(secs)), arrivals = new Uint16Array(secs);
   const compList = [];
-  for (const u of units) { const e = ((u.end % L) + L) % L; comp[u.sid][Math.min(secs - 1, Math.floor(e))]++; compList.push([e, u]); }
+  for (const u of units) { const e = ((u.end % L) + L) % L; comp[u.sid][Math.min(secs - 1, Math.floor(e))]++; compList.push([e, u]); arrivals[Math.min(secs - 1, Math.floor(u.t0))]++; }
   compList.sort((x, y) => x[0] - y[0]);
   const roll = (arr, tau, n) => { let s = 0; for (let k = 0; k < n; k++) { let i = Math.floor(tau) - k; i = ((i % secs) + secs) % secs; s += arr[i]; } return s; };
 
-  // ---------- rows
-  const rowsEl = document.getElementById("rows");
-  const rowEls = sids.map((sid, li) => {
+  // ---------- agents panel
+  const alist = document.getElementById("alist");
+  const glyph = (sid, i) => {
+    const three = ARCH[sid].workers === 3, r = sid === "task_ticket" ? 3 : 3.6;
+    if (!three) return `<svg width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="${r}" fill="#4fb0f0"/></svg>`;
+    return `<svg width="30" height="30" viewBox="0 0 30 30">${[0, 1, 2].map(k => { const an = k / 3 * Math.PI * 2 - Math.PI / 2; return `<circle cx="${(15 + Math.cos(an) * 4.2).toFixed(1)}" cy="${(15 + Math.sin(an) * 4.2).toFixed(1)}" r="2.3" fill="#4fb0f0"/>`; }).join("")}</svg>`;
+  };
+  sids.forEach((sid, li) => {
     const A = ARCH[sid];
-    const r = document.createElement("div"); r.className = "row";
-    r.innerHTML = `<div class="who"><div class="name"><span>${A.name}</span><span class="n" id="n-${li}">0</span></div><div class="does">${A.does}</div>
-      <div class="foot">${A.workers} worker${A.workers > 1 ? "s" : ""} &middot; ${A.calls} LLM calls &middot; ${A.gen.toLocaleString()} tokens &middot; ${A.coreS} core-s &middot; ${A.lat} &middot; ${tile[sid]} in 12</div></div>
-      <div class="lane"></div>
-      <div class="dem"><div class="m"><div class="v"><span id="c-${li}">&ndash;</span><small>cores</small></div><div class="bar"><i id="cb-${li}"></i></div></div>
-      <div class="m llm"><div class="v"><span id="l-${li}">&ndash;</span><small>tok/s</small></div><div class="bar"><i id="lb-${li}"></i></div></div></div>`;
-    rowsEl.appendChild(r); return r;
+    const d = document.createElement("div"); d.className = "agent";
+    d.innerHTML = `<div class="glyph">${glyph(sid, li)}</div>
+      <div><div class="name">${A.name} <span class="k" style="margin-left:6px">${tile[sid]} in every 12</span></div><div class="does">${A.does}</div>
+      <div class="facts">${A.workers} worker${A.workers > 1 ? "s" : ""} &middot; ${A.calls} model calls &middot; ${A.coreS} core-s of CPU &middot; ${A.lat}</div></div>
+      <div class="now"><div class="v" id="n-${li}">0</div><div class="l">on server</div></div>`;
+    alist.appendChild(d);
   });
-  const cv = document.getElementById("lanes"), ctx = cv.getContext("2d");
-  let cw = 0, ch = 0, ox = 0, lanes = [];
+
+  // ---------- flow canvas
+  const cv = document.getElementById("flow"), ctx = cv.getContext("2d"), wrap = cv.parentElement;
+  let cw = 0, ch = 0, lanes = [];
+  const LANE_LABEL = 96;
   function resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const rr = rowsEl.getBoundingClientRect(); cw = rr.width; ch = rr.height;
+    cw = wrap.clientWidth; ch = wrap.clientHeight;
     cv.width = cw * dpr; cv.height = ch * dpr; cv.style.width = cw + "px"; cv.style.height = ch + "px"; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    lanes = rowEls.map(r => { const l = r.querySelector(".lane").getBoundingClientRect(); return { x: l.left - rr.left, y: l.top - rr.top, w: l.width, h: l.height }; });
+    const wts = [1.5, 0.8, 0.8, 1.2, 1.2], tot = wts.reduce((x, y) => x + y, 0); let y = 4;
+    lanes = wts.map(w => { const h = (ch - 8) * w / tot; const g = { y, h }; y += h; return g; });
     sizeCoreMap();
   }
   function sizeCoreMap() {
-    const cg = document.querySelector(".coregrid"), cm = document.getElementById("coremap");
-    const size = Math.max(96, Math.min(cg.clientHeight - 28, 240));
-    const cell = Math.floor((size - 7 * 4) / 8);
+    const cm = document.getElementById("coremap"); const cell = 11;
     cm.style.gridTemplateColumns = `repeat(8, ${cell}px)`; cm.style.gridTemplateRows = `repeat(8, ${cell}px)`;
-    cm.style.width = (cell * 8 + 28) + "px"; cm.style.height = (cell * 8 + 28) + "px";
   }
   window.addEventListener("resize", resize);
-
-  // ---------- core map and stacks
   const coremap = document.getElementById("coremap");
   const coreEls = M.tiers.map(t => { const d = document.createElement("div"); d.className = "core tier-" + t; coremap.appendChild(d); return d; });
   const archColors = ["#4fb0f0", "#7cc2ee", "#5fc9c2", "#a9c4e2", "#dfe9f5"];
-  const cpustack = document.getElementById("cpustack"), llmstack = document.getElementById("llmstack");
-  const cpuSpans = sids.map((s, i) => { const e = document.createElement("span"); e.style.background = archColors[i]; cpustack.appendChild(e); return e; });
-  const llmSpans = sids.map((s, i) => { const e = document.createElement("span"); e.style.background = archColors[i]; llmstack.appendChild(e); return e; });
+  const cpuSpans = sids.map((s, i) => { const e = document.createElement("span"); e.style.background = archColors[i]; document.getElementById("cpustack").appendChild(e); return e; });
+  const llmSpans = sids.map((s, i) => { const e = document.createElement("span"); e.style.background = archColors[i]; document.getElementById("llmstack").appendChild(e); return e; });
   document.getElementById("cpukeys").innerHTML = sids.map((s, i) => `<span><i style="background:${archColors[i]}"></i>${ARCH[s].name}</span>`).join("");
 
-  // ---------- swarm
-  const colors = { agent: "#4fb0f0", sandbox: "#dfe9f5", retrieval: "#d2a66a", embed: "#5fc9c2", late: "#ef8a5c" };
-  const rowsPerLane = [7, 3, 3, 5, 5];
+  const colors = { agent: "#4fb0f0", sandbox: "#dfe9f5", retrieval: "#d2a66a", embed: "#5fc9c2" };
+  const rowsPerLane = [6, 3, 3, 5, 5];
   const slotsFree = sids.map(() => []), slotsNext = sids.map(() => 0);
   const takeSlot = l => slotsFree[l].length ? slotsFree[l].pop() : slotsNext[l]++;
-  const active = new Map();   // unit -> true
-  const counts = sids.map(() => 0);
-  const fades = [];
-  let tau = 0, last = performance.now(), lastPanel = -10, playing = true;
+  const active = new Map(), counts = sids.map(() => 0), fades = [];
+  let tau = 0, last = performance.now(), lastPanel = -10, playing = true, speed = 8;
 
-  function xOf(u, prog, lane) {
-    const bw = lane.w / 5;
+  function bandOf(u, prog) {   // 0 plan, 1 working, 2 tools, 3 validate, 4 finishing; and x within the flow
+    const bw = (cw - LANE_LABEL) / 5, x0 = LANE_LABEL;
     const seg = [[0.08, 0], [u.w, 1], [u.ft, 2], [u.w, 1.5], [0.12, 3], [0.08, 4]];
     let acc = 0;
     for (const [len, band] of seg) {
       if (len <= 0) continue;
       if (prog <= acc + len || band === 4) {
         const f = Math.max(0, Math.min(1, (prog - acc) / len));
-        if (band === 1.5) return lane.x + bw * (1.5 + f * 0.44);
-        if (band === 1) return lane.x + bw * (1.06 + f * 0.44);
-        return lane.x + bw * (band + 0.08 + f * 0.84);
+        if (band === 1.5) return [1, x0 + bw * (1.5 + f * 0.44)];
+        if (band === 1) return [1, x0 + bw * (1.06 + f * 0.44)];
+        return [band, x0 + bw * (band + 0.08 + f * 0.84)];
       }
       acc += len;
     }
-    return lane.x + bw * 4.9;
+    return [4, x0 + bw * 4.9];
   }
 
   function step(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (playing) tau = (tau + dt) % L;
-    // membership
+    if (playing) tau = (tau + dt * speed) % L;
     for (const u of units) {
       const on = isActive(u, tau);
       if (on && !active.has(u)) { u.slot = takeSlot(u.lane); active.set(u, true); counts[u.lane]++; }
-      else if (!on && active.has(u)) { active.delete(u); counts[u.lane]--; slotsFree[u.lane].push(u.slot); if (u._x) fades.push({ x: u._x, y: u._y, age: 0, ok: u.ok }); }
+      else if (!on && active.has(u)) { active.delete(u); counts[u.lane]--; slotsFree[u.lane].push(u.slot); if (u._x) fades.push({ x: u._x, y: u._y, age: 0 }); }
     }
     render();
     requestAnimationFrame(step);
   }
 
+  const census = [0, 0, 0, 0, 0];
   function render() {
     ctx.clearRect(0, 0, cw, ch);
-    lanes.forEach(lane => { for (let bnd = 1; bnd < 5; bnd++) { ctx.strokeStyle = "rgba(170,205,240,0.07)"; ctx.beginPath(); ctx.moveTo(lane.x + lane.w * bnd / 5, lane.y); ctx.lineTo(lane.x + lane.w * bnd / 5, lane.y + lane.h); ctx.stroke(); } });
+    const bw = (cw - LANE_LABEL) / 5;
+    lanes.forEach((g, li) => {
+      if (li % 2) { ctx.fillStyle = "rgba(255,255,255,0.025)"; ctx.fillRect(0, g.y, cw, g.h); }
+      ctx.fillStyle = "#c9d6e6"; ctx.font = "400 12px Roboto, sans-serif"; ctx.textBaseline = "middle"; ctx.fillText(ARCH[sids[li]].name, 0, g.y + g.h / 2);
+    });
+    for (let k = 1; k < 5; k++) { ctx.strokeStyle = "rgba(170,205,240,0.08)"; ctx.beginPath(); ctx.moveTo(LANE_LABEL + bw * k, 0); ctx.lineTo(LANE_LABEL + bw * k, ch); ctx.stroke(); }
+    census.fill(0);
     for (const u of active.keys()) {
       const lane = lanes[u.lane]; if (!lane) continue;
       const rows = rowsPerLane[u.lane], row = u.slot % rows, col = Math.floor(u.slot / rows);
-      const age = ((tau - u.t0) % L + L) % L;
-      const prog = Math.min(1, age / u.life);
-      const x = xOf(u, prog, lane) + (col % 3) * 3;
-      const y = lane.y + 8 + (row + 0.5) * ((lane.h - 16) / rows);
+      const age = ((tau - u.t0) % L + L) % L, prog = Math.min(1, age / u.life);
+      const [band, bx] = bandOf(u, prog);
+      census[band]++;
+      const x = bx + (col % 3) * 3, y = lane.y + 7 + (row + 0.5) * ((lane.h - 14) / rows);
       u._x = x; u._y = y;
-      const inTools = prog > 0.08 + u.w && prog <= 0.08 + u.w + u.ft;
-      const color = inTools && u.tool !== "none" ? colors[u.tool] : colors.agent;
-      const r = u.sid === 0 ? 2.6 : 3.4;
+      const color = band === 2 && u.tool !== "none" ? colors[u.tool] : colors.agent;
+      const r = u.sid === 0 ? 2.4 : 3.2;
       ctx.fillStyle = color;
-      if (ARCH[sids[u.sid]].workers === 3 && prog > 0.08 && prog < 0.8) {
-        for (let k = 0; k < 3; k++) { const an = (k / 3) * Math.PI * 2 + prog * 2; ctx.beginPath(); ctx.arc(x + Math.cos(an) * 3.2, y + Math.sin(an) * 3.2, r * 0.6, 0, Math.PI * 2); ctx.fill(); }
+      if (ARCH[sids[u.sid]].workers === 3 && band >= 1 && band <= 2) {
+        for (let k = 0; k < 3; k++) { const an = (k / 3) * Math.PI * 2 + prog * 2; ctx.beginPath(); ctx.arc(x + Math.cos(an) * 3, y + Math.sin(an) * 3, r * 0.58, 0, Math.PI * 2); ctx.fill(); }
       } else { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
     }
-    for (let i = fades.length - 1; i >= 0; i--) { const f = fades[i]; f.age += 0.05; if (f.age >= 1) { fades.splice(i, 1); continue; } ctx.globalAlpha = 1 - f.age; ctx.strokeStyle = f.ok ? colors.agent : colors.late; ctx.beginPath(); ctx.arc(f.x, f.y, 3 + f.age * 9, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+    for (let i = fades.length - 1; i >= 0; i--) { const f = fades[i]; f.age += 0.06; if (f.age >= 1) { fades.splice(i, 1); continue; } ctx.globalAlpha = 1 - f.age; ctx.strokeStyle = colors.agent; ctx.beginPath(); ctx.arc(f.x, f.y, 3 + f.age * 8, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     updatePanels();
   }
 
@@ -316,39 +360,35 @@ const ARCH = {
   let tickerSeen = -1, tickerItems = [];
   function updatePanels() {
     const jump = tau - lastPanel; if (jump > -1 && jump < 0.5) return; lastPanel = tau;
-    // per-archetype demand from the last 60 s of completions
-    let attr = 0, genTot = 0, callsTot = 0;
-    const cores = [], gens = [];
+    census.forEach((c, i) => set(`st-${i}`, c));
+    document.getElementById("census-total").textContent = `${active.size} agents on the server`;
+    let attr = 0, genTot = 0, callsTot = 0; const cores = [], gens = [];
     sids.forEach((sid, li) => {
-      const done = roll(comp[li], tau, 60) / 60;          // completions per second
+      const done = roll(comp[li], tau, 60) / 60;
       const c = done * ARCH[sid].coreS * SMT_SHARE, g = done * (genPerWf[sid] || ARCH[sid].gen);
       cores.push(c); gens.push(g); attr += c; genTot += g; callsTot += done * ARCH[sid].calls;
-      document.getElementById(`n-${li}`).textContent = counts[li];
-      document.getElementById(`c-${li}`).textContent = c.toFixed(1);
-      document.getElementById(`l-${li}`).textContent = Math.round(g);
+      set(`n-${li}`, counts[li]);
     });
-    sids.forEach((s, li) => { document.getElementById(`cb-${li}`).style.width = (100 * cores[li] / 34).toFixed(1) + "%"; document.getElementById(`lb-${li}`).style.width = (100 * gens[li] / 700).toFixed(1) + "%"; });
     cpuSpans.forEach((e, i) => e.style.width = (attr ? 100 * cores[i] / attr : 0).toFixed(1) + "%");
     llmSpans.forEach((e, i) => e.style.width = (genTot ? 100 * gens[i] / genTot : 0).toFixed(1) + "%");
-    // measured cores at this moment
     const k = Math.min(C.length - 1, Math.floor((tau + WARMUP_S) / 10)); const row = C[k];
     let busy = 0; const ts = { app: 0, rerank: 0, embed: 0, ingest: 0 };
     if (row) row.forEach((v, i) => { coreEls[i].style.setProperty("--b", (v / 100).toFixed(2)); busy += v / 100; ts[M.tiers[i]] += v; });
-    const resident = active.size;
-    set("h-res", resident);
-    document.getElementById("h-cores").innerHTML = `${busy.toFixed(0)}<small>of 64</small>`;
-    set("t-cores", busy.toFixed(1)); set("t-attr", attr.toFixed(0));
+    set("t-cores", busy.toFixed(0));
     set("t-app", Math.round(ts.app / 46)); set("t-rerank", Math.round(ts.rerank / 8)); set("t-ingest", Math.round(ts.ingest / 8)); set("t-embed", Math.round(ts.embed / 2));
     set("l-calls", callsTot.toFixed(1)); set("l-in", Math.round(promptPerS / 1000) + "k"); set("l-out", Math.round(genTot).toLocaleString());
     const gpus = genTot / GPU_TOKS, perSocket = busy > 0 ? gpus * 64 / busy : 0;
     document.getElementById("gauge").style.width = Math.min(100, 100 * gpus).toFixed(1) + "%";
-    set("t-gpu", gpus.toFixed(2)); set("h-gpu", "1 : " + perSocket.toFixed(1));
-    document.getElementById("gpunote").textContent = `This server's ${busy.toFixed(0)} busy cores keep ${gpus.toFixed(2)} of a GPU generating; a full 64-core socket at the same work keeps ${perSocket.toFixed(1)}. Host work per token: ${genTot > 0 ? (busy * 1000 / genTot).toFixed(1) : "–"} core-ms.`;
-    // ticker: completions in the last second(s)
+    set("t-gpu", gpus.toFixed(2));
+    document.getElementById("gpunote").textContent = `${busy.toFixed(0)} busy cores behind ${Math.round(genTot).toLocaleString()} generated tokens a second is ${genTot > 0 ? (busy * 1000 / genTot).toFixed(1) : "–"} core-ms of CPU per token; a full 64-core socket at this work keeps ${perSocket.toFixed(1)} GPUs busy.`;
+    document.getElementById("s-run").innerHTML = `${active.size}<small>running</small>`;
+    document.getElementById("s-calls").innerHTML = `${callsTot.toFixed(1)}<small>calls / s</small>`;
+    set("s-gpu", gpus.toFixed(2)); set("s-ratio", perSocket.toFixed(1));
     const s0 = Math.floor(tau);
     if (s0 !== tickerSeen) {
+      const from = tickerSeen < 0 || s0 < tickerSeen ? s0 : tickerSeen + 1;
       tickerSeen = s0;
-      for (const [e, u] of compList) if (e >= s0 && e < s0 + 1) tickerItems.unshift({ u, at: tau });
+      for (const [e, u] of compList) if (e >= from && e < s0 + 1) { tickerItems = tickerItems.filter(x => x.u.sid !== u.sid); tickerItems.unshift({ u }); }
       tickerItems = tickerItems.slice(0, 5);
       tickerEl.innerHTML = tickerItems.map(({ u }) => `<span><i>${u.lat.toFixed(0)} s</i><b>${ARCH[sids[u.sid]].name}</b> &middot; ${ARCH[sids[u.sid]].phrase}</span>`).join("");
     }
@@ -356,8 +396,11 @@ const ARCH = {
   }
   function set(id, v) { const e = document.getElementById(id); if (e && e.textContent !== String(v)) e.textContent = v; }
 
-  window.addEventListener("keydown", ev => { if (ev.code === "Space" && ev.target === document.body) { ev.preventDefault(); playing = !playing; } });
+  function setPlay() { const bt = document.getElementById("play"); bt.textContent = playing ? "Pause" : "Play"; bt.setAttribute("aria-label", bt.textContent); document.getElementById("pill").classList.toggle("paused", !playing); }
+  document.getElementById("play").addEventListener("click", () => { playing = !playing; setPlay(); });
+  document.querySelectorAll("[data-speed]").forEach(bt => bt.addEventListener("click", () => { speed = +bt.dataset.speed; document.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", x === bt ? "true" : "false")); document.getElementById("speedword").textContent = speed + "×"; }));
+  window.addEventListener("keydown", ev => { if (ev.code === "Space" && ev.target === document.body) { ev.preventDefault(); playing = !playing; setPlay(); } });
   resize(); requestAnimationFrame(() => { resize(); tau = 30; step(performance.now()); });
-  window.__steady = { seek: t => { tau = ((t % L) + L) % L; lastPanel = -10; render(); }, time: () => tau, pause: () => playing = false, play: () => playing = true };
+  window.__steady = { seek: t => { tau = ((t % L) + L) % L; lastPanel = -10; render(); }, time: () => tau, pause: () => { playing = false; setPlay(); }, play: () => { playing = true; setPlay(); } };
 })();
 </script>
