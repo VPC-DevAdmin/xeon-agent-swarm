@@ -1,0 +1,420 @@
+<meta charset="utf-8">
+<title>R470 Agent Replay</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&family=Roboto+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg0: #0d2447; --bg1: #061225;
+    --glass: rgba(255,255,255,0.045); --glass2: rgba(255,255,255,0.025);
+    --edge: rgba(170,205,240,0.18); --edge2: rgba(170,205,240,0.10);
+    --ink: #f2f6fb; --muted: #9fb6cf; --dim: #6b83a0;
+    --eyebrow: #7cc2ee; --accent: #4fb0f0; --accent2: #2a7fc4;
+    --rerank: #d2a66a; --embed: #5fc9c2; --warn: #ef8a5c; --app: #4fb0f0;
+    --sans: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Roboto Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; color: var(--ink); font-family: var(--sans); font-weight: 300;
+    background: radial-gradient(120% 90% at 20% 0%, #163b6b 0%, var(--bg0) 38%, var(--bg1) 100%) fixed;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 16px; padding: 18px 22px 20px; height: 100vh; max-width: 1920px; margin: 0 auto; }
+  .card {
+    background: var(--glass); border: 1px solid var(--edge); border-radius: 18px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 18px 40px rgba(0,0,0,0.28);
+    position: relative; overflow: hidden;
+  }
+  .card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0) 40%); }
+  .eyebrow { font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--eyebrow); font-weight: 500; }
+  .title { font-size: 22px; font-weight: 400; margin: 4px 0 0; letter-spacing: -0.005em; }
+
+  header.top { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 20px; padding: 6px 4px 0; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--edge); border-radius: 999px;
+    background: var(--glass2); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .pill.paused .dot { background: var(--dim); box-shadow: none; }
+
+  .controls { display: flex; gap: 10px; align-items: center; }
+  .btn { font: inherit; font-weight: 400; font-size: 13px; color: var(--ink); background: var(--glass2); border: 1px solid var(--edge);
+    border-radius: 10px; padding: 8px 14px; cursor: pointer; letter-spacing: 0.02em; transition: background .15s, border-color .15s; }
+  .btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(170,205,240,0.35); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn.primary { background: rgba(79,176,240,0.16); border-color: rgba(79,176,240,0.5); }
+  .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; }
+  .seg .btn { border: 0; border-radius: 0; background: transparent; padding: 8px 11px; font-family: var(--mono); font-size: 12px; }
+  .seg .btn[aria-pressed="true"] { background: rgba(79,176,240,0.18); color: #fff; }
+
+  main.grid { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 16px; min-height: 0; }
+  main.grid > .card { min-height: 0; }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; padding: 18px 22px 0; }
+  .card-head .right { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  .swarm { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
+  .stages { display: grid; grid-template-columns: 150px repeat(5, 1fr); padding: 14px 22px 0; }
+  .stages div { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); text-align: center; padding-bottom: 8px;
+    border-bottom: 1px solid var(--edge2); }
+  .stages div:first-child { text-align: left; }
+  .swarm canvas { width: 100%; height: 100%; display: block; }
+  .swarm .canvaswrap { position: relative; min-height: 0; margin: 0 22px 18px; }
+  .swarm canvas { position: absolute; inset: 0; }
+
+  .cores { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .cores > .coregrid { overflow: hidden; }
+  .coregrid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; padding: 14px 22px 8px; height: 100%; min-height: 0; align-items: stretch; }
+  .coremap { display: grid; gap: 5px; flex: none; }
+  .core { border-radius: 5px; border: 1px solid var(--edge2); position: relative;
+    background: rgba(79,176,240,calc(var(--b, 0) * 0.85)); transition: background .5s linear; }
+  .core.tier-rerank { background: rgba(210,166,106,calc(var(--b, 0) * 0.85)); }
+  .core.tier-embed, .core.tier-ingest { background: rgba(95,201,194,calc(var(--b, 0) * 0.85)); }
+  .core::after { content: ""; position: absolute; left: 3px; top: 3px; width: 3px; height: 3px; border-radius: 50%; background: var(--app); opacity: .9; }
+  .core.tier-rerank::after { background: var(--rerank); }
+  .core.tier-embed::after, .core.tier-ingest::after { background: var(--embed); }
+  .tiers { display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 6px; min-height: 0; }
+  .tier { border-top: 1px solid var(--edge2); padding-top: 8px; min-height: 0; }
+  .tier .k { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+  .tier .v { font-family: var(--mono); font-size: 20px; margin-top: 2px; }
+  .tier .v small { font-size: 12px; color: var(--muted); margin-left: 4px; }
+  .fam { padding: 14px 22px 20px; }
+  .fam .k { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: rgba(255,255,255,0.06); }
+  .bar span { display: block; height: 100%; transition: width .5s linear; }
+  .legend { display: flex; gap: 16px; margin-top: 8px; font-size: 11.5px; color: var(--muted); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+
+  .readout { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; }
+  .tile { padding: 18px 22px 20px; border-right: 1px solid var(--edge2); }
+  .tile:last-child { border-right: 0; }
+  .tile .v { font-family: var(--sans); font-weight: 300; font-size: 40px; line-height: 1.05; margin-top: 8px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .tile .v small { font-size: 15px; color: var(--muted); margin-left: 6px; font-weight: 300; }
+  .tile .n { color: var(--muted); font-size: 12.5px; margin-top: 8px; min-height: 16px; }
+  .tile.hero .v { color: #fff; }
+  .tile .v.warn { color: var(--warn); }
+
+  .ladder { padding: 0 0 12px; }
+  .ladder svg { width: 100%; height: 150px; display: block; cursor: pointer; }
+  .ladder .foot { display: flex; justify-content: space-between; align-items: center; padding: 6px 22px 6px; color: var(--muted); font-size: 12px; }
+  .chips { display: flex; gap: 8px; }
+  .chip { font: 500 12px var(--mono); color: var(--muted); border: 1px solid var(--edge2); border-radius: 8px; padding: 5px 9px; background: transparent; cursor: pointer; }
+  .chip[aria-current="true"] { color: #fff; border-color: rgba(79,176,240,0.6); background: rgba(79,176,240,0.14); }
+  .note { font-size: 12px; color: var(--dim); }
+  @media (max-width: 1100px) { .app { height: auto; } main.grid { grid-template-columns: 1fr; } .swarm .canvaswrap { min-height: 340px; } .readout { grid-template-columns: repeat(3, 1fr); } .tile { border-bottom: 1px solid var(--edge2); } }
+  @media (prefers-reduced-motion: reduce) { .core, .bar span { transition: none; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Dell PowerEdge R470 &middot; agent execution tier</div>
+      <h1 class="title">Enterprise agent mix, replayed from the certified set</h1>
+      <div class="sub" id="subtitle"></div>
+    </div>
+    <div class="controls">
+      <span class="pill" id="pill"><span class="dot"></span><span id="clock">00:00</span></span>
+      <div class="seg" role="group" aria-label="Replay speed">
+        <button class="btn" data-speed="10" aria-pressed="false">10&times;</button>
+        <button class="btn" data-speed="20" aria-pressed="true">20&times;</button>
+        <button class="btn" data-speed="60" aria-pressed="false">60&times;</button>
+        <button class="btn" data-speed="120" aria-pressed="false">120&times;</button>
+      </div>
+      <button class="btn primary" id="play" aria-label="Pause">Pause</button>
+      <button class="btn" id="restart">Restart</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card swarm" aria-label="Resident agents by archetype and stage">
+      <div class="card-head"><div><div class="eyebrow">Resident agents</div></div><div class="right" id="swarmcount"></div></div>
+      <div class="stages"><div>Archetype</div><div>Plan</div><div>Workers</div><div>Tools</div><div>Validate</div><div>Synthesize</div></div>
+      <div class="canvaswrap"><canvas id="swarm"></canvas></div>
+    </section>
+    <section class="card cores" aria-label="Physical core occupancy">
+      <div class="card-head"><div><div class="eyebrow">64 physical cores</div></div><div class="right" id="corecount"></div></div>
+      <div class="coregrid">
+        <div class="coremap" id="coremap"></div>
+        <div class="tiers">
+          <div class="tier"><div class="k">Application &middot; 46</div><div class="v"><span id="t-app">&ndash;</span><small>%</small></div></div>
+          <div class="tier"><div class="k">Reranker &middot; 8</div><div class="v"><span id="t-rerank">&ndash;</span><small>%</small></div></div>
+          <div class="tier"><div class="k">Embedders &middot; 10</div><div class="v"><span id="t-embed">&ndash;</span><small>%</small></div></div>
+        </div>
+      </div>
+      <div class="fam">
+        <div class="k"><span>Where the CPU goes</span><span id="famnote">share of attributed CPU</span></div>
+        <div class="bar" id="fambar"></div>
+        <div class="legend"><span><i style="background:var(--app)"></i>Sandboxed jobs</span><span><i style="background:var(--rerank)"></i>Retrieval and embedding</span><span><i style="background:#9fb6cf"></i>Orchestration</span><span><i style="background:#5a6f8a"></i>Database and other</span></div>
+      </div>
+    </section>
+  </main>
+
+  <section class="card readout" aria-label="Live readout">
+    <div class="tile"><div class="eyebrow">Offered rate</div><div class="v"><span id="r-rate">&ndash;</span><small>workflows / s</small></div><div class="n" id="r-rate-n"></div></div>
+    <div class="tile"><div class="eyebrow">Resident agents</div><div class="v"><span id="r-res">&ndash;</span></div><div class="n" id="r-res-n"></div></div>
+    <div class="tile"><div class="eyebrow">Busy cores</div><div class="v"><span id="r-cores">&ndash;</span><small>of 64</small></div><div class="n" id="r-cores-n"></div></div>
+    <div class="tile"><div class="eyebrow">Host work per token</div><div class="v"><span id="r-cms">&ndash;</span><small>core-ms</small></div><div class="n" id="r-cms-n"></div></div>
+    <div class="tile hero"><div class="eyebrow">GPUs per CPU</div><div class="v"><span id="r-gpu">&ndash;</span></div><div class="n" id="r-gpu-n">at 2,400 generated tokens / s per GPU</div></div>
+  </section>
+
+  <section class="card ladder" aria-label="Offered rate ladder">
+    <div class="card-head"><div><div class="eyebrow">The ladder</div></div><div class="right">arrivals and completions per second, rolling 60 s</div></div>
+    <svg id="ladder" viewBox="0 0 1200 150" preserveAspectRatio="none" role="img" aria-label="Offered rate plateaus with arrivals and completions"></svg>
+    <div class="foot">
+      <div class="chips" id="chips"></div>
+      <div class="note" id="foot-note"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const CERTIFIED_CORE_MS = [22.7, 21.8, 21.5, 22.0, 21.6];   // steady-window measurement per plateau (scripts/ratio_from_profile.py --mpstat)
+const GPU_TOKS = 2400;
+const DEADLINE_S = 150;
+
+(function () {
+  const M = DATA.meta, P = DATA.plateaus, U = DATA.units, S = DATA.samples, C = DATA.cores;
+  const sids = M.sids, labels = M.labels;
+  const tile = M.tile;
+  const workersOf = { task_ticket: 1, ingestion: 1, deep_research: 3, analyst_large: 3, code_agent: 3 };
+  const laneOrder = [0, 1, 2, 3, 4];
+  document.getElementById("subtitle").textContent =
+    `Set ${M.set ? M.set.split("/").pop() : ""}, series ${M.series.split("-")[1]} \u00b7 twelve-arrival enterprise tile: ` +
+    `${tile.task_ticket} task, ${tile.code_agent} code, ${tile.analyst_large} analyst, ${tile.deep_research} research, ${tile.ingestion} ingestion \u00b7 ` +
+    `five plateaus of ten minutes, ${(M.duration / 60).toFixed(0)} minutes of evidence`;
+
+  // ---------- units: sorted by arrival, with per-unit phase layout
+  U.sort((a, b) => a[2] - b[2]);
+  const units = U.map((u, i) => {
+    const [pl, sid, t0, t1, ok, mw, ret, sb, emb] = u;
+    const end = t1 == null ? P[pl].t1 : t1;
+    const life = Math.max(1, end - t0);
+    const toolS = ret + sb + emb;
+    const ft = Math.min(0.6, toolS / life);
+    const w = (0.72 - ft) / 2;
+    return { i, pl, sid, t0, end, ok, censored: t1 == null, life, ft, w, tool: sb > ret && sb > emb ? "sandbox" : (emb > ret ? "embed" : (ret > 0 ? "retrieval" : "none")),
+             slot: -1, lane: sid };
+  });
+  const perPlateauGen = P.map(p => p.gen_tokens_per_wf);
+
+  // ---------- rolling series for the ladder and the readout (10 s buckets)
+  const B = 10, NB = Math.ceil(M.duration / B) + 1;
+  const arrB = new Float32Array(NB), compB = new Float32Array(NB), tokB = new Float32Array(NB);
+  for (const u of units) {
+    arrB[Math.min(NB - 1, Math.floor(u.t0 / B))] += 1;
+    if (!u.censored) {
+      const b = Math.min(NB - 1, Math.floor(u.end / B));
+      compB[b] += 1;
+      tokB[b] += (perPlateauGen[u.pl] && perPlateauGen[u.pl][sids[u.sid]]) || 1000;
+    }
+  }
+  function rolling(arr, b, n) { let s = 0; for (let k = Math.max(0, b - n + 1); k <= b; k++) s += arr[k]; return s; }
+
+  // ---------- samples lookup (in-flight, host cpu, mem, families)
+  const sampleAt = t => { let lo = 0, hi = S.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (S[m][1] <= t) lo = m; else hi = m - 1; } return S[lo]; };
+  const coresAt = t => { const pl = plateauAt(t); const g = C[pl]; if (!g) return null; const k = Math.min(g.length - 1, Math.floor((t - P[pl].t0) / 10)); return g[k] || null; };
+  const plateauAt = t => { for (let i = P.length - 1; i >= 0; i--) if (t >= P[i].t0) return i; return 0; };
+
+  // ---------- core map DOM
+  const coremap = document.getElementById("coremap");
+  const coreEls = M.tiers.map(tier => { const d = document.createElement("div"); d.className = "core tier-" + tier; d.title = tier; coremap.appendChild(d); return d; });
+  const fambar = document.getElementById("fambar");
+  const famSpans = ["var(--app)", "var(--rerank)", "#9fb6cf", "#5a6f8a"].map(c => { const s = document.createElement("span"); s.style.background = c; s.style.width = "0%"; fambar.appendChild(s); return s; });
+
+  // ---------- ladder SVG
+  const svg = document.getElementById("ladder");
+  const NS = "http://www.w3.org/2000/svg";
+  const W = 1200, H = 150, L = 46, R = 20, T = 14, Bm = 26;
+  const xs = t => L + (t / M.duration) * (W - L - R);
+  const maxRate = 4.2;
+  const ys = r => T + (1 - r / maxRate) * (H - T - Bm);
+  function el(n, a, txt) { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; svg.appendChild(e); return e; }
+  P.forEach((p, i) => {
+    el("rect", { x: xs(p.t0), y: T, width: xs(p.t1) - xs(p.t0), height: H - T - Bm, fill: p.sustained.length ? "rgba(79,176,240,0.06)" : "rgba(239,138,92,0.07)" });
+    el("line", { x1: xs(p.t0), x2: xs(p.t1), y1: ys(p.rate), y2: ys(p.rate), stroke: "rgba(255,255,255,0.35)", "stroke-width": 1.2, "stroke-dasharray": "4 4" });
+    el("text", { x: xs(p.t0) + 8, y: ys(p.rate) - 5, fill: "#9fb6cf", "font-size": 11, "font-family": "Roboto Mono, monospace" }, `${p.rate.toFixed(1)}/s`);
+    const tag = i === 2 ? "responsive tier certified" : (i === 3 ? "cliff: executors 97%" : null);
+    if (tag) el("text", { x: xs(p.t0) + 8, y: H - Bm - 8, fill: i === 2 ? "#7cc2ee" : "#ef8a5c", "font-size": 11, "font-family": "Roboto, sans-serif", "letter-spacing": "0.08em" }, tag.toUpperCase());
+  });
+  [1, 2, 3, 4].forEach(r => { el("line", { x1: L, x2: W - R, y1: ys(r), y2: ys(r), stroke: "rgba(255,255,255,0.06)" }); el("text", { x: L - 8, y: ys(r) + 4, fill: "#6b83a0", "font-size": 10, "text-anchor": "end", "font-family": "Roboto Mono, monospace" }, r); });
+  const backlogPath = el("path", { fill: "rgba(239,138,92,0.25)", stroke: "none" });
+  const arrPath = el("path", { fill: "none", stroke: "rgba(159,182,207,0.6)", "stroke-width": 1.4 });
+  const compPath = el("path", { fill: "none", stroke: "#4fb0f0", "stroke-width": 2 });
+  const playhead = el("line", { x1: L, x2: L, y1: T - 4, y2: H - Bm + 4, stroke: "#fff", "stroke-width": 1.2, opacity: 0.9 });
+  const playdot = el("circle", { cx: L, cy: ys(0), r: 3.5, fill: "#fff" });
+  for (let m = 0; m <= M.duration; m += 600) el("text", { x: xs(m), y: H - 8, fill: "#6b83a0", "font-size": 10, "text-anchor": "middle", "font-family": "Roboto Mono, monospace" }, `${(m / 60) | 0} min`);
+  svg.addEventListener("click", ev => { const r = svg.getBoundingClientRect(); const fx = (ev.clientX - r.left) / r.width * W; seek(Math.max(0, Math.min(M.duration, (fx - L) / (W - L - R) * M.duration))); });
+
+  const chips = document.getElementById("chips");
+  const chipEls = P.map((p, i) => { const b = document.createElement("button"); b.className = "chip"; b.textContent = `${p.rate.toFixed(1)}/s`; b.addEventListener("click", () => seek(p.t0 + 1)); chips.appendChild(b); return b; });
+  document.getElementById("foot-note").textContent = "Stage positions within a workflow are laid out from its recorded stage sums; every arrival, completion, sample and core reading is the ledger's own.";
+
+  // ---------- swarm canvas
+  const cv = document.getElementById("swarm"), ctx = cv.getContext("2d");
+  const wrap = cv.parentElement;
+  let cw = 0, ch = 0, dpr = 1;
+  function resize() { dpr = Math.min(2, window.devicePixelRatio || 1); cw = wrap.clientWidth; ch = wrap.clientHeight; cv.width = cw * dpr; cv.height = ch * dpr; cv.style.width = cw + "px"; cv.style.height = ch + "px"; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+  function sizeCoreMap() {
+    const cg = document.querySelector(".coregrid"), cm = document.getElementById("coremap");
+    const size = Math.max(96, Math.min(cg.clientHeight - 8, 280));
+    const cell = Math.floor((size - 7 * 5) / 8);
+    cm.style.gridTemplateColumns = `repeat(8, ${cell}px)`; cm.style.gridTemplateRows = `repeat(8, ${cell}px)`;
+    cm.style.width = (cell * 8 + 35) + "px"; cm.style.height = (cell * 8 + 35) + "px";
+  }
+  window.addEventListener("resize", () => { resize(); sizeCoreMap(); }); resize(); sizeCoreMap();
+  const LANE_W = 150;
+  const bands = 5;
+  const slotsFree = laneOrder.map(() => []);
+  const slotsNext = laneOrder.map(() => 0);
+  function takeSlot(l) { return slotsFree[l].length ? slotsFree[l].pop() : slotsNext[l]++; }
+  function freeSlot(l, s) { slotsFree[l].push(s); }
+  const laneRows = [8, 4, 4, 6, 6];   // dot rows per lane
+  const laneWeights = [1.6, 0.9, 0.9, 1.3, 1.3];
+  function laneGeom() {
+    const total = laneWeights.reduce((a, b) => a + b, 0);
+    let y = 6; return laneWeights.map(wgt => { const h = (ch - 12) * wgt / total; const g = { y, h }; y += h; return g; });
+  }
+  function xOf(u, prog) {
+    // bands: plan | workers | tools | validate | synthesize
+    const bw = (cw - LANE_W) / bands, x0 = LANE_W;
+    const seg = [[0.08, 0], [u.w, 1], [u.ft, 2], [u.w, 1.5], [0.12, 3], [0.08, 4]];
+    let acc = 0;
+    for (const [len, band] of seg) {
+      if (len <= 0) continue;
+      if (prog <= acc + len || band === 4) {
+        const f = Math.max(0, Math.min(1, (prog - acc) / len));
+        if (band === 1.5) return x0 + bw * (1 + 0.5 + f * 0.5) + (f < 0.5 ? bw * 1 : 0) * 0; // second draft half of worker band
+        return x0 + bw * (band + 0.06 + f * 0.88);
+      }
+      acc += len;
+    }
+    return x0 + bw * (4 + 0.94);
+  }
+  const colors = { agent: "#4fb0f0", sandbox: "#dfe9f5", retrieval: "#d2a66a", embed: "#5fc9c2", late: "#ef8a5c" };
+  const active = new Set(); let cursor = 0;
+  let t = 0, speed = 20, playing = true, last = performance.now();
+  const fades = [];   // completed units fading out: {x,y,r,color,age}
+
+  function drawLanes(geom) {
+    ctx.clearRect(0, 0, cw, ch);
+    const bw = (cw - LANE_W) / bands;
+    geom.forEach((g, li) => {
+      ctx.fillStyle = "rgba(255,255,255,0.02)"; if (li % 2) ctx.fillRect(0, g.y, cw, g.h);
+      ctx.strokeStyle = "rgba(170,205,240,0.08)"; ctx.beginPath(); ctx.moveTo(0, g.y + g.h); ctx.lineTo(cw, g.y + g.h); ctx.stroke();
+      ctx.fillStyle = "#dfe9f5"; ctx.font = "400 13px Roboto, sans-serif"; ctx.textBaseline = "middle";
+      ctx.fillText(labels[li], 0, g.y + g.h / 2 - 8);
+      ctx.fillStyle = "#6b83a0"; ctx.font = "400 11px Roboto Mono, monospace";
+      ctx.fillText(`${counts[li]} resident \u00b7 ${tile[sids[li]]} in 12`, 0, g.y + g.h / 2 + 9);
+    });
+    for (let b = 1; b < bands; b++) { ctx.strokeStyle = "rgba(170,205,240,0.07)"; ctx.beginPath(); ctx.moveTo(LANE_W + bw * b, 0); ctx.lineTo(LANE_W + bw * b, ch); ctx.stroke(); }
+  }
+  const counts = [0, 0, 0, 0, 0];
+
+  function step(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (playing) t += dt * speed;
+    if (t >= M.duration) { t = M.duration; playing = false; setPlayLabel(); }
+    // admit and retire
+    while (cursor < units.length && units[cursor].t0 <= t) { const u = units[cursor++]; if (u.end > t) { u.slot = takeSlot(u.lane); active.add(u); counts[u.lane]++; } }
+    for (const u of active) if (u.end <= t) { active.delete(u); counts[u.lane]--; freeSlot(u.lane, u.slot); if (u.end > t - 2) fades.push({ x: u._x || cw, y: u._y || 0, color: u.ok ? colors.agent : colors.late, age: 0 }); }
+    render();
+    requestAnimationFrame(step);
+  }
+
+  function render() {
+    const geom = laneGeom();
+    drawLanes(geom);
+    for (const u of active) {
+      const g = geom[u.lane];
+      const rows = laneRows[u.lane];
+      const row = u.slot % rows, col = Math.floor(u.slot / rows);
+      const prog = (t - u.t0) / u.life;
+      const x = xOf(u, prog) + (col % 3) * 4;
+      const y = g.y + 10 + (row + 0.5) * ((g.h - 20) / rows);
+      u._x = x; u._y = y;
+      const age = t - u.t0;
+      const inTools = prog > 0.08 + u.w && prog <= 0.08 + u.w + u.ft;
+      let color = colors.agent;
+      if (age > DEADLINE_S) color = colors.late;
+      else if (inTools && u.tool !== "none") color = colors[u.tool];
+      const r = u.sid === 0 ? 2.6 : 3.4;
+      const nW = workersOf[sids[u.sid]];
+      ctx.fillStyle = color;
+      if (nW === 3 && prog > 0.08 && prog < 0.8) {
+        for (let k = 0; k < 3; k++) { const a = (k / 3) * Math.PI * 2 + prog * 2; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 3.2, y + Math.sin(a) * 3.2, r * 0.6, 0, Math.PI * 2); ctx.fill(); }
+      } else { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+      if (age > DEADLINE_S) { ctx.strokeStyle = "rgba(239,138,92,0.5)"; ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI * 2); ctx.stroke(); }
+    }
+    for (let i = fades.length - 1; i >= 0; i--) { const f = fades[i]; f.age += 0.04; if (f.age >= 1) { fades.splice(i, 1); continue; } ctx.globalAlpha = 1 - f.age; ctx.strokeStyle = f.color; ctx.beginPath(); ctx.arc(f.x, f.y, 3 + f.age * 10, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+    updatePanels();
+  }
+
+  let lastPanel = -1;
+  function updatePanels() {
+    if (Math.abs(t - lastPanel) < 0.5) return; lastPanel = t;
+    const pl = plateauAt(t), p = P[pl];
+    document.getElementById("clock").textContent = `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+    document.getElementById("swarmcount").textContent = `${active.size} resident \u00b7 plateau ${pl + 1} of ${P.length}`;
+    chipEls.forEach((c, i) => c.setAttribute("aria-current", i === pl ? "true" : "false"));
+    // cores
+    const row = coresAt(t);
+    let busy = 0; const tierSum = { app: 0, rerank: 0, embed: 0, ingest: 0 }, tierN = { app: 46, rerank: 8, embed: 2, ingest: 8 };
+    if (row) row.forEach((b, i) => { coreEls[i].style.setProperty("--b", (b / 100).toFixed(2)); busy += b / 100; tierSum[M.tiers[i]] += b; });
+    document.getElementById("corecount").textContent = row ? `${busy.toFixed(1)} busy` : "";
+    document.getElementById("t-app").textContent = row ? Math.round(tierSum.app / tierN.app) : "\u2013";
+    document.getElementById("t-rerank").textContent = row ? Math.round(tierSum.rerank / tierN.rerank) : "\u2013";
+    document.getElementById("t-embed").textContent = row ? Math.round((tierSum.embed + tierSum.ingest) / 10) : "\u2013";
+    // families
+    const smp = sampleAt(t); const fam = smp[5];
+    if (fam) { const idx = M.families; const g = k => fam[idx.indexOf(k)] || 0;
+      const parts = [g("sandbox"), g("retrieval"), g("siblings") + g("executors") + g("control") + g("mock_router"), g("database") + g("other")];
+      const tot = parts.reduce((a, b) => a + b, 0) || 1; famSpans.forEach((s, i) => s.style.width = (100 * parts[i] / tot).toFixed(1) + "%"); }
+    // readout
+    const b = Math.min(NB - 1, Math.floor(t / B));
+    const comp60 = rolling(compB, b, 6) / 60, tok60 = rolling(tokB, b, 6) / 60;
+    const coreMs = tok60 > 0 && row ? (busy * 1000) / tok60 : null;
+    set("r-rate", p.rate.toFixed(1)); document.getElementById("r-rate-n").textContent = `${p.rate_per_instance} per instance \u00d7 4 \u00b7 ${p.sustained.length ? p.sustained[0] + " tier sustained" : "backlog grows"}`;
+    set("r-res", active.size); document.getElementById("r-res-n").textContent = `Little's law at this plateau: ${p.resident ?? "\u2013"} \u00b7 host memory ${smp[4] ? smp[4].toFixed(0) + " GB" : "\u2013"}`;
+    set("r-cores", row ? busy.toFixed(1) : "\u2013"); document.getElementById("r-cores-n").textContent = smp[3] != null ? `host threads ${smp[3].toFixed(0)}% \u00b7 busier sibling per core` : "";
+    set("r-cms", coreMs ? coreMs.toFixed(1) : "\u2013"); document.getElementById("r-cms-n").textContent = `rolling 60 s \u00b7 steady-window measurement ${CERTIFIED_CORE_MS[pl]}`;
+    const gpu = coreMs ? 64000 / (coreMs * GPU_TOKS) : null;
+    set("r-gpu", gpu ? "1 : " + gpu.toFixed(1) : "\u2013");
+    const v = document.getElementById("r-rate").parentElement; v.classList.toggle("warn", !p.sustained.length);
+    // ladder paths
+    let dA = "", dC = "", dB = "";
+    const bs = Math.floor(t / B);
+    const pts = [];
+    for (let k = 0; k <= bs; k++) { const tt = Math.min(t, (k + 1) * B); const a = rolling(arrB, k, 6) / 60, c = rolling(compB, k, 6) / 60; pts.push([xs(tt), ys(a), ys(c)]); }
+    if (pts.length) {
+      dA = pts.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + " " + q[1].toFixed(1)).join(" ");
+      dC = pts.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + " " + q[2].toFixed(1)).join(" ");
+      dB = dA + " " + pts.slice().reverse().map(q => "L" + q[0].toFixed(1) + " " + Math.max(q[1], q[2]).toFixed(1)).join(" ") + " Z";
+    }
+    arrPath.setAttribute("d", dA); compPath.setAttribute("d", dC); backlogPath.setAttribute("d", dB);
+    playhead.setAttribute("x1", xs(t)); playhead.setAttribute("x2", xs(t)); playdot.setAttribute("cx", xs(t)); playdot.setAttribute("cy", ys(rolling(compB, bs, 6) / 60));
+  }
+  function set(id, v) { const e = document.getElementById(id); if (e.textContent !== String(v)) e.textContent = v; }
+
+  // ---------- controls
+  function setPlayLabel() { const b = document.getElementById("play"); b.textContent = playing ? "Pause" : "Play"; b.setAttribute("aria-label", playing ? "Pause" : "Play"); document.getElementById("pill").classList.toggle("paused", !playing); }
+  document.getElementById("play").addEventListener("click", () => { if (t >= M.duration) seek(0); playing = !playing; setPlayLabel(); });
+  document.getElementById("restart").addEventListener("click", () => { seek(0); playing = true; setPlayLabel(); });
+  document.querySelectorAll("[data-speed]").forEach(b => b.addEventListener("click", () => { speed = +b.dataset.speed; document.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false")); }));
+  window.addEventListener("keydown", ev => { if (ev.code === "Space" && ev.target === document.body) { ev.preventDefault(); playing = !playing; setPlayLabel(); } });
+  function seek(to) {
+    t = to; active.clear(); fades.length = 0; counts.fill(0); slotsFree.forEach(a => a.length = 0); slotsNext.fill(0); cursor = 0; lastPanel = -1;
+    while (cursor < units.length && units[cursor].t0 <= t) { const u = units[cursor++]; if (u.end > t) { u.slot = takeSlot(u.lane); active.add(u); counts[u.lane]++; } }
+  }
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) { playing = false; setPlayLabel(); seek(P[2].t0 + 300); }
+  // deep links for presenters: #t=1500 (seconds) or #plateau=3 (1-based); #paused to open still
+  const h = new URLSearchParams(location.hash.replace(/^#/, ""));
+  if (h.get("plateau")) seek(P[Math.max(0, Math.min(P.length - 1, +h.get("plateau") - 1))].t0 + 1);
+  if (h.get("t")) seek(Math.max(0, Math.min(M.duration, +h.get("t"))));
+  if (h.has("paused")) { playing = false; setPlayLabel(); }
+  render();
+  window.__replay = { seek: to => { seek(to); render(); }, render, time: () => t, pause: () => { playing = false; setPlayLabel(); }, play: () => { playing = true; setPlayLabel(); } };
+  requestAnimationFrame(step);
+})();
+</script>
