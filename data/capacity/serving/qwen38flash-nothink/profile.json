@@ -1,0 +1,25 @@
+{
+ "model": "Qwen/Qwen3.8-Flash",
+ "base_url": "https://api.together.xyz/v1",
+ "queryset": "data/capacity/queryset/enterprise.jsonl",
+ "levels": [
+  2,
+  8,
+  32
+ ],
+ "spans_s": {
+  "2": 917.0207005818374,
+  "8": 239.59128667484038,
+  "32": 119.69506156607531
+ },
+ "calls": 1074,
+ "gpus": null,
+ "gen_tok_s_per_level": {
+  "2": 87.25648172307442,
+  "8": 344.161096776058,
+  "32": 735.8783131698095
+ },
+ "gen_tok_s_ceiling": 735.8783131698095,
+ "gen_tok_s_per_gpu": null,
+ "recorded_at": "2026-09-07T16:51:22Z"
+}

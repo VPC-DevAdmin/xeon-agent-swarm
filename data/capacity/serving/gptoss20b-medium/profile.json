@@ -1,0 +1,22 @@
+{
+ "model": "openai/gpt-oss-20b",
+ "base_url": "https://api.together.xyz/v1",
+ "queryset": "data/capacity/queryset/enterprise.jsonl",
+ "levels": [
+  8,
+  32
+ ],
+ "spans_s": {
+  "8": 1040.8658323918935,
+  "32": 305.63026607292704
+ },
+ "calls": 716,
+ "gpus": null,
+ "gen_tok_s_per_level": {
+  "8": 551.930884963185,
+  "32": 1908.5184445077746
+ },
+ "gen_tok_s_ceiling": 1908.5184445077746,
+ "gen_tok_s_per_gpu": null,
+ "recorded_at": "2026-09-07T16:12:06Z"
+}
