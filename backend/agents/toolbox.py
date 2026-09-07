@@ -284,8 +284,15 @@ def build_bench_execute_tool() -> StructuredTool:
                     f"main text after boilerplate removal) in {r['parse_ms']:.0f}ms (isolation {r['isolation']}). "
                     f"Leads: {' | '.join(r.get('leads') or [])[:400]}\n\nEXECUTION COMPLETE. "
                     "Now retrieve against the evidence store for your section; do not fetch again for this subtask.")
-        return (f"[bench_execute] {size} job over {r['rows']:,} rows finished in "
-                f"{r['elapsed_ms']}ms (compute {r['compute_ms']}ms, isolation {r['isolation']}).\n"
+        pop = ""
+        if r.get("period_deltas"):
+            d = r["period_deltas"]; prev = r["periods"][1]
+            pop = (f" Previous period: total value {prev['total_value']:,}, p95 {prev['q95']}, "
+                   f"{prev['outliers']} outliers; change: value {d['total_value']:+,}, p95 {d['q95']:+}, "
+                   f"outliers {d['outliers']:+}.")
+        return (f"[bench_execute] {size} job over {r['rows']:,} rows"
+                f"{' x ' + str(r['passes']) + ' periods' if r.get('passes', 1) > 1 else ''} finished in "
+                f"{r['elapsed_ms']}ms (compute {r['compute_ms']}ms, isolation {r['isolation']}).{pop}\n"
                 f"Results: top keys by total {r['top_keys']}; value quantiles p50 {r['q50']}, "
                 f"p95 {r['q95']}, p99 {r['q99']}; peak hour {r['hourly_peak_hour']}; "
                 f"outliers {r['outliers']}; max high-value share {r['hi_share_max']}; "

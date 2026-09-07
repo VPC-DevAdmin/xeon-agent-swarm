@@ -56,7 +56,8 @@ SIZES = {"light": 450_000, "heavy": 3_300_000, "large": 100_000_000, "xl": 60_00
 #           executor, as for ingest)
 #   fetch   the research agent's source fetch: parse a set of HTML pages
 #           (boilerplate removal, main-text extraction) before retrieval
-#   large_rerun  the analyst's job run twice, the rerun after a failed check
+#   large_rerun  the analyst's job over two periods (this one and the previous),
+#           the period-over-period comparison of its analysis step
 KINDS = ("light", "heavy", "large", "xl", "build", "ingest",
          "setup", "ci", "verify", "scan", "fetch", "large_rerun")
 KIND_SCRIPTS = {"build": Path(__file__).with_name("sandbox_build_job.py"),

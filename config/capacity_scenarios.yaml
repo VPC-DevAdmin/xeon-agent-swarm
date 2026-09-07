@@ -330,9 +330,9 @@ e2e_workflows:
   analyst_large:
     name: "Data analysis pipeline, large (e2e, enterprise mix)"
     think_ms: 3000
-    # The data analyst with its three jobs at 40M rows each (a week of
-    # events; about 17 core-s per job, ~50 per workflow): the size a team
-    # runs daily, between the reference job and the month-end XL.
+    # The data analyst with its three jobs at 100M rows each (a week of
+    # events; about 47 core-s per job); the analysis worker's job runs over
+    # two periods, this week and the previous, and reports the change.
     toolless: true
     tools: [bench_execute, bench_record]
     contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [6000, 200000]}

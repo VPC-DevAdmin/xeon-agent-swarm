@@ -802,7 +802,7 @@ async def _chat_impl(body: dict) -> JSONResponse:
     elif "Using ONLY the dataset (XL)" in obj:
         _kind = "xl"
     elif "Using ONLY the dataset (L)" in obj:
-        # The analyst's rerun after a failed check lands on the analysis worker.
+        # The analyst's period-over-period pass (two periods) lands on the analysis worker.
         _kind = "large_rerun" if _role_now == "analysis" else "large"
     elif "Using ONLY the dataset" in obj:
         _kind = "heavy"

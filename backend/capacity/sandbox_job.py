@@ -17,7 +17,7 @@ import time
 
 size, seed, site = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 ROWS = int(sys.argv[4]) if len(sys.argv) > 4 else {"light": 450_000, "heavy": 3_300_000, "large": 100_000_000, "xl": 60_000_000}[size]
-PASSES = int(sys.argv[5]) if len(sys.argv) > 5 else 1   # 2 = the rerun after a failed check
+PASSES = int(sys.argv[5]) if len(sys.argv) > 5 else 1   # 2 = two periods, this one and the previous, compared
 if site:
     sys.path.append(site)
 import numpy as np  # noqa: E402
@@ -75,9 +75,19 @@ def run_pass(seed):
                                           out=np.zeros(MERCHANTS), where=counts > 0)))
     return {k: v for k, v in locals().items() if k not in ('rng', 'merchant', 'value', 'ts', 'm_cat', 'm_region', 'cat', 'region')}
 
+# Period over period: pass 0 is the current period, pass 1 the previous one
+# (a different seed, so different events); the report carries both and the
+# change between them, the comparison an analyst's second pass exists for.
+_periods = []
 for _pass in range(PASSES):
     _r = run_pass(seed + _pass)
-globals().update(_r)
+    _periods.append({"total_value": round(float(_r["sums"].sum()), 1), "q95": round(float(_r["q95"]), 2),
+                     "outliers": int(len(_r["flagged"])), "peak_hour": int(_r["peak_min"] // 60),
+                     "mean_of_means": round(float(_r["means"][_r["counts"] > 0].mean()), 3)})
+    if _pass == 0:
+        globals().update(_r)
+_deltas = ({k: round(_periods[0][k] - _periods[1][k], 3) for k in ("total_value", "q95", "outliers", "mean_of_means")}
+           if len(_periods) > 1 else None)
 print(json.dumps({
     "rows": int(ROWS), "merchants": int(MERCHANTS),
     "top_keys": [[int(k), round(float(sums[k]), 1)] for k in top],
@@ -93,4 +103,5 @@ print(json.dumps({
     "cpu_ms": round((cpu.ru_utime + cpu.ru_stime) * 1000, 1),
     "compute_ms": round((time.perf_counter() - t0) * 1000, 1),
     "passes": PASSES,
+    "periods": _periods, "period_deltas": _deltas,
 }))
