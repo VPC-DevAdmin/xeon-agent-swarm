@@ -99,11 +99,12 @@ while i < len(words):
         chunks.append(piece)
     i += CHUNK - OVERLAP
 cpu = resource.getrusage(resource.RUSAGE_SELF)
+kids = resource.getrusage(resource.RUSAGE_CHILDREN)   # Tesseract runs as a child process
 print(json.dumps({
     "docs": docs, "pages": pages, "chars": len(text), "words": len(words),
     "chunks": len(chunks), "duplicates": max(0, (len(words) + CHUNK - OVERLAP - 1) // (CHUNK - OVERLAP) - len(chunks)),
     "render_ms": round(render_ms, 1), "ocr_ms": round(ocr_ms, 1), "parse_ms": round(render_ms + ocr_ms, 1), "pii": pii,
-    "cpu_ms": round((cpu.ru_utime + cpu.ru_stime) * 1000, 1),
+    "cpu_ms": round((cpu.ru_utime + cpu.ru_stime + kids.ru_utime + kids.ru_stime) * 1000, 1),
     "compute_ms": round((time.perf_counter() - t0) * 1000, 1),
     "texts": chunks,
 }))
