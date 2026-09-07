@@ -110,7 +110,7 @@ class StartBody(BaseModel):
     arrival_start_rate: float | None = Field(None, gt=0, le=10_000)
     arrival_step_factor: float | None = Field(None, gt=1.0, le=4.0)
     arrival_max_rate: float | None = Field(None, gt=0, le=100_000)
-    arrival_hold_s: float | None = Field(None, ge=10, le=600)
+    arrival_hold_s: float | None = Field(None, ge=10, le=3600)
 
 
 def _resolve_dimensions(body: StartBody) -> tuple[str, str, str]:
