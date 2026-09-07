@@ -1,12 +1,12 @@
 """The sandboxed scanned-document intake job (isolated interpreter; see
 sandbox.py).
 
-    python -I -S sandbox_scan_job.py <seed> <site-packages> <docs-dir> <pages>
+    python -I -S sandbox_scan_job.py <seed> <site-packages> <docs-dir> <pages> [tesseract|rapidocr]
 
 The parse half of an ingestion agent's step for scanned intake: a seeded
 selection of documents is rendered page by page to images (pypdfium2),
-each image is read with OCR on the CPU (rapidocr, ONNX Runtime, single
-thread), the text is scanned for personal data (e-mail addresses, phone
+each image is read with OCR on the CPU (Tesseract 5 by default, one
+thread; or rapidocr on ONNX Runtime), the text is scanned for personal data (e-mail addresses, phone
 and card numbers) and redacted, then normalized, split into ~180-word
 chunks with a 30-word overlap and de-duplicated, and the chunks go back to
 the executor for embedding and indexing. Prints one JSON line: docs,
@@ -22,19 +22,40 @@ import sys
 import time
 
 seed, site, docs_dir, pages_wanted = int(sys.argv[1]), sys.argv[2], sys.argv[3], int(sys.argv[4])
+engine = sys.argv[5] if len(sys.argv) > 5 else "tesseract"
 if site:
     sys.path.append(site)
 os.environ.setdefault("OMP_NUM_THREADS", "1")
+import subprocess  # noqa: E402
 import numpy as np  # noqa: E402
 import pypdfium2 as pdfium  # noqa: E402
-from rapidocr_onnxruntime import RapidOCR  # noqa: E402
+if engine == "rapidocr":
+    from rapidocr_onnxruntime import RapidOCR  # noqa: E402
 
 t0 = time.perf_counter()
 paths = sorted(glob.glob(os.path.join(docs_dir, "doc-*.pdf")))
 if not paths:
     print(json.dumps({"error": f"no documents under {docs_dir}"}))
     sys.exit(2)
-ocr = RapidOCR(intra_op_num_threads=1, inter_op_num_threads=1)
+ocr = RapidOCR(intra_op_num_threads=1, inter_op_num_threads=1) if engine == "rapidocr" else None
+tess_env = {**os.environ, "OMP_THREAD_LIMIT": "1"}
+
+
+def read_page(img_arr, img_pil):
+    if ocr is not None:
+        result, _ = ocr(img_arr)
+        return "\n".join(r[1] for r in (result or []))
+    tmp = os.path.join("/tmp", f"scan-{os.getpid()}.png")
+    img_pil.save(tmp)
+    try:
+        r = subprocess.run(["tesseract", tmp, "stdout", "--psm", "6", "-l", "eng"],
+                           capture_output=True, text=True, env=tess_env, timeout=120)
+        return r.stdout
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 start = seed % len(paths)
 order = paths[start:] + paths[:start]
 pages = docs = 0
@@ -53,9 +74,8 @@ for p in order:
         arr = np.asarray(img)
         render_ms += (time.perf_counter() - t1) * 1000
         t2 = time.perf_counter()
-        result, _ = ocr(arr)
+        text_parts.append(read_page(arr, img))
         ocr_ms += (time.perf_counter() - t2) * 1000
-        text_parts.append("\n".join(r[1] for r in (result or [])))
         pages += 1
 text = "\n".join(text_parts)
 # personal-data scan and redaction, the intake pipeline's compliance step

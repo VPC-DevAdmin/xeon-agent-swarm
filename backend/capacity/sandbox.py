@@ -138,7 +138,7 @@ def _command(kind: str, seed: int) -> list[str]:
         script = [str(KIND_SCRIPTS[kind]), str(seed), str(_build_tree()), "full" if kind == "build" else kind]
     elif kind == "scan":
         script = [str(KIND_SCRIPTS[kind]), str(seed), site,
-                  str(Path(INGEST_DOCS).resolve()), str(SCAN_PAGES)]
+                  str(Path(INGEST_DOCS).resolve()), str(SCAN_PAGES), os.getenv("CAPACITY_OCR", "tesseract")]
     elif kind == "fetch":
         script = [str(KIND_SCRIPTS[kind]), str(seed), site,
                   str(Path(HTML_DOCS).resolve()), str(FETCH_PAGES)]

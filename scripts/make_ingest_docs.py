@@ -46,14 +46,25 @@ def page_stream(rng: random.Random, doc: int, page: int) -> bytes:
             ops.append(f"BT /F1 10 Tf {x} {y} Td ({_esc(line)}) Tj ET")
             y -= 16
             continue
-        ops.append(f"BT /F1 {rng.choice((9, 10, 11))} Tf {x} {y} Td")
+        size = rng.choice((9, 10, 11))
+        ops.append(f"BT /F1 {size} Tf {x} {y} Td")
         runs = rng.randrange(3, 7)
+        width = 0.0
         for r in range(runs):
             n = rng.randrange(2, 6)
-            words = " ".join(rng.choice(WORDS) for _ in range(n))
+            words = " ".join(rng.choice(WORDS) for _ in range(n)) + " "
+            # Each run starts where the previous one ended (about 0.5 em per
+            # character for these faces), so the rendered line reads as text
+            # and stays inside the page's 500-point column.
             if r:
-                ops.append(f"/F{rng.choice((1, 1, 3))} {rng.choice((9, 10, 11))} Tf {rng.randrange(18, 40)} 0 Td")
-            ops.append(f"({_esc(words + ' ')}) Tj")
+                advance = last_len * last_size * 0.5
+                if width + advance + len(words) * size * 0.5 > 500:
+                    break
+                size = rng.choice((9, 10, 11))
+                ops.append(f"/F{rng.choice((1, 1, 3))} {size} Tf {advance:.1f} 0 Td")
+                width += advance
+            ops.append(f"({_esc(words)}) Tj")
+            last_len, last_size = len(words), size
         ops.append("ET")
         y -= 16
     ops.append(f"BT /F2 8 Tf 50 40 Td ({_esc(f'page {page + 1} · topic{zlib.crc32(f'{doc}-{page}'.encode()) % 2000}')}) Tj ET")
