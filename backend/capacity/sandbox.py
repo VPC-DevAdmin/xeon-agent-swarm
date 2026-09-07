@@ -68,7 +68,9 @@ KIND_SCRIPTS = {"build": Path(__file__).with_name("sandbox_build_job.py"),
                 "fetch": Path(__file__).with_name("sandbox_fetch_job.py")}
 HTML_DOCS = os.getenv("CAPACITY_HTML_DOCS", "data/capacity/html")
 FETCH_PAGES = int(os.getenv("CAPACITY_FETCH_PAGES", "30") or 30)
-SCAN_PAGES = int(os.getenv("CAPACITY_SCAN_PAGES", "100") or 100)
+# Scanned intake batch: 50 pages per workflow. OCR of a dense page at 144 dpi
+# costs about 5 core-s on one thread, so the batch is about 250 core-s.
+SCAN_PAGES = int(os.getenv("CAPACITY_SCAN_PAGES", "50") or 50)
 BUILD_SRC = os.getenv("CAPACITY_BUILD_SRC", "data/capacity/build")   # vendored tarballs live here
 # Declared job sizes for the heavy mix (docs/plan-cpu-heavy-mix.md).
 # Ingestion is embedding-bound: ~250-token chunks cost ~11 GFLOP each

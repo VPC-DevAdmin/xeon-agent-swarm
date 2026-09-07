@@ -35,8 +35,17 @@ def _esc(s: str) -> str:
 def page_stream(rng: random.Random, doc: int, page: int) -> bytes:
     ops = [f"BT /F2 9 Tf 50 800 Td ({_esc(f'Report {doc:03d} / section {page + 1}')}) Tj ET"]
     y = 770
-    for _ in range(45):
+    for li in range(45):
         x = 50
+        if li % 9 == 4:
+            # a contact line, so the intake pipeline's personal-data scan has
+            # real items to find and redact (seeded, synthetic)
+            who = rng.choice(("a.reyes", "m.okafor", "j.lindqvist", "s.tanaka", "p.novak"))
+            line = (f"Contact: {who}@example.com, +1 415 555 {rng.randrange(1000, 9999)}; "
+                    f"card on file 4111 1111 1111 {rng.randrange(1000, 9999)}")
+            ops.append(f"BT /F1 10 Tf {x} {y} Td ({_esc(line)}) Tj ET")
+            y -= 16
+            continue
         ops.append(f"BT /F1 {rng.choice((9, 10, 11))} Tf {x} {y} Td")
         runs = rng.randrange(3, 7)
         for r in range(runs):
