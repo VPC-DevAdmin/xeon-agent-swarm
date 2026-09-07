@@ -71,7 +71,7 @@ def run_pass(seed):
     hourly_flagged = np.bincount(ts[mask] // 3600, minlength=24)
     top = np.argsort(-sums)[:5]
     cpu = resource.getrusage(resource.RUSAGE_SELF)
-    return {k: v for k, v in locals().items() if k not in ('rng', 'merchant', 'value', 'ts', 'm_cat', 'm_region', 'cat', 'region') and not isinstance(v, np.ndarray)}
+    return {k: v for k, v in locals().items() if k not in ('rng', 'merchant', 'value', 'ts', 'm_cat', 'm_region', 'cat', 'region')}
 
 for _pass in range(PASSES):
     _r = run_pass(seed + _pass)
