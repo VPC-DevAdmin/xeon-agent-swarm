@@ -73,7 +73,7 @@ def test_stand_in_policies_pick_the_kind_and_depth():
 
     research = "You are a research specialist. Gather facts."
     general = "You are a general-purpose specialist."
-    for obj, kind in (("Research the topic: Using ONLY the build available through the execution tool", "build"),
+    for obj, kind in (("Research the topic: Using ONLY the build available through the execution tool", "setup"),
                       ("Handle this task end to end: Using ONLY the document set available through the execution tool", "scan"),
                       ("Research the topic: Using ONLY the dataset (XL) available through the execution tool", "xl"),
                       ("Research the topic: Using ONLY the dataset (L) available through the execution tool", "large"),

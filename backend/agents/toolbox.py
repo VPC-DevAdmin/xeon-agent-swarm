@@ -271,7 +271,8 @@ def build_bench_execute_tool() -> StructuredTool:
                 extra = f"; sanitizer build, static analysis in {r.get('analysis_ms', 0):.0f}ms"
             elif kind == "verify":
                 extra = f"; incremental rebuild after the change, lint pass in {r.get('lint_ms', 0):.0f}ms"
-            return (f"[bench_execute] {r.get('mode', 'build')}: {r['project']} ({r['sources']} source files, "
+            label = "build" if r.get("mode", "full") == "full" else r["mode"]
+            return (f"[bench_execute] {label}: {r['project']} ({r['sources']} source files, "
                     f"{r['lines']:,} lines) built in {r['build_ms']:.0f}ms; "
                     f"{r['suites']} suites run in {r['test_ms']:.0f}ms, {r['failures']} failures{extra} "
                     f"(isolation {r['isolation']}).\n\nEXECUTION COMPLETE. "
