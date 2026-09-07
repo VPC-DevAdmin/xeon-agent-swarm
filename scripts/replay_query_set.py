@@ -134,12 +134,14 @@ async def run_level(items, base, model, level, min_calls, max_tokens, timeout):
     return list(rows), span
 
 
-def per_workflow(rows: list[dict], level: int) -> str:
+def per_workflow(rows: list[dict], level: int, mult: dict | None = None) -> str:
     """Tokens per workflow by archetype: the median prompt and completion
     tokens of every call position (archetype / role / phase) at the lowest
-    concurrency, summed over the archetype's positions. Each position is one
-    call in the workflow, so the sum is the workflow's model demand as the
-    real model produced it."""
+    concurrency, weighted by how many times the position occurs in one
+    workflow (calls_per_workflow from the query set; seven judge calls, two
+    turns per worker) and summed: the workflow's model demand as the real
+    model produced it."""
+    mult = mult or {}
     lines = ["| archetype (lowest concurrency) | call positions | prompt tokens per workflow | completion tokens per workflow | completion by role |",
              "|---|---|---|---|---|"]
     ok = [r for r in rows if r["concurrency"] == level and r.get("ok")]
@@ -149,7 +151,8 @@ def per_workflow(rows: list[dict], level: int) -> str:
         by_role: dict = {}
         for k in keys:
             xs = [r for r in ok if r["key"] == k]
-            mp, mc = st.median(r["prompt_tokens"] for r in xs), st.median(r["completion_tokens"] for r in xs)
+            w = float(mult.get(k, 1.0))
+            mp, mc = w * st.median(r["prompt_tokens"] for r in xs), w * st.median(r["completion_tokens"] for r in xs)
             pin += mp; pout += mc
             by_role[xs[0]["role"]] = by_role.get(xs[0]["role"], 0) + mc
         roles = ", ".join(f"{k} {v:.0f}" for k, v in sorted(by_role.items()))
@@ -248,7 +251,8 @@ def main() -> None:
             best = max(best, gen)
     if a.extra_body:
         pass
-    summary = summarize(all_rows, spans) + "\n\n" + per_workflow(all_rows, min(spans))
+    mult = {it["key"]: it.get("calls_per_workflow", 1.0) for it in items}
+    summary = summarize(all_rows, spans) + "\n\n" + per_workflow(all_rows, min(spans), mult)
     (out / "summary.md").write_text(f"# Serving profile: {a.model} via {a.base_url}\n\n" + summary + "\n")
     ok_rows = [r for r in all_rows if r.get("ok")]
     per_level = {lv: sum(r["completion_tokens"] for r in ok_rows if r["concurrency"] == lv) / spans[lv]

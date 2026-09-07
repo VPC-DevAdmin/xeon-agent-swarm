@@ -28,6 +28,7 @@ def main() -> None:
     a = ap.parse_args()
     seen: dict[str, list] = collections.defaultdict(list)
     digests: set[str] = set()
+    calls_per_key: collections.Counter = collections.Counter()
     n = 0
     for f in sorted(glob.glob(os.path.join(a.trace_dir, "trace-*.jsonl"))):
         for line in open(f):
@@ -37,6 +38,7 @@ def main() -> None:
                 continue
             n += 1
             key = r.get("key") or "unknown"
+            calls_per_key[key] += 1
             if len(seen[key]) >= a.per_key:
                 continue
             d = hashlib.sha1(json.dumps(r.get("messages"), sort_keys=True).encode()).hexdigest()
@@ -48,6 +50,16 @@ def main() -> None:
                               "messages": r["messages"], "tools": r.get("tools"),
                               "max_tokens": r.get("max_tokens"),
                               "stand_in_response": r.get("response"), "stand_in_usage": r.get("usage")})
+    # How many times each position occurs per workflow: the archetype's
+    # planner/0 call happens exactly once per workflow, so its count is the
+    # number of workflows traced. replay_query_set.py weights the recorded
+    # completion tokens by this to give tokens per workflow.
+    workflows = {arch: calls_per_key.get(f"{arch}/planner/0", 0) for arch in {k.split("/")[0] for k in seen}}
+    for k, items in seen.items():
+        arch = k.split("/")[0]
+        mult = (calls_per_key[k] / workflows[arch]) if workflows.get(arch) else 1.0
+        for x in items:
+            x["calls_per_workflow"] = round(mult, 3)
     rows = [x for k in sorted(seen) for x in seen[k]]
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w") as fh:
