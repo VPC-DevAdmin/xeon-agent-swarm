@@ -38,10 +38,13 @@ def pct(xs, q):
     return xs[min(len(xs) - 1, int(round(q * (len(xs) - 1))))] if xs else None
 
 
+EXTRA_BODY: dict = {}   # --extra-body: provider-specific fields (reasoning_effort for gpt-oss, say)
+
+
 async def one_call(client: httpx.AsyncClient, base: str, model: str, item: dict,
                    sem: asyncio.Semaphore, level: int, max_tokens: int | None) -> dict:
     body = {"model": model, "messages": item["messages"], "stream": True,
-            "stream_options": {"include_usage": True}, "temperature": 0.2}
+            "stream_options": {"include_usage": True}, "temperature": 0.2, **EXTRA_BODY}
     if item.get("tools"):
         body["tools"] = item["tools"]
     if max_tokens or item.get("max_tokens"):
@@ -131,6 +134,29 @@ async def run_level(items, base, model, level, min_calls, max_tokens, timeout):
     return list(rows), span
 
 
+def per_workflow(rows: list[dict], level: int) -> str:
+    """Tokens per workflow by archetype: the median prompt and completion
+    tokens of every call position (archetype / role / phase) at the lowest
+    concurrency, summed over the archetype's positions. Each position is one
+    call in the workflow, so the sum is the workflow's model demand as the
+    real model produced it."""
+    lines = ["| archetype (lowest concurrency) | call positions | prompt tokens per workflow | completion tokens per workflow | completion by role |",
+             "|---|---|---|---|---|"]
+    ok = [r for r in rows if r["concurrency"] == level and r.get("ok")]
+    for arch in sorted({r["archetype"] for r in ok}):
+        keys = sorted({r["key"] for r in ok if r["archetype"] == arch})
+        pin = pout = 0
+        by_role: dict = {}
+        for k in keys:
+            xs = [r for r in ok if r["key"] == k]
+            mp, mc = st.median(r["prompt_tokens"] for r in xs), st.median(r["completion_tokens"] for r in xs)
+            pin += mp; pout += mc
+            by_role[xs[0]["role"]] = by_role.get(xs[0]["role"], 0) + mc
+        roles = ", ".join(f"{k} {v:.0f}" for k, v in sorted(by_role.items()))
+        lines.append(f"| {arch} | {len(keys)} | {pin:,.0f} | {pout:,.0f} | {roles} |")
+    return "\n".join(lines)
+
+
 def summarize(rows: list[dict], spans: dict[int, float]) -> str:
     lines = ["| concurrency | calls | ok | 429/5xx retries | requests/s | gen tok/s | prompt tok/s | ttft p50/p95 ms | total p50/p95 ms | decode tok/s p50 |",
              "|---|---|---|---|---|---|---|---|---|---|"]
@@ -176,6 +202,8 @@ def main() -> None:
     ap.add_argument("--min-calls", type=int, default=300)
     ap.add_argument("--max-tokens", type=int, default=None)
     ap.add_argument("--timeout", type=float, default=180.0)
+    ap.add_argument("--extra-body", default=None,
+                    help='JSON merged into every request body, e.g. \'{"reasoning_effort":"low"}\'')
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     items = [json.loads(l) for l in open(a.queryset) if l.strip()]
@@ -193,6 +221,7 @@ def main() -> None:
         levels = [int(x) for x in a.concurrency.split(",") if x.strip()]
     best = 0.0
     for level in levels:
+        EXTRA_BODY.update(json.loads(a.extra_body) if a.extra_body else {})
         rows, span = asyncio.run(run_level(items, a.base_url.rstrip("/"), a.model, level,
                                            max(a.min_calls, level * 4), a.max_tokens, a.timeout))
         spans[level] = span
@@ -217,7 +246,9 @@ def main() -> None:
                 print("throughput flat; ceiling reached", flush=True)
                 break
             best = max(best, gen)
-    summary = summarize(all_rows, spans)
+    if a.extra_body:
+        pass
+    summary = summarize(all_rows, spans) + "\n\n" + per_workflow(all_rows, min(spans))
     (out / "summary.md").write_text(f"# Serving profile: {a.model} via {a.base_url}\n\n" + summary + "\n")
     ok_rows = [r for r in all_rows if r.get("ok")]
     per_level = {lv: sum(r["completion_tokens"] for r in ok_rows if r["concurrency"] == lv) / spans[lv]
