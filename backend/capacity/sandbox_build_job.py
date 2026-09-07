@@ -6,9 +6,9 @@ sandbox.py).
 Modes, the three steps of the code agent's CI-shaped workflow (full is the
 original single step: release build and both suites):
   setup   fresh tree, release build of Lua and SQLite with gcc -O2, both suites
-  ci      sanitizer build (-fsanitize=address,undefined, -O1 -g), both suites
-          under it, then a static-analysis pass (gcc -fanalyzer) over the
-          interpreter's sources
+  ci      sanitizer build (-fsanitize=undefined, -O1 -g), both suites under
+          it, then a static-analysis pass (gcc -fanalyzer) over every one of
+          the interpreter's sources
   verify  release build, a source change, incremental rebuild, both suites,
           then a warnings-as-errors lint pass (-Wall -Wextra -Werror) over
           the interpreter's sources and the shell
@@ -37,7 +37,10 @@ import time
 
 seed, src_root = int(sys.argv[1]), sys.argv[2]
 mode = sys.argv[3] if len(sys.argv) > 3 else "full"
-SAN = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g", "-O1"]
+# The undefined-behaviour sanitizer: the address sanitizer needs tens of
+# terabytes of virtual address space for its shadow memory, which the
+# sandbox's address-space cap refuses.
+SAN = ["-fsanitize=undefined", "-fno-omit-frame-pointer", "-g", "-O1"]
 t0 = time.perf_counter()
 work = tempfile.mkdtemp(prefix=f"bench-build-{seed % 1000}-", dir="/tmp")
 env = {**os.environ, "CC": "gcc", "MAKEFLAGS": "", "LC_ALL": "C",
@@ -117,8 +120,6 @@ PRAGMA integrity_check;
         # it: gcc's analyzer, one translation unit at a time.
         t5 = time.perf_counter()
         for f in sorted(glob.glob(os.path.join(lua, "src", "*.c"))):
-            if os.path.basename(f) in ("lua.c", "luac.c"):
-                continue
             r = run(["gcc", "-fanalyzer", "-O1", "-c", f, "-o", "/dev/null"], os.path.join(lua, "src"))
         analysis_ms += (time.perf_counter() - t5) * 1000
         suites += 1
