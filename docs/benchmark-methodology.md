@@ -559,8 +559,9 @@ on the reference server.
   and recovery after overload are not measured.
 - Depths other than 128 and job sizes other than the declared ones are
   not measured.
-- The GPU side of the ratio is a lab measurement of one accelerator and
-  model, stated with its provenance, not a measurement made here.
+- The GPU side of the ratio is a published measurement of one
+  accelerator and model, context-adjusted and cited (section 11), not a
+  measurement made here.
 
 ## 11. The organisation mixes and the ratio
 
@@ -671,26 +672,57 @@ the steady window divided by generated tokens per second
 constant that explains it: it is a property of the tile, not of the load,
 and moves within a few core-ms across each ladder.
 
-| Tile | At capacity | Generated tokens/s | Busy cores | Core-ms per token | GPUs the server keeps busy at 1,300 / 2,400 / 3,800 tokens/s per GPU |
-|---|---|---|---|---|---|
-| Enterprise | 2.4 wf/s | 2,418 | 55.8 | 23.1 | 1.86 / 1.01 / 0.64 |
-| Engineering | 2.4 wf/s | 2,387 | 47.4 | 19.8 | 1.84 / 0.99 / 0.63 |
-| Analytics | 2.6 wf/s | 2,658 | 52.7 | 19.8 | 2.04 / 1.11 / 0.70 |
-| Enterprise, at 2.0 wf/s | | 2,081 | 44.8 | 21.5 | 1.60 / 0.87 / 0.55 |
+| Tile | At capacity | Generated tokens/s | Busy cores | Core-ms per token | GPUs the server keeps busy at 3,500 tokens/s per GPU (record) | at 2,400 / 4,378 |
+|---|---|---|---|---|---|---|
+| Enterprise | 2.4 wf/s | 2,418 | 55.8 | 23.1 | 0.69 | 1.01 / 0.55 |
+| Engineering | 2.4 wf/s | 2,387 | 47.4 | 19.8 | 0.68 | 0.99 / 0.55 |
+| Analytics | 2.6 wf/s | 2,658 | 52.7 | 19.8 | 0.76 | 1.11 / 0.61 |
+| Enterprise, at 2.0 wf/s | | 2,081 | 44.8 | 21.5 | 0.59 | 0.87 / 0.48 |
 
-The GPU side is not measured here. The reference band is a lab
-measurement of one RTX PRO 6000 serving a 35B mixture-of-experts model
-with 3B active in FP8 (window average 1,300 generation tokens/s over a
-draining fleet; peaks 2,400 to 3,800), stated with that provenance. The
-same lab's fleet-scale figure at its own density boundary was about 390
-generated tokens/s per GPU with the GPUs 46% busy and nothing queued, an
-untuned serving tier rather than a hardware limit; against it one server
-would keep about six GPUs busy. The single-GPU recording that replaces
-the band with our own measurement on this workload's calls is described
-in section 6 and is an enhancement, not part of this result.
+The GPU side is not measured here. The record rate is 3,500 generation
+tokens/s per GPU: the tuned serving rate of the model of record on one
+RTX PRO 6000, adjusted for the context this workload's calls carry. Its
+derivation: Database Mart measured gpt-oss-20b in 8-bit under vLLM on
+one RTX PRO 6000 Blackwell Server Edition at 50 concurrent requests, 100
+input and 600 output tokens per request, at 4,378 generation tokens/s.
+The calls recorded from this workload (section 6) carry a mean of 3,100
+prompt tokens (median 1,700, p90 6,900) and generate a mean of 1,000
+each, and Millstone AI's context sweep of the same model on the same
+card shows aggregate throughput falling about 30% from 1K to 8K context
+at fixed concurrency. The record applies a 20% haircut to the
+short-context measurement (4,378 x 0.8 = 3,500), which is the 8K-context
+penalty scaled to a mean context nearer 3K, and it does not credit
+prefix caching, which every serving stack provides and which agent loops
+exercise because their context grows call by call so that only each
+call's new tokens are prefilled. The band around the record: 2,400 is
+the conservative rate at which the ratio was first stated; 4,378 is the
+short-context measurement itself; NVIDIA's TensorRT-LLM tables put a 30B
+mixture-of-experts model with 3B active at 9,938 tokens/s per GPU in FP4
+at 1,000 input and 1,000 output tokens, and CloudRift measured the same
+model class at about 8,400 under vLLM at 400 concurrent requests, which
+bounds what a different model choice does on the same card.
+Low-concurrency serving sits far below all of these: Millstone's own
+peak was 642 tokens/s because it never ran more than five requests at
+once, and the Metrum agent-density runs, which served the model on the
+same server as the agents, produced about 390 tokens/s per GPU with the
+GPUs 46% busy and nothing queued; against that figure a server
+generating 2,400 tokens/s would keep about six GPUs busy, which is the
+case for a serving tier of its own rather than a limit of the card. The
+single-GPU recording that replaces the record with our own measurement
+on this workload's calls is described in section 6 and is the intended
+substitution.
 
-At capacity every organisation tile keeps one GPU of the reference class
-busy at its conservative peak: one server, one GPU. A tile of twelve
+References for the serving rate:
+
+- Database Mart, "Pro 6000 vLLM Inference Benchmark: LLM Throughput and Latency Analysis", August 2026: gpt-oss-20b, 8-bit, vLLM, one RTX PRO 6000 Blackwell Server Edition, 50 concurrent requests, 100 input and 600 output tokens per request, 4,378 generation tokens/s. https://www.databasemart.com/blog/vllm-gpu-benchmark-pro6000
+- Millstone AI, "gpt-oss-20b: Performance Analysis on 1x RTX Pro 6000 Blackwell", 28 January 2026: MXFP4, vLLM, one to five concurrent requests, context 1K to 128K; 642 tokens/s at five requests and 1K context, 222 at 32K; the context sweep behind the haircut. https://cdn.millstoneai.cloud/benchmarks/gpt-oss-20b-mxfp4-1x-rtx-pro-6000-blackwell/gpt-oss-20b-mxfp4-1x-rtx-pro-6000-blackwell.pdf
+- NVIDIA, TensorRT-LLM performance overview, RTX 6000 Pro Blackwell Server Edition tables, updated 27 August 2026: Qwen3 30B A3B in FP4 at 1,000 input and 1,000 output tokens, 9,938 output tokens/s per GPU; Llama 3.3 70B in FP4, 1,724. https://nvidia.github.io/TensorRT-LLM/latest/developer-guide/perf-overview.html
+- CloudRift, GPU benchmarks for LLM inference, October and November 2025: Qwen3-Coder-30B-A3B AWQ under vLLM at 400 concurrent requests, about 8,400 output tokens/s on one RTX PRO 6000; GLM-4.5-Air AWQ at 256 to 512 concurrent requests, 3,140. https://www.cloudrift.ai/gpu-benchmarks
+- Metrum AI, agent-density runs on a PowerEdge R770 with the model served on the same server: about 390 generation tokens/s per GPU at the density boundary with the GPUs 46% busy (the reports supplied with this project).
+
+At capacity every organisation tile keeps about 0.7 of a GPU busy at the
+record rate and one GPU at the conservative 2,400: one server to one
+GPU or better. A tile of twelve
 task agents alone, the support-desk case, would generate about 550
 tokens per workflow at a far higher rate and keep several GPUs busy per
 server; it is an estimate from the catalog's weights, not a measured set.

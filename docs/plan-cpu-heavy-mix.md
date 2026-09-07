@@ -8,12 +8,19 @@ generated token**, and a formula:
 
     GPUs per 64-core socket = 64,000 / (core-ms per generated token × generation tokens per second per GPU)
 
-The host side is measured here on the reference server. The GPU side is a
-lab measurement of one RTX PRO 6000 serving a 35B mixture-of-experts
-model with 3B active in FP8 (window average 1,300 generation tokens/s
-over a draining fleet; peaks 2,400 to 3,800), stated with that
-provenance. The method of record is `docs/benchmark-methodology.md`; this
-document is the ratio's own account.
+The host side is measured here on the reference server. The GPU side is
+a published measurement: 3,500 generation tokens/s per GPU is the
+record, the tuned serving rate of the model of record (gpt-oss-20b under
+vLLM on one RTX PRO 6000, 4,378 tokens/s at 50 concurrent requests,
+Database Mart, August 2026) with a 20% haircut for the context this
+workload's calls carry (mean 3,100 prompt tokens; Millstone AI's context
+sweep of the same model and card shows about 30% lost from 1K to 8K
+context). The band around it is 2,400, the conservative rate at which
+the ratio was first stated, and 4,378, the short-context measurement;
+NVIDIA's TensorRT-LLM tables and CloudRift put 30B mixture-of-experts
+models with 3B active at 8,400 to 9,938 on the same card. The method of
+record is `docs/benchmark-methodology.md`, whose section 11 carries the
+derivation and the citations; this document is the ratio's own account.
 
 ## What moves the ratio and what does not
 
@@ -71,15 +78,16 @@ embedder 1, ingest embedder 8, 51 for the instances and their jobs), the
 others with the reranker on 8, the query embedder on 2 and 46 application
 cores:
 
-| Tile | Capacity | Resident agents, measured | Generated tokens/s at capacity | Core-ms per token | GPUs the server keeps busy at 1,300 / 2,400 / 3,800 tok/s per GPU |
-|---|---|---|---|---|---|
-| Enterprise | 2.4 wf/s (2.6 falls behind) | 151 | 2,418 | 23.1 | 1.86 / 1.01 / 0.64 |
-| Engineering | 2.4 wf/s (2.8 falls behind) | 150 | 2,387 | 19.8 | 1.84 / 0.99 / 0.63 |
-| Analytics | 2.6 wf/s (3.2 falls behind) | 137 | 2,658 | 19.8 | 2.04 / 1.11 / 0.70 |
+| Tile | Capacity | Resident agents, measured | Generated tokens/s at capacity | Core-ms per token | GPUs the server keeps busy at 3,500 tok/s per GPU (record) | at 2,400 / 4,378 |
+|---|---|---|---|---|---|---|
+| Enterprise | 2.4 wf/s (2.6 falls behind) | 151 | 2,418 | 23.1 | 0.69 | 1.01 / 0.55 |
+| Engineering | 2.4 wf/s (2.8 falls behind) | 150 | 2,387 | 19.8 | 0.68 | 0.99 / 0.55 |
+| Analytics | 2.6 wf/s (3.2 falls behind) | 137 | 2,658 | 19.8 | 0.76 | 1.11 / 0.61 |
 
 The ratio is the server's own: its generated tokens per second against
 one GPU's, with no scaling to busy cores. At capacity each server keeps
-one GPU of the reference class busy at the lab's conservative peak. The
+about 0.7 of a GPU busy at the record rate and one GPU at the
+conservative 2,400. The
 enterprise tile's residency was confirmed the other way round: 152
 sessions held in a closed loop completed 2.30 workflows a second at the
 ladder's latencies with no drift over ten minutes, in all three seeds.
@@ -90,13 +98,15 @@ methodology.
 
 ## What this does not claim
 
-The lab's serving numbers were measured on coding-agent traffic with long
-contexts; our calls are shorter and more numerous, and tokens per GPU on
-our shapes will differ until they are measured on them. The path for
+The published serving numbers were measured on synthetic prompts of 100
+to 1,000 tokens; our calls carry a few thousand tokens of context and
+generate about a thousand each, and tokens per GPU on our shapes will
+differ until they are measured on them, which is why the record carries
+a context haircut and does not credit prefix caching. The path for
 that measurement exists: the workload's calls are recorded as a query
 set and can be replayed against one GPU of a known class at rising
 concurrency (`scripts/replay_query_set.py --sweep --gpus`), and the
 stand-in then answers with the recorded timing so the host is measured
 under a named model's data. Until then the ratio is a host-side
-measurement against a stated reference band, and the band's provenance
-is printed beside every ratio.
+measurement against a cited serving rate, and the rate's provenance is
+printed beside every ratio.
