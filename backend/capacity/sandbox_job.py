@@ -71,6 +71,8 @@ def run_pass(seed):
     hourly_flagged = np.bincount(ts[mask] // 3600, minlength=24)
     top = np.argsort(-sums)[:5]
     cpu = resource.getrusage(resource.RUSAGE_SELF)
+    hi_share_max = float(np.max(np.divide(np.bincount(merchant[value > q95], minlength=MERCHANTS), counts,
+                                          out=np.zeros(MERCHANTS), where=counts > 0)))
     return {k: v for k, v in locals().items() if k not in ('rng', 'merchant', 'value', 'ts', 'm_cat', 'm_region', 'cat', 'region')}
 
 for _pass in range(PASSES):
@@ -86,7 +88,7 @@ print(json.dumps({
     "outliers": int(len(flagged)), "flagged_events": flagged_events,
     "flagged_value": round(flagged_value, 1),
     "flagged_peak_hour": int(np.argmax(hourly_flagged)),
-    "hi_share_max": round(float(np.max(np.divide(np.bincount(merchant[value > q95], minlength=MERCHANTS), counts, out=np.zeros(MERCHANTS), where=counts > 0))), 4),
+    "hi_share_max": round(hi_share_max, 4),
     "mean_of_means": round(float(means[counts > 0].mean()), 3),
     "cpu_ms": round((cpu.ru_utime + cpu.ru_stime) * 1000, 1),
     "compute_ms": round((time.perf_counter() - t0) * 1000, 1),
