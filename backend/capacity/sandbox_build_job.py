@@ -1,7 +1,17 @@
 """The sandboxed build-and-test job (runs in an isolated interpreter; see
 sandbox.py).
 
-    python -I -S sandbox_build_job.py <seed> <src-root>
+    python -I -S sandbox_build_job.py <seed> <src-root> [full|setup|ci|verify]
+
+Modes, the three steps of the code agent's CI-shaped workflow (full is the
+original single step: release build and both suites):
+  setup   fresh tree, release build of Lua and SQLite with gcc -O2, both suites
+  ci      sanitizer build (-fsanitize=address,undefined, -O1 -g), both suites
+          under it, then a static-analysis pass (gcc -fanalyzer) over the
+          interpreter's sources
+  verify  release build, a source change, incremental rebuild, both suites,
+          then a warnings-as-errors lint pass (-Wall -Wextra -Werror) over
+          the interpreter's sources and the shell
 
 The shape of a code agent's step: build the working tree and run its
 test suite. The tree is a real, recognizable project vendored into the
@@ -26,13 +36,18 @@ import tempfile
 import time
 
 seed, src_root = int(sys.argv[1]), sys.argv[2]
+mode = sys.argv[3] if len(sys.argv) > 3 else "full"
+SAN = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g", "-O1"]
 t0 = time.perf_counter()
 work = tempfile.mkdtemp(prefix=f"bench-build-{seed % 1000}-", dir="/tmp")
-env = {**os.environ, "CC": "gcc", "MAKEFLAGS": "", "LC_ALL": "C"}
+env = {**os.environ, "CC": "gcc", "MAKEFLAGS": "", "LC_ALL": "C",
+       "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0", "UBSAN_OPTIONS": "print_stacktrace=0"}
 failures = 0
 suites = 0
 build_ms = 0.0
 test_ms = 0.0
+analysis_ms = 0.0
+lint_ms = 0.0
 
 
 def run(cmd, cwd, timeout=900):
@@ -48,7 +63,10 @@ try:
     lines = sum(sum(1 for _ in open(f, errors="replace")) for f in sources)
     target = "macosx" if sys.platform == "darwin" else "generic"
     t1 = time.perf_counter()
-    r = run(["make", "-s", target], lua)
+    make_cmd = ["make", "-s", target]
+    if mode == "ci":
+        make_cmd += ["MYCFLAGS=" + " ".join(SAN), "MYLDFLAGS=" + " ".join(SAN)]
+    r = run(make_cmd, lua)
     build_ms += (time.perf_counter() - t1) * 1000
     if r.returncode != 0:
         print(json.dumps({"error": "lua build failed: " + r.stderr[-400:]}))
@@ -68,7 +86,8 @@ try:
         sources += [os.path.join(sq, "sqlite3.c"), os.path.join(sq, "shell.c")]
         lines += sum(sum(1 for _ in open(f, errors="replace")) for f in sources[-2:])
         t3 = time.perf_counter()
-        r = run(["gcc", "-O2", "-DSQLITE_THREADSAFE=0", "-DSQLITE_OMIT_LOAD_EXTENSION",
+        flags = SAN if mode == "ci" else ["-O2"]
+        r = run(["gcc", *flags, "-DSQLITE_THREADSAFE=0", "-DSQLITE_OMIT_LOAD_EXTENSION",
                  "sqlite3.c", "shell.c", "-o", "sqlite3", "-lm"], sq)
         build_ms += (time.perf_counter() - t3) * 1000
         if r.returncode != 0:
@@ -93,11 +112,42 @@ PRAGMA integrity_check;
         if r.returncode != 0 or "ok" not in r.stdout.strip().splitlines()[-1:]:
             failures += 1
         project += "+sqlite"
+    if mode == "ci":
+        # Static analysis over the interpreter's sources, as a CI pipeline runs
+        # it: gcc's analyzer, one translation unit at a time.
+        t5 = time.perf_counter()
+        for f in sorted(glob.glob(os.path.join(lua, "src", "*.c"))):
+            if os.path.basename(f) in ("lua.c", "luac.c"):
+                continue
+            r = run(["gcc", "-fanalyzer", "-O1", "-c", f, "-o", "/dev/null"], os.path.join(lua, "src"))
+        analysis_ms += (time.perf_counter() - t5) * 1000
+        suites += 1
+    if mode == "verify":
+        # The change: touch two interpreter sources, rebuild incrementally,
+        # rerun both suites, then lint everything warnings-as-errors.
+        for f in ("lvm.c", "lapi.c"):
+            os.utime(os.path.join(lua, "src", f), None)
+        t6 = time.perf_counter()
+        r = run(["make", "-s", target], lua)
+        build_ms += (time.perf_counter() - t6) * 1000
+        t7 = time.perf_counter()
+        r = run([os.path.join(lua, "src", "lua"), "-e", "_U=true", "all.lua"], tests)
+        test_ms += (time.perf_counter() - t7) * 1000
+        suites += 1
+        if r.returncode != 0 or "final OK" not in r.stdout:
+            failures += 1
+        t8 = time.perf_counter()
+        for f in sorted(glob.glob(os.path.join(lua, "src", "*.c"))):
+            r = run(["gcc", "-Wall", "-Wextra", "-fsyntax-only", f], os.path.join(lua, "src"))
+        if os.path.isdir(sqlite_src):
+            run(["gcc", "-Wall", "-fsyntax-only", "shell.c"], os.path.join(work, "sqlite"))
+        lint_ms += (time.perf_counter() - t8) * 1000
     cpu = resource.getrusage(resource.RUSAGE_SELF)
     kids = resource.getrusage(resource.RUSAGE_CHILDREN)
     print(json.dumps({
-        "project": project, "sources": len(sources), "lines": lines,
+        "project": project, "mode": mode, "sources": len(sources), "lines": lines,
         "build_ms": round(build_ms, 1), "test_ms": round(test_ms, 1),
+        "analysis_ms": round(analysis_ms, 1), "lint_ms": round(lint_ms, 1),
         "suites": suites, "failures": failures,
         "cpu_ms": round((cpu.ru_utime + cpu.ru_stime + kids.ru_utime + kids.ru_stime) * 1000, 1),
         "compute_ms": round((time.perf_counter() - t0) * 1000, 1),

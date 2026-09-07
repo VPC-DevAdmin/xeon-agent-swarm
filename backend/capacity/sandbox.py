@@ -36,7 +36,7 @@ JOB_SCRIPT = Path(__file__).with_name("sandbox_job.py")
 # Rows per job, calibrated on the reference Xeon (one core, 3.6 GHz):
 # light ~0.25 core-seconds, heavy ~2 core-seconds, interpreter start and
 # numpy import included. The job reads this from argv - one source.
-SIZES = {"light": 450_000, "heavy": 3_300_000, "large": 40_000_000, "xl": 60_000_000}
+SIZES = {"light": 450_000, "heavy": 3_300_000, "large": 100_000_000, "xl": 60_000_000}
 # Job KINDS beyond the data job (CPU-heavy mix, see docs/plan-cpu-heavy-mix.md):
 #   build   build a real project from vendored source (Lua 5.4.7, plus the
 #           SQLite amalgamation when present) and run its test suite: the
@@ -44,9 +44,31 @@ SIZES = {"light": 450_000, "heavy": 3_300_000, "large": 40_000_000, "xl": 60_000
 #   ingest  parse a set of PDF pages, normalize and chunk the text (the
 #           embedding and indexing happen on the executor, see toolbox)
 # Each kind has its own script; per-kind limits below.
-KINDS = ("light", "heavy", "large", "xl", "build", "ingest")
+#   setup   the code agent's first step: fresh tree, configure, release build
+#           of Lua and SQLite, both suites
+#   ci      its verification step: sanitizer build (address + undefined
+#           behaviour, as CI matrices do), both suites under it, and a
+#           static-analysis pass over the interpreter's sources
+#   verify  its change step: incremental rebuild, both suites again, and a
+#           warnings-as-errors lint pass
+#   scan    scanned-document intake: pages rendered to images, OCR on the
+#           CPU, PII scan, then chunking (embedding and indexing on the
+#           executor, as for ingest)
+#   fetch   the research agent's source fetch: parse a set of HTML pages
+#           (boilerplate removal, main-text extraction) before retrieval
+#   large_rerun  the analyst's job run twice, the rerun after a failed check
+KINDS = ("light", "heavy", "large", "xl", "build", "ingest",
+         "setup", "ci", "verify", "scan", "fetch", "large_rerun")
 KIND_SCRIPTS = {"build": Path(__file__).with_name("sandbox_build_job.py"),
-                "ingest": Path(__file__).with_name("sandbox_ingest_job.py")}
+                "setup": Path(__file__).with_name("sandbox_build_job.py"),
+                "ci": Path(__file__).with_name("sandbox_build_job.py"),
+                "verify": Path(__file__).with_name("sandbox_build_job.py"),
+                "ingest": Path(__file__).with_name("sandbox_ingest_job.py"),
+                "scan": Path(__file__).with_name("sandbox_scan_job.py"),
+                "fetch": Path(__file__).with_name("sandbox_fetch_job.py")}
+HTML_DOCS = os.getenv("CAPACITY_HTML_DOCS", "data/capacity/html")
+FETCH_PAGES = int(os.getenv("CAPACITY_FETCH_PAGES", "30") or 30)
+SCAN_PAGES = int(os.getenv("CAPACITY_SCAN_PAGES", "100") or 100)
 BUILD_SRC = os.getenv("CAPACITY_BUILD_SRC", "data/capacity/build")   # vendored tarballs live here
 # Declared job sizes for the heavy mix (docs/plan-cpu-heavy-mix.md).
 # Ingestion is embedding-bound: ~250-token chunks cost ~11 GFLOP each
@@ -57,9 +79,12 @@ INGEST_DOCS = os.getenv("CAPACITY_INGEST_DOCS", "data/capacity/ingest")
 CPU_LIMIT_S = int(os.getenv("CAPACITY_SANDBOX_CPU_S", "30") or 30)
 # Heavier kinds get proportionate limits; a limit is a runaway guard, never a
 # budget the job is expected to approach.
-KIND_LIMITS = {"large": (300, 600), "xl": (300, 600), "build": (300, 600), "ingest": (300, 600)}
+KIND_LIMITS = {"large": (600, 900), "large_rerun": (1200, 1800), "xl": (300, 600), "build": (300, 600),
+               "ingest": (300, 600), "setup": (600, 900), "ci": (1800, 2400), "verify": (600, 900),
+               "scan": (1800, 2400), "fetch": (300, 600)}
 # Address-space cap per kind (bytes): the XL job holds ten 60M-element arrays.
-KIND_MEM = {"large": 24 * 1024 ** 3, "xl": 24 * 1024 ** 3}
+KIND_MEM = {"large": 40 * 1024 ** 3, "large_rerun": 40 * 1024 ** 3, "xl": 24 * 1024 ** 3,
+            "scan": 16 * 1024 ** 3, "ci": 16 * 1024 ** 3}
 # Address-space limit, not resident: numpy + OpenBLAS reserve several GB of
 # virtual space at import even single-threaded, so the cap is 8 GB while a
 # heavy job's resident set is ~0.5 GB.
@@ -104,8 +129,16 @@ def _command(kind: str, seed: int) -> list[str]:
                 "GIT_CONFIG_NOSYSTEM=1"]
     if kind in SIZES:
         script = [str(JOB_SCRIPT), kind, str(seed), site, str(SIZES[kind])]
-    elif kind == "build":
-        script = [str(KIND_SCRIPTS[kind]), str(seed), str(_build_tree())]
+    elif kind == "large_rerun":
+        script = [str(JOB_SCRIPT), "large", str(seed), site, str(SIZES["large"]), "2"]
+    elif kind in ("build", "setup", "ci", "verify"):
+        script = [str(KIND_SCRIPTS[kind]), str(seed), str(_build_tree()), "full" if kind == "build" else kind]
+    elif kind == "scan":
+        script = [str(KIND_SCRIPTS[kind]), str(seed), site,
+                  str(Path(INGEST_DOCS).resolve()), str(SCAN_PAGES)]
+    elif kind == "fetch":
+        script = [str(KIND_SCRIPTS[kind]), str(seed), site,
+                  str(Path(HTML_DOCS).resolve()), str(FETCH_PAGES)]
     elif kind == "ingest":
         script = [str(KIND_SCRIPTS[kind]), str(seed), site,
                   str(Path(INGEST_DOCS).resolve()), str(INGEST_PAGES)]
@@ -115,7 +148,7 @@ def _command(kind: str, seed: int) -> list[str]:
     cpu_s, _wall = KIND_LIMITS.get(kind, (CPU_LIMIT_S, WALL_LIMIT_S))
     # File-size cap: 1 MB for the data jobs (they write nothing); the build
     # links binaries and writes a test database, so 64 MB.
-    fsize = 64 * 1024 * 1024 if kind == "build" else 1048576
+    fsize = 64 * 1024 * 1024 if kind in ("build", "setup", "ci", "verify") else 1048576
     limits = ["prlimit", f"--cpu={cpu_s}", f"--as={KIND_MEM.get(kind, MEM_LIMIT_BYTES)}",
               f"--fsize={fsize}"] if shutil.which("prlimit") else []
     if isolation_mode() == "netns":

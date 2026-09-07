@@ -584,6 +584,19 @@ def _serving_profile() -> dict | None:
     return {"ttft_ms": ttft, "decode_tps": decode, "prefill_tps": prefill}
 
 
+def _model_wait_tokens(tokens_in: float, tokens_out: float, seed: str) -> float:
+    prof = _serving_profile()
+    if not prof:
+        return 0.0
+    wait = prof["ttft_ms"] / 1000.0
+    if prof["decode_tps"] > 0:
+        wait += max(1.0, tokens_out) / prof["decode_tps"]
+    if prof["prefill_tps"] > 0:
+        wait += tokens_in / prof["prefill_tps"]
+    jitter = 0.8 + 0.4 * ((_hash(seed) % 1000) / 1000.0)
+    return wait * jitter
+
+
 def _model_wait_s(messages: list[dict], completion_text: str, seed: str) -> float:
     prof = _serving_profile()
     if not prof:
@@ -614,6 +627,11 @@ async def _completion(*, tier: str, category: str, seed: str, messages: list[dic
     if recorded is not None:
         wait, pin, pout = recorded
         usage = {"prompt_tokens": pin, "completion_tokens": pout, "total_tokens": pin + pout}
+        if os.environ.get("CAPACITY_SERVING_TIMING", "recorded") == "modeled":
+            # Calibrated token counts from the recorded profile, waited as the
+            # modeled reference tier would serve them (its TTFT, decode and
+            # prefill rates), not as the recording endpoint happened to.
+            wait = _model_wait_tokens(pin, pout, seed + _key)
     else:
         wait = _model_wait_s(messages, completion_text, seed)
     if wait > 0:
@@ -775,6 +793,26 @@ async def _chat_impl(body: dict) -> JSONResponse:
     # worker; the comparison (medium) retrieves in its research worker only.
     _role_now = next((r for r, marker in _ROLE_MARKERS if marker in system),
                      "general-purpose")
+    _kind = None
+    if "Using ONLY the build" in obj:
+        # The code agent's CI shape: setup, verification, change - one per worker.
+        _kind = {"research": "setup", "analysis": "ci", "writing": "verify"}.get(_role_now, "build")
+    elif "Using ONLY the document set" in obj:
+        _kind = "scan"
+    elif "Using ONLY the dataset (XL)" in obj:
+        _kind = "xl"
+    elif "Using ONLY the dataset (L)" in obj:
+        # The analyst's rerun after a failed check lands on the analysis worker.
+        _kind = "large_rerun" if _role_now == "analysis" else "large"
+    elif "Using ONLY the dataset" in obj:
+        _kind = "heavy"
+    elif "fetch the source pages" in obj:
+        _kind = "fetch"
+    if (_kind == "fetch" and "bench_execute" in tools
+            and _tool_result_count(messages, "bench_execute") == 0):
+        tc = _tool_call("bench_execute", {"task": (obj or "fetch")[:80], "size": "fetch"})
+        return await _completion(tier=tier, category=_CATEGORY.get(_role_now, "general"),
+                                 seed=seed, messages=messages, tool_calls=[tc])
     _wants_retrieval = ("bench_retrieve" in tools and (
         "Using ONLY the measurements" not in obj or _role_now == "research"))
     if _wants_retrieval and _tool_result_count(messages, "bench_retrieve") == 0:
@@ -795,17 +833,6 @@ async def _chat_impl(body: dict) -> JSONResponse:
     # Heavy mix (docs/plan-cpu-heavy-mix.md): the code agent builds in every
     # worker, the XL analyst runs xl jobs, the ingestion agent runs its
     # single job in its one worker.
-    _kind = None
-    if "Using ONLY the build" in obj:
-        _kind = "build"
-    elif "Using ONLY the document set" in obj:
-        _kind = "ingest"
-    elif "Using ONLY the dataset (XL)" in obj:
-        _kind = "xl"
-    elif "Using ONLY the dataset (L)" in obj:
-        _kind = "large"
-    elif "Using ONLY the dataset" in obj:
-        _kind = "heavy"
     _wants_exec = ("bench_execute" in tools and (
         _kind is not None or _role_now == "analysis"))
     if _wants_exec and _tool_result_count(messages, "bench_execute") == 0:

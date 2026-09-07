@@ -242,8 +242,9 @@ async def _finish_ingest(r: dict) -> str:
     except Exception:  # noqa: BLE001
         pass
     dim = len(vecs[0]) if vecs else 0
+    ocr = f", OCR {r['ocr_ms']:.0f}ms, {r.get('pii', 0)} personal-data items redacted" if r.get("ocr_ms") is not None else ""
     return (f"[bench_execute] ingest: parsed {r['pages']} pages of {r['docs']} documents "
-            f"({r['words']:,} words) in {r['parse_ms']:.0f}ms, {r['chunks']} chunks "
+            f"({r['words']:,} words) in {r['parse_ms']:.0f}ms{ocr}, {r['chunks']} chunks "
             f"({r['duplicates']} duplicates dropped); embedded {len(vecs or [])} chunks "
             f"(dim {dim}) in {embed_ms:.0f}ms; indexed in {index_ms:.0f}ms; check query "
             f"'{query}' -> chunk {hit[0] if hit else 'none'} (isolation {r['isolation']}).\n\n"
@@ -264,14 +265,24 @@ def build_bench_execute_tool() -> StructuredTool:
         r = await sandbox.run_job(kind, seed)
         if not r.get("ok"):
             raise RuntimeError(f"sandboxed job failed: {r.get('error')}")
-        if kind == "build":
-            return (f"[bench_execute] build: {r['project']} ({r['sources']} source files, "
-                    f"{r['lines']:,} lines) built in {r['build_ms']:.0f}ms; test suite "
-                    f"{r['suites']} suites run in {r['test_ms']:.0f}ms, {r['failures']} failures "
+        if kind in ("build", "setup", "ci", "verify"):
+            extra = ""
+            if kind == "ci":
+                extra = f"; sanitizer build, static analysis in {r.get('analysis_ms', 0):.0f}ms"
+            elif kind == "verify":
+                extra = f"; incremental rebuild after the change, lint pass in {r.get('lint_ms', 0):.0f}ms"
+            return (f"[bench_execute] {r.get('mode', 'build')}: {r['project']} ({r['sources']} source files, "
+                    f"{r['lines']:,} lines) built in {r['build_ms']:.0f}ms; "
+                    f"{r['suites']} suites run in {r['test_ms']:.0f}ms, {r['failures']} failures{extra} "
                     f"(isolation {r['isolation']}).\n\nEXECUTION COMPLETE. "
                     "Use these results in your section; do not run the build again for this subtask.")
-        if kind == "ingest":
+        if kind in ("ingest", "scan"):
             return await _finish_ingest(r)
+        if kind == "fetch":
+            return (f"[bench_execute] fetch: {r['pages']} source pages parsed ({r['words']:,} words of "
+                    f"main text after boilerplate removal) in {r['parse_ms']:.0f}ms (isolation {r['isolation']}). "
+                    f"Leads: {' | '.join(r.get('leads') or [])[:400]}\n\nEXECUTION COMPLETE. "
+                    "Now retrieve against the evidence store for your section; do not fetch again for this subtask.")
         return (f"[bench_execute] {size} job over {r['rows']:,} rows finished in "
                 f"{r['elapsed_ms']}ms (compute {r['compute_ms']}ms, isolation {r['isolation']}).\n"
                 f"Results: top keys by total {r['top_keys']}; value quantiles p50 {r['q50']}, "

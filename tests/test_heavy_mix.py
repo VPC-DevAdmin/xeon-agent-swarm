@@ -34,7 +34,7 @@ def test_ingest_job_parses_and_chunks(tmp_path, monkeypatch):
 
 
 def test_xl_size_is_the_data_job_at_nine_times_the_rows():
-    assert sandbox.SIZES["xl"] == 60_000_000 and sandbox.SIZES["large"] == 40_000_000
+    assert sandbox.SIZES["xl"] == 60_000_000 and sandbox.SIZES["large"] == 100_000_000
     assert sandbox.wall_limit("xl") > sandbox.wall_limit("heavy")
 
 
@@ -74,7 +74,7 @@ def test_stand_in_policies_pick_the_kind_and_depth():
     research = "You are a research specialist. Gather facts."
     general = "You are a general-purpose specialist."
     for obj, kind in (("Research the topic: Using ONLY the build available through the execution tool", "build"),
-                      ("Handle this task end to end: Using ONLY the document set available through the execution tool", "ingest"),
+                      ("Handle this task end to end: Using ONLY the document set available through the execution tool", "scan"),
                       ("Research the topic: Using ONLY the dataset (XL) available through the execution tool", "xl"),
                       ("Research the topic: Using ONLY the dataset (L) available through the execution tool", "large"),
                       ("Research the topic: Using ONLY the dataset available through the execution tool", "heavy")):

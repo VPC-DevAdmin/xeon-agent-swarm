@@ -280,12 +280,17 @@ e2e_workflows:
     # the cross-encoder scores eight times the candidates per call, on the
     # reranker's pair law, and the packed context is the same size.
     toolless: true
-    tools: [bench_retrieve, bench_record]
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [20000, 500000]}
-    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 10]}
-    budgets: {max_subagents: 4, max_tool_hops: 2}
+    # Each worker first fetches and parses its share of the source pages in
+    # the sandbox (sandbox_fetch_job.py: boilerplate removal, main-text
+    # extraction over 30 HTML pages), then retrieves at depth 128, then
+    # records: three tool calls per worker, one model call more each.
+    tools: [bench_execute, bench_retrieve, bench_record]
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [16, 16], validations: [7, 7], tool_calls: [9, 9], tokens_in: [20000, 500000]}
+    contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 12]}
+    budgets: {max_subagents: 4, max_tool_hops: 3}
     query: >-
-      Using ONLY the field notes below (do not research further), and
+      Using ONLY the field notes below (do not research further), first
+      fetch the source pages available through the execution tool, then
       retrieving at rerank depth 128, write a one-page brief on capacity
       planning for agent hosts with a clear recommendation. Field notes:
       (1) an orchestration host's cost per workflow is set by the tool
@@ -294,7 +299,8 @@ e2e_workflows:
       depth 64. (3) Sandboxed execution dominates the host at analyst-heavy
       mixes. (4) The serving tier's tokens per second decide how many
       hosts one accelerator needs. Plan EXACTLY three worker subtasks and
-      no more: research, analysis, and writing. Each worker calls
+      no more: research, analysis, and writing. Each worker runs
+      bench_execute exactly once, then bench_retrieve exactly once, then
       bench_record exactly once, then writes its section and stops.
       Deliverable: a brief with sections for findings, trade-offs, and one
       recommendation.
