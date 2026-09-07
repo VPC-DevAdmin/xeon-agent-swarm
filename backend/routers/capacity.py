@@ -237,7 +237,7 @@ async def _prepare(body: StartBody) -> dict:
             if any(float(_os.getenv(k, "0") or 0) > 0 for k in (
                     "CAPACITY_MODEL_TTFT_MS", "CAPACITY_MODEL_DECODE_TPS",
                     "CAPACITY_MODEL_PREFILL_TPS")):
-                cfg["e2e_timeout_s"] = 900.0
+                cfg["e2e_timeout_s"] = float(_os.getenv("CAPACITY_E2E_TIMEOUT_S", "900") or 900)
         elif target == "integrated_node":
             # Real workflows on local CPU inference run minutes each; a 300s
             # ceiling times out healthy runs and a 30s cadence outruns them.
