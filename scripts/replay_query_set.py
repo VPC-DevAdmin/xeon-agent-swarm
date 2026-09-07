@@ -43,7 +43,12 @@ EXTRA_BODY: dict = {}   # --extra-body: provider-specific fields (reasoning_effo
 
 async def one_call(client: httpx.AsyncClient, base: str, model: str, item: dict,
                    sem: asyncio.Semaphore, level: int, max_tokens: int | None) -> dict:
-    body = {"model": model, "messages": item["messages"], "stream": True,
+    # Provider validators differ from the stand-in's transcript: an assistant
+    # turn that only carried tool calls has content null, which Together's
+    # OpenAI-compatible endpoint rejects; an empty string is accepted everywhere.
+    messages = [({**m, "content": ""} if m.get("role") == "assistant" and m.get("content") is None else m)
+                for m in item["messages"]]
+    body = {"model": model, "messages": messages, "stream": True,
             "stream_options": {"include_usage": True}, "temperature": 0.2, **EXTRA_BODY}
     if item.get("tools"):
         body["tools"] = item["tools"]
