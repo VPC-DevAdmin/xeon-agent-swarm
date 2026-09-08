@@ -271,7 +271,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
     <div>
       <span class="eyebrow">White Paper</span>
       <h1>Enterprise agents shift infrastructure <span class="accent">toward the CPU</span></h1>
-      <p class="hero-sub">Chat serving places most compute on the GPU, so one orchestration host can support four to eight GPUs. Enterprise agents retrieve records, process documents, analyze data, compile code, and validate results between model calls. That work moves infrastructure planning toward one CPU server per GPU. One Dell&trade; PowerEdge&trade; R470 carried 152 resident agents across a fixed mix of five Enterprise capabilities.</p>
+      <p class="hero-sub">Chat serving leans heavily on GPUs to generate tokens. Enterprise agents, however, retrieve records, process documents, analyze data, compile code, and validate results between model calls. That work moves infrastructure planning toward one CPU per GPU and requires more CPU servers for every GPU server.  We found that for every 64-core Xeon with AMX running 150 agents, we needed the capacity of 1.5 RTX Pro 6000 GPUs, bringing the ratio of CPU to GPU close to 1:1. </p>
       <p class="authors">Authored by: Vector Path Consulting</p>
       <div class="hero-meta">
         <span class="chip"><span class="dotg"></span>Enterprise mix</span>
@@ -298,12 +298,12 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
         <div class="cap"><b>One Enterprise population</b> carrying task, research, ingestion, analysis, and code work.</div>
       </div>
       <div class="statcell">
-        <div class="big">toward 1:1</div>
-        <div class="cap"><b>CPU host to GPU</b> compared with one CPU host for as many as eight GPUs in chat serving.</div>
+        <div class="big">1 CPUs for every 1.5 GPUs</div>
+        <div class="cap"><b>CPU agent work to GPU</b> compared with one CPU for eight or more GPUs in chat serving.</div>
       </div>
       <div class="statcell">
-        <div class="big"><span data-count="84">84</span><small>% of host work</small></div>
-        <div class="cap"><b>Code and analysis agents</b> supplied most of the tile's CPU work from four of twelve workflows.</div>
+        <div class="big"><span data-count="84">5</span><small> agent archetypes</small></div>
+        <div class="cap"><b>Enterprise agents</b> consisting of Analysis, Tasks, Ingestion, Code, and Research.</div>
       </div>
     </div>
   </div>
@@ -315,7 +315,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
   <h2>Agent workflows are shifting infrastructure toward the CPU<span class="rule"></span></h2>
   <div class="prose">
     <p class="lead">Agent workflows are shifting the balance of AI infrastructure toward the CPU. Tools and sandboxes retrieve data, process documents, analyze datasets, compile software, and validate results between LLM calls. This increases the CPU capacity needed for each GPU system.</p>
-    <p>We tested this effect with an Enterprise-style mix of 152 resident agents, ranging from small task agents through research and ingestion to heavy analyst and code agents. The mix produced a 1:1.5 CPU-to-GPU ratio. Data jobs, software builds, retrieval, embedding, and validation kept the CPU active, moving the system away from GPU-heavy ratios associated with simpler LLM requests. A near-parity deployment would pair three dual-socket PowerEdge R770 systems with one eight-GPU PowerEdge XE7740, providing six CPU sockets for eight GPUs.</p>
+    <p>We tested this effect with an Enterprise-style mix of 152 resident agents per CPU, ranging from small task agents through research and ingestion to heavy analyst and code agents. The mix produced a 1:1.5 CPU-to-GPU ratio. Data jobs, software builds, retrieval, embedding, and validation kept the CPU active, moving the system away from GPU-heavy ratios associated with simpler LLM requests. A near-parity deployment would pair three dual-socket PowerEdge R770 systems with one eight-GPU PowerEdge XE7740, providing six CPU sockets for eight GPUs.</p>
     <p>The deployment separates agent execution from model inference. The R770 systems run the agents, tools, and sandboxes, then send LLM calls to the XE7740 for model serving. Each tier can scale independently as demand changes. Agent execution can stay close to users and enterprise data, while model serving runs where power, cooling, and GPU capacity are available.</p>
   </div>
   <figure class="figure wide reveal" id="fig-overview">
@@ -344,7 +344,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
       <div class="overview-ratio-band">
         <div><span>Reference layout</span><b>6 CPU sockets : 8 GPUs</b></div>
         <div><span>Enterprise test</span><b>1 CPU socket : 1.5 GPUs</b></div>
-        <div><span>Resident population</span><b>152 agents</b></div>
+        <div><span>Resident population per CPU</span><b>152 agents</b></div>
       </div>
     </div>
     <figcaption class="fig-cap">Three dual-socket R770 systems provide six CPU sockets beside one eight-GPU XE7740. This layout, six sockets to eight GPUs, follows the roughly 1:1.5 ratio found with the Enterprise agent mix.</figcaption>
@@ -356,9 +356,9 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
   <h2>The Enterprise mix fills the system with different kinds of work<span class="rule"></span></h2>
   <div class="prose">
     <p class="lead">Enterprise agent deployments carry a mix of work. Many agents handle short service tasks such as triaging requests and updating records. Alongside them, smaller groups research information, ingest documents, analyze business data, and change software. We represented this population with five archetypes that span those common activities.</p>
-    <p>The mix is organized as a 12-agent tile: six task agents, one research agent, one ingestion agent, two data analysts, and two code agents. The system fills by repeating the tile, keeping the proportion of lightweight and intensive work consistent as the resident population grows. At the 152-agent point, the host carries many small workflows and a smaller number of long-running workflows at the same time.</p>
+    <p>The mix is organized as a 12-agent tile: six task agents, one research agent, one ingestion agent, two data analysts, and two code agents. The system fills by repeating the tile, keeping the proportion of lightweight and intensive work consistent as the resident population grows. At the 152-agent per CPU point, the host carries many small workflows and a smaller number of long-running workflows at the same time.</p>
     <p>The load changes as the mix moves from short tasks to deeper work. Task agents keep the runtime and its database active, while research and ingestion bring retrieval, embedding, memory traffic, and storage into the execution path. Data analysis and code workflows then add long sandboxed jobs for processing, compilation, and validation.</p>
-    <p>Together, the mix ran on one 64-core processor, reaching 76 percent host CPU utilization and using 39 percent of memory capacity. The agents issued 10.8 LLM calls per second, driving a model-serving requirement of roughly 5,200 output tokens per second. That demand corresponds to one RTX PRO 6000 GPU. The CPU profile shows how agent execution, sandboxed jobs, retrieval, embedding, and supporting services combine as the system fills.</p>
+    <p>Together, the mix ran on one 64-core processor, reaching 76 percent host CPU utilization and using 39 percent of memory capacity. The agents issued 10.8 LLM calls per second, driving a model-serving requirement of roughly 5,200 output tokens per second. That demand corresponds to one RTX PRO 6000 GPU. The CPU profile shows how agent execution, sandboxed jobs, retrieval, embedding, and supporting services combine as the system fills.  The testing was done on a single socket to isolate demand, and scaling up would generally follow the same pattern.</p>
   </div>
   <figure class="figure wide reveal" id="fig-archetypes">
     <div class="fig-head">
@@ -374,23 +374,23 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
             <div class="vessel-level"><span><b data-count="152">152</b> resident agents</span></div>
             <div class="mix-card code one">
               <div class="mix-card-head"><b>Code 1</b></div>
-              <small>CI and verify</small>
+              <small>Set up, CI, and Verification.</small>
             </div>
             <div class="mix-card code two">
               <div class="mix-card-head"><b>Code 2</b></div>
-              <small>CI and verify</small>
+              <small>Set up, CI, and Verification.</small>
             </div>
             <div class="mix-card analyst one">
               <div class="mix-card-head"><b>Analyst 1</b></div>
-              <small>Data jobs</small>
+              <small>Data analysis over two periods.</small>
             </div>
             <div class="mix-card analyst two">
               <div class="mix-card-head"><b>Analyst 2</b></div>
-              <small>Data jobs</small>
+              <small>Data analysis over two periods.</small>
             </div>
             <div class="mix-card ingestion">
               <div class="mix-card-head"><b>Ingestion</b></div>
-              <small>OCR and embed</small>
+              <small>OCR, pre-process, and embed</small>
             </div>
             <div class="mix-card research">
               <div class="mix-card-head"><b>Research</b></div>
@@ -565,27 +565,27 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
           <div class="workstream-list">
             <div class="workload-row" style="--tone:#0672CB">
               <span class="workload-index">01</span>
-              <div class="workload-copy"><b>Agent execution and orchestration</b><span>Triage a support case, record the decision, and validate the response.</span></div>
+              <div class="workload-copy"><b>Task workflow</b><span>Triage a support case, record the decision, and validate the response.</span></div>
               <div class="workload-load"><div class="workload-track"><i style="--level:.5%"></i></div><div class="workload-cost"><b>1K core-ms</b><span>task workflow</span></div></div>
             </div>
             <div class="workload-row" style="--tone:#0B7C84">
               <span class="workload-index">02</span>
-              <div class="workload-copy"><b>Retrieval and reranking</b><span>Search internal knowledge and rerank evidence for a research brief.</span></div>
+              <div class="workload-copy"><b>Research workflow</b><span>Search internal knowledge and rerank evidence for a research brief.</span></div>
               <div class="workload-load"><div class="workload-track"><i style="--level:12%"></i></div><div class="workload-cost"><b>23K core-ms</b><span>research workflow</span></div></div>
             </div>
             <div class="workload-row" style="--tone:#00468B">
               <span class="workload-index">03</span>
-              <div class="workload-copy"><b>Document OCR and embedding</b><span>Read a 50-page report batch with OCR and convert it into a searchable index.</span></div>
+              <div class="workload-copy"><b>Ingestion workflow</b><span>Read a 50-page report batch with OCR and convert it into a searchable index.</span></div>
               <div class="workload-load"><div class="workload-track"><i style="--level:50%"></i></div><div class="workload-cost"><b>95K core-ms</b><span>ingestion workflow</span></div></div>
             </div>
             <div class="workload-row" style="--tone:#40586D">
               <span class="workload-index">04</span>
-              <div class="workload-copy"><b>Sandboxed data analysis</b><span>Profile payment events, compare two periods, and rank merchant anomalies across three data jobs.</span></div>
+              <div class="workload-copy"><b>Analyst workflow</b><span>Profile payment events, compare two periods, and rank merchant anomalies across three data jobs.</span></div>
               <div class="workload-load"><div class="workload-track"><i style="--level:100%"></i></div><div class="workload-cost"><b>190K core-ms</b><span>analyst workflow</span></div></div>
             </div>
             <div class="workload-row" style="--tone:#66278F">
               <span class="workload-index">05</span>
-              <div class="workload-copy"><b>Sandboxed CI steps</b><span>Set up, run CI with a sanitizer and static analysis, and verify a change over two software projects.</span></div>
+              <div class="workload-copy"><b>Code workflow</b><span>Set up, run CI with a sanitizer and static analysis, and verify a change over two software projects.</span></div>
               <div class="workload-load"><div class="workload-track"><i style="--level:79%"></i></div><div class="workload-cost"><b>150K core-ms</b><span>code workflow</span></div></div>
             </div>
           </div>
@@ -741,7 +741,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
     <div class="prose">
       <h3><span class="method-index">4.3</span>Active agents connect capacity to incoming work</h3>
       <p>At 0.84 new workflows per second, the server accepted about 3,000 requests per hour. Each archetype stayed active for a different length of time, leaving an average of 152 agents on the server at once. Short task agents came and went while analyst and code agents remained inside longer jobs.</p>
-      <p>The active population settles when the server finishes work as quickly as it arrives. At 0.96 workflows per second, about 3,500 requests entered each hour. Heavy workflows then accumulated, so the agent count kept rising instead of finding a stable level.</p>
+      <p>The active population settles when the server finishes work as quickly as it arrives. At 0.90 workflows per second, about 3,200 requests entered each hour. Heavy workflows then accumulated, so the agent count kept rising instead of finding a stable level.</p>
       <p>We held each arrival rate for 25 minutes and repeated it under three timing seeds. The generator submitted new work on schedule without waiting for earlier work to finish. Open-loop submission exposed the point where a busy system became a growing queue.</p>
     </div>
     <figure class="figure wide reveal" id="fig-load">
@@ -765,7 +765,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
             <span class="load-state">Above capacity</span>
             <h4>Heavy workflows begin to accumulate</h4>
             <div class="load-flow">
-              <div class="flow-rate"><b>3,500</b><span>offered workflows per hour</span></div>
+              <div class="flow-rate"><b>3,200</b><span>offered workflows per hour</span></div>
               <div class="resident-pool"><div class="pool-number"><b>Agent count</b><span>continues rising</span></div></div>
               <div class="flow-rate"><b>less than inflow</b><span>completed each hour</span></div>
             </div>

@@ -85,7 +85,7 @@ embedder 2, ingest embedder 3, 51 for the instances and their jobs):
 
 | Tile | Capacity | Resident agents, measured | Generated tokens/s at capacity | Core-ms per token | GPUs the server keeps busy at 3,500 tok/s per GPU (record) | at 2,400 / 4,378 |
 |---|---|---|---|---|---|---|
-| Enterprise | 0.84 wf/s (0.96 falls behind) | 152 | 5,240 | 9.2 | 1.50 | 2.18 / 1.20 |
+| Enterprise | 0.84 wf/s (0.90 falls behind) | 152 | 5,240 | 9.2 | 1.50 | 2.18 / 1.20 |
 
 The ratio is the server's own: its generated tokens per second against
 one GPU's, with no scaling to busy cores. At capacity the server is 76%
@@ -93,7 +93,7 @@ busy and keeps 1.5 GPUs of the reference class busy at the record rate;
 per core, 9.2 core-ms per token at 3,500 tokens/s is 32 cores per GPU,
 two GPUs per fully busy 64-core socket. The constant held at 9.2 to 10.2
 across the ladder and the seeds. The residency was confirmed the other way round: 152 sessions held in a closed loop kept 150 agents in flight and completed 0.8 workflows a second at the capacity rung's latencies with no drift over half an hour, in all three seeds, with zero failures. Sets
-`data/capacity/set-20260908-025329` and `set-20260908-053752`; full curves in
+`data/capacity/set-20260908-025329`, `set-20260908-053752` and `set-20260908-115604`; full curves in
 section 11 of the methodology.
 
 ## What this does not claim

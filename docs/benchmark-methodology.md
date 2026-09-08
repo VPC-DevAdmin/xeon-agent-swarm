@@ -613,11 +613,13 @@ match.
 The results of record are the enterprise tile's sets (section 11):
 `data/capacity/set-20260908-025329` (seeds 11401, 11501, 11601; 0.84
 and 0.96 workflows/s) with its lower rung `set-20260908-053752` (same seeds,
-0.72) and its residency photographs `photo-11401-20260908-070145`, `photo-11501-20260908-075234`, `photo-11601-20260908-084324` (152 sessions). Three
+0.72), its midpoint rung `set-20260908-115604` (same seeds, 0.90) and its
+residency photographs `photo-11401-20260908-070145`, `photo-11501-20260908-075234`, `photo-11601-20260908-084324` (152 sessions). Three
 seeds each, 25-minute holds (30 for the photographs); run commit
-ebaf94f, evidence commits 5add991 and bce6f26 and 3df029a. Their per-core samples
-are `data/capacity/set-11400-mpstat.log` and `set-11400c-mpstat.log`
-on the reference server. Earlier sets are superseded and listed in
+ebaf94f, evidence commits 5add991, bce6f26, 3df029a and 325d7d7. Their
+per-core samples are `data/capacity/set-11400-mpstat.log`,
+`set-11400c-mpstat.log` and `set-11400d-mpstat.log` on the reference
+server. Earlier sets are superseded and listed in
 section 12. The serving profile of record is
 `data/capacity/serving/gptoss20b-low-faithful/calls.jsonl`, recorded
 from the query set `data/capacity/queryset/enterprise.jsonl`; the
@@ -657,27 +659,30 @@ the constant of any other tile before it is measured.
 One set, three seeds, 25-minute holds: enterprise
 `data/capacity/set-20260908-025329` (0.21 and 0.24 per instance, 0.84
 and 0.96 workflows/s box-wide) with its lower rung `set-20260908-053752`
-(0.18, 0.72), on the allocation of record, the archetypes of section 2
+(0.18, 0.72) and its midpoint rung `set-20260908-115604` (0.225, 0.90), on
+the allocation of record, the archetypes of section 2
 and the calibrated gpt-oss-20b profile. Latencies are p50 / p95 in
 seconds, medians of three series; host cores busy is the median of the
 three series' time-averaged per-core occupancy (section 7); resident
 agents are measured from the fleet's in-flight samples. Zero failures in
 every series at every rung, including past the cliff.
 
-**Enterprise.** Capacity 0.84 workflows/s with 152 resident agents; 0.96
-falls behind in every seed.
+**Enterprise.** Capacity 0.84 workflows/s with 152 resident agents; 0.90
+falls behind in every seed, and 0.96 further.
 
 | Offered (box-wide) | Code agent | Data analyst | Research | Ingestion | Task | Resident | Backlog over the hold (three seeds) | Host cores busy | Application pool | Verdict |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 0.72/s | 275 / 293 | 374 / 392 | 182 / 199 | 125 / 144 | 30 / 35 | 107 | -14, -6, -4 | 67% (43 cores) | 77% | keeps up |
 | 0.84/s | 343 / 369 | 527 / 563 | 184 / 202 | 152 / 169 | 30 / 35 | 152 | +18, +18, +23 | 76% (48 cores) | 87% | keeps up: capacity |
+| 0.90/s | 410 / 452 | 654 / 673 | 186 / 206 | 188 / 211 | 30 / 35 | 181 and climbing | +51, +50, +50 | 78% (50 cores) | 89% | falls behind |
 | 0.96/s | 501 / 546 | none completed inside the hold | 188 / 210 | 226 / 256 | 31 / 35 | 215 and climbing | +85, +84, +83 | 81% (52 cores) | 93% | past the cliff |
 
 The response curve is the three sandboxed archetypes': from 0.72 to
 0.84 the code agent, the analyst and the ingestion agent lengthen as
-their jobs queue for application cores, and past the cliff the code
-agent's median passes 500 s, the analysts stop completing inside the
-hold, and ingestion's median rises by half; the research and task
+their jobs queue for application cores; at 0.90 the backlog grows by
+fifty over the hold with every heavy archetype a quarter slower again,
+and past the cliff the code agent's median passes 500 s, the analysts
+stop completing inside the hold, and ingestion's median rises by half; the research and task
 agents, whose time is model wait, hold 184 and 30 s at every rate
 including past the cliff. The cliff is the application pool's, at 87%
 occupancy with both threads of most cores busy: under that contention
@@ -747,6 +752,7 @@ and moves within a few core-ms across each ladder.
 |---|---|---|---|---|---|---|
 | below capacity | 0.72 wf/s | 4,613 | 42.9 | 9.3 | 1.32 | 1.92 / 1.05 |
 | **at capacity** | **0.84 wf/s** | **5,240** | **48.4** | **9.2** | **1.50** | 2.18 / 1.20 |
+| first rung past capacity | 0.90 wf/s | 5,464 | 49.9 | 9.1 | 1.56 | 2.28 / 1.25 |
 | past the cliff | 0.96 wf/s | 5,600 | 52.0 | 9.3 | 1.60 | 2.33 / 1.28 |
 
 Generated tokens per workflow are 6,190 at capacity (task 2,300, code
