@@ -63,6 +63,7 @@ class E2ERunner:
             query,
             validator_enabled=bool(opts.get("validator_enabled", True)),
             grade_synthesis=bool(opts.get("grade_synthesis", True)),
+            handoff=bool(opts.get("handoff", False)),
             trigger="api", plan_approval=False,  # benchmarks never pause for HITL
             enabled_tools=list(opts.get("enabled_tools") or []),
             budget=opts.get("budgets") or None,

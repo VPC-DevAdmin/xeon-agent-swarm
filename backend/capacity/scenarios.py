@@ -35,6 +35,9 @@ def load_e2e_workflows() -> dict[str, dict]:
                     # worker's answer handed back keeps only the mechanical
                     # check on the final answer (no synthesis judgment).
                     "grade_synthesis": bool(w.get("grade_synthesis", True)),
+                    # v2.3: the first validated worker result is the
+                    # deliverable; no closing model call (routed agent).
+                    "handoff": bool(w.get("handoff", False)),
                     # Declared shape of a completed unit. `contract` applies to
                     # deterministic backends, `contract_live` to a real planner.
                     "contract": dict(w.get("contract") or {}) or None,

@@ -44,6 +44,13 @@ from backend.repositories import persistence as db
 _ORCH_STEP = "orchestrator"  # synthetic step holding planner + synthesis calls
 
 
+class HandoffComplete(Exception):
+    """A handoff workflow's single worker has returned and been validated: the
+    run ends with the worker's answer as the deliverable, without a closing
+    model call (the routed-agent shape). Raised from the adapter, caught by
+    run_with_adapter as a clean stop."""
+
+
 class BudgetExceeded(Exception):
     """Raised when a run breaches a budget ceiling. Caught by run_with_adapter,
     which stops the stream cleanly and lets synthesis work from partial results
@@ -121,8 +128,13 @@ class EventAdapter:
     def __init__(self, run_id: str, broadcast=None, *, persistence=db,
                  planner_tier: str | None = None, judge=None, redispatch=None,
                  validation_cfg: dict | None = None, synthesis_grader=None,
-                 partial_synthesizer=None, budget: dict | None = None):
+                 partial_synthesizer=None, budget: dict | None = None,
+                 handoff: bool = False):
         self.run_id = run_id
+        # Handoff workflows (task agent, v2.3): the first validated worker
+        # result is the deliverable; the graph is abandoned before the main
+        # agent's closing turn, so no model call re-drafts the answer.
+        self.handoff = bool(handoff)
         self.broadcast = broadcast
         self.db = persistence
         self.planner_tier = (planner_tier or os.environ.get("ADL_PLANNER_TIER", "T5")).upper()
@@ -474,6 +486,10 @@ class EventAdapter:
         # Keep the usable result for the synthesis grader's cross-check.
         self._results.append({"step_key": step_key, "terminal": terminal,
                               "result": result_text})
+        if self.handoff:
+            self.final_answer = result_text
+            await self._emit(EventType.synthesis_started, {"handoff": True})
+            raise HandoffComplete()
         if terminal == "degraded":
             await self._emit(EventType.validator_rejected,
                              {"task_id": step_key, "verdict_kind": "degraded",
@@ -609,7 +625,8 @@ async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
                            judge=None, redispatch=None, validation_cfg: dict | None = None,
                            synthesis_grader=None, partial_synthesizer=None,
                            budget: dict | None = None,
-                           approval=None, recursion_limit: int = 80) -> dict:
+                           approval=None, recursion_limit: int = 80,
+                           handoff: bool = False) -> dict:
     """Drive one deepagents run through the adapter end to end.
 
     Streams the compiled agent with subgraphs=True so subagent-internal calls
@@ -630,7 +647,8 @@ async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
                            planner_tier=planner_tier, judge=judge,
                            redispatch=redispatch, validation_cfg=validation_cfg,
                            synthesis_grader=synthesis_grader,
-                           partial_synthesizer=partial_synthesizer, budget=budget)
+                           partial_synthesizer=partial_synthesizer, budget=budget,
+                           handoff=handoff)
     await adapter.start(query)
     config = {"configurable": {"thread_id": run_id},
               "tags": [f"tier_req:{adapter.planner_tier}"],
@@ -676,6 +694,10 @@ async def run_with_adapter(agent, query: str, run_id: str, *, broadcast=None,
             decisions = [{"type": str(decision).lower()}
                          for _ in range(_decision_count(interrupt_payload))]
             stream_input = Command(resume={"decisions": decisions})
+    except HandoffComplete:
+        # Clean stop: the handoff workflow's worker answer is the deliverable;
+        # the graph is abandoned before the closing model call.
+        pass
     except BudgetExceeded as be:
         # Clean stop: abandon the graph, keep partial results, let synthesis grade
         # whatever was produced. The run still completes (it is not a failure).

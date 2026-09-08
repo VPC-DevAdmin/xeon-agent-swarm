@@ -592,6 +592,7 @@ class CapacityTest:
                         "enabled_tools": wf.get("enabled_tools"),
                         "validator_enabled": wf.get("validator_enabled", True),
                         "grade_synthesis": wf.get("grade_synthesis", True),
+                        "handoff": wf.get("handoff", False),
                         "budgets": wf.get("budgets"),
                         "toolless": wf.get("toolless", False),
                     }, timeout_s=self._profile_timeout_s(wid))
@@ -2430,6 +2431,7 @@ class CapacityTest:
                     "enabled_tools": wf.get("enabled_tools"),
                     "validator_enabled": wf.get("validator_enabled", True),
                     "grade_synthesis": wf.get("grade_synthesis", True),
+                        "handoff": wf.get("handoff", False),
                     "budgets": wf.get("budgets"),
                     "toolless": wf.get("toolless", False),
                 }, timeout_s=self._profile_timeout_s(sid))

@@ -387,6 +387,7 @@ async def run_deepagents(
     router_provider: str = "openai",
     toolless: bool = False,
     grade_synthesis: bool = True,
+    handoff: bool = False,
 ):
     """deepagents (ADL) engine: a single deep agent decomposes + delegates + synthesizes,
     streamed through the event adapter onto the same WS + DB surfaces as the old swarm.
@@ -459,6 +460,7 @@ async def run_deepagents(
             judge=judge, redispatch=redispatch,
             synthesis_grader=synthesis_grader,
             partial_synthesizer=partial_synthesizer, approval=approval,
+            handoff=handoff,
             # Definition budgets override env defaults key-by-key; a partial
             # budget must not silently unlimit the other dimensions.
             budget=({**_budget_from_env(),
@@ -548,6 +550,7 @@ def launch_run(
     *,
     validator_enabled: bool = True,
     grade_synthesis: bool = True,
+    handoff: bool = False,
     job_id: str | None = None,
     trigger: str = "manual",
     plan_approval: bool | None = None,
@@ -591,6 +594,7 @@ def launch_run(
                 "router_provider": router_provider,
                 "toolless": toolless,
                 "grade_synthesis": grade_synthesis,
+                "handoff": handoff,
             }
 
             async def _dispatch():
@@ -626,6 +630,7 @@ def launch_run(
         router_provider=router_provider,
         toolless=toolless,
         grade_synthesis=grade_synthesis,
+        handoff=handoff,
     ))
     _run_tasks[run_id] = task
     task.add_done_callback(lambda _t, rid=run_id: _run_tasks.pop(rid, None))
