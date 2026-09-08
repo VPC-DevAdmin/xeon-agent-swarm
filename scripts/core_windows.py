@@ -2,7 +2,9 @@
 
     python3 scripts/core_windows.py <series-dir> <mpstat-log> [allocation.env]
 
-For each rate in the series (window: evidence stamp +150 s to +690 s), a
+For each rate in the series (window: evidence stamp +600 s to +1500 s by
+default, WINDOW_LO/WINDOW_HI to override; the default skips the transient,
+since the slowest archetype takes about nine minutes to reach steady state), a
 physical core's occupancy per sample is the busier of its two threads,
 and the figure reported is the MEAN over the window's samples: the
 time-average of busy cores, which is what a ratio needs. (An earlier
@@ -78,7 +80,7 @@ for f in glob.glob(f"{series}/rate-*-i1-evidence-*.jsonl.gz"):
     b = f.split("/")[-1]
     r = re.search(r"rate-([0-9.]+)-", b).group(1)
     t = dt.datetime.strptime(re.search(r"(\d{8}-\d{6})", b).group(1), "%Y%m%d-%H%M%S").replace(tzinfo=dt.timezone.utc).timestamp()
-    rates.append((float(r), r, t + 150, t + 690))
+    rates.append((float(r), r, t + float(os.getenv("WINDOW_LO", "600")), t + float(os.getenv("WINDOW_HI", "1500"))))
 for _, r, a, b in sorted(rates):
     sel = [blk for ts, blk in blocks if a <= ts <= b]
     if not sel:
