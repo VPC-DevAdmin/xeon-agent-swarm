@@ -170,17 +170,49 @@ def toolbox_catalog() -> dict[str, dict]:
 # dispatch, latency, a record written, data injected — with zero external
 # dependence, so the work unit stays fixed-size and reproducible.
 
+_LOOKUP_BUDGET_WORDS = 1500   # packed context per embedded lookup
+
+
+async def _lookup(text: str, spec: dict | None) -> str:
+    """Retrieval as host work inside a tool step (v2.2): `spec` =
+    {"count": N, "depth": D} runs N retrievals over the seeded corpus on
+    the server's own embedder, index and reranker, each with a different
+    query derived from the step's text, and returns the packed chunks for
+    the worker's context. No model turn is spent on it: the agent looks
+    things up the way a pipeline does, before it acts."""
+    if not spec:
+        return ""
+    import re as _re
+    import zlib
+    from backend.capacity import retrieval
+    count = max(1, int(spec.get("count") or 1))
+    depth = spec.get("depth")
+    words = _re.findall(r"[a-z]+", text.lower())
+    out = []
+    for i in range(count):
+        topic = zlib.crc32(f"{text[:80]}|{i}".encode()) % 2000
+        q = f"topic{topic} " + " ".join(words[i:i + 6])
+        r = await retrieval.retrieve(q, budget_words=_LOOKUP_BUDGET_WORDS,
+                                     depth=int(depth) if depth else None)
+        out.append(f"[lookup {i + 1}/{count}] {len(r['chunks'])} chunks in {r['elapsed_ms']}ms:\n{r['packed']}")
+    return "\n\n".join(out) + "\n\n"
+
+
 class _BenchRecordArgs(BaseModel):
     key: str = Field(description="record key to store and retrieve")
+    lookup: dict | None = Field(default=None,
+                                description="knowledge-base lookup to run first: "
+                                            "{count, depth} (declared by the workload)")
 
 
 def build_bench_tool() -> StructuredTool:
-    async def _call(key: str) -> str:
+    async def _call(key: str, lookup: dict | None = None) -> str:
         import asyncio as _asyncio
         import zlib
         from backend.capacity.scenarios import synthetic_text
         from backend.repositories import persistence
 
+        context = await _lookup(key, lookup)
         # Deterministic 50-150ms "backend latency" per key (crc32, not hash():
         # hash() is salted per process and would break reproducibility).
         delay = 0.05 + (zlib.crc32(key.encode()) % 100) / 1000.0
@@ -191,7 +223,7 @@ def build_bench_tool() -> StructuredTool:
             raise RuntimeError("benchmark audit record was not committed")
         stored = "stored"
         await _asyncio.sleep(delay)
-        return (f"[bench_record] {stored} record '{key[:60]}'. Retrieved context: "
+        return (context + f"[bench_record] {stored} record '{key[:60]}'. Retrieved context: "
                 + synthetic_text(f"bench:{key}", 400)
                 + "\n\nRECORD COMPLETE. Do not call bench_record again for this "
                   "subtask. Write your final answer now using the context above.")
@@ -210,6 +242,9 @@ class _BenchExecuteArgs(BaseModel):
     task: str = Field(description="what to compute over the dataset")
     size: str = Field(default="light",
                       description="job: light, heavy, large or xl (data), build, or ingest")
+    lookup: dict | None = Field(default=None,
+                                description="retrieval to run before the job: "
+                                            "{count, depth} (declared by the workload)")
 
 
 async def _finish_ingest(r: dict) -> str:
@@ -257,14 +292,22 @@ def build_bench_execute_tool() -> StructuredTool:
     a seeded aggregation over a generated table and returns its results
     into the worker's context. The size is declared by the workload; the
     seed derives from the task text so the job is reproducible."""
-    async def _call(task: str, size: str = "light") -> str:
+    async def _call(task: str, size: str = "light", lookup: dict | None = None) -> str:
         import zlib
         from backend.capacity import sandbox
         seed = zlib.crc32(task.encode()) % 1_000_000
         kind = size if size in sandbox.KINDS else "light"
+        # The step's lookup (codebase search before a CI step, schema and
+        # definitions before a data job) runs on the retrieval tiers first.
+        context = await _lookup(task, lookup)
         r = await sandbox.run_job(kind, seed)
         if not r.get("ok"):
             raise RuntimeError(f"sandboxed job failed: {r.get('error')}")
+        if context:
+            return context + await _describe_job(kind, size, r)
+        return await _describe_job(kind, size, r)
+
+    async def _describe_job(kind: str, size: str, r: dict) -> str:
         if kind in ("build", "setup", "ci", "verify"):
             extra = ""
             if kind == "ci":
@@ -313,6 +356,8 @@ class _BenchRetrieveArgs(BaseModel):
     depth: int | None = Field(default=None,
                               description="rerank depth (candidates scored per call); "
                                           "default is the workload's declared depth")
+    count: int = Field(default=1, description="retrievals to run in this step, "
+                                              "with a different query each")
 
 
 def build_bench_retrieve_tool() -> StructuredTool:
@@ -320,21 +365,26 @@ def build_bench_retrieve_tool() -> StructuredTool:
     rerank + packing over the seeded corpus store, with the large vector
     index modeled as an off-box call. The packed chunks return into the
     worker's context with chunk-id citations."""
-    async def _call(query: str, depth: int | None = None) -> str:
+    async def _call(query: str, depth: int | None = None, count: int = 1) -> str:
         from backend.capacity import retrieval
         r = await retrieval.retrieve(query, depth=depth)
+        extra = ""
+        if count and count > 1:
+            # Further retrievals in the same step (the research agent's
+            # several searches per section): host work, no model turn.
+            extra = await _lookup(query, {"count": count - 1, "depth": depth})
         return (f"[bench_retrieve] {len(r['chunks'])} chunks retrieved in "
                 f"{r['elapsed_ms']}ms for '{query[:60]}'.\n\n"
-                + r["packed"]
-                + "\n\nRETRIEVAL COMPLETE. Use the chunks above; cite "
-                  "them by their [chunk-N] ids. Retrieve again only as the "
-                  "workflow declares.")
+                + r["packed"] + "\n\n" + extra
+                + "RETRIEVAL COMPLETE. Use ONLY the chunks above; cite "
+                  "them by their [chunk-N] ids. Do not retrieve again for "
+                  "this subtask.")
 
     return StructuredTool.from_function(
         coroutine=_call, name="bench_retrieve",
         description="Search the document store and retrieve the most "
                     "relevant chunks for a query (benchmark retrieval "
-                    "tool). Call as many times as the workflow declares, "
-                    "before bench_record.",
+                    "tool). Call EXACTLY ONCE per subtask, before "
+                    "bench_record.",
         args_schema=_BenchRetrieveArgs,
     )

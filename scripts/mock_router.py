@@ -430,18 +430,31 @@ def _synthesis_text(obj: str) -> str:
 # serving side of a benchmark run is measured data from a named model at
 # a named concurrency, repeatable and re-recordable for another model.
 
-# Retrieval per archetype (v2.2): how many times each worker retrieves
-# and at what rerank depth. Agents of these classes retrieve on most
-# steps: a task agent looks up the knowledge base once per ticket, a code
-# agent searches the codebase and its documentation, an analyst pulls
-# schema and definitions before it queries, a research agent searches
-# several times per section. Roles None = every worker.
+# Retrieval per archetype (v2.2): agents of these classes look things up
+# on most steps, and the lookup is host work (query embedder, index,
+# reranker on the server), not a model turn. It rides the step's own tool
+# call: a task agent looks the ticket up in the knowledge base as it files
+# its record (depth 32), a code agent searches the codebase and its
+# documentation before each CI step (depth 64), an analyst pulls schema
+# and metric definitions before its research and analysis jobs (depth 64),
+# and the research agent's retrieval step scores three queries (depth 128).
+# {tool: (roles or None for every worker, count, depth)}
 _RETRIEVAL_PLAN: dict[str, dict] = {
-    "task_ticket":   {"roles": None, "per_worker": 1, "depth": 32},
-    "code_agent":    {"roles": None, "per_worker": 1, "depth": 64},
-    "analyst_large": {"roles": {"research", "analysis"}, "per_worker": 1, "depth": 64},
-    "deep_research": {"roles": None, "per_worker": 3, "depth": 128},
+    "task_ticket":   {"bench_record":   (None, 1, 32)},
+    "code_agent":    {"bench_execute":  (None, 1, 64)},
+    "analyst_large": {"bench_execute":  ({"research", "analysis"}, 1, 64)},
+    "deep_research": {"bench_retrieve": (None, 3, 128)},
 }
+
+
+def _lookup_spec(obj: str, tool: str, role: str) -> dict | None:
+    plan = _RETRIEVAL_PLAN.get(_archetype_of(obj), {}).get(tool)
+    if not plan:
+        return None
+    roles, count, depth = plan
+    if roles is not None and role not in roles:
+        return None
+    return {"count": count, "depth": depth}
 
 _ARCHETYPE_MARKERS: list[tuple[str, str]] = [
     ("Using ONLY the build", "code_agent"),
@@ -879,30 +892,21 @@ async def _chat_impl(body: dict) -> JSONResponse:
         tc = _tool_call("bench_execute", {"task": (obj or "fetch")[:80], "size": "fetch"})
         return await _completion(tier=tier, category=_CATEGORY.get(_role_now, "general"),
                                  seed=seed, messages=messages, tool_calls=[tc])
-    _plan = _RETRIEVAL_PLAN.get(_archetype_of(obj))
-    _done_retrievals = _tool_result_count(messages, "bench_retrieve")
-    if _plan is not None:
-        _wants_retrieval = ("bench_retrieve" in tools
-                            and (_plan["roles"] is None or _role_now in _plan["roles"])
-                            and _done_retrievals < _plan["per_worker"])
-    else:
-        _wants_retrieval = ("bench_retrieve" in tools and (
-            "Using ONLY the measurements" not in obj or _role_now == "research")
-            and _done_retrievals == 0)
-    if _wants_retrieval:
-        # A different query each time a worker retrieves, so repeated
-        # retrievals score different candidates.
-        topic = zlib.crc32(f"{obj[:80]}|{seed}|{_role_now}|{_done_retrievals}".encode()) % 2000
+    _wants_retrieval = ("bench_retrieve" in tools and (
+        "Using ONLY the measurements" not in obj or _role_now == "research"))
+    if _wants_retrieval and _tool_result_count(messages, "bench_retrieve") == 0:
+        topic = zlib.crc32(f"{obj[:80]}|{seed}".encode()) % 2000
         args = {"query": f"topic{topic} " + " ".join(
-            re.findall(r"[a-z]+", obj.lower())[_done_retrievals:_done_retrievals + 6])}
-        if _plan is not None:
-            args["depth"] = _plan["depth"]
-        else:
-            # Heavy mix: the deep researcher declares its rerank depth in the
-            # objective ("retrieving at rerank depth 128").
-            m_depth = re.search(r"rerank depth (\d+)", obj)
-            if m_depth:
-                args["depth"] = int(m_depth.group(1))
+            re.findall(r"[a-z]+", obj.lower())[:6])}
+        # Heavy mix: the deep researcher declares its rerank depth in the
+        # objective ("retrieving at rerank depth 128").
+        m_depth = re.search(r"rerank depth (\d+)", obj)
+        if m_depth:
+            args["depth"] = int(m_depth.group(1))
+        _spec = _lookup_spec(obj, "bench_retrieve", _role_now)
+        if _spec:
+            args["depth"] = _spec["depth"]
+            args["count"] = _spec["count"]
         tc = _tool_call("bench_retrieve", args)
         return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, tool_calls=[tc])
@@ -916,13 +920,20 @@ async def _chat_impl(body: dict) -> JSONResponse:
         _kind is not None or _role_now == "analysis"))
     if _wants_exec and _tool_result_count(messages, "bench_execute") == 0:
         size = _kind or "light"
-        tc = _tool_call("bench_execute",
-                        {"task": (obj or "aggregate")[:80], "size": size})
+        _args = {"task": (obj or "aggregate")[:80], "size": size}
+        _spec = _lookup_spec(obj, "bench_execute", _role_now)
+        if _spec:
+            _args["lookup"] = _spec
+        tc = _tool_call("bench_execute", _args)
         return await _completion(tier=tier, category=_CATEGORY.get(_role_now, "general"),
                            seed=seed, messages=messages, tool_calls=[tc])
     if ("bench_record" in tools
             and _tool_result_count(messages, "bench_record") == 0):
-        tc = _tool_call("bench_record", {"key": (obj or "record")[:40]})
+        _args = {"key": (obj or "record")[:40]}
+        _spec = _lookup_spec(obj, "bench_record", _role_now)
+        if _spec:
+            _args["lookup"] = _spec
+        tc = _tool_call("bench_record", _args)
         return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, tool_calls=[tc])
 
