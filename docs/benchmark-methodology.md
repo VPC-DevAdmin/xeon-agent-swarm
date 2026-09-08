@@ -58,7 +58,7 @@ run (section 6), so generated tokens are the model's, not a formula's.
 
 | Archetype | Declared size | Workers | Model calls (planner and workers + judgments) | Lookups | Host work per workflow, stand-alone | Output tokens per workflow, judgments included (gpt-oss-20b, low reasoning) | Core-ms per token, stand-alone |
 |---|---|---|---|---|---|---|---|
-| Task agent | one ticket: one knowledge-base lookup, one record | 1 | 4 + 2 | 1 at depth 32 | about 1 core-s | 2,440 | 0.4 |
+| Task agent | one ticket: one knowledge-base lookup, one record, the worker's answer handed back | 1 | 4 + 1 | 1 at depth 32 | about 1 core-s | about 1,400 (v2.3 calibration in progress; 2,440 in the v2.2 shape) | 0.7 |
 | Research agent | 90 source pages fetched and parsed, nine retrievals at rerank depth 128 | 3 | 16 + 4 | 9 at depth 128 | about 25 core-s | 15,500 | 1.6 |
 | Ingestion agent | 50 PDF pages rendered, OCR'd, redacted, chunked, embedded and indexed | 1 | 5 + 2 | none | about 100 core-s | 3,470 | 29 |
 | Data analyst | three jobs over 100 million rows, the second over two periods | 3 | 13 + 4 | 2 at depth 64 | about 190 core-s | 12,940 | 15 |
@@ -75,16 +75,21 @@ first, and the lookup is host work inside the step, never a model turn:
 the query embedder, the index and the reranker are the server's own.
 
 - **Task agent**: a trigger, triage, or routing agent: born, does one
-  thing, dies. One worker reads a short ticket, looks it up in the
-  knowledge base (one retrieval, 32 candidates reranked), files a
-  durable record, writes the reply, and is validated. It carries the
-  per-agent lifecycle cost and is most of any deployment by count.
-  Its 2,440 tokens are the model's for this shape: about 1,350 in the
-  two planner turns, 960 in the worker's two turns, and 130 in its two
-  judge verdicts; the reply itself is a few hundred. A smaller or
-  non-reasoning model emits fewer (section 11), and the record keeps
-  one model for every archetype. Latency 30 s at every load, almost
-  all of it model wait.
+  thing, dies. The planner delegates the ticket in one turn; one worker
+  reads it, looks it up in the knowledge base (one retrieval, 32
+  candidates reranked), files a durable record and writes the reply;
+  the reply is judged once and handed back as the deliverable in a
+  short closing turn with only the mechanical check on it (the
+  workflow declares `grade_synthesis: false`). That is the shape of a
+  routed ticket agent: the planner routes, the worker answers, nothing
+  re-drafts the answer. It is most of any deployment by count. Its
+  tokens are the model's for this shape: about 350 in the planner's
+  delegation, 960 in the worker's two turns, 70 in the judgment and a
+  short handoff, about 1,400 in all, against 2,440 when the planner
+  re-drafted the answer and a second judgment graded it (the v2.2
+  shape, section 12). A smaller or non-reasoning model emits fewer
+  (section 11), and the record keeps one model for every archetype.
+  Latency about 20 s at every load, almost all of it model wait.
 - **Research agent**: three workers each fetch and parse 30 source pages
   in the sandbox (boilerplate removal and main-text extraction over real
   HTML), retrieve three times over the corpus with the cross-encoder
@@ -180,7 +185,9 @@ reasoning effort through a serving endpoint, and the recorded prompt
 and completion sizes answer the same position in a measured run,
 chosen by the unit's seed (`CAPACITY_SERVING_PROFILE`, section 6). A
 worker's turns are matched by shape, a tool-call turn or a draft, so a
-step added after the calibration still answers with calibrated sizes.
+step added after the calibration still answers with calibrated sizes;
+a changed shape (the task agent's handoff, v2.3) is recaptured and
+replayed on its own and merged into the profile of record.
 The three timing parameters and the profile are part of the machine
 fingerprint. Each call re-sends its whole context and is charged
 prefill for all of it; a serving tier with prompt caching would charge
@@ -662,6 +669,11 @@ tile is the tile of record, and the archetype table of section 2 gives
 the constant of any other tile before it is measured.
 
 ### Results of record
+
+*The v2.3 set (the task agent's handoff shape, section 2) is being
+measured; the figures below are the v2.2 set's and are replaced when it
+lands. The definitions, windows and weighting rules are the ones the v2.3
+figures will use.*
 
 One set, three seeds, 25-minute holds: enterprise
 `data/capacity/set-20260908-025329` (0.21 and 0.24 per instance, 0.84
