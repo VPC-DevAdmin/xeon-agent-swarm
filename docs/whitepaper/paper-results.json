@@ -1,0 +1,48 @@
+{
+  "revisionDate": "2026-09-08",
+  "resultVersion": "v2.2",
+  "definitionVersion": "v2.3",
+  "status": "Awaiting the revised mixed-workload benchmark",
+  "definitions": {
+    "residentUnit": "One end-to-end workflow, including its planner and workers",
+    "tile": {"Task": 6, "Research": 1, "Ingestion": 1, "Analyst": 2, "Code": 2},
+    "workers": {"Task": 1, "Research": 3, "Ingestion": 1, "Analyst": 3, "Code": 3}
+  },
+  "platform": {"cores": 64, "memoryGB": 1000},
+  "capacity": {
+    "resident": 152,
+    "cpuPercent": 83,
+    "memoryGB": 390,
+    "callsPerSecond": 9.2,
+    "outputTokensPerSecond": 5920,
+    "coreMsPerSecond": 53100,
+    "cpuShares": {"sandbox": 70, "retrieval": 3, "execution": 24, "support": 3}
+  },
+  "serving": {
+    "model": "gpt-oss-20b",
+    "gpu": "RTX PRO 6000 Blackwell Server Edition",
+    "outputTokensPerSecondPerGpu": 3500,
+    "prefixCache": true,
+    "cacheAllowancePercent": 5
+  },
+  "archetypes": [
+    {"name":"Task", "coreMs":1000, "modelCalls":6, "outputTokens":2440, "label":"retrieve, record, and reply", "color":"#0672CB"},
+    {"name":"Research", "coreMs":25000, "modelCalls":20, "outputTokens":15500, "label":"retrieve and synthesize", "color":"#0B7C84"},
+    {"name":"Ingestion", "coreMs":100000, "modelCalls":7, "outputTokens":3470, "label":"OCR, embed, and index", "color":"#00468B"},
+    {"name":"Analyst", "coreMs":190000, "modelCalls":17, "outputTokens":12940, "label":"analyze and explain", "color":"#40586D"},
+    {"name":"Code", "coreMs":150000, "modelCalls":17, "outputTokens":12400, "label":"set up, CI, and verify", "color":"#66278F"}
+  ],
+  "responsePoints": [
+    {"resident":107,"sustainable":true,"p95":{"Task":35,"Research":199,"Ingestion":144,"Analyst":392,"Code":293}},
+    {"resident":152,"sustainable":true,"p95":{"Task":35,"Research":202,"Ingestion":169,"Analyst":563,"Code":369}},
+    {"resident":181,"sustainable":false,"p95":{"Task":35,"Research":206,"Ingestion":211,"Analyst":673,"Code":452}},
+    {"resident":215,"sustainable":false,"p95":{"Task":35,"Research":210,"Ingestion":256,"Analyst":null,"Code":546}}
+  ],
+  "sources": [
+    {"id":"methodology","title":"Benchmark methodology","path":"../benchmark-methodology.md"},
+    {"id":"configuration","title":"Workflow configuration","path":"../../config/capacity_scenarios.yaml"},
+    {"id":"capacity","title":"Capacity result","path":"../../data/capacity/set-20260908-025329/summary.md"},
+    {"id":"lower-load","title":"Lower-load result","path":"../../data/capacity/set-20260908-053752/summary.md"},
+    {"id":"overload","title":"Intermediate overload result","path":"../../data/capacity/set-20260908-115604/summary.md"}
+  ]
+}

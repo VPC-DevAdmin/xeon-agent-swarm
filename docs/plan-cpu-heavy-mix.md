@@ -77,28 +77,29 @@ and the compute-carrying archetypes set the constant.
 | Engineering (an engineering organisation) | 7 | 3 | 1 | 1 | 0 | 8 |
 | Analytics (a data and research organisation) | 6 | 0 | 3 | 2 | 1 | 10 |
 
-## Result (8 September 2026)
+## Result (8 September 2026; first seed of the v2.3 set, the other two being measured)
 
-The enterprise tile was measured with three seeds and 25-minute holds on
-the allocation of record (reranker 8 cores as two processes, query
-embedder 2, ingest embedder 3, 51 for the instances and their jobs):
+The enterprise tile is measured with three seeds and 25-minute holds on
+the allocation of record (reranker 6 cores as two processes, query
+embedder 1, ingest embedder 2, 55 for the instances and their jobs):
 
-| Tile | Capacity | Resident agents, measured | Generated tokens/s at capacity | Core-ms per token | GPUs the server keeps busy at 3,500 tok/s per GPU (record) | at 2,400 / 4,378 |
+| Tile | Capacity | Resident agents, measured | Generated tokens/s at capacity | Core-ms per token | GPUs the server keeps busy at 3,565 tok/s per GPU (record) | at 2,400 / 3,753 |
 |---|---|---|---|---|---|---|
-| Enterprise | 0.84 wf/s (0.90 falls behind) | 152 | 5,920 | 9.0 | 1.69 | 2.47 / 1.35 |
+| Enterprise | 0.84 wf/s (0.90 falls behind) | 143 | 5,660 | 9.6 | 1.59 | 2.36 / 1.51 |
 
 The ratio is the server's own: its generated tokens per second against
 one GPU's, with no scaling to busy cores. Generated tokens per second
 are the declared mix's output per workflow (judgments included) times
 the rate, and busy cores are averaged over the steady window of the
-hold. At capacity the server is 83% busy and keeps 1.7 GPUs of the
-reference class busy at the record rate; per core, 9.0 core-ms per
-token at 3,500 tokens/s is 31 cores per GPU (two GPUs per socket only
+hold. At capacity the server is 85% busy and keeps 1.6 GPUs of the
+reference class busy at the record rate; per core, 9.6 core-ms per
+token at 3,565 tokens/s is 34 cores per GPU (1.9 GPUs per socket only
 as an extrapolation to every core busy, which the reserved tiers do not
-permit). The constant held at 8.8 to 9.2 across the passing
-rungs and the seeds. The residency was confirmed the other way round: 152 sessions held in a closed loop kept 150 agents in flight and completed 0.8 workflows a second at the capacity rung's latencies with no drift over half an hour, in all three seeds, with zero failures. Sets
-`data/capacity/set-20260908-025329`, `set-20260908-053752` and `set-20260908-115604`; full curves in
-section 11 of the methodology.
+permit). The constant held at 9.2 to 9.6 across the ladder. The v2.2
+set with the longer task agent measured 152 resident and 9.0 core-ms
+per token at the same capacity; the residency photograph on the v2.3
+shape follows the set. Set `data/capacity/set-20260908-165351`; full
+curves in section 11 of the methodology.
 
 ## What this does not claim
 
