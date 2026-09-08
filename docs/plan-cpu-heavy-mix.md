@@ -97,8 +97,11 @@ token at 3,565 tokens/s is 34 cores per GPU (1.9 GPUs per socket only
 as an extrapolation to every core busy, which the reserved tiers do not
 permit). The constant held at 9.2 to 9.6 across the ladder and the three seeds. The v2.2
 set with the longer task agent measured 152 resident and 9.0 core-ms
-per token at the same capacity; the residency photograph on the v2.3
-shape follows the set. Set `data/capacity/set-20260908-165351`; full
+per token at the same capacity. The residency was confirmed the other
+way round: 144 sessions held in a closed loop kept 142 agents in flight
+and completed 0.82 workflows a second at the capacity rung's latencies
+with no drift over half an hour, in all three seeds, with zero
+failures. Set `data/capacity/set-20260908-165351`; full
 curves in section 11 of the methodology.
 
 ## What this does not claim

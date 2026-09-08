@@ -648,7 +648,8 @@ The result of record is the v2.3 enterprise set (section 11):
 0.84 and 0.90 workflows/s on the allocation of record; three seeds,
 25-minute holds; evidence commits 4665ab1 and the set commit that
 follows it; per-core samples `set-12000-mpstat.log`), with its residency
-photograph (144 sessions, 30-minute holds, seeds 12001, 12101, 12201). The v2.2 sets it supersedes (section 12):
+photographs `photo-12001-20260908-205808`, `photo-12101-20260908-214827`,
+`photo-12201-20260908-223911` (144 sessions, 30-minute holds). The v2.2 sets it supersedes (section 12):
 `data/capacity/set-20260908-025329` (seeds 11401, 11501, 11601; 0.84
 and 0.96 workflows/s) with its lower rung `set-20260908-053752` (same seeds,
 0.72), its midpoint rung `set-20260908-115604` (same seeds, 0.90) and its
@@ -768,17 +769,17 @@ server then shows what it sustains with that many agents on it.
 
 | Sessions held | In flight, measured | Completions / s | Code agent p50 / p95 | Data analyst | Research / ingestion / task | Drift, first to second half of the hold | Host threads busy | Host memory |
 |---|---|---|---|---|---|---|---|---|
-| 152 | 150 | 0.80 to 0.81 | 337 / 365 s | 526 / 560 s | 183 / 147 / 30 s | within 2% for every type (ingestion +5% in one seed) | 70% | 390 GB |
+| 144 | 142 | 0.81 to 0.82 | 327 / 355 s | 506 / 552 s | 192 / 146 / 17 s | within 3% for every type (research +4% in one seed) | 66% | 365 to 368 GB |
 
-Three seeds, 30-minute holds, zero failures in 4,254 workflows; the
+Three seeds, 30-minute holds, zero failures in 4,249 workflows; the
 seeds agree to the second decimal on throughput and to within a few
-seconds on every latency. Little's law closes it: 0.81 a second times
-189 seconds is 153 against 152 held and 150 measured in flight. The
-152-session photograph is the 0.84 workflows/s point seen from the
-other side: the same server, holding 150 agents in flight, completes
+seconds on every latency. Little's law closes it: 0.82 a second times
+180 seconds is 147 against 144 held and 142 measured in flight. The
+144-session photograph is the 0.84 workflows/s point seen from the
+other side: the same server, holding 142 agents in flight, completes
 0.8 workflows a second at the latencies the open-loop ladder measured
 at its capacity rung, and holds them for half an hour without drift.
-"This server carries about 150 working agents" is therefore a
+"This server carries about 140 working agents" is therefore a
 measurement, not a derivation. The memory figure is real too: the
 analysts' 100-million-row jobs hold about 40 GB each while they run,
 and a dozen of them are in flight at once.

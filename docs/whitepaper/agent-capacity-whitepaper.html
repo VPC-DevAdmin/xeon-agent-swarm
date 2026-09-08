@@ -796,6 +796,15 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
 @media (prefers-reduced-motion:reduce){.glass-seen,.glass-seen *{animation:none!important;transition:none!important}}
 @media print{.glass-seen,.glass-seen *{animation:none!important;transition:none!important}.figure :is(.overview-stage,.design-stage,.journey-spine,.agent-weight-panel,.journey-lane,.component-row,.agent-weight-row),#method :is(.s4-panel,.s4-node,.s4-sandbox,.s4-job-overview,.s4-static-chart,.s4-operating-point){box-shadow:inset 0 1px 0 rgba(237,249,255,.2)}}
 </style>
+<style id="workflow-category-accents">
+#method .s4-flow-figure :is(.s4-node,.s4-job-overview){--category-accent:#53c3ff;--category-label:#b9e9ff}
+#method .s4-flow-figure :is(.s4-node.model,.s4-node.judge){--category-accent:#c39bff;--category-label:#e3d1ff}
+#method .s4-flow-figure .s4-node.check{--category-accent:#56dcbf;--category-label:#b3f4e4}
+#method .s4-flow-figure .s4-sandbox{--category-accent:#f0be68;--category-label:#ffe0aa}
+#method .s4-flow-figure :is(.s4-node,.s4-sandbox,.s4-job-overview){border-top-color:var(--category-accent);box-shadow:inset 0 3px 0 var(--category-accent),inset 0 -1px 0 rgba(0,13,30,.18),0 5px 12px rgba(0,13,30,.16)}
+#method .s4-flow-figure :is(.s4-node,.s4-sandbox,.s4-job-overview) .s4-node-kind{color:var(--category-label);font-size:10px;font-weight:600;line-height:1.5;letter-spacing:.04em;margin-top:3px;margin-bottom:7px}
+@media print{#method .s4-flow-figure :is(.s4-node,.s4-sandbox,.s4-job-overview){box-shadow:inset 0 3px 0 var(--category-accent)}#method .s4-flow-figure :is(.s4-node,.s4-sandbox,.s4-job-overview) .s4-node-kind{font-size:9px}}
+</style>
 </head>
 <body>
 <div id="progress"></div>
@@ -1216,14 +1225,14 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
       <div class="fig-head"><span class="fig-title">Task · one ticket, one worker cycle</span><span class="fig-tag">Figure 7a</span></div>
       <div class="s4-panel">
         <p class="s4-cycle-label">The planner assigns one worker. Its reviewed reply returns directly to the caller.</p>
-        <div class="s4-job-overview"><span class="s4-node-kind">Job 1 · CPU host · no sandbox</span><b>Resolve a routed support ticket</b><span class="s4-job-size">Example: an export arrives at the wrong local time after a timezone change</span><ol class="s4-page-operations"><li><b>Find context</b><span>Search the knowledge base and rerank 32 candidates</span></li><li><b>Record the action</b><span>Commit an audit record</span></li><li><b>Prepare the reply</b><span>Classify the ticket, assign severity, explain the likely cause, and draft a customer response</span></li></ol></div>
+        <div class="s4-job-overview"><span class="s4-node-kind">CPU service · Job 1 · no sandbox</span><b>Resolve a routed support ticket</b><span class="s4-job-size">Example: an export arrives at the wrong local time after a timezone change</span><ol class="s4-page-operations"><li><b>Find context</b><span>Search the knowledge base and rerank 32 candidates</span></li><li><b>Record the action</b><span>Commit an audit record</span></li><li><b>Prepare the reply</b><span>Classify the ticket, assign severity, explain the likely cause, and draft a customer response</span></li></ol></div>
         <div class="s4-shared-cycle"><p class="s4-cycle-label">Worker cycle · once for the ticket above</p><div class="s4-cycle-stages">
-          <div class="s4-cycle-stage"><h5><span>1</span>Assign and request</h5><div class="s4-node model"><span class="s4-node-kind">Planner · LLM</span><b>Assign one worker</b><span>Delegate the ticket</span></div><div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Request record tool</b><span>bench_record</span></div></div>
-          <div class="s4-cycle-stage"><h5><span>2</span>Retrieve and record</h5><div class="s4-node cpu"><span class="s4-node-kind">CPU</span><b>Retrieve ticket context</b><span>Embed query → search → rerank 32 candidates</span></div><div class="s4-node cpu"><span class="s4-node-kind">CPU</span><b>Write the audit record</b><span>PostgreSQL commit within bench_record</span></div></div>
-          <div class="s4-cycle-stage"><h5><span>3</span>Write the reply</h5><div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Prepare the ticket response</b><span>Use the returned context and record result</span></div></div>
-          <div class="s4-cycle-stage"><h5><span>4</span>Review the worker</h5><div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check structure</b><span>Mechanical validation</span></div><div class="s4-node judge"><span class="s4-node-kind">LLM judgment</span><b>Review worker</b><span>Model-based judgment</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>1</span>Assign and request</h5><div class="s4-node model"><span class="s4-node-kind">LLM · planner</span><b>Assign one worker</b><span>Delegate the ticket</span></div><div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Request record tool</b><span>bench_record</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>2</span>Retrieve and record</h5><div class="s4-node cpu"><span class="s4-node-kind">CPU service</span><b>Retrieve ticket context</b><span>Embed query → search → rerank 32 candidates</span></div><div class="s4-node cpu"><span class="s4-node-kind">CPU service</span><b>Write the audit record</b><span>PostgreSQL commit within bench_record</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>3</span>Write the reply</h5><div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Prepare the ticket response</b><span>Use the returned context and record result</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>4</span>Review the worker</h5><div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check structure</b><span>Mechanical validation</span></div><div class="s4-node judge"><span class="s4-node-kind">LLM · review</span><b>Review worker</b><span>Model-based judgment</span></div></div>
         </div></div>
-        <p class="s4-synthesis-label">After the worker passes review</p><div class="s4-direct-handoff"><div class="s4-node check"><span class="s4-node-kind">CPU · runtime</span><b>Return the checked answer</b><span>Direct handoff and final mechanical check. No closing synthesis call.</span></div></div>
+        <p class="s4-synthesis-label">After the worker passes review</p><div class="s4-direct-handoff"><div class="s4-node check"><span class="s4-node-kind">CPU service · runtime</span><b>Return the checked answer</b><span>Direct handoff and final mechanical check. No closing synthesis call.</span></div></div>
       </div>
       <figcaption class="fig-cap">The task makes three planner and worker model calls plus one judgment. It uses no sandbox and makes no closing synthesis call.</figcaption>
     </figure>
@@ -1239,21 +1248,21 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
       <div class="s4-panel">
         <p class="s4-cycle-label">The planner assigns these jobs in order. Each worker completes its job and passes review before the next begins.</p>
         <div class="s4-analyst-jobs">
-          <div class="s4-sandbox"><span class="s4-node-kind">Job 1 · CPU sandbox · trafilatura</span><b>Research worker: prepare source text</b><span class="s4-job-size">30 supplied HTML pages</span><ol><li>Extract source text from the pages</li><li>Remove navigation and boilerplate</li><li>Return clean text to the worker</li></ol></div>
-          <div class="s4-sandbox"><span class="s4-node-kind">Job 2 · CPU sandbox · trafilatura</span><b>Analysis worker: prepare source text</b><span class="s4-job-size">30 supplied HTML pages</span><ol><li>Extract source text from the pages</li><li>Remove navigation and boilerplate</li><li>Return clean text to the worker</li></ol></div>
-          <div class="s4-sandbox"><span class="s4-node-kind">Job 3 · CPU sandbox · trafilatura</span><b>Writing worker: prepare source text</b><span class="s4-job-size">30 supplied HTML pages</span><ol><li>Extract source text from the pages</li><li>Remove navigation and boilerplate</li><li>Return clean text to the worker</li></ol></div>
+          <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox · Job 1 · trafilatura</span><b>Research worker: prepare source text</b><span class="s4-job-size">30 supplied HTML pages</span><ol><li>Extract source text from the pages</li><li>Remove navigation and boilerplate</li><li>Return clean text to the worker</li></ol></div>
+          <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox · Job 2 · trafilatura</span><b>Analysis worker: prepare source text</b><span class="s4-job-size">30 supplied HTML pages</span><ol><li>Extract source text from the pages</li><li>Remove navigation and boilerplate</li><li>Return clean text to the worker</li></ol></div>
+          <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox · Job 3 · trafilatura</span><b>Writing worker: prepare source text</b><span class="s4-job-size">30 supplied HTML pages</span><ol><li>Extract source text from the pages</li><li>Remove navigation and boilerplate</li><li>Return clean text to the worker</li></ol></div>
         </div>
         <div class="s4-shared-cycle">
           <p class="s4-cycle-label">Shared worker cycle · once for each job above</p>
           <div class="s4-cycle-stages">
-          <div class="s4-cycle-stage"><h5><span>1</span>Assign and request</h5><div class="s4-node model"><span class="s4-node-kind">Planner · LLM</span><b>Delegate the next job</b><span>Assign one worker</span></div><div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Request sandbox job</b><span>bench_execute</span></div></div>
-          <div class="s4-cycle-stage"><h5><span>2</span>Parse and retrieve</h5><div class="s4-sandbox"><span class="s4-node-kind">CPU · isolated sandbox</span><b>Run the assigned parsing job</b><ol><li>Execute the operations shown above</li><li>Return clean source text to the worker</li></ol></div><div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Request retrieval</b><span>bench_retrieve</span></div><div class="s4-node cpu"><span class="s4-node-kind">CPU · outside sandbox</span><b>Run three lookups</b><span>Embed each query → search corpus → rerank 128 candidates per lookup</span></div></div>
-          <div class="s4-cycle-stage"><h5><span>3</span>Record and explain</h5><div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Request durable record</b><span>bench_record</span></div><div class="s4-node cpu"><span class="s4-node-kind">CPU</span><b>Write durable record</b><span>PostgreSQL commit</span></div><div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Draft worker result</b><span>Write the section using the returned evidence</span></div></div>
-          <div class="s4-cycle-stage"><h5><span>4</span>Review the worker</h5><div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check structure</b><span>Mechanical validation</span></div><div class="s4-node judge"><span class="s4-node-kind">LLM judgment</span><b>Review worker</b><span>Model-based judgment</span></div><p class="s4-review-gate">After review, the planner advances to the next job.</p></div>
+          <div class="s4-cycle-stage"><h5><span>1</span>Assign and request</h5><div class="s4-node model"><span class="s4-node-kind">LLM · planner</span><b>Delegate the next job</b><span>Assign one worker</span></div><div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Request sandbox job</b><span>bench_execute</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>2</span>Parse and retrieve</h5><div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox</span><b>Run the assigned parsing job</b><ol><li>Execute the operations shown above</li><li>Return clean source text to the worker</li></ol></div><div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Request retrieval</b><span>bench_retrieve</span></div><div class="s4-node cpu"><span class="s4-node-kind">CPU service · outside sandbox</span><b>Run three lookups</b><span>Embed each query → search corpus → rerank 128 candidates per lookup</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>3</span>Record and explain</h5><div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Request durable record</b><span>bench_record</span></div><div class="s4-node cpu"><span class="s4-node-kind">CPU service</span><b>Write durable record</b><span>PostgreSQL commit</span></div><div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Draft worker result</b><span>Write the section using the returned evidence</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>4</span>Review the worker</h5><div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check structure</b><span>Mechanical validation</span></div><div class="s4-node judge"><span class="s4-node-kind">LLM · review</span><b>Review worker</b><span>Model-based judgment</span></div><p class="s4-review-gate">After review, the planner advances to the next job.</p></div>
           </div>
         </div>
         <p class="s4-synthesis-label">After all three workers pass review · 90 page parses, nine evidence lookups, three reviewed sections</p>
-        <div class="s4-final-flow"><div class="s4-node model"><span class="s4-node-kind">LLM</span><b>Synthesize reviewed results</b><span>Planner combines the worker reports</span></div><div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check final structure</b><span>Mechanical validation</span></div><div class="s4-node judge"><span class="s4-node-kind">LLM judgment</span><b>Review final answer</b><span>Model-based judgment</span></div></div>
+        <div class="s4-final-flow"><div class="s4-node model"><span class="s4-node-kind">LLM</span><b>Synthesize reviewed results</b><span>Planner combines the worker reports</span></div><div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check final structure</b><span>Mechanical validation</span></div><div class="s4-node judge"><span class="s4-node-kind">LLM · review</span><b>Review final answer</b><span>Model-based judgment</span></div></div>
       </div>
       <figcaption class="fig-cap">The repeated sequence totals 90 parsed pages and nine retrievals. The planner synthesizes the three reviewed sections once, then validates the final brief.</figcaption>
     </figure>
@@ -1269,15 +1278,15 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
       <div class="s4-panel">
         <p class="s4-cycle-label">The planner assigns one intake worker. Page processing runs in its sandbox, followed by embedding and indexing on the host.</p>
         <div class="s4-analyst-jobs s4-single-job">
-          <div class="s4-sandbox"><span class="s4-node-kind">Job 1 · CPU sandbox · pypdfium2 and Tesseract</span><b>Prepare document text</b><span class="s4-job-size">50 supplied PDF pages</span><ol><li>Render page images with pypdfium2 and read them with Tesseract OCR</li><li>Redact personal-data patterns</li><li>Normalize, chunk, and remove duplicate text</li></ol></div>
+          <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox · Job 1 · pypdfium2 and Tesseract</span><b>Prepare document text</b><span class="s4-job-size">50 supplied PDF pages</span><ol><li>Render page images with pypdfium2 and read them with Tesseract OCR</li><li>Redact personal-data patterns</li><li>Normalize, chunk, and remove duplicate text</li></ol></div>
         </div>
         <div class="s4-shared-cycle"><p class="s4-cycle-label">Worker cycle · once for the intake job above</p><div class="s4-cycle-stages">
-          <div class="s4-cycle-stage"><h5><span>1</span>Assign and request</h5><div class="s4-node model"><span class="s4-node-kind">Planner · LLM</span><b>Delegate the intake job</b><span>Assign one worker</span></div><div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Request sandbox job</b><span>bench_execute</span></div></div>
-          <div class="s4-cycle-stage"><h5><span>2</span>Process and index</h5><div class="s4-sandbox"><span class="s4-node-kind">CPU · isolated sandbox</span><b>Run the page-processing job</b><ol><li>Execute the operations shown above</li><li>Return clean text chunks</li></ol></div><div class="s4-node cpu"><span class="s4-node-kind">CPU · outside sandbox</span><b>Embed and index chunks</b><span>Ingest embedding service → SQLite FTS5 keyword index → check query</span></div></div>
-          <div class="s4-cycle-stage"><h5><span>3</span>Record and explain</h5><div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Request durable record</b><span>bench_record</span></div><div class="s4-node cpu"><span class="s4-node-kind">CPU</span><b>Write durable record</b><span>PostgreSQL commit</span></div><div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Draft worker result</b><span>Summarize the returned intake artifacts</span></div></div>
-          <div class="s4-cycle-stage"><h5><span>4</span>Review the worker</h5><div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check structure</b><span>Mechanical validation</span></div><div class="s4-node judge"><span class="s4-node-kind">LLM judgment</span><b>Review worker</b><span>Model-based judgment</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>1</span>Assign and request</h5><div class="s4-node model"><span class="s4-node-kind">LLM · planner</span><b>Delegate the intake job</b><span>Assign one worker</span></div><div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Request sandbox job</b><span>bench_execute</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>2</span>Process and index</h5><div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox</span><b>Run the page-processing job</b><ol><li>Execute the operations shown above</li><li>Return clean text chunks</li></ol></div><div class="s4-node cpu"><span class="s4-node-kind">CPU service · outside sandbox</span><b>Embed and index chunks</b><span>Ingest embedding service → SQLite FTS5 keyword index → check query</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>3</span>Record and explain</h5><div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Request durable record</b><span>bench_record</span></div><div class="s4-node cpu"><span class="s4-node-kind">CPU service</span><b>Write durable record</b><span>PostgreSQL commit</span></div><div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Draft worker result</b><span>Summarize the returned intake artifacts</span></div></div>
+          <div class="s4-cycle-stage"><h5><span>4</span>Review the worker</h5><div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check structure</b><span>Mechanical validation</span></div><div class="s4-node judge"><span class="s4-node-kind">LLM · review</span><b>Review worker</b><span>Model-based judgment</span></div></div>
         </div></div>
-        <p class="s4-synthesis-label">After the worker passes review</p><div class="s4-final-flow"><div class="s4-node model"><span class="s4-node-kind">LLM</span><b>Synthesize reviewed results</b><span>Planner uses the reviewed intake result</span></div><div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check final structure</b><span>Mechanical validation</span></div><div class="s4-node judge"><span class="s4-node-kind">LLM judgment</span><b>Review final answer</b><span>Model-based judgment</span></div></div>
+        <p class="s4-synthesis-label">After the worker passes review</p><div class="s4-final-flow"><div class="s4-node model"><span class="s4-node-kind">LLM</span><b>Synthesize reviewed results</b><span>Planner uses the reviewed intake result</span></div><div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check final structure</b><span>Mechanical validation</span></div><div class="s4-node judge"><span class="s4-node-kind">LLM · review</span><b>Review final answer</b><span>Model-based judgment</span></div></div>
       </div>
       <figcaption class="fig-cap">Only page processing runs inside the sandbox. Embedding and indexing follow on the host, using 180-word chunks with 30-word overlap.</figcaption>
     </figure>
@@ -1293,29 +1302,29 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
       <div class="s4-panel">
         <p class="s4-cycle-label">The planner assigns these jobs in order. Each worker completes its job and passes review before the next begins.</p>
         <div class="s4-analyst-jobs">
-          <div class="s4-sandbox"><span class="s4-node-kind">Job 1 · CPU sandbox · NumPy</span><b>Profile events</b><span class="s4-job-size">100 million rows</span><ol><li>Join payment events to merchant attributes</li><li>Group volumes and calculate distributions</li><li>Return structured profile data</li></ol></div>
-          <div class="s4-sandbox"><span class="s4-node-kind">Job 2 · CPU sandbox · NumPy</span><b>Compare periods</b><span class="s4-job-size">Two 100-million-row periods</span><ol><li>Join and aggregate each period</li><li>Sort values for percentiles</li><li>Calculate rolling load and rank anomalies</li></ol></div>
-          <div class="s4-sandbox"><span class="s4-node-kind">Job 3 · CPU sandbox · NumPy</span><b>Prepare report data</b><span class="s4-job-size">100 million rows</span><ol><li>Run the report’s data pass</li><li>Calculate the reporting results</li><li>Return structured report data</li></ol></div>
+          <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox · Job 1 · NumPy</span><b>Profile events</b><span class="s4-job-size">100 million rows</span><ol><li>Join payment events to merchant attributes</li><li>Group volumes and calculate distributions</li><li>Return structured profile data</li></ol></div>
+          <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox · Job 2 · NumPy</span><b>Compare periods</b><span class="s4-job-size">Two 100-million-row periods</span><ol><li>Join and aggregate each period</li><li>Sort values for percentiles</li><li>Calculate rolling load and rank anomalies</li></ol></div>
+          <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox · Job 3 · NumPy</span><b>Prepare report data</b><span class="s4-job-size">100 million rows</span><ol><li>Run the report’s data pass</li><li>Calculate the reporting results</li><li>Return structured report data</li></ol></div>
         </div>
         <div class="s4-shared-cycle">
           <p class="s4-cycle-label">Shared worker cycle · once for each job above</p>
           <div class="s4-cycle-stages">
             <div class="s4-cycle-stage"><h5><span>1</span>Assign and request</h5>
-              <div class="s4-node model"><span class="s4-node-kind">Planner · LLM</span><b>Delegate the next job</b><span>Assign one worker</span></div>
-              <div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Request sandbox job</b><span>bench_execute</span></div>
+              <div class="s4-node model"><span class="s4-node-kind">LLM · planner</span><b>Delegate the next job</b><span>Assign one worker</span></div>
+              <div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Request sandbox job</b><span>bench_execute</span></div>
             </div>
             <div class="s4-cycle-stage"><h5><span>2</span>Retrieve and calculate</h5>
-              <div class="s4-node cpu"><span class="s4-node-kind">CPU · jobs 1 and 2 only</span><b>Retrieve definitions</b><span>Query embedding → search → rerank 64 candidates. Job 3 skips this lookup.</span></div>
-              <div class="s4-sandbox"><span class="s4-node-kind">CPU · isolated sandbox</span><b>Run the assigned data job</b><ol><li>Execute the NumPy operations shown above</li><li>Return structured results to the worker</li></ol></div>
+              <div class="s4-node cpu"><span class="s4-node-kind">CPU service · jobs 1 and 2 only</span><b>Retrieve definitions</b><span>Query embedding → search → rerank 64 candidates. Job 3 skips this lookup.</span></div>
+              <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox</span><b>Run the assigned data job</b><ol><li>Execute the NumPy operations shown above</li><li>Return structured results to the worker</li></ol></div>
             </div>
             <div class="s4-cycle-stage"><h5><span>3</span>Record and explain</h5>
-              <div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Request durable record</b><span>bench_record</span></div>
-              <div class="s4-node cpu"><span class="s4-node-kind">CPU</span><b>Write durable record</b><span>PostgreSQL commit</span></div>
-              <div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Draft worker result</b><span>Explain the returned artifacts</span></div>
+              <div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Request durable record</b><span>bench_record</span></div>
+              <div class="s4-node cpu"><span class="s4-node-kind">CPU service</span><b>Write durable record</b><span>PostgreSQL commit</span></div>
+              <div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Draft worker result</b><span>Explain the returned artifacts</span></div>
             </div>
             <div class="s4-cycle-stage"><h5><span>4</span>Review the worker</h5>
               <div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check structure</b><span>Mechanical validation</span></div>
-              <div class="s4-node judge"><span class="s4-node-kind">LLM judgment</span><b>Review worker</b><span>Model-based judgment</span></div>
+              <div class="s4-node judge"><span class="s4-node-kind">LLM · review</span><b>Review worker</b><span>Model-based judgment</span></div>
               <p class="s4-review-gate">After review, the planner advances to the next job.</p>
             </div>
           </div>
@@ -1324,7 +1333,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
         <div class="s4-final-flow">
           <div class="s4-node model"><span class="s4-node-kind">LLM</span><b>Synthesize reviewed results</b><span>Planner combines the worker reports</span></div>
           <div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check final structure</b><span>Mechanical validation</span></div>
-          <div class="s4-node judge"><span class="s4-node-kind">LLM judgment</span><b>Review final answer</b><span>Model-based judgment</span></div>
+          <div class="s4-node judge"><span class="s4-node-kind">LLM · review</span><b>Review final answer</b><span>Model-based judgment</span></div>
         </div>
       </div>
       <figcaption class="fig-cap">The data job changes for each worker. Delegation, recording, drafting, and review follow the same sequence. Only the profiling and comparison jobs retrieve definitions before entering the sandbox.</figcaption>
@@ -1341,29 +1350,29 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
       <div class="s4-panel">
         <p class="s4-cycle-label">The planner assigns these jobs in order. Each worker completes its job and passes review before the next begins.</p>
         <div class="s4-analyst-jobs">
-          <div class="s4-sandbox"><span class="s4-node-kind">Job 1 · CPU sandbox · GCC</span><b>Set up the build</b><span class="s4-job-size">Optimized Lua and SQLite binaries</span><ol><li>Copy the supplied source trees</li><li>Build optimized binaries with GCC</li><li>Run both test suites</li></ol></div>
-          <div class="s4-sandbox"><span class="s4-node-kind">Job 2 · CPU sandbox · GCC</span><b>Run CI checks</b><span class="s4-job-size">Instrumented build and static analysis</span><ol><li>Build with undefined-behavior sanitizer</li><li>Run both test suites</li><li>Apply GCC static analysis to Lua</li></ol></div>
-          <div class="s4-sandbox"><span class="s4-node-kind">Job 3 · CPU sandbox · GCC</span><b>Verify the rebuild</b><span class="s4-job-size">Baseline and incremental build</span><ol><li>Build a fresh baseline</li><li>Touch two Lua files and rebuild</li><li>Rerun Lua tests and syntax checks</li></ol></div>
+          <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox · Job 1 · GCC</span><b>Set up the build</b><span class="s4-job-size">Optimized Lua and SQLite binaries</span><ol><li>Copy the supplied source trees</li><li>Build optimized binaries with GCC</li><li>Run both test suites</li></ol></div>
+          <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox · Job 2 · GCC</span><b>Run CI checks</b><span class="s4-job-size">Instrumented build and static analysis</span><ol><li>Build with undefined-behavior sanitizer</li><li>Run both test suites</li><li>Apply GCC static analysis to Lua</li></ol></div>
+          <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox · Job 3 · GCC</span><b>Verify the rebuild</b><span class="s4-job-size">Baseline and incremental build</span><ol><li>Build a fresh baseline</li><li>Touch two Lua files and rebuild</li><li>Rerun Lua tests and syntax checks</li></ol></div>
         </div>
         <div class="s4-shared-cycle">
           <p class="s4-cycle-label">Shared worker cycle · once for each job above</p>
           <div class="s4-cycle-stages">
             <div class="s4-cycle-stage"><h5><span>1</span>Assign and request</h5>
-              <div class="s4-node model"><span class="s4-node-kind">Planner · LLM</span><b>Delegate the next job</b><span>Assign one worker</span></div>
-              <div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Request sandbox job</b><span>bench_execute</span></div>
+              <div class="s4-node model"><span class="s4-node-kind">LLM · planner</span><b>Delegate the next job</b><span>Assign one worker</span></div>
+              <div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Request sandbox job</b><span>bench_execute</span></div>
             </div>
             <div class="s4-cycle-stage"><h5><span>2</span>Retrieve and build</h5>
-              <div class="s4-node cpu"><span class="s4-node-kind">CPU · every job</span><b>Retrieve build guidance</b><span>Query embedding → search → rerank 64 candidates</span></div>
-              <div class="s4-sandbox"><span class="s4-node-kind">CPU · isolated sandbox</span><b>Run the assigned build job</b><ol><li>Start a fresh sandbox for the job above</li><li>Return build and test artifacts to the worker</li></ol></div>
+              <div class="s4-node cpu"><span class="s4-node-kind">CPU service · every job</span><b>Retrieve build guidance</b><span>Query embedding → search → rerank 64 candidates</span></div>
+              <div class="s4-sandbox"><span class="s4-node-kind">CPU sandbox</span><b>Run the assigned build job</b><ol><li>Start a fresh sandbox for the job above</li><li>Return build and test artifacts to the worker</li></ol></div>
             </div>
             <div class="s4-cycle-stage"><h5><span>3</span>Record and explain</h5>
-              <div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Request durable record</b><span>bench_record</span></div>
-              <div class="s4-node cpu"><span class="s4-node-kind">CPU</span><b>Write durable record</b><span>PostgreSQL commit</span></div>
-              <div class="s4-node model"><span class="s4-node-kind">Worker · LLM</span><b>Draft worker result</b><span>Explain the returned artifacts</span></div>
+              <div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Request durable record</b><span>bench_record</span></div>
+              <div class="s4-node cpu"><span class="s4-node-kind">CPU service</span><b>Write durable record</b><span>PostgreSQL commit</span></div>
+              <div class="s4-node model"><span class="s4-node-kind">LLM · worker</span><b>Draft worker result</b><span>Explain the returned artifacts</span></div>
             </div>
             <div class="s4-cycle-stage"><h5><span>4</span>Review the worker</h5>
               <div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check structure</b><span>Mechanical validation</span></div>
-              <div class="s4-node judge"><span class="s4-node-kind">LLM judgment</span><b>Review worker</b><span>Model-based judgment</span></div>
+              <div class="s4-node judge"><span class="s4-node-kind">LLM · review</span><b>Review worker</b><span>Model-based judgment</span></div>
               <p class="s4-review-gate">After review, the planner advances to the next job.</p>
             </div>
           </div>
@@ -1372,7 +1381,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
         <div class="s4-final-flow">
           <div class="s4-node model"><span class="s4-node-kind">LLM</span><b>Synthesize reviewed results</b><span>Planner combines the worker reports</span></div>
           <div class="s4-node check"><span class="s4-node-kind">CPU check</span><b>Check final structure</b><span>Mechanical validation</span></div>
-          <div class="s4-node judge"><span class="s4-node-kind">LLM judgment</span><b>Review final answer</b><span>Model-based judgment</span></div>
+          <div class="s4-node judge"><span class="s4-node-kind">LLM · review</span><b>Review final answer</b><span>Model-based judgment</span></div>
         </div>
       </div>
       <figcaption class="fig-cap">Each sandbox uses supplied Lua 5.4.7 and SQLite 3.50.4 sources. All three jobs follow the same worker cycle. The verification job scripts the source touches rather than generating a corrective patch.</figcaption>
