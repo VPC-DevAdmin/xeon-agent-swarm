@@ -430,6 +430,19 @@ def _synthesis_text(obj: str) -> str:
 # serving side of a benchmark run is measured data from a named model at
 # a named concurrency, repeatable and re-recordable for another model.
 
+# Retrieval per archetype (v2.2): how many times each worker retrieves
+# and at what rerank depth. Agents of these classes retrieve on most
+# steps: a task agent looks up the knowledge base once per ticket, a code
+# agent searches the codebase and its documentation, an analyst pulls
+# schema and definitions before it queries, a research agent searches
+# several times per section. Roles None = every worker.
+_RETRIEVAL_PLAN: dict[str, dict] = {
+    "task_ticket":   {"roles": None, "per_worker": 1, "depth": 32},
+    "code_agent":    {"roles": None, "per_worker": 1, "depth": 64},
+    "analyst_large": {"roles": {"research", "analysis"}, "per_worker": 1, "depth": 64},
+    "deep_research": {"roles": None, "per_worker": 3, "depth": 128},
+}
+
 _ARCHETYPE_MARKERS: list[tuple[str, str]] = [
     ("Using ONLY the build", "code_agent"),
     ("rerank depth", "deep_research"),
@@ -532,19 +545,72 @@ def _load_profile() -> dict | None:
     by_role: dict[str, list] = {}
     for k, v in by_key.items():
         by_role.setdefault(k.split("/", 1)[1], []).extend(v)
+    # Worker turns by SHAPE rather than by position: a worker's last
+    # recorded position is its draft, every earlier one a tool-call turn.
+    # Positions shift when a workflow gains a tool call after the
+    # calibration (retrieval added to the task agent, say), and the shape
+    # is what the tokens depend on.
+    positions: dict[str, dict[int, list]] = {}
+    for k, v in by_key.items():
+        head, _, n = k.rpartition("/")
+        if n.isdigit() and head.split("/", 1)[1] not in _NON_WORKER_ROLES:
+            positions.setdefault(head, {}).setdefault(int(n), []).extend(v)
+    draft_by, tool_by = {}, {}
+    for head, byn in positions.items():
+        last = max(byn)
+        draft_by[head] = list(byn[last])
+        tool_by[head] = [x for n, v in byn.items() if n != last for x in v]
+    draft_role, tool_role, tool_arch, tool_all = {}, {}, {}, []
+    for head, v in draft_by.items():
+        draft_role.setdefault(head.split("/", 1)[1], []).extend(v)
+    for head, v in tool_by.items():
+        tool_role.setdefault(head.split("/", 1)[1], []).extend(v)
+        tool_arch.setdefault(head.split("/", 1)[0], []).extend(v)
+        tool_all.extend(v)
     _profile = {"level": level, "model": next((r.get("model") for r in rows), None),
-                "by_key": by_key, "by_role": by_role, "path": path}
+                "by_key": by_key, "by_role": by_role, "path": path,
+                "draft_by": draft_by, "tool_by": tool_by,
+                "draft_role": draft_role, "tool_role": tool_role,
+                "tool_arch": tool_arch, "tool_all": tool_all}
     return _profile
 
 
-def profile_sample(key: str, seed: str) -> tuple[float, int, int] | None:
-    """(wait_s, prompt_tokens, completion_tokens) recorded for this call
-    position, chosen by the unit's seed; a position never recorded falls
-    back to the same role in any archetype; None when no profile is set."""
+_MIN_POOL = 4   # a tool-call turn draws from the smallest pool with this many samples
+
+
+_NON_WORKER_ROLES = {"planner", "judge", "partial", "tool_user"}
+
+
+def profile_sample(key: str, seed: str, draft: bool | None = None) -> tuple[float, int, int] | None:
+    """(wait_s, prompt_tokens, completion_tokens) recorded for this call,
+    chosen by the unit's seed. Planner, judge and delegation calls match
+    their recorded position exactly. A worker's call matches by SHAPE:
+    a draft (no tool call) takes the samples of that archetype and role's
+    last recorded position, a tool-call turn the samples of its earlier
+    positions, so tool calls added after the calibration keep calibrated
+    tokens; either falls to the same role in any archetype. None when no
+    profile is set."""
     prof = _load_profile()
     if not prof:
         return None
-    samples = prof["by_key"].get(key) or prof["by_role"].get(key.split("/", 1)[1])
+    head, _, _n = key.rpartition("/")
+    role = head.split("/", 1)[1] if "/" in head else ""
+    if role in _NON_WORKER_ROLES or draft is None:
+        samples = prof["by_key"].get(key) or prof["by_role"].get(key.split("/", 1)[1])
+    elif draft:
+        samples = prof["draft_by"].get(head) or prof["draft_role"].get(role)
+    else:
+        # Tool-call turns were recorded thinly (a few per position), so a
+        # turn draws from the smallest pool with enough samples: its own
+        # archetype and role, then its role anywhere, then its archetype,
+        # then every worker tool-call turn; failing all, the draft samples.
+        arch = head.split("/", 1)[0]
+        samples = next((pool for pool in (prof["tool_by"].get(head), prof["tool_role"].get(role),
+                                          prof["tool_arch"].get(arch), prof["tool_all"])
+                        if pool and len(pool) >= _MIN_POOL), None)
+        if not samples:
+            samples = (prof["tool_by"].get(head) or prof["draft_by"].get(head)
+                       or prof["draft_role"].get(role))
     if not samples:
         return None
     ttft, total, pin, pout = samples[_hash(seed + key) % len(samples)]
@@ -623,7 +689,7 @@ async def _completion(*, tier: str, category: str, seed: str, messages: list[dic
         completion_text = json.dumps(tool_calls)
     usage = _usage(messages, completion_text)
     _key = _current_key.get()
-    recorded = profile_sample(_key, seed) if _key else None
+    recorded = profile_sample(_key, seed, draft=not tool_calls) if _key else None
     if recorded is not None:
         wait, pin, pout = recorded
         usage = {"prompt_tokens": pin, "completion_tokens": pout, "total_tokens": pin + pout}
@@ -813,17 +879,30 @@ async def _chat_impl(body: dict) -> JSONResponse:
         tc = _tool_call("bench_execute", {"task": (obj or "fetch")[:80], "size": "fetch"})
         return await _completion(tier=tier, category=_CATEGORY.get(_role_now, "general"),
                                  seed=seed, messages=messages, tool_calls=[tc])
-    _wants_retrieval = ("bench_retrieve" in tools and (
-        "Using ONLY the measurements" not in obj or _role_now == "research"))
-    if _wants_retrieval and _tool_result_count(messages, "bench_retrieve") == 0:
-        topic = zlib.crc32(f"{obj[:80]}|{seed}".encode()) % 2000
+    _plan = _RETRIEVAL_PLAN.get(_archetype_of(obj))
+    _done_retrievals = _tool_result_count(messages, "bench_retrieve")
+    if _plan is not None:
+        _wants_retrieval = ("bench_retrieve" in tools
+                            and (_plan["roles"] is None or _role_now in _plan["roles"])
+                            and _done_retrievals < _plan["per_worker"])
+    else:
+        _wants_retrieval = ("bench_retrieve" in tools and (
+            "Using ONLY the measurements" not in obj or _role_now == "research")
+            and _done_retrievals == 0)
+    if _wants_retrieval:
+        # A different query each time a worker retrieves, so repeated
+        # retrievals score different candidates.
+        topic = zlib.crc32(f"{obj[:80]}|{seed}|{_role_now}|{_done_retrievals}".encode()) % 2000
         args = {"query": f"topic{topic} " + " ".join(
-            re.findall(r"[a-z]+", obj.lower())[:6])}
-        # Heavy mix: the deep researcher declares its rerank depth in the
-        # objective ("retrieving at rerank depth 128").
-        m_depth = re.search(r"rerank depth (\d+)", obj)
-        if m_depth:
-            args["depth"] = int(m_depth.group(1))
+            re.findall(r"[a-z]+", obj.lower())[_done_retrievals:_done_retrievals + 6])}
+        if _plan is not None:
+            args["depth"] = _plan["depth"]
+        else:
+            # Heavy mix: the deep researcher declares its rerank depth in the
+            # objective ("retrieving at rerank depth 128").
+            m_depth = re.search(r"rerank depth (\d+)", obj)
+            if m_depth:
+                args["depth"] = int(m_depth.group(1))
         tc = _tool_call("bench_retrieve", args)
         return await _completion(tier=tier, category="general", seed=seed,
                            messages=messages, tool_calls=[tc])

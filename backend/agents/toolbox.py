@@ -326,15 +326,15 @@ def build_bench_retrieve_tool() -> StructuredTool:
         return (f"[bench_retrieve] {len(r['chunks'])} chunks retrieved in "
                 f"{r['elapsed_ms']}ms for '{query[:60]}'.\n\n"
                 + r["packed"]
-                + "\n\nRETRIEVAL COMPLETE. Use ONLY the chunks above; cite "
-                  "them by their [chunk-N] ids. Do not retrieve again for "
-                  "this subtask.")
+                + "\n\nRETRIEVAL COMPLETE. Use the chunks above; cite "
+                  "them by their [chunk-N] ids. Retrieve again only as the "
+                  "workflow declares.")
 
     return StructuredTool.from_function(
         coroutine=_call, name="bench_retrieve",
         description="Search the document store and retrieve the most "
                     "relevant chunks for a query (benchmark retrieval "
-                    "tool). Call EXACTLY ONCE per subtask, before "
-                    "bench_record.",
+                    "tool). Call as many times as the workflow declares, "
+                    "before bench_record.",
         args_schema=_BenchRetrieveArgs,
     )

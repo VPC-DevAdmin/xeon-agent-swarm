@@ -231,14 +231,14 @@ e2e_workflows:
   task_ticket:
     name: "Task agent: one ticket (e2e)"
     think_ms: 3000
-    # The task agent: one planner turn, ONE general-purpose worker
-    # that writes one durable record and answers, validation, synthesis. Born,
-    # does one thing, dies - the shape of most agents in a deployment
-    # (triggers, routing, extraction). Contract measured from a smoke run
-    # against the real orchestrator on 2026-09-03 and pinned exactly.
+    # The task agent: one planner turn, ONE general-purpose worker that
+    # looks the ticket up in the knowledge base (one retrieval at rerank
+    # depth 32), writes one durable record and answers, validation,
+    # synthesis. Born, does one thing, dies - the shape of most agents in
+    # a deployment (triggers, routing, extraction).
     toolless: true
-    tools: [bench_record]
-    contract: {task_count: [1, 1], steps: [1, 1], llm_calls: [4, 4], validations: [3, 3], tool_calls: [1, 1], tokens_in: [300, 20000]}
+    tools: [bench_retrieve, bench_record]
+    contract: {task_count: [1, 1], steps: [1, 1], llm_calls: [5, 5], validations: [3, 3], tool_calls: [2, 2], tokens_in: [300, 60000]}
     contract_live: {task_count: [1, 2], steps: [1, 2], llm_calls: [2, 20], validations: [0, 10], tool_calls: [0, 4]}
     budgets: {max_subagents: 2, max_tool_hops: 2}
     query: >-
@@ -248,19 +248,21 @@ e2e_workflows:
       and the last one landed at the old time. Classify the ticket
       (category and severity), decide whether it is a defect or a
       configuration change, and write the customer reply. Plan EXACTLY one
-      worker subtask and no more. The worker calls bench_record exactly
-      once to file the ticket record, then writes the classification and
-      the reply and stops. Deliverable: category, severity, root cause in
+      worker subtask and no more. The worker calls bench_retrieve exactly
+      once to look the ticket up in the knowledge base, then bench_record
+      exactly once to file the ticket record, then writes the
+      classification and the reply and stops. Deliverable: category, severity, root cause in
       one line, and a three-sentence reply.
   code_agent:
     name: "Code agent: build and test (e2e, heavy mix)"
     think_ms: 3000
-    # Three workers each build the working tree's library (twelve units of
-    # sixty functions) with gcc -O2 in the sandbox and run its property tests (backend/capacity/
-    # sandbox_build_job.py), then record. The verifier is the test result.
+    # Three workers: each searches the codebase and its documentation
+    # (one retrieval at rerank depth 64), runs its CI step in the sandbox
+    # (backend/capacity/sandbox_build_job.py: setup, ci, verify), then
+    # records. The verifier is the test result.
     toolless: true
-    tools: [bench_execute, bench_record]
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [6000, 200000]}
+    tools: [bench_retrieve, bench_execute, bench_record]
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [16, 16], validations: [7, 7], tool_calls: [9, 9], tokens_in: [6000, 300000]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 12]}
     budgets: {max_subagents: 4, max_tool_hops: 3}
     query: >-
@@ -269,23 +271,24 @@ e2e_workflows:
       through the change: build the tree and run the test suite, fix what
       fails, and confirm the tests. Plan EXACTLY three worker subtasks and no more: research
       (build the baseline and read the failures), analysis (make the
-      change and rebuild), and writing (the change note). Each worker runs
-      bench_execute exactly once and then bench_record exactly once, then
-      writes its section and stops. Deliverable: the build result, the
+      change and rebuild), and writing (the change note). Each worker
+      runs bench_retrieve exactly once to search the codebase and its
+      documentation, then bench_execute exactly once, then bench_record
+      exactly once, then writes its section and stops. Deliverable: the build result, the
       test counts, and a change note.
   deep_research:
     name: "Deep research brief (e2e, heavy mix)"
     think_ms: 3000
-    # The research brief with its three retrievals at rerank depth 128:
-    # the cross-encoder scores eight times the candidates per call, on the
-    # reranker's pair law, and the packed context is the same size.
+    # The research brief with nine retrievals at rerank depth 128, three
+    # per worker: the cross-encoder scores 128 candidates per call on the
+    # reranker's pair law.
     toolless: true
     # Each worker first fetches and parses its share of the source pages in
     # the sandbox (sandbox_fetch_job.py: boilerplate removal, main-text
-    # extraction over 30 HTML pages), then retrieves at depth 128, then
-    # records: three tool calls per worker, one model call more each.
+    # extraction over 30 HTML pages), then retrieves three times at depth
+    # 128, then records: five tool calls per worker, one model call more each.
     tools: [bench_execute, bench_retrieve, bench_record]
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [16, 16], validations: [7, 7], tool_calls: [9, 9], tokens_in: [20000, 500000]}
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [22, 22], validations: [7, 7], tool_calls: [15, 15], tokens_in: [20000, 800000]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 12]}
     budgets: {max_subagents: 4, max_tool_hops: 3}
     query: >-
@@ -300,8 +303,9 @@ e2e_workflows:
       mixes. (4) The serving tier's tokens per second decide how many
       hosts one accelerator needs. Plan EXACTLY three worker subtasks and
       no more: research, analysis, and writing. Each worker runs
-      bench_execute exactly once, then bench_retrieve exactly once, then
-      bench_record exactly once, then writes its section and stops.
+      bench_execute exactly once, then bench_retrieve exactly three times
+      with different queries, then bench_record exactly once, then writes
+      its section and stops.
       Deliverable: a brief with sections for findings, trade-offs, and one
       recommendation.
   ingestion:
@@ -332,10 +336,12 @@ e2e_workflows:
     think_ms: 3000
     # The data analyst with its three jobs at 100M rows each (a week of
     # events; about 47 core-s per job); the analysis worker's job runs over
-    # two periods, this week and the previous, and reports the change.
+    # two periods, this week and the previous, and reports the change. The
+    # research and analysis workers each pull schema and metric
+    # definitions first (one retrieval at rerank depth 64).
     toolless: true
-    tools: [bench_execute, bench_record]
-    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [13, 13], validations: [7, 7], tool_calls: [6, 6], tokens_in: [6000, 200000]}
+    tools: [bench_retrieve, bench_execute, bench_record]
+    contract: {task_count: [3, 3], steps: [3, 3], llm_calls: [15, 15], validations: [7, 7], tool_calls: [8, 8], tokens_in: [6000, 300000]}
     contract_live: {task_count: [1, 5], steps: [1, 5], llm_calls: [4, 60], validations: [0, 40], tool_calls: [0, 12]}
     budgets: {max_subagents: 4, max_tool_hops: 3}
     query: >-
@@ -345,8 +351,10 @@ e2e_workflows:
       profile, the value distribution and its tail, and anomalous
       merchants. Plan EXACTLY three worker subtasks and no more: research
       (profile the data), analysis (rank and explain the anomalies), and
-      writing (the report). Each worker runs bench_execute exactly once and
-      then bench_record exactly once, then writes its section and stops.
+      writing (the report). The research and analysis workers run
+      bench_retrieve exactly once to pull the schema and metric
+      definitions; each worker runs bench_execute exactly once and then
+      bench_record exactly once, then writes its section and stops.
       Deliverable: a summary table of the top merchants, the peak hour with
       its load, the p95 and p99 transaction values, and a list of anomalies
       with a one-line explanation each.
