@@ -206,8 +206,8 @@
 
 <script>
 const DATA = /*__DATA__*/null;
-const PLATEAU = 2;              // the capacity point of the ladder in the event file
-const WARMUP_S = 240;
+const PLATEAU = 1;              // the capacity point of the ladder in the event file (0.72, 0.84, 0.96)
+const WARMUP_S = 600;           // the analysts take about nine minutes, so steady state starts later
 const GPU_TOKS = 3500;   // record serving rate: gpt-oss-20b on one RTX PRO 6000 under vLLM, context-adjusted (methodology section 11)
 const SMT_SHARE = 0.8;
 const ARCH = {

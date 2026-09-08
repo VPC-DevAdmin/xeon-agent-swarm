@@ -77,31 +77,24 @@ and the compute-carrying archetypes set the constant.
 | Engineering (an engineering organisation) | 7 | 3 | 1 | 1 | 0 | 8 |
 | Analytics (a data and research organisation) | 6 | 0 | 3 | 2 | 1 | 10 |
 
-## Result (6 September 2026)
+## Result (8 September 2026)
 
-Each tile was measured with three seeds and ten-minute holds; the
-enterprise tile on its allocation of record (reranker 4 cores, query
-embedder 1, ingest embedder 8, 51 for the instances and their jobs), the
-others with the reranker on 8, the query embedder on 2 and 46 application
-cores:
+The enterprise tile was measured with three seeds and 25-minute holds on
+the allocation of record (reranker 8 cores as two processes, query
+embedder 2, ingest embedder 3, 51 for the instances and their jobs):
 
 | Tile | Capacity | Resident agents, measured | Generated tokens/s at capacity | Core-ms per token | GPUs the server keeps busy at 3,500 tok/s per GPU (record) | at 2,400 / 4,378 |
 |---|---|---|---|---|---|---|
-| Enterprise | 2.4 wf/s (2.6 falls behind) | 151 | 2,418 | 23.1 | 0.69 | 1.01 / 0.55 |
-| Engineering | 2.4 wf/s (2.8 falls behind) | 150 | 2,387 | 19.8 | 0.68 | 0.99 / 0.55 |
-| Analytics | 2.6 wf/s (3.2 falls behind) | 137 | 2,658 | 19.8 | 0.76 | 1.11 / 0.61 |
+| Enterprise | 0.84 wf/s (0.96 falls behind) | 152 | 5,240 | 9.2 | 1.50 | 2.18 / 1.20 |
 
 The ratio is the server's own: its generated tokens per second against
-one GPU's, with no scaling to busy cores. At capacity each server keeps
-about 0.7 of a GPU busy at the record rate and one GPU at the
-conservative 2,400. The
-enterprise tile's residency was confirmed the other way round: 152
-sessions held in a closed loop completed 2.30 workflows a second at the
-ladder's latencies with no drift over ten minutes, in all three seeds.
-Sets `data/capacity/set-20260906-163941`, `set-20260906-182610`,
-`set-20260905-060903`, `set-20260905-090413`; photographs
-`photo-10301-20260906-213254`, `photo-10401-20260906-215815`, `photo-10501-20260906-222336`; full curves in section 11 of the
-methodology.
+one GPU's, with no scaling to busy cores. At capacity the server is 76%
+busy and keeps 1.5 GPUs of the reference class busy at the record rate;
+per core, 9.2 core-ms per token at 3,500 tokens/s is 32 cores per GPU,
+two GPUs per fully busy 64-core socket. The constant held at 9.2 to 10.2
+across the ladder and the seeds. <<PHOTO_SENTENCE>> Sets
+`data/capacity/set-20260908-025329` and `set-20260908-053752`; full curves in
+section 11 of the methodology.
 
 ## What this does not claim
 

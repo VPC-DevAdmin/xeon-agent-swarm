@@ -169,7 +169,7 @@
 
 <script>
 const DATA = /*__DATA__*/null;
-const CERTIFIED_CORE_MS = [21.5, 22.5, 23.1, 23.2];   // steady-window measurement per plateau (scripts/ratio_from_profile.py --mpstat)
+const CERTIFIED_CORE_MS = [9.3, 9.2, 9.3];   // steady-window measurement per plateau (scripts/ratio_from_profile.py --mpstat)
 const GPU_TOKS = 3500;   // record serving rate: gpt-oss-20b on one RTX PRO 6000 under vLLM, context-adjusted (methodology section 11)
 
 (function () {
@@ -181,7 +181,7 @@ const GPU_TOKS = 3500;   // record serving rate: gpt-oss-20b on one RTX PRO 6000
   document.getElementById("subtitle").textContent =
     `Set ${M.set ? M.set.split("/").pop() : ""}, series ${M.series.split("-")[1]} \u00b7 twelve-arrival enterprise tile: ` +
     `${tile.task_ticket} task, ${tile.code_agent} code, ${tile.analyst_large} analyst, ${tile.deep_research} research, ${tile.ingestion} ingestion \u00b7 ` +
-    `five plateaus of ten minutes, ${(M.duration / 60).toFixed(0)} minutes of evidence`;
+    `${P.length} plateaus of twenty-five minutes, ${(M.duration / 60).toFixed(0)} minutes of evidence`;
 
   // ---------- units: sorted by arrival, with per-unit phase layout
   U.sort((a, b) => a[2] - b[2]);
