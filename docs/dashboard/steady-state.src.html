@@ -211,11 +211,11 @@ const WARMUP_S = 600;           // the analysts take about nine minutes, so stea
 const GPU_TOKS = 3500;   // record serving rate: gpt-oss-20b on one RTX PRO 6000 under vLLM, context-adjusted (methodology section 11)
 const SMT_SHARE = 0.8;
 const ARCH = {
-  task_ticket:  { name: "Task agent",      does: "Reads one ticket, looks it up in the knowledge base (32 candidates reranked), files a record, writes the reply.", workers: 1, calls: 4,  gen: 2300,  coreS: 1,   lat: "30 s",  phrase: "ticket looked up, record filed, reply written" },
-  deep_research:{ name: "Research agent",  does: "Three workers each fetch and parse 30 source pages, run three searches with 128 candidates reranked, and draft; the brief is assembled.", workers: 3, calls: 16, gen: 15000, coreS: 25,  lat: "185 s", phrase: "90 pages parsed, nine searches reranked, brief assembled" },
-  ingestion:    { name: "Ingestion agent", does: "Renders 50 PDF pages, reads them with OCR, redacts personal data, chunks, embeds and indexes the text, checks with a query.", workers: 1, calls: 5,  gen: 3300,  coreS: 100, lat: "160 s", phrase: "50 pages OCR'd and redacted, chunks embedded and indexed" },
-  analyst_large:{ name: "Data analyst",    does: "Three workers pull definitions and run jobs over 100 million events in a sandbox; the second compares this period with the last.", workers: 3, calls: 13, gen: 12600, coreS: 190, lat: "580 s", phrase: "three 100 M-row jobs run, period-over-period change reported" },
-  code_agent:   { name: "Code agent",      does: "Three workers search the codebase, then set up, run CI under the sanitizer with static analysis, and verify the change over Lua and SQLite.", workers: 3, calls: 13, gen: 12000, coreS: 150, lat: "370 s", phrase: "tree built, CI and analysis passed, change verified" },
+  task_ticket:  { name: "Task agent",      does: "Reads one ticket, looks it up in the knowledge base (32 candidates reranked), files a record, writes the reply.", workers: 1, calls: 6,  gen: 2440,  coreS: 1,   lat: "30 s",  phrase: "ticket looked up, record filed, reply written" },
+  deep_research:{ name: "Research agent",  does: "Three workers each fetch and parse 30 source pages, run three searches with 128 candidates reranked, and draft; the brief is assembled.", workers: 3, calls: 20, gen: 15500, coreS: 25,  lat: "185 s", phrase: "90 pages parsed, nine searches reranked, brief assembled" },
+  ingestion:    { name: "Ingestion agent", does: "Renders 50 PDF pages, reads them with OCR, redacts personal data, chunks, embeds and indexes the text, checks with a query.", workers: 1, calls: 7,  gen: 3470,  coreS: 100, lat: "160 s", phrase: "50 pages OCR'd and redacted, chunks embedded and indexed" },
+  analyst_large:{ name: "Data analyst",    does: "Three workers pull definitions and run jobs over 100 million events in a sandbox; the second compares this period with the last.", workers: 3, calls: 17, gen: 12940, coreS: 190, lat: "580 s", phrase: "three 100 M-row jobs run, period-over-period change reported" },
+  code_agent:   { name: "Code agent",      does: "Three workers search the codebase, then set up, run CI under the sanitizer with static analysis, and verify the change over Lua and SQLite.", workers: 3, calls: 17, gen: 12400, coreS: 150, lat: "370 s", phrase: "tree built, CI and analysis passed, change verified" },
 };
 
 (function () {

@@ -315,7 +315,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
   <h2>Agent workflows are shifting infrastructure toward the CPU<span class="rule"></span></h2>
   <div class="prose">
     <p class="lead">Agent workflows are shifting the balance of AI infrastructure toward the CPU. Tools and sandboxes retrieve data, process documents, analyze datasets, compile software, and validate results between LLM calls. This increases the CPU capacity needed for each GPU system.</p>
-    <p>We tested this effect with an Enterprise-style mix of 152 resident agents per CPU, ranging from small task agents through research and ingestion to heavy analyst and code agents. The mix produced a 1:1.5 CPU-to-GPU ratio. Data jobs, software builds, retrieval, embedding, and validation kept the CPU active, moving the system away from GPU-heavy ratios associated with simpler LLM requests. A near-parity deployment would pair three dual-socket PowerEdge R770 systems with one eight-GPU PowerEdge XE7740, providing six CPU sockets for eight GPUs.</p>
+    <p>We tested this effect with an Enterprise-style mix of 152 resident agents per CPU, ranging from small task agents through research and ingestion to heavy analyst and code agents. The mix produced a 1:1.7 CPU-to-GPU ratio. Data jobs, software builds, retrieval, embedding, and validation kept the CPU active, moving the system away from GPU-heavy ratios associated with simpler LLM requests. A near-parity deployment would pair three dual-socket PowerEdge R770 systems with one eight-GPU PowerEdge XE7740, providing six CPU sockets for eight GPUs.</p>
     <p>The deployment separates agent execution from model inference. The R770 systems run the agents, tools, and sandboxes, then send LLM calls to the XE7740 for model serving. Each tier can scale independently as demand changes. Agent execution can stay close to users and enterprise data, while model serving runs where power, cooling, and GPU capacity are available.</p>
   </div>
   <figure class="figure wide reveal" id="fig-overview">
@@ -343,11 +343,11 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
       </div>
       <div class="overview-ratio-band">
         <div><span>Reference layout</span><b>6 CPU sockets : 8 GPUs</b></div>
-        <div><span>Enterprise test</span><b>1 CPU socket : 1.5 GPUs</b></div>
+        <div><span>Enterprise test</span><b>1 CPU socket : 1.7 GPUs</b></div>
         <div><span>Resident population per CPU</span><b>152 agents</b></div>
       </div>
     </div>
-    <figcaption class="fig-cap">Three dual-socket R770 systems provide six CPU sockets beside one eight-GPU XE7740. This layout, six sockets to eight GPUs, follows the roughly 1:1.5 ratio found with the Enterprise agent mix.</figcaption>
+    <figcaption class="fig-cap">Three dual-socket R770 systems provide six CPU sockets beside one eight-GPU XE7740. This layout, six sockets to eight GPUs, follows the roughly 1:1.7 ratio found with the Enterprise agent mix.</figcaption>
   </figure>
 </section>
 
@@ -358,7 +358,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
     <p class="lead">Enterprise agent deployments carry a mix of work. Many agents handle short service tasks such as triaging requests and updating records. Alongside them, smaller groups research information, ingest documents, analyze business data, and change software. We represented this population with five archetypes that span those common activities.</p>
     <p>The mix is organized as a 12-agent tile: six task agents, one research agent, one ingestion agent, two data analysts, and two code agents. The system fills by repeating the tile, keeping the proportion of lightweight and intensive work consistent as the resident population grows. At the 152-agent per CPU point, the host carries many small workflows and a smaller number of long-running workflows at the same time.</p>
     <p>The load changes as the mix moves from short tasks to deeper work. Task agents keep the runtime and its database active, while research and ingestion bring retrieval, embedding, memory traffic, and storage into the execution path. Data analysis and code workflows then add long sandboxed jobs for processing, compilation, and validation.</p>
-    <p>Together, the mix ran on one 64-core processor, reaching 76 percent host CPU utilization and using 39 percent of memory capacity. The agents issued 10.8 LLM calls per second, driving a model-serving requirement of roughly 5,200 output tokens per second. That demand corresponds to one RTX PRO 6000 GPU. The CPU profile shows how agent execution, sandboxed jobs, retrieval, embedding, and supporting services combine as the system fills.  The testing was done on a single socket to isolate demand, and scaling up would generally follow the same pattern.</p>
+    <p>Together, the mix ran on one 64-core processor, reaching 83 percent host CPU utilization and using 39 percent of memory capacity. The agents issued 9.2 LLM calls per second, driving a model-serving requirement of roughly 5,900 output tokens per second. That demand corresponds to about 1.7 RTX PRO 6000 GPUs at the planning throughput used in section 4. The CPU profile shows how agent execution, sandboxed jobs, retrieval, embedding, and supporting services combine as the system fills.  The testing was done on a single socket to isolate demand, and scaling up would generally follow the same pattern.</p>
   </div>
   <figure class="figure wide reveal" id="fig-archetypes">
     <div class="fig-head">
@@ -420,7 +420,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
           <div class="mix-metric-title"><span>System activity</span><b>At 152 resident agents</b></div>
           <div class="mix-metric-list">
             <div class="mix-metric mix-metric-cpu">
-              <div class="mix-metric-head"><span>CPU utilization</span><b>76%</b></div>
+              <div class="mix-metric-head"><span>CPU utilization</span><b>83%</b></div>
               <div class="cpu-stack" role="img" aria-label="Attributed CPU: 70 percent sandboxed jobs, 3 percent retrieval and embedding, 24 percent agent execution, and 3 percent database and other services">
                 <i class="sandbox" style="--share:70%"></i><i class="retrieval" style="--share:3%"></i><i class="execution" style="--share:24%"></i><i class="support" style="--share:3%"></i>
               </div>
@@ -437,14 +437,14 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
               <small>Workflow state, documents, and job data</small>
             </div>
             <div class="mix-metric">
-              <div class="mix-metric-head"><span>LLM calls per second</span><b>10.8</b></div>
-              <div class="mix-meter" role="progressbar" aria-label="LLM calls per second" aria-valuemin="0" aria-valuemax="20" aria-valuenow="10.8"><i style="--level:54%"></i></div>
-              <small>Planner, worker, validation, and synthesis calls</small>
+              <div class="mix-metric-head"><span>LLM calls per second</span><b>9.2</b></div>
+              <div class="mix-meter" role="progressbar" aria-label="LLM calls per second" aria-valuemin="0" aria-valuemax="20" aria-valuenow="9.2"><i style="--level:46%"></i></div>
+              <small>Planner, worker, validation, and synthesis calls, including model-based judgments</small>
             </div>
             <div class="mix-metric">
-              <div class="mix-metric-head"><span>LLM output required</span><b>~5,200/s</b></div>
-              <div class="mix-meter" role="progressbar" aria-label="Model-serving demand of roughly 5,200 output tokens per second" aria-valuemin="0" aria-valuemax="5200" aria-valuenow="5200"><i style="--level:100%"></i></div>
-              <small>Served by 1.5 RTX PRO 6000 GPUs</small>
+              <div class="mix-metric-head"><span>LLM output required</span><b>~5,900/s</b></div>
+              <div class="mix-meter" role="progressbar" aria-label="Model-serving demand of roughly 5,900 output tokens per second" aria-valuemin="0" aria-valuemax="5900" aria-valuenow="5900"><i style="--level:100%"></i></div>
+              <small>Served by 1.7 RTX PRO 6000 GPUs</small>
             </div>
             <div class="mix-metric">
               <div class="mix-metric-head"><span>CPU cores required</span><b>64</b></div>
@@ -596,10 +596,10 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
 
   <div class="prose section-subhead">
     <h3>Complete workflows connect CPU work to model demand</h3>
-    <p>Each archetype combines its primary CPU job with a defined agent flow. Task and ingestion workflows use one worker. Research, analyst, and code workflows use three workers. Depending on the archetype, one workflow makes 4, 5, 13, or 16 model calls.</p>
+    <p>Each archetype combines its primary CPU job with a defined agent flow. Task and ingestion workflows use one worker. Research, analyst, and code workflows use three workers. Depending on the archetype, one workflow makes 6, 7, 17, or 20 model calls, including its model-based validations.</p>
     <p>Each model call sends workflow context to the model tier and returns a decision or generated result. Repeated calls add prefill traffic. Output tokens determine the required decoding work.</p>
     <p><strong>Agent weight</strong> measures CPU core-milliseconds per required output token. The calculation divides the workflow's total core-ms by its output tokens. The denominator matches the GPU throughput used later in the paper, which is reported in output tokens per second.</p>
-    <p>Task agents require 0.5 core-ms of host work per output token. Ingestion agents require 30 core-ms. At capacity, the measured Enterprise mix requires 9.2 core-ms per output token.</p>
+    <p>Task agents require 0.4 core-ms of host work per output token. Ingestion agents require 29 core-ms. At capacity, the measured Enterprise mix requires 9.0 core-ms per output token.</p>
   </div>
   <figure class="figure wide reveal" id="fig-agent-weight">
     <div class="fig-head">
@@ -609,36 +609,36 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
     <div class="design-stage">
       <div class="agent-weight-panel">
         <div class="workbench-head"><span>Complete archetype</span><b>Totals across one workflow</b></div>
-        <div class="agent-weight-head" aria-hidden="true"><span>Agent</span><span>CPU work</span><span>Model calls</span><span>Total output tokens</span><span>Core-ms per output token</span></div>
+        <div class="agent-weight-head" aria-hidden="true"><span>Agent</span><span>CPU work</span><span>Model calls, judgments included</span><span>Output tokens, judgments included</span><span>Core-ms per output token</span></div>
         <div class="agent-weight-list" role="img" aria-label="Complete workflow weight by archetype, including CPU work, model calls, total output tokens, and core-milliseconds per output token">
           <div class="agent-weight-row" style="--tone:#0672CB">
-            <div class="weight-label"><b>Task</b><span>generate and validate</span></div> <div class="weight-stat"><span>CPU work</span><b>1K core-ms</b></div> <div class="weight-stat"><span>Model calls</span><b>4</b></div> <div class="weight-stat"><span>Total output tokens</span><b>2,300</b></div> <div class="weight-bar-cell"><div class="weight-track"><i style="--level:1.7%"></i></div><strong>0.5</strong></div>
+            <div class="weight-label"><b>Task</b><span>generate and validate</span></div> <div class="weight-stat"><span>CPU work</span><b>1K core-ms</b></div> <div class="weight-stat"><span>Model calls, judgments included</span><b>6</b></div> <div class="weight-stat"><span>Output tokens, judgments included</span><b>2,440</b></div> <div class="weight-bar-cell"><div class="weight-track"><i style="--level:1.4%"></i></div><strong>0.4</strong></div>
           </div>
           <div class="agent-weight-row" style="--tone:#0B7C84">
-            <div class="weight-label"><b>Research</b><span>retrieve and synthesize</span></div> <div class="weight-stat"><span>CPU work</span><b>25K core-ms</b></div> <div class="weight-stat"><span>Model calls</span><b>16</b></div> <div class="weight-stat"><span>Total output tokens</span><b>15,100</b></div> <div class="weight-bar-cell"><div class="weight-track"><i style="--level:5.7%"></i></div><strong>1.7</strong></div>
+            <div class="weight-label"><b>Research</b><span>retrieve and synthesize</span></div> <div class="weight-stat"><span>CPU work</span><b>25K core-ms</b></div> <div class="weight-stat"><span>Model calls, judgments included</span><b>20</b></div> <div class="weight-stat"><span>Output tokens, judgments included</span><b>15,500</b></div> <div class="weight-bar-cell"><div class="weight-track"><i style="--level:5.5%"></i></div><strong>1.6</strong></div>
           </div>
           <div class="agent-weight-row" style="--tone:#00468B">
-            <div class="weight-label"><b>Ingestion</b><span>OCR, embed, and index</span></div> <div class="weight-stat"><span>CPU work</span><b>100K core-ms</b></div> <div class="weight-stat"><span>Model calls</span><b>5</b></div> <div class="weight-stat"><span>Total output tokens</span><b>3,300</b></div> <div class="weight-bar-cell"><div class="weight-track"><i style="--level:100%"></i></div><strong>30</strong></div>
+            <div class="weight-label"><b>Ingestion</b><span>OCR, embed, and index</span></div> <div class="weight-stat"><span>CPU work</span><b>100K core-ms</b></div> <div class="weight-stat"><span>Model calls, judgments included</span><b>7</b></div> <div class="weight-stat"><span>Output tokens, judgments included</span><b>3,470</b></div> <div class="weight-bar-cell"><div class="weight-track"><i style="--level:100%"></i></div><strong>29</strong></div>
           </div>
           <div class="agent-weight-row" style="--tone:#40586D">
-            <div class="weight-label"><b>Analyst</b><span>analyze and explain</span></div> <div class="weight-stat"><span>CPU work</span><b>190K core-ms</b></div> <div class="weight-stat"><span>Model calls</span><b>13</b></div> <div class="weight-stat"><span>Total output tokens</span><b>12,600</b></div> <div class="weight-bar-cell"><div class="weight-track"><i style="--level:50%"></i></div><strong>15</strong></div>
+            <div class="weight-label"><b>Analyst</b><span>analyze and explain</span></div> <div class="weight-stat"><span>CPU work</span><b>190K core-ms</b></div> <div class="weight-stat"><span>Model calls, judgments included</span><b>17</b></div> <div class="weight-stat"><span>Output tokens, judgments included</span><b>12,940</b></div> <div class="weight-bar-cell"><div class="weight-track"><i style="--level:52%"></i></div><strong>15</strong></div>
           </div>
           <div class="agent-weight-row" style="--tone:#66278F">
-            <div class="weight-label"><b>Code</b><span>set up, CI, and verify</span></div> <div class="weight-stat"><span>CPU work</span><b>150K core-ms</b></div> <div class="weight-stat"><span>Model calls</span><b>13</b></div> <div class="weight-stat"><span>Total output tokens</span><b>12,000</b></div> <div class="weight-bar-cell"><div class="weight-track"><i style="--level:42%"></i></div><strong>12.5</strong></div>
+            <div class="weight-label"><b>Code</b><span>set up, CI, and verify</span></div> <div class="weight-stat"><span>CPU work</span><b>150K core-ms</b></div> <div class="weight-stat"><span>Model calls, judgments included</span><b>17</b></div> <div class="weight-stat"><span>Output tokens, judgments included</span><b>12,400</b></div> <div class="weight-bar-cell"><div class="weight-track"><i style="--level:41%"></i></div><strong>12</strong></div>
           </div>
         </div>
         <div class="weight-summary">
           <div class="enterprise-intensity">
             <span>Measured Enterprise mix at capacity</span>
-            <b>9.2 core-ms per output token</b>
+            <b>9.0 core-ms per output token</b>
             <div class="enterprise-meter" aria-hidden="true"><i></i></div>
             <p>The 12-agent mix combines six light task workflows with retrieval, ingestion, analyst, and code work.</p>
-            <p>At capacity, the measured mix used 48.4K core-ms per second while requiring 5,240 output tokens per second.</p>
+            <p>At capacity, the measured mix used 53.1K core-ms per second while requiring 5,920 output tokens per second on the declared mix.</p>
           </div>
         </div>
       </div>
     </div>
-    <figcaption class="fig-cap">The Enterprise mix combines six task, two analyst, two code, one research, and one ingestion workflow. At capacity, the measured workload requires 9.2 core-ms of host work per output token.</figcaption>
+    <figcaption class="fig-cap">The Enterprise mix combines six task, two analyst, two code, one research, and one ingestion workflow. At capacity, the measured workload requires 9.0 core-ms of host work per output token.</figcaption>
   </figure>
 </section>
 
@@ -783,18 +783,18 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
   <div class="method-block">
     <div class="prose">
       <h3><span class="method-index">4.4</span>CPU work per model token sets the hardware ratio</h3>
-      <p>The Enterprise mix used 9.2 core-milliseconds of host work for each output token required from the model tier. For planning, we used 3,500 output tokens per second per RTX PRO 6000 Blackwell Server Edition: a published measurement of gpt-oss-20b served through vLLM at 50 concurrent requests (4,378 tokens per second), adjusted for the context this workload's calls carry.</p>
-      <p>At that model throughput, one GPU corresponds to 32 busy CPU cores around its calls. The server's 48.4 busy cores at capacity are 1.5 times that requirement, giving 1.5 GPUs per socket. The ratio links a named Enterprise mix to a named model and accelerator.</p>
+      <p>The Enterprise mix used 9.0 core-milliseconds of host work for each output token required from the model tier. For planning, we used 3,500 output tokens per second per RTX PRO 6000 Blackwell Server Edition: a published measurement of gpt-oss-20b served through vLLM at 50 concurrent requests (4,378 tokens per second), adjusted for the context this workload's calls carry.</p>
+      <p>At that model throughput, one GPU corresponds to 31 busy CPU cores around its calls. The server's 53.1 busy cores at capacity are 1.7 times that requirement, giving 1.7 GPUs per socket. The ratio links a named Enterprise mix to a named model and accelerator.</p>
     </div>
     <figure class="figure wide reveal" id="fig-ratio-method">
       <div class="fig-head">
-        <span class="fig-title">Host work and model throughput produce the 1:1.5 ratio</span>
+        <span class="fig-title">Host work and model throughput produce the 1:1.7 ratio</span>
         <span class="fig-tag">Figure 9</span>
       </div>
       <div class="method-stage">
         <div class="ratio-calc">
           <div class="ratio-card">
-            <span>Enterprise host work</span> <b>9.2 core-ms</b>
+            <span>Enterprise host work</span> <b>9.0 core-ms</b>
             <small>for each model output token</small>
           </div>
           <div class="ratio-op" aria-hidden="true">×</div>
@@ -806,11 +806,11 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
           <div class="ratio-op" aria-hidden="true">=</div>
           <div class="ratio-card ratio-result">
             <span>CPU work around one GPU</span>
-            <b>32 cores</b>
+            <b>31 cores</b>
             <small>at the selected model throughput</small>
           </div>
         </div>
-        <div class="ratio-answer"><span>48.4 busy cores at capacity ÷ 32 cores per GPU</span><b>= 1 CPU socket : 1.5 GPUs</b></div>
+        <div class="ratio-answer"><span>53.1 busy cores at capacity ÷ 31 cores per GPU</span><b>= 1 CPU socket : 1.7 GPUs</b></div>
         <div class="gpu-provenance"><span>RTX PRO 6000 Blackwell Server Edition</span><span>gpt-oss-20b, 8-bit</span><span>vLLM, 50 concurrent requests</span><span>3,500 output tokens per second, context-adjusted from 4,378</span></div>
       </div>
       <figcaption class="fig-cap">The ratio uses the Enterprise mix measured on the R470 and a published RTX PRO 6000 serving measurement adjusted for the workload's context.</figcaption>
