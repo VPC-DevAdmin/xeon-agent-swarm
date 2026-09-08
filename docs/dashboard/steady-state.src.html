@@ -191,7 +191,7 @@
         </div>
         <div class="stack" id="llmstack"></div>
         <div class="keys" id="llmkeys"></div>
-        <div class="gpu"><div><div class="k">GPUs this server keeps generating, at 3,500 tokens / s per GPU</div><div class="gauge"><i id="gauge"></i></div></div><div class="v" id="t-gpu">&ndash;</div></div>
+        <div class="gpu"><div><div class="k">GPUs this server keeps generating, at 3,565 tokens / s per GPU</div><div class="gauge"><i id="gauge"></i></div></div><div class="v" id="t-gpu">&ndash;</div></div>
         <div class="note" style="margin-top:8px" id="gpunote"></div>
       </div>
     </section>
@@ -208,7 +208,7 @@
 const DATA = /*__DATA__*/null;
 const PLATEAU = 1;              // the capacity point of the ladder in the event file (0.72, 0.84, 0.90, 0.96)
 const WARMUP_S = 600;           // the analysts take about nine minutes, so steady state starts later
-const GPU_TOKS = 3500;   // record serving rate: gpt-oss-20b on one RTX PRO 6000 under vLLM, context-adjusted (methodology section 11)
+const GPU_TOKS = 3565;   // record serving rate: gpt-oss-20b on one RTX PRO 6000 under vLLM, 3,753 output tok/s published, prefix caching assumed, less 5% (methodology section 11)
 const SMT_SHARE = 0.8;
 const ARCH = {
   task_ticket:  { name: "Task agent",      does: "Reads one ticket, looks it up in the knowledge base (32 candidates reranked), files a record, writes the reply.", workers: 1, calls: 6,  gen: 2440,  coreS: 1,   lat: "30 s",  phrase: "ticket looked up, record filed, reply written" },
@@ -387,7 +387,7 @@ const ARCH = {
     const gpus = genTot / GPU_TOKS;
     document.getElementById("gauge").style.width = Math.min(100, 100 * gpus).toFixed(1) + "%";
     set("t-gpu", gpus.toFixed(2));
-    document.getElementById("gpunote").textContent = `The whole server, tiers and headroom included, generating ${Math.round(genTot).toLocaleString()} tokens a second against a GPU that generates 3,500: one server to ${gpus.toFixed(2)} GPUs. Averaged over the last ten minutes.`;
+    document.getElementById("gpunote").textContent = `The whole server, tiers and headroom included, generating ${Math.round(genTot).toLocaleString()} tokens a second against a GPU that generates 3,565: one server to ${gpus.toFixed(2)} GPUs. Averaged over the last ten minutes.`;
     document.getElementById("s-run").innerHTML = `${active.size}<small>running</small>`;
     document.getElementById("s-calls").innerHTML = `${callsTot.toFixed(1)}<small>calls / s</small>`;
     set("s-gpu", gpus.toFixed(2));

@@ -17,10 +17,10 @@ the ceiling of the concurrency sweep, divided by the GPUs.
 
     GPUs per socket = (cores x 1000) / (core-ms per token x gen tok/s per GPU)
 
-Prints the ratio for the profile and, for reference, at 2,400 / 3,500 /
-4,378 tok/s per GPU (3,500 is the record: gpt-oss-20b on one RTX PRO
-6000 under vLLM, context-adjusted; see docs/benchmark-methodology.md
-section 11).
+Prints the ratio for the profile and, for reference, at 2,400 / 3,565 /
+3,753 tok/s per GPU (3,565 is the record: gpt-oss-20b on one RTX PRO
+6000 under vLLM, 3,753 output tokens/s published, prefix caching assumed,
+less 5%; see docs/benchmark-methodology.md section 11).
 """
 from __future__ import annotations
 
@@ -200,7 +200,7 @@ def main() -> None:
         print(f"GPUs per {a.cores}-core socket = {a.cores * 1000 / (cm * per_gpu):.2f}  (1 : {a.cores * 1000 / (cm * per_gpu):.1f})")
     else:
         print("serving: profile has no gpus/ceiling (record with --sweep --gpus N); reference points only")
-    for ref in (2400, 3500, 4378):
+    for ref in (2400, 3565, 3753):
         print(f"  at {ref} tok/s per GPU: 1 : {a.cores * 1000 / (cm * ref):.1f}")
 
 

@@ -783,7 +783,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
   <div class="method-block">
     <div class="prose">
       <h3><span class="method-index">4.4</span>CPU work per model token sets the hardware ratio</h3>
-      <p>The Enterprise mix used 9.0 core-milliseconds of host work for each output token required from the model tier. For planning, we used 3,500 output tokens per second per RTX PRO 6000 Blackwell Server Edition: a published measurement of gpt-oss-20b served through vLLM at 50 concurrent requests (4,378 tokens per second), adjusted for the context this workload's calls carry.</p>
+      <p>The Enterprise mix used 9.0 core-milliseconds of host work for each output token required from the model tier. For planning, we used 3,565 output tokens per second per RTX PRO 6000 Blackwell Server Edition: the published output rate of gpt-oss-20b served through vLLM at 50 concurrent requests (3,753 tokens per second), less 5 percent, with prefix caching assumed for the context this workload's calls carry.</p>
       <p>At that model throughput, one GPU corresponds to 31 busy CPU cores around its calls. The server's 53.1 busy cores at capacity are 1.7 times that requirement, giving 1.7 GPUs per socket. The ratio links a named Enterprise mix to a named model and accelerator.</p>
     </div>
     <figure class="figure wide reveal" id="fig-ratio-method">
@@ -800,7 +800,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
           <div class="ratio-op" aria-hidden="true">×</div>
           <div class="ratio-card">
             <span>Selected GPU throughput</span>
-            <b>3,500 tokens/s</b>
+            <b>3,565 tokens/s</b>
             <small>per RTX PRO 6000 GPU</small>
           </div>
           <div class="ratio-op" aria-hidden="true">=</div>
@@ -811,9 +811,9 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
           </div>
         </div>
         <div class="ratio-answer"><span>53.1 busy cores at capacity ÷ 31 cores per GPU</span><b>= 1 CPU socket : 1.7 GPUs</b></div>
-        <div class="gpu-provenance"><span>RTX PRO 6000 Blackwell Server Edition</span><span>gpt-oss-20b, 8-bit</span><span>vLLM, 50 concurrent requests</span><span>3,500 output tokens per second, context-adjusted from 4,378</span></div>
+        <div class="gpu-provenance"><span>RTX PRO 6000 Blackwell Server Edition</span><span>gpt-oss-20b, 8-bit</span><span>vLLM, 50 concurrent requests</span><span>3,565 output tokens per second: 3,753 published, prefix caching assumed, less 5%</span></div>
       </div>
-      <figcaption class="fig-cap">The ratio uses the Enterprise mix measured on the R470 and a published RTX PRO 6000 serving measurement adjusted for the workload's context.</figcaption>
+      <figcaption class="fig-cap">The ratio uses the Enterprise mix measured on the R470 and a published RTX PRO 6000 output-token serving measurement with prefix caching assumed.</figcaption>
     </figure>
   </div>
 
@@ -823,7 +823,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:0 28px}
       <div class="ref"><span class="rn">01</span><p><a href="../benchmark-methodology.md">Agent capacity benchmark methodology</a> records the workload, server layout, load process, and calculation rules.</p></div>
       <div class="ref"><span class="rn">02</span><p><a href="../../config/capacity_scenarios.yaml">Capacity scenario configuration</a> declares the Enterprise mix, workflow contracts, and job sizes.</p></div>
       <div class="ref"><span class="rn">03</span><p><a href="../../data/capacity/set-20260908-025329/summary.md">Enterprise result summary</a> records the three runs and the 152-agent stable population.</p></div>
-      <div class="ref"><span class="rn">04</span><p>Database Mart, <em>Pro 6000 vLLM Inference Benchmark</em> (August 2026), records the RTX PRO 6000 serving rate for gpt-oss-20b.</p></div>
+      <div class="ref"><span class="rn">04</span><p>Database Mart, <em>Pro 6000 vLLM Inference Benchmark</em> (August 2026), records the RTX PRO 6000 output-token serving rate for gpt-oss-20b.</p></div>
     </div>
   </div>
 </section>

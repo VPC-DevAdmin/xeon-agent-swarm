@@ -9,16 +9,16 @@ generated token**, and a formula:
     GPUs per 64-core socket = 64,000 / (core-ms per generated token × generation tokens per second per GPU)
 
 The host side is measured here on the reference server. The GPU side is
-a published measurement: 3,500 generation tokens/s per GPU is the
-record, the tuned serving rate of the model of record (gpt-oss-20b under
-vLLM on one RTX PRO 6000, 4,378 tokens/s at 50 concurrent requests,
-Database Mart, August 2026) with a 20% haircut for the context this
-workload's calls carry (mean 3,100 prompt tokens; Millstone AI's context
-sweep of the same model and card shows about 30% lost from 1K to 8K
-context). The band around it is 2,400, the conservative rate at which
-the ratio was first stated, and 4,378, the short-context measurement;
-NVIDIA's TensorRT-LLM tables and CloudRift put 30B mixture-of-experts
-models with 3B active at 8,400 to 9,938 on the same card. The method of
+a published measurement: 3,565 output tokens/s per GPU is the record,
+the published output-only serving rate of the model of record
+(gpt-oss-20b under vLLM on one RTX PRO 6000, 3,753 output tokens/s at 50
+concurrent requests, Database Mart, August 2026) less 5%, with prefix
+caching assumed for the context this workload's calls carry (mean 3,100
+prompt tokens, grown call by call). The band around it is 2,400, the
+conservative rate at which the ratio was first stated, and 3,753, the
+published rate unadjusted; NVIDIA's TensorRT-LLM tables and CloudRift
+put 30B mixture-of-experts models with 3B active at 8,400 to 9,938 on
+the same card. The method of
 record is `docs/benchmark-methodology.md`, whose section 11 carries the
 derivation and the citations; this document is the ratio's own account.
 

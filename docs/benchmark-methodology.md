@@ -778,42 +778,46 @@ constant is 8.8 to 9.2 core-ms per token on the passing rungs across
 all three seeds; past the cliff it reads lower only because the pool is
 saturated and arrivals' tokens outrun the host work being done.
 
-The GPU side is not measured here. The record rate is 3,500 generation
-tokens/s per GPU: the tuned serving rate of the model of record on one
-RTX PRO 6000, adjusted for the context this workload's calls carry. Its
-derivation: Database Mart measured gpt-oss-20b in 8-bit under vLLM on
-one RTX PRO 6000 Blackwell Server Edition at 50 concurrent requests, 100
-input and 600 output tokens per request, at 4,378 generation tokens/s.
+The GPU side is not measured here. The record rate is 3,565 output
+tokens/s per GPU: the published output-only serving rate of the model
+of record on one RTX PRO 6000, less 5%. Its derivation: Database Mart
+measured gpt-oss-20b under vLLM on one RTX PRO 6000 Blackwell Server
+Edition at 50 concurrent requests, 100 input and 600 output tokens per
+request, at 3,752.9 output tokens/s (its table also reports 4,378 total
+tokens/s, input and output together, which is not the figure to use).
 The calls recorded from this workload (section 6) carry a mean of 3,100
 prompt tokens (median 1,700, p90 6,900) and generate a mean of 1,000
-each, and Millstone AI's context sweep of the same model on the same
-card shows aggregate throughput falling about 30% from 1K to 8K context
-at fixed concurrency. The record applies a 20% haircut to the
-short-context measurement (4,378 x 0.8 = 3,500), which is the 8K-context
-penalty scaled to a mean context nearer 3K, and it does not credit
-prefix caching, which every serving stack provides and which agent loops
-exercise because their context grows call by call so that only each
-call's new tokens are prefilled. The band around the record: 2,400 is
-the conservative rate at which the ratio was first stated; 4,378 is the
-short-context measurement itself; NVIDIA's TensorRT-LLM tables put a 30B
-mixture-of-experts model with 3B active at 9,938 tokens/s per GPU in FP4
-at 1,000 input and 1,000 output tokens, and CloudRift measured the same
-model class at about 8,400 under vLLM at 400 concurrent requests, which
-bounds what a different model choice does on the same card.
-Low-concurrency serving sits far below all of these: Millstone's own
-peak was 642 tokens/s because it never ran more than five requests at
-once, and the Metrum agent-density runs, which served the model on the
-same server as the agents, produced about 390 tokens/s per GPU with the
-GPUs 46% busy and nothing queued; against that figure a server
-generating 2,400 tokens/s would keep about six GPUs busy, which is the
-case for a serving tier of its own rather than a limit of the card. The
-single-GPU recording that replaces the record with our own measurement
-on this workload's calls is described in section 6 and is the intended
-substitution.
+each. Prefix caching is assumed: agent loops grow their context call by
+call, so with the caching every serving stack provides only each call's
+new tokens are prefilled, and the published short-prompt rate is the
+right basis for the decode work. The 5% haircut covers what caching
+does not: each call's own new tokens are several hundred rather than
+the benchmark's 100, and the workers' prompts share less prefix than a
+chat session's do. Millstone AI's context sweep of the same model on the
+same card, which prefills the whole context on every call, shows about
+30% lost from 1K to 8K context; that is the bound without caching, and
+the single-GPU replay of these calls with caching on and off (section 6)
+is what would replace both the assumption and the haircut. The source
+describes the model's precision inconsistently (4-bit in its model list,
+8-bit in its results table); gpt-oss-20b is distributed in MXFP4, and the
+rate is cited as published. The band around the record: 2,400 is the
+conservative rate at which the ratio was first stated; 3,753 is the
+published output rate unadjusted; NVIDIA's TensorRT-LLM tables put a 30B
+mixture-of-experts model with 3B active at 9,938 output tokens/s per GPU
+in FP4 at 1,000 input and 1,000 output tokens, and CloudRift measured the
+same model class at about 8,400 under vLLM at 400 concurrent requests,
+which bounds what a different model choice does on the same card.
+Low-concurrency serving sits far below all of these: Millstone's own peak
+was 642 tokens/s because it never ran more than five requests at once,
+and the Metrum agent-density runs, which served the model on the same
+server as the agents, produced about 390 tokens/s per GPU with the GPUs
+46% busy and nothing queued; against that figure a server generating
+5,000 tokens/s would keep about thirteen GPUs busy, which is the case for
+a serving tier of its own rather than a limit of the card.
 
 References for the serving rate:
 
-- Database Mart, "Pro 6000 vLLM Inference Benchmark: LLM Throughput and Latency Analysis", August 2026: gpt-oss-20b, 8-bit, vLLM, one RTX PRO 6000 Blackwell Server Edition, 50 concurrent requests, 100 input and 600 output tokens per request, 4,378 generation tokens/s; gpt-oss-120b, 8-bit, same conditions, 1,779. https://www.databasemart.com/blog/vllm-gpu-benchmark-pro6000
+- Database Mart, "Pro 6000 vLLM Inference Benchmark: LLM Throughput and Latency Analysis", August 2026: gpt-oss-20b under vLLM on one RTX PRO 6000 Blackwell Server Edition, 50 concurrent requests, 100 input and 600 output tokens per request: 3,752.9 output tokens/s (4,378.4 total tokens/s including input); gpt-oss-120b, same conditions, 1,524 output tokens/s (1,779 total). The source's precision labels are inconsistent (4-bit in its model list, 8-bit in its table). https://www.databasemart.com/blog/vllm-gpu-benchmark-pro6000
 - Millstone AI, "gpt-oss-20b: Performance Analysis on 1x RTX Pro 6000 Blackwell", 28 January 2026: MXFP4, vLLM, one to five concurrent requests, context 1K to 128K; 642 tokens/s at five requests and 1K context, 222 at 32K; the context sweep behind the haircut. https://cdn.millstoneai.cloud/benchmarks/gpt-oss-20b-mxfp4-1x-rtx-pro-6000-blackwell/gpt-oss-20b-mxfp4-1x-rtx-pro-6000-blackwell.pdf
 - NVIDIA, TensorRT-LLM performance overview, RTX 6000 Pro Blackwell Server Edition tables, updated 27 August 2026: Qwen3 30B A3B in FP4 at 1,000 input and 1,000 output tokens, 9,938 output tokens/s per GPU; Llama 3.3 70B in FP4, 1,724. https://nvidia.github.io/TensorRT-LLM/latest/developer-guide/perf-overview.html
 - CloudRift, GPU benchmarks for LLM inference, October and November 2025: Qwen3-Coder-30B-A3B AWQ under vLLM at 400 concurrent requests, about 8,400 output tokens/s on one RTX PRO 6000; GLM-4.5-Air AWQ at 256 to 512 concurrent requests, 3,140. https://www.cloudrift.ai/gpu-benchmarks
