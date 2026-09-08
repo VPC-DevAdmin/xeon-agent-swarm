@@ -77,7 +77,12 @@ the query embedder, the index and the reranker are the server's own.
   knowledge base (one retrieval, 32 candidates reranked), files a
   durable record, writes the reply, and is validated. It carries the
   per-agent lifecycle cost and is most of any deployment by count.
-  Latency 30 s at every load, almost all of it model wait.
+  Its 2,300 tokens are the model's for this shape: about 1,350 in the
+  two planner turns, 970 in the worker's two turns, and 200 in three
+  judge verdicts; the reply itself is a few hundred. A smaller or
+  non-reasoning model emits fewer (section 11), and the record keeps
+  one model for every archetype. Latency 30 s at every load, almost
+  all of it model wait.
 - **Research agent**: three workers each fetch and parse 30 source pages
   in the sandbox (boilerplate removal and main-text extraction over real
   HTML), retrieve three times over the corpus with the cross-encoder
@@ -93,6 +98,12 @@ the query embedder, the index and the reranker are the server's own.
   overlap and de-duplicated; the executor then embeds the chunks on the
   ingest embedder and indexes them, and the check query is the
   verifier. About 100 core-s, most of it OCR. Latency about 125 s.
+  OCR on the host is the on-premises choice, where documents do not
+  leave the building; it costs what Tesseract costs, about 1.4 core-s
+  per page, and is not inflated. A deployment with a GPU OCR model
+  moves that work off the host: at one ingestion agent in twelve that
+  is about 7 of the tile's 58 core-s per workflow, and the tile's host
+  work per token goes from 9.2 to about 8 core-ms.
 - **Data analyst**: three workers each run a sandboxed job over 100
   million rows of payment events, a week's worth: profile, rank and
   explain, report. The analysis worker's job runs over two periods, this
@@ -110,7 +121,12 @@ the query embedder, the index and the reranker are the server's own.
   sources, incremental rebuild, suites, a lint pass). Each worker
   searches the codebase and its documentation first (one retrieval, 64
   candidates). About 34, 74 and 40 core-s; nothing in the tree is
-  generated. Latency about 255 s at light load.
+  generated. Its thirteen calls are coarse by design: a deployed coding
+  agent takes many more, smaller turns (read, search, edit), which
+  changes what it asks of the serving tier's prefill far more than its
+  generated tokens or its host work, and is accounted for on the
+  serving side rather than by adding turns here. Latency about 255 s
+  at light load.
 
 Why these five: each is a role a reader recognises and would deploy, and
 each carries a different kind of host work in a different amount, so the
