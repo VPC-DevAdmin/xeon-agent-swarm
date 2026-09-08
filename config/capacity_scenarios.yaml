@@ -134,10 +134,11 @@ e2e_tile:
 
 e2e_tiles:
   # Three organisation-shaped tiles of twelve sessions from the five
-  # archetypes: task agent (task_ticket), research agent at depth 128
-  # (deep_research), data analyst at 40M rows (analyst_large), code agent,
-  # ingestion agent. Small agents dominate by count; the compute-carrying
-  # archetypes set the host work per token.
+  # archetypes: task agent (task_ticket), research agent (deep_research:
+  # fetch, nine retrievals at depth 128), data analyst at 100M rows with
+  # a period-over-period pass (analyst_large), code agent (setup, CI,
+  # verify), ingestion agent (OCR intake). Small agents dominate by
+  # count; the compute-carrying archetypes set the host work per token.
   enterprise:          # a technology-forward company: two coders, two analysts in twelve
     code_agent: 2
     analyst_large: 2

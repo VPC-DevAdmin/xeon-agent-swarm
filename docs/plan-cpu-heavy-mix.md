@@ -42,33 +42,40 @@ generative judging runs on the host in any variant.
 ## The archetypes and their weights
 
 Five archetypes at production sizes, sizes declared as parameters; host
-work is each archetype's stand-alone measurement, generated tokens are
-what its model calls make the serving tier produce.
+work is the stand-alone sum of each archetype's steps (the methodology's
+cost laws), generated tokens are calibrated: the archetype's model calls
+recorded and replayed against gpt-oss-20b at low reasoning effort, and
+the recorded sizes answering the same call positions in every measured
+run. Every archetype that acts looks things up first, and the lookup is
+host work (query embedder, index, reranker on the server) inside the
+step, never a model turn.
 
-| Archetype | Declared size | Host work per workflow | Generated tokens | Core-ms per token |
-|---|---|---|---|---|
-| Task agent | one short request, one record | 0.5 core-s | 550 | 0.9 |
-| Research agent | three retrievals at rerank depth 128 | 8.5 core-s | 1,800 | 4.7 |
-| Ingestion agent | 100 PDF pages parsed, about 480 chunks embedded and indexed | 24 core-s | 550 | 44 |
-| Data analyst | three sandboxed jobs over 40 million rows each | 54 core-s | 1,790 | 30 |
-| Code agent | three build-and-test steps over Lua 5.4.7 and the SQLite 3.50.4 amalgamation | 92 core-s | 1,800 | 51 |
+| Archetype | Declared size | Lookups | Host work per workflow | Generated tokens | Core-ms per token |
+|---|---|---|---|---|---|
+| Task agent | one ticket: a knowledge-base lookup, one record | 1 at depth 32 | about 1 core-s | 2,300 | 0.5 |
+| Research agent | 90 source pages fetched and parsed, nine retrievals | 9 at depth 128 | about 25 core-s | 12,800 | 2 |
+| Ingestion agent | 50 PDF pages rendered, OCR'd (Tesseract), redacted, chunked, embedded and indexed | none | about 100 core-s | 3,400 | 30 |
+| Data analyst | three jobs over 100 million rows, the second over two periods, reporting the change | 2 at depth 64 | about 190 core-s | 11,200 | 17 |
+| Code agent | setup, CI (sanitizer build, both suites, static analysis) and verification over Lua 5.4.7 and SQLite 3.50.4 | 3 at depth 64 | about 150 core-s | 9,500 | 16 |
 
 In a mix, busy cores run at about 0.8 times the summed weights because
 sibling threads share physical cores, so a tile's constant can be
-estimated from this table before it is measured. The code agent's step is
-real, recognizable code: nothing in it is generated, and compiling the
-SQLite amalgamation is the best-known compile workload there is.
+estimated from this table before it is measured. The work is the work a
+reviewer recognises: a CI run over real source, OCR of real pages, a
+weekly report compared to the last one, a brief from fetched pages.
+Nothing in it is generated, and nothing in it is a lever: each step is
+what that agent does, at a size an enterprise runs it.
 
 ## The tiles
 
 Twelve arrivals each; small agents dominate by count, as in a deployment,
 and the compute-carrying archetypes set the constant.
 
-| Tile | Task agents | Code agents | Data analysts | Research agents | Ingestion agents | Estimated core-ms per token |
+| Tile | Task agents | Code agents | Data analysts | Research agents | Ingestion agents | Estimated core-ms per token (0.8 of the summed weights) |
 |---|---|---|---|---|---|---|
-| Enterprise (a technology-forward company) | 6 | 2 | 2 | 1 | 1 | 21 |
-| Engineering (an engineering organisation) | 7 | 3 | 1 | 1 | 0 | 21 |
-| Analytics (a data and research organisation) | 6 | 0 | 3 | 2 | 1 | 13 |
+| Enterprise (a technology-forward company) | 6 | 2 | 2 | 1 | 1 | 10 |
+| Engineering (an engineering organisation) | 7 | 3 | 1 | 1 | 0 | 8 |
+| Analytics (a data and research organisation) | 6 | 0 | 3 | 2 | 1 | 10 |
 
 ## Result (6 September 2026)
 

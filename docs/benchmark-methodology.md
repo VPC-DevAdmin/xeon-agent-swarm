@@ -50,64 +50,82 @@ archetype declares a **contract** (subtasks, model calls, validations, tool
 calls, an input-token floor) and every completed unit is held to it; a unit
 outside its contract is invalid, never counted as a success or a failure.
 The five archetypes are roles an enterprise deploys, at the sizes it runs
-them: sizes are declared parameters and are stated with every result. The
-contract shapes and model-call sizes are shared, so tokens per workflow
-stay in the same range across archetypes and only the host work per
-token changes.
+them: sizes are declared parameters and are stated with every result.
+What each archetype generates per workflow is calibrated: its model calls
+were recorded from a traced run, replayed against a named model, and the
+recorded token counts answer the same call positions in every measured
+run (section 6), so generated tokens are the model's, not a formula's.
 
-| Archetype | Declared size | Workers | Model calls | Validations | Host work per workflow | Generated tokens | Core-ms per token |
+| Archetype | Declared size | Workers | Model calls | Lookups | Host work per workflow, stand-alone | Generated tokens per workflow (gpt-oss-20b, low reasoning) | Core-ms per token, stand-alone |
 |---|---|---|---|---|---|---|---|
-| Task agent | one short request, one record | 1 | 4 | 3 | 0.5 core-s | 550 | 0.9 |
-| Research agent | three retrievals at rerank depth 128 | 3 | 13 | 7 | 8.5 core-s | 1,800 | 4.7 |
-| Ingestion agent | 100 PDF pages parsed, about 480 chunks embedded and indexed | 1 | 5 | 3 | 24 core-s | 550 | 44 |
-| Data analyst | three sandboxed jobs over 40 million rows each | 3 | 13 | 7 | 54 core-s | 1,790 | 30 |
-| Code agent | three build-and-test steps over Lua 5.4.7 and the SQLite 3.50.4 amalgamation | 3 | 13 | 7 | 92 core-s | 1,800 | 51 |
+| Task agent | one ticket: one knowledge-base lookup, one record | 1 | 4 | 1 at depth 32 | about 1 core-s | 2,300 | 0.5 |
+| Research agent | 90 source pages fetched and parsed, nine retrievals at rerank depth 128 | 3 | 16 | 9 at depth 128 | about 25 core-s | 12,800 | 2 |
+| Ingestion agent | 50 PDF pages rendered, OCR'd, redacted, chunked, embedded and indexed | 1 | 5 | none | about 100 core-s | 3,400 | 30 |
+| Data analyst | three jobs over 100 million rows, the second over two periods | 3 | 13 | 2 at depth 64 | about 190 core-s | 11,200 | 17 |
+| Code agent | setup, CI and verification over Lua 5.4.7 and SQLite 3.50.4 | 3 | 13 | 3 at depth 64 | about 150 core-s | 9,500 | 16 |
 
-Host work is the stand-alone measurement from each archetype's cost run
-(the method of section 8); in a mix, busy cores run at about 0.8 times
-the summed weights because sibling threads share physical cores.
+Host work is the stand-alone sum of each archetype's steps (the cost laws
+of section 8); in a mix, busy cores run at about 0.8 times the summed
+weights because sibling threads share physical cores. Generated tokens
+are the completed units' own at the 0.84 workflows/s rung of the
+enterprise set, three seeds. Every archetype that acts looks things up
+first, and the lookup is host work inside the step, never a model turn:
+the query embedder, the index and the reranker are the server's own.
 
 - **Task agent**: a trigger, triage, or routing agent: born, does one
-  thing, dies. One worker interprets a short request, updates a work
-  record, and is validated; no retrieval, no sandbox. It carries the
-  per-agent lifecycle cost (planner plus synthesis, little between) and
-  is most of any deployment by count. Latency 10 s.
-- **Research agent**: three workers each retrieve over the corpus with
-  the cross-encoder scoring 128 candidates per call, draft a section, and
-  a synthesis step assembles the brief. Reranking is about 7 core-s per
-  workflow (128-pair calls batch well on the AMX units). Latency 34 s at
-  every load below the cliff.
-- **Ingestion agent**: one worker parses 100 PDF pages in the sandbox
-  (about 1 core-s), then the executor embeds the chunks on the CPU
-  embedder (about 22 core-s; MiniLM-L6 in FP32 does about 22 chunks per
-  second per core) and indexes them; the check query is the verifier.
-  Ingestion is embedding-bound, which is why the ingest embedder is its
-  own tier. Latency 23 s.
-- **Data analyst**: three workers each run a sandboxed job over 40
-  million rows of payment events, a week's worth; about 17 core-s per job
-  stand-alone, 21 to 24 in a mix. The three jobs run one after another,
-  so the archetype takes about 90 s at light load; that is its shape, not
-  a queue.
-- **Code agent**: three workers each build a real working tree from
-  vendored source in the sandbox, Lua 5.4.7 through its own Makefile and
-  the SQLite amalgamation, both with gcc -O2, and run both suites (Lua's
-  own tests; an integration script against the built engine). About 33
-  core-s per step, in three sequential steps, so about two minutes at
-  light load; nothing in the tree is generated.
+  thing, dies. One worker reads a short ticket, looks it up in the
+  knowledge base (one retrieval, 32 candidates reranked), files a
+  durable record, writes the reply, and is validated. It carries the
+  per-agent lifecycle cost and is most of any deployment by count.
+  Latency 30 s at every load, almost all of it model wait.
+- **Research agent**: three workers each fetch and parse 30 source pages
+  in the sandbox (boilerplate removal and main-text extraction over real
+  HTML), retrieve three times over the corpus with the cross-encoder
+  scoring 128 candidates per query, draft a section, and a synthesis
+  step assembles the brief. Nine depth-128 queries are about 23 core-s
+  of reranking; the fetch is under 2. Latency about 150 s, mostly the
+  sixteen model calls' wait.
+- **Ingestion agent**: one worker takes a seeded selection of 50 PDF
+  pages through document intake in the sandbox: each page is rendered
+  and read by Tesseract OCR (about 1.4 core-s per legible page), the
+  text is scanned for personal data and redacted (e-mail addresses,
+  phone numbers, card numbers), chunked at 180 words with a 30-word
+  overlap and de-duplicated; the executor then embeds the chunks on the
+  ingest embedder and indexes them, and the check query is the
+  verifier. About 100 core-s, most of it OCR. Latency about 125 s.
+- **Data analyst**: three workers each run a sandboxed job over 100
+  million rows of payment events, a week's worth: profile, rank and
+  explain, report. The analysis worker's job runs over two periods, this
+  week and the previous, and reports the change period over period. The
+  research and analysis workers pull the schema and metric definitions
+  first (one retrieval each, 64 candidates). About 47 core-s per job,
+  95 for the two-period job. Latency about 340 s at light load; that is
+  its shape, not a queue.
+- **Code agent**: three workers take a real working tree, Lua 5.4.7 and
+  the SQLite 3.50.4 amalgamation, through a continuous-integration
+  change: a setup step (fresh tree, optimised build of both, both
+  suites), a CI step (instrumented build under the undefined-behaviour
+  sanitizer, both suites, static analysis of every Lua source with the
+  compiler's analyzer), and a verification step (touch the changed
+  sources, incremental rebuild, suites, a lint pass). Each worker
+  searches the codebase and its documentation first (one retrieval, 64
+  candidates). About 34, 74 and 40 core-s; nothing in the tree is
+  generated. Latency about 255 s at light load.
 
 Why these five: each is a role a reader recognises and would deploy, and
 each carries a different kind of host work in a different amount, so the
-cost of retrieval, embedding, data jobs, and builds is each identifiable
-from the data, and the per-agent lifecycle cost is carried alone by the
-task agent. Five roles is already a lot for a reader; variants of a role
-at other sizes are not archetypes.
+cost of retrieval, OCR, embedding, data jobs, and builds is each
+identifiable from the data, and the per-agent lifecycle cost is carried
+alone by the task agent. Five roles is already a lot for a reader;
+variants of a role at other sizes are not archetypes.
 
 ### The tiles
 
 The unit of load is a **tile** of twelve workflow arrivals. Three tiles
 describe three organisations; small agents dominate by count, as they do
 in a deployment, and the compute-carrying archetypes set the host work
-per token.
+per token. The enterprise tile is the tile of record; the other two are
+declared and were measured on the previous archetype sizes.
 
 | Tile | Task agents | Code agents | Data analysts | Research agents | Ingestion agents |
 |---|---|---|---|---|---|
@@ -129,38 +147,54 @@ validations run on every step and on the synthesis, and steps, attempts,
 validations, and tool records are written durably. Prompts are
 self-contained; no third-party service participates in a measured run.
 
-### The serving tier is modeled per call
+### The serving tier is modeled per call, with calibrated tokens
 
 No model call is instantaneous. A deterministic stand-in answers every call
 through the production request path and waits as a remote serving tier
 would: 500 ms to first token, plus output tokens at 100 per second, plus
-input tokens at 8,000 per second, computed from the actual payload of that
-call with 20% seeded jitter. A planner re-reading 30,000 tokens waits
-several seconds; a validator returning a verdict waits about one. The
-three parameters are part of the machine fingerprint. Each call re-sends
-its whole context and is charged prefill for all of it; a serving tier
-with prompt caching would charge less, and the benchmark keeps the
-pessimistic accounting because the host's cost, the quantity measured,
-does not change with the tier's cache policy. Validations are calls to
-the serving tier like any other; no small-model inference runs on the
-host beyond the retrieval and embedding tiers (section 11).
+input tokens at 8,000 per second, with 20% seeded jitter. The token
+counts it waits for and reports are calibrated, not estimated: every
+call position in every workflow (archetype, worker role, turn) was
+recorded from a traced run, replayed against gpt-oss-20b at low
+reasoning effort through a serving endpoint, and the recorded prompt
+and completion sizes answer the same position in a measured run,
+chosen by the unit's seed (`CAPACITY_SERVING_PROFILE`, section 6). A
+worker's turns are matched by shape, a tool-call turn or a draft, so a
+step added after the calibration still answers with calibrated sizes.
+The three timing parameters and the profile are part of the machine
+fingerprint. Each call re-sends its whole context and is charged
+prefill for all of it; a serving tier with prompt caching would charge
+less, and the benchmark keeps the pessimistic accounting because the
+host's cost, the quantity measured, does not change with the tier's
+cache policy. Validations are calls to the serving tier like any other;
+no generative inference runs on the host.
 
 ### Retrieval is real work on the server
 
-A worker that retrieves calls a tool that runs BM25 keyword search over a
-seeded 120,000-passage store (SQLite FTS5, 2,000 topics, built once per
-server), fuses that ranking by reciprocal rank with the answer of a vector
-index (modeled as a 15 ms off-server call, because a large vector database
-is its own system in any deployment), prefilters to 128 candidates with a
-keyword scorer, scores those 128 with an INT8 cross-encoder
-(ms-marco-MiniLM-L-6-v2) on the processor's AMX units, and packs about
-6,000 words of winning passages into the worker's context with `[chunk-N]`
-citations. Workers cite the passage ids they were given, so grounding is
-checkable by construction. Rerank depth (128) is a declared parameter in
-the fingerprint; its cost law is in section 8. Retrieval quality is
-reported as an in-topic fraction and never judged: capacity is invariant to
-relevance, since reranking 128 relevant passages costs what reranking 128
-irrelevant ones costs.
+Every retrieval embeds the query on the query embedder, runs BM25
+keyword search over a seeded 120,000-passage store (SQLite FTS5, 2,000
+topics, built once per server), fuses that ranking by reciprocal rank
+with the answer of a vector index (modeled as a 15 ms off-server call,
+because a large vector database is its own system in any deployment),
+prefilters to the declared depth with a keyword scorer, scores those
+candidates with an INT8 cross-encoder (ms-marco-MiniLM-L-6-v2) on the
+processor's AMX units, and packs the winning passages into the worker's
+context with `[chunk-N]` citations. Workers cite the passage ids they
+were given, so grounding is checkable by construction.
+
+Retrieval is host work, never a model turn. The research agent's
+retrieval step is a tool call that scores three queries; every other
+lookup rides the step the agent was already taking: the task agent
+looks the ticket up as it files its record, the code agent searches the
+codebase and its documentation as it starts each CI step, the analyst
+pulls schema and definitions as it starts each of its first two jobs.
+The lookup runs on the retrieval tiers before the step's own work and
+its packed passages (1,500 words per lookup, 6,000 for the research
+step) return with the step's result. Depths (32, 64, 128) are declared
+per archetype and ride the fingerprint; the cost law is in section 8.
+Retrieval quality is reported as an in-topic fraction and never judged:
+capacity is invariant to relevance, since reranking 128 relevant
+passages costs what reranking 128 irrelevant ones costs.
 
 ### Execution is a real, bounded sandbox
 
@@ -169,31 +203,54 @@ interpreter (`python -I -S`) under CPU-time, address-space, and file-size
 limits, with no network (a network namespace via `sudo unshare -n`; the
 isolation mode is fingerprinted), single-threaded math, seeded
 deterministic inputs, and a few hundred characters of results returned
-into the worker's context. Three kinds of job exist, one per archetype
+into the worker's context. Four kinds of job exist, one per archetype
 that executes:
 
 - The **data job** (data analyst) is the shape of an analyst's tool run
-  over a week of payment events: generate the 40-million-row event table,
-  join it to a merchant table, bucket by merchant and minute, sort-based
-  per-merchant percentiles, a rolling load window, tail quantiles,
-  z-scored anomaly ranking against a category baseline, and a second pass
-  over the flagged merchants. About 17 core-s stand-alone.
-- The **build job** (code agent) copies the vendored Lua 5.4.7 tree and
-  the SQLite 3.50.4 amalgamation into a working directory, builds Lua
-  through its own Makefile and SQLite from `sqlite3.c` with its shell,
-  both with gcc -O2, runs Lua's own test suite in its portable mode and an
+  over a week of payment events: generate the 100-million-row event
+  table, join it to a merchant table, bucket by merchant and minute,
+  sort-based per-merchant percentiles, a rolling load window, tail
+  quantiles, z-scored anomaly ranking against a category baseline, and a
+  second pass over the flagged merchants. About 47 core-s stand-alone.
+  The analysis worker's job runs the same pass over two periods (this
+  week's seed and the previous week's) and reports the deltas in total
+  value, tail quantile, outliers and merchant means, the way a weekly
+  report compares to the last one. About 95 core-s.
+- The **CI job** (code agent) is one step of a continuous-integration
+  change over the vendored Lua 5.4.7 tree and the SQLite 3.50.4
+  amalgamation. *Setup* copies a fresh tree and builds both with gcc
+  -O2, Lua through its own Makefile and SQLite from `sqlite3.c` with its
+  shell, and runs Lua's own test suite in its portable mode and an
   integration script against the built engine (schema, 300,000 inserted
-  rows, an index, aggregates, an integrity check), and reports the build
-  and test result. About 33 core-s; the suites' result is the verifier.
-- The **ingest job** (ingestion agent) opens a seeded selection of PDF
-  documents, extracts 100 pages of text, normalizes it, splits it into
-  180-word chunks with a 30-word overlap, drops duplicates, and hands
-  about 480 chunks back to the executor, which embeds them on the ingest
-  embedder and indexes them for search. About 1 core-s of parsing plus 22
-  of embedding.
+  rows, an index, aggregates, an integrity check): about 34 core-s.
+  *CI* rebuilds both under the undefined-behaviour sanitizer
+  (`-fsanitize=undefined -O1 -g`), runs both suites instrumented, and
+  runs the compiler's static analyzer (`gcc -fanalyzer`) over every Lua
+  source file: about 74 core-s. *Verify* touches the changed sources
+  (`lvm.c`, `lapi.c`), rebuilds incrementally, runs both suites, and
+  runs a lint pass (`-Wall -Wextra -fsyntax-only`) over the tree: about
+  40 core-s. The suites' result is the verifier. The address sanitizer
+  is not used because its shadow memory does not fit the sandbox's
+  address-space cap.
+- The **intake job** (ingestion agent) opens a seeded selection of PDF
+  documents and takes 50 pages through document intake: each page is
+  rendered at two times scale (pypdfium2) and read by Tesseract OCR in
+  page-segmentation mode 6 with one thread (about 1.4 core-s per
+  legible page), the text is scanned with personal-data patterns
+  (e-mail addresses, phone numbers, card numbers) and redacted, then
+  normalized, split into 180-word chunks with a 30-word overlap and
+  de-duplicated; the chunks go back to the executor, which embeds them
+  on the ingest embedder and indexes them for search. About 75 core-s
+  of OCR and a few of rendering and redaction; the documents are
+  generated with a legible layout so the OCR reads real text rather
+  than noise, and OCR text quality is reported, not judged.
+- The **fetch job** (research agent) takes a worker's share of 30 source
+  pages (real HTML with navigation, footers and scripts) through
+  boilerplate removal and main-text extraction (trafilatura), and
+  returns the word count and leads. About 0.5 core-s.
 
 Job sizes are declared parameters (the row count, the vendored project,
-`CAPACITY_INGEST_PAGES`) and are stated with the result. It is
+`SCAN_PAGES`, `FETCH_PAGES`) and are stated with the result. It is
 representative work with a stated size, not a drain.
 
 ### The record tool
@@ -217,39 +274,40 @@ reference server has 64 cores with two SMT threads each and an irregular
 sibling map, so allocations are never written as logical ranges. The
 reranker's runtime gets one thread per physical core (the first sibling);
 two runtime threads on one core's siblings were measured to halve each
-other. The allocation of record for the enterprise tile is 4 cores for the
-reranker (one process, four inference threads), 1 for the query embedder,
-8 for the ingest embedder, and the remaining 51 for the four instances,
-their executors, stand-ins, databases, and sandboxed jobs, which are
-pinned there so nothing shares AMX units with the tiers. Provisioning
-selects it with `RERANK_PHYS_CORES=4 RERANK_WORKERS=1 RERANK_THREADS=4
-EMBED_PHYS_CORES=1 INGEST_EMBED_PHYS_CORES=8`, and it rides the run
-fingerprint (`allocation.env`). The engineering and analytics tiles ran
-with the reranker on 8 cores, the query embedder on 2 and 46 application
-cores, the sizing their heavier retrieval share called for. Pinning is by cpuset, not quota: a CPU quota on a
-128-thread host lets a many-threaded process burn its allowance in
-milliseconds and sleep for the rest of the period.
+other. The allocation of record for the enterprise tile is 8 cores for
+the reranker (two processes of four inference threads each), 2 for the
+query embedder, 3 for the ingest embedder, and the remaining 51 for the
+four instances, their executors, stand-ins, databases, and sandboxed
+jobs, which are pinned there so nothing shares AMX units with the tiers.
+Provisioning selects it with `RERANK_PHYS_CORES=8 RERANK_WORKERS=2
+RERANK_THREADS=4 EMBED_PHYS_CORES=2 INGEST_EMBED_PHYS_CORES=3`, and it
+rides the run fingerprint (`allocation.env`). The allocation is sized
+from the lookups the tile makes (section 8): at capacity the tile
+scores about 140 candidate pairs a second, 2.8 cores of reranking, and
+two processes keep a depth-128 query's wait short at that load. The
+earlier enterprise set without the lookups ran on 4/1/8/51 (the
+reranker as one process of four threads, the ingest embedder sized for
+the previous ingestion agent); the engineering and analytics tiles ran
+on 8/2/0/46 with the reranker as two processes. Pinning is by cpuset,
+not quota: a CPU quota on a 128-thread host lets a many-threaded process
+burn its allowance in milliseconds and sleep for the rest of the period.
 
 The allocation is set from measured costs so that the tiers keep headroom
 past the rate at which the executors' side runs out, which is what makes
 the server, rather than an allocation, the limit: a tier sized to
 saturate at the target queues at the target and shows a knee the cores do
-not have, and a tier sized generously starves the other side. At
-2.0 workflows/s in all three tiles the executors' 46 cores are 83 to 84%
-occupied (time-averaged per core, busier sibling), the reranker at most
-36% of its cores, and the ingest embedder about 50%; past the cliff the
-executors' side is 97 to 100% occupied and full on both threads of every
-core, and the data jobs' and builds' CPU per workflow rises by a third to
-a half as sibling threads contend (the analyst's three jobs take 72 core-s
-at 2.0 workflows/s and 100 at 2.4; the code agent's three builds 102 and
-151), which is what makes the cliff sharp. The ingest embedder reaches
-94% only past the analytics tile's cliff. The sizing arithmetic is in
-section 8.
+not have, and a tier sized generously starves the other side. At the
+enterprise tile's capacity the application pool's 51 cores are about
+85% occupied (time-averaged per core, busier sibling) and past the cliff
+92 to 97%, full on both threads of most cores, while the retrieval tiers
+stay under half occupied at every rate. The cliff is the application
+pool's: builds, OCR and data jobs queue for cores, and the code agent's
+and analyst's latencies double while the task and research agents, whose
+time is model wait, do not move. The sizing arithmetic is in section 8.
 
-The reranker tier is one server process pinned to eight whole cores with
-its own queue; when the tier has several processes, every executor
-rotates its calls across them per call, moving a refused call to the next
-process before it backs off. The shape matters as much as the core count:
+The reranker tier is pinned server processes, each on its own whole
+cores with its own queue; every executor rotates its calls across them
+per call, moving a refused call to the next process before it backs off. The shape matters as much as the core count:
 one listening socket shared by several worker processes hands each
 keep-alive *connection*, not each request, to a worker, so a few
 executors' connections can pile onto one worker while the others idle,
@@ -478,38 +536,45 @@ latencies include a ramp of tens of milliseconds.
 Each component's cost is measured on the fleet so the capacity can
 be rescaled to a different mix, depth, or job size.
 
-- **Reranker.** The tier's ceiling is a pair budget: about 35 scored pairs
-  per physical core per second in sixteen-pair calls of about 125 tokens,
-  and about 55 in 128-pair calls, which batch better; sustainable rate
-  scales inversely with candidates per call. A research agent's three
-  calls at depth 128 cost about 7 core-s.
+- **Reranker.** The tier's cost is a pair budget: about 20 ms of core
+  time per candidate pair scored (the slope of the reranker's occupancy
+  against its load across the enterprise ladder, 50 pairs per core per
+  second), so a query costs its depth: 0.65 core-s at depth 32, 1.3 at
+  64, 2.6 at 128. The tile's lookups (six at 32, ten at 64, nine at 128
+  per twelve workflows) are about 1,980 pairs, 3.3 core-s per workflow.
+  A query's wait is its depth divided by the process's threads: about
+  0.65 s at depth 128 on four threads, so two processes keep the wait
+  near that at two queries a second.
 - **Embedding.** About 22 chunks per second per physical core (MiniLM-L6,
-  FP32, 180-word chunks), so an ingestion agent's 480 chunks cost about
-  22 core-s; the query embedder's single-query loads are negligible next
-  to it, which is why ingestion has its own tier.
-- **Sandbox.** The data job runs at about 0.43 core-s per million rows
-  (17 core-s at 40 million, single-threaded, interpreter start included);
-  the build-and-test step is about 33 core-s (the SQLite amalgamation is
-  most of it); the parse is about 1 core-s per 100 pages. Under
-  contention on both threads of a core each rises by a third to a half.
+  FP32, 180-word chunks), so an ingestion agent's chunks from 50 pages
+  cost about 12 core-s; a query embedding is about 0.2 core-s including
+  the call, about 5 core-s per twelve workflows.
+- **Sandbox.** The data job runs at about 0.475 core-s per million rows
+  (47 core-s at 100 million, single-threaded, interpreter start
+  included) and its two-period form at twice that; the CI steps are
+  about 34 (setup), 74 (CI with the sanitizer build and the analyzer)
+  and 40 (verify) core-s; OCR is about 1.4 core-s per legible page plus
+  rendering and redaction, about 80 core-s per 50 pages; the fetch is
+  about 0.5 core-s per 30 pages. Under contention on both threads of a
+  core each rises by a third to a half.
 - **Orchestration.** A roughly fixed floor of about 17 hardware threads
   across the four instances (executors, control, stand-ins, databases),
   nearly independent of rate, plus a small per-workflow marginal cost (2
   to 5 s of executor time per workflow, section 6).
-- **Per archetype** (each measured alone at two rates, floor cancelled):
-  task agent 0.5 core-s per workflow, research agent 8.5 (about 7 of
-  reranking), ingestion agent 24 (22 of embedding, 1 of parsing), data
-  analyst 54 (three jobs of about 17), code agent 92 (three steps of
-  about 31 to 39). Measured at light load, so lower bounds for the jobs
-  under contention; in a mix, busy cores run at about 0.8 times the
-  summed weights because sibling threads share physical cores.
+- **Per archetype** (stand-alone sums of the laws above): task agent
+  about 1 core-s per workflow, research agent about 25 (23 of
+  reranking), ingestion agent about 100 (most of it OCR, 12 of
+  embedding), data analyst about 190 (jobs of 47, 95 and 47, plus two
+  lookups), code agent about 150 (steps of 34, 74 and 40, plus three
+  lookups). In a mix, busy cores run at about 0.8 times the summed
+  weights because sibling threads share physical cores: the enterprise
+  tile sums to about 68 core-s per workflow and measures 54 to 57.
 - **Allocation.** Cores are divided so that the tiers keep headroom past
   the rate at which the executors' side runs out; for the enterprise tile
-  that is 4 + 1 + 8 cores for the tiers and 51 for everything else, and
-  the box is full at 2.4 workflows/s. Every core moved from a tier with
-  headroom to the application pool buys capacity at the same host work
-  per token: the enterprise tile's capacity went from 2.0 to 2.4
-  workflows/s when five cores moved.
+  that is 8 + 2 + 3 cores for the tiers and 51 for everything else. A
+  core moved from a tier with headroom to the application pool buys
+  capacity at the same host work per token, and a tier sized below its
+  pair budget turns every lookup into a queue wait.
 
 `scripts/archetype_costs.sh` runs an archetype alone at two rates and
 `scripts/archetype_cost_summary.py` reads its cost; `scripts/cost_table.py`
@@ -557,8 +622,7 @@ on the reference server.
   is for the declared tile.
 - Runs cover a single host; multi-node coordination, failover, long soaks,
   and recovery after overload are not measured.
-- Depths other than 128 and job sizes other than the declared ones are
-  not measured.
+- Depths and job sizes other than the declared ones are not measured.
 - The GPU side of the ratio is a published measurement of one
   accelerator and model, context-adjusted and cited (section 11), not a
   measurement made here.
