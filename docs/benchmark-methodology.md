@@ -787,7 +787,7 @@ substitution.
 
 References for the serving rate:
 
-- Database Mart, "Pro 6000 vLLM Inference Benchmark: LLM Throughput and Latency Analysis", August 2026: gpt-oss-20b, 8-bit, vLLM, one RTX PRO 6000 Blackwell Server Edition, 50 concurrent requests, 100 input and 600 output tokens per request, 4,378 generation tokens/s. https://www.databasemart.com/blog/vllm-gpu-benchmark-pro6000
+- Database Mart, "Pro 6000 vLLM Inference Benchmark: LLM Throughput and Latency Analysis", August 2026: gpt-oss-20b, 8-bit, vLLM, one RTX PRO 6000 Blackwell Server Edition, 50 concurrent requests, 100 input and 600 output tokens per request, 4,378 generation tokens/s; gpt-oss-120b, 8-bit, same conditions, 1,779. https://www.databasemart.com/blog/vllm-gpu-benchmark-pro6000
 - Millstone AI, "gpt-oss-20b: Performance Analysis on 1x RTX Pro 6000 Blackwell", 28 January 2026: MXFP4, vLLM, one to five concurrent requests, context 1K to 128K; 642 tokens/s at five requests and 1K context, 222 at 32K; the context sweep behind the haircut. https://cdn.millstoneai.cloud/benchmarks/gpt-oss-20b-mxfp4-1x-rtx-pro-6000-blackwell/gpt-oss-20b-mxfp4-1x-rtx-pro-6000-blackwell.pdf
 - NVIDIA, TensorRT-LLM performance overview, RTX 6000 Pro Blackwell Server Edition tables, updated 27 August 2026: Qwen3 30B A3B in FP4 at 1,000 input and 1,000 output tokens, 9,938 output tokens/s per GPU; Llama 3.3 70B in FP4, 1,724. https://nvidia.github.io/TensorRT-LLM/latest/developer-guide/perf-overview.html
 - CloudRift, GPU benchmarks for LLM inference, October and November 2025: Qwen3-Coder-30B-A3B AWQ under vLLM at 400 concurrent requests, about 8,400 output tokens/s on one RTX PRO 6000; GLM-4.5-Air AWQ at 256 to 512 concurrent requests, 3,140. https://www.cloudrift.ai/gpu-benchmarks
@@ -807,6 +807,43 @@ the tokens a server generates per second for a given amount of host
 work, and the tokens per GPU, which the model and accelerator set; a
 slower serving tier changes residency and the response curve, never the
 ratio.
+
+### Sensitivity to the model
+
+The host side of the ratio does not depend on the model; the token side
+does, twice: a different model generates a different number of tokens
+for the same workflow, and it is served at a different rate per GPU.
+The workload's calls were replayed against four model settings and
+each answer set kept only the turns whose shape matched the position
+(a tool call where a tool call was due, a draft where a draft was due),
+so the four token profiles are comparable. The table scales the
+record's measured tokens per workflow by each profile's ratio to the
+record's own profile, holds the host work per workflow at the
+capacity rung (58 core-s, which the model does not change), and takes
+each model's serving rate from the same source and with the same
+context haircut as the record where one exists.
+
+| Model, as replayed | Tokens per workflow, tile-weighted | Core-ms per token | Generated tokens/s at 0.84 wf/s | Tokens/s per GPU | GPUs one server keeps busy | Cores per GPU |
+|---|---|---|---|---|---|---|
+| gpt-oss-20b, low reasoning (record) | 6,190 measured | 9.2 | 5,240 | 3,500 | 1.50 | 32 |
+| gpt-oss-120b, low reasoning | 3,750 (0.61 of the record) | 15.4 | 3,150 | 1,420 (1,779 at 50 concurrent, same haircut) | 2.2 | 22 |
+| Qwen3.8 Flash, thinking off | 3,340 (0.54) | 17.3 | 2,800 | not cited; shown at 3,500 | 0.80 | 60 |
+| gpt-oss-20b, medium reasoning | 12,950 (2.1) | 4.5 | 10,900 | 3,500 | 3.1 | 16 |
+
+Two things move the ratio in opposite directions. A larger model
+generates fewer tokens for the same work (the 120B and Qwen replays
+emit about half the record's tokens, mostly because their tool-call
+turns carry little reasoning) and is served more slowly, so the
+server keeps more GPUs busy per unit of host work only when the second
+effect outweighs the first: for the 120B it does (2.2 GPUs), because its
+serving rate is 40% of the 20B's while its tokens are 60%. A higher
+reasoning setting on the same model doubles the tokens at the same
+serving rate and the ratio doubles with it (3.1 GPUs), which is the
+case for stating the reasoning setting with every ratio. Residency
+and the response curve move with tokens too, through the model wait,
+and are not rescaled here; the host work and the capacity rung are
+the same in every row because the host is the limit. Profiles:
+`data/capacity/serving/{gptoss20b-low,gptoss120b-low,qwen38flash-nothink,gptoss20b-medium}-faithful`.
 
 ### Where small-model inference runs is a sensitivity, not the result
 
