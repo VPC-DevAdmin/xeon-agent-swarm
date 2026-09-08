@@ -1,413 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
-<title>R470 Steady State</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&family=Roboto+Mono:wght@400;500&display=swap">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Enterprise agents put the CPU to work | Dell Technologies</title>
 <style>
-  :root {
-    --bg0: #0d2447; --bg1: #061225;
-    --glass: rgba(255,255,255,0.045); --glass2: rgba(255,255,255,0.025);
-    --edge: rgba(170,205,240,0.18); --edge2: rgba(170,205,240,0.10);
-    --ink: #f2f6fb; --muted: #9fb6cf; --dim: #6b83a0;
-    --eyebrow: #7cc2ee; --accent: #4fb0f0;
-    --rerank: #d2a66a; --embed: #5fc9c2; --warn: #ef8a5c; --sandbox: #dfe9f5;
-    --sans: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --mono: "Roboto Mono", ui-monospace, Menlo, monospace;
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; }
-  body { margin: 0; color: var(--ink); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased;
-    background: radial-gradient(120% 90% at 20% 0%, #163b6b 0%, var(--bg0) 38%, var(--bg1) 100%) fixed; }
-  .app { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 12px; padding: 14px 20px 14px; height: 100vh; max-width: 1920px; margin: 0 auto; }
-  .card { background: var(--glass); border: 1px solid var(--edge); border-radius: 16px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 18px 40px rgba(0,0,0,0.28); position: relative; overflow: hidden; min-height: 0; }
-  .card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0) 40%); }
-  .eyebrow { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--eyebrow); font-weight: 500; }
-  .k { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
-  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-  .lead { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
-  .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 18px 0; }
-  .panel-head .lead { margin-top: 3px; }
-  .panel-head .right { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; min-width: 24ch; text-align: right; font-variant-numeric: tabular-nums; }
+/*__FONTS__*/
+:root{color-scheme:dark;--ink:#f3f9ff;--muted:#b6d0e0;--faint:#83a9c1;--llm:#c39bff;--cpu:#53c3ff;--sandbox:#f0be68;--check:#56dcbf;--edge:rgba(178,223,249,.25)}
+*{box-sizing:border-box}body{margin:0;background:#061625;color:var(--ink);font-family:Roboto,Arial,sans-serif;overflow:hidden}button,a{font:inherit}button{color:inherit;cursor:pointer}button:focus-visible,a:focus-visible{outline:3px solid #fff;outline-offset:4px}button:hover{background:rgba(170,221,255,.16)}
+.screen{width:1600px;height:900px;position:absolute;transform-origin:top left;padding:24px 28px 16px;display:grid;grid-template-rows:76px 94px minmax(0,1fr) 35px;gap:14px;background:radial-gradient(ellipse at 10% 8%,#17496d 0,transparent 53%),radial-gradient(ellipse at 96% 76%,#104553 0,transparent 55%),linear-gradient(145deg,#082943,#071c30 65%,#0b293b);isolation:isolate;overflow:hidden}
+.screen:before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(115deg,transparent 24%,#9bddff07 40%,transparent 60%);pointer-events:none}
+header{display:flex;justify-content:space-between;align-items:center;gap:24px}.brandline{display:flex;gap:17px;align-items:center;margin-bottom:10px}.dell-logo{width:122px;height:19px;object-fit:contain;filter:brightness(0) invert(1);opacity:.9}.eyebrow{font-size:12px;font-weight:700;letter-spacing:1.7px;text-transform:uppercase;color:#9ed9ef}h1{margin:0;font-size:31px;font-weight:500;letter-spacing:-.6px}h2,h3,p{margin:0}.controls{display:flex;gap:7px;align-items:center}.control{border:1px solid var(--edge);background:#102d44aa;padding:9px 12px;border-radius:10px;font-size:13px}.replay-label{font-size:13px;color:var(--muted);margin-right:8px;display:flex;gap:9px;align-items:center}.lamp{width:7px;height:7px;border-radius:100%;background:#61dcca;box-shadow:0 0 12px #61dcca80}.paused .lamp{background:#a9b7c4;box-shadow:none}
+.glass{position:relative;border:1px solid var(--edge);border-radius:22px;background:linear-gradient(130deg,#ffffff10,#b1daff05 48%,#ffffff03),#092b405e;box-shadow:inset 0 1px 0 #e1f5ff28,inset 0 -1px 0 #09233390,0 15px 28px #00132130;overflow:hidden}.glass:before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(115deg,#ecfaff08,transparent 40%)}
+.findings{display:grid;grid-template-columns:1.03fr 1fr 1.1fr;align-items:center;padding:17px 25px;gap:26px}.finding{display:flex;gap:18px;align-items:center;height:56px}.finding+.finding{border-left:1px solid var(--edge);padding-left:27px}.finding strong{font-size:43px;font-weight:300;letter-spacing:-1px;white-space:nowrap}.finding .label{font-size:17px;line-height:1.35}.finding .label small{display:block;font-size:12px;color:var(--muted);margin-top:5px;letter-spacing:.2px}.ratio-label{font-size:15px!important}
+main{display:grid;grid-template-columns:minmax(0,1.64fr) minmax(0,1fr);gap:16px;min-height:0}.fleet{padding:20px 22px;display:grid;grid-template-rows:44px 1fr 154px;gap:12px}.panel-title{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.panel-title h2{font-size:21px;font-weight:500}.panel-title p{font-size:13px;color:var(--muted);margin-top:5px}.census{font-size:25px;font-weight:400;text-align:right;line-height:1.1}.census small{display:block;font-size:11px;color:var(--muted);margin-top:5px;letter-spacing:.4px}.lanes{display:grid;grid-template-rows:repeat(5,minmax(0,1fr));gap:8px;min-height:0}
+.lane{display:grid;grid-template-columns:43px 125px 1fr 58px;gap:13px;align-items:center;position:relative;padding:8px 14px;border:1px solid #a8d1ed1c;border-radius:13px;background:linear-gradient(110deg,#b7dcff0a,#08233855);box-shadow:inset 0 1px 0 #ddf3ff0b;transition:border-color .6s,background .6s,box-shadow .6s;min-width:0}.lane.selected{border-color:#90d9ff88;background:linear-gradient(110deg,#227da744,#0d35559c);box-shadow:inset 3px 0 0 var(--lane),0 5px 14px #04142544}.agent-icon{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#fff2,transparent),var(--lane);box-shadow:inset 0 1px 0 #fff5,3px 5px 0 #00192e55,0 6px 12px #00162950;display:grid;place-items:center;transform:perspective(180px) rotateY(-12deg) rotateX(8deg)}.agent-icon svg{width:24px;height:24px;stroke:#f5fbff;stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round}.lane h3{font-size:18px;font-weight:500}.lane small{display:block;color:var(--muted);font-size:11px;margin-top:5px}.workline{font-size:15px;line-height:1.35;color:#d9edf6}.population{display:flex;gap:3px;align-items:center;height:7px;margin-top:8px;overflow:hidden}.population i{height:5px;flex:1;background:var(--lane);opacity:.72;border-radius:3px;max-width:18px;box-shadow:0 1px 3px #0004}.population .empty{opacity:.1}.lane-count{font-size:26px;text-align:right;font-weight:300}.lane-count small{font-size:10px;letter-spacing:.4px}
+.focus{border-top:1px solid var(--edge);padding-top:13px;min-width:0}.focus-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.focus-head h3{font-size:17px;font-weight:500}.focus-head span{font-size:11px;color:var(--muted)}.worker-sequence{display:flex;align-items:center;gap:6px;margin-bottom:12px;font-size:12px;white-space:nowrap}.worker-chip{padding:5px 8px;border-radius:6px;border:1px solid #badfff22;color:var(--muted);background:#091e3244}.worker-chip.active{color:#f4e9ff;border-color:#c39bff99;background:#a871ef25}.review-step{color:#9ddacb;font-size:10px}.cycle{display:flex;align-items:stretch;gap:7px}.cycle-node{position:relative;flex:1;min-width:0;padding:8px 9px;border:1px solid color-mix(in srgb,var(--role) 45%,transparent);border-radius:9px;background:linear-gradient(125deg,color-mix(in srgb,var(--role) 14%,transparent),#08243899);box-shadow:inset 0 2px 0 color-mix(in srgb,var(--role) 70%,transparent);transition:box-shadow .4s,background .4s}.cycle-node.active{box-shadow:inset 0 2px 0 var(--role),0 0 18px color-mix(in srgb,var(--role) 18%,transparent);background:linear-gradient(125deg,color-mix(in srgb,var(--role) 27%,transparent),#08243899)}.cycle-node b{display:block;color:var(--role);font-size:9px;letter-spacing:.6px;margin-bottom:5px;text-transform:uppercase}.cycle-node span{font-size:12px;line-height:1.2;display:block}.cycle-arrow{align-self:center;font-size:17px;color:#97c4da}.focus-description{font-size:12px;color:var(--muted);margin-top:9px}
+.right-column{display:grid;grid-template-rows:276px 1fr;gap:14px;min-height:0}.systems{padding:19px 20px}.systems .eyebrow{margin-bottom:10px}.hardware{display:grid;grid-template-columns:1fr 71px 1fr;align-items:center;gap:5px}.machine{position:relative;text-align:center}.machine h3{font-size:17px;font-weight:500}.machine small{display:block;color:var(--muted);font-size:11px;margin-top:4px}.server-plinth{height:88px;display:flex;align-items:center;justify-content:center;position:relative;perspective:700px}.server-plinth:after{content:"";position:absolute;width:85%;height:22px;bottom:2px;border:1px solid #98dbff25;border-radius:50%;background:radial-gradient(ellipse,#80d9ff24,transparent 70%);transform:rotateX(55deg)}.server-photo{position:relative;z-index:1;width:96%;max-height:78px;object-fit:contain;filter:drop-shadow(0 13px 7px #00101b99);transform:perspective(700px) rotateY(-5deg) rotateX(2deg);animation:float 9s ease-in-out infinite}.gpu-photo{width:91%;animation-delay:-4s}.xeon{position:absolute;right:0;bottom:4px;width:35px;height:35px;object-fit:contain;z-index:2;filter:drop-shadow(0 4px 3px #00182566)}.exchange{align-self:center;position:relative;text-align:center;padding-bottom:12px}.exchange span{font-size:11px;color:#d9edf8;white-space:nowrap}.exchange svg{width:71px;height:28px;display:block;overflow:visible}.signal{filter:drop-shadow(0 0 4px #c39bff);animation:exchange 4s ease-in-out infinite alternate}.system-note{text-align:center;color:var(--muted);font-size:12px;margin-top:4px}.serving-demand{border-top:1px solid var(--edge);margin-top:12px;padding-top:12px;display:flex;justify-content:space-between;gap:12px;align-items:center}.serving-demand strong{font-size:28px;font-weight:300;white-space:nowrap}.serving-demand p{font-size:12px;color:var(--muted);line-height:1.5}.serving-demand small{font-size:11px;display:block;color:#bfd1e2;text-align:right;margin-top:3px}
+.resources{padding:18px 20px;display:grid;grid-template-rows:28px 45px 20px 43px 1fr;gap:7px}.resource-top{display:flex;align-items:center;justify-content:space-between}.resource-top .eyebrow{font-size:11px}.recorded-tag{color:#a4c6da;font-size:11px}.metric{display:flex;align-items:center;justify-content:space-between}.metric p{font-size:18px}.metric strong{font-size:33px;font-weight:300}.cpu-stack{display:flex;height:12px;border-radius:6px;overflow:hidden;background:#759db52b;box-shadow:inset 0 2px 3px #0017246b}.cpu-stack i{min-width:0;transition:width 1s;background:var(--color);box-shadow:inset 0 1px 0 #fff4}.cpu-key{display:grid;grid-template-columns:1fr 1fr;gap:7px 12px;align-content:start;font-size:11px;color:var(--muted)}.cpu-key span{display:flex;gap:6px;align-items:center}.cpu-key i{width:7px;height:7px;background:var(--color);border-radius:2px}.memory{border-top:1px solid var(--edge);padding-top:8px;display:flex;justify-content:space-between;align-items:center;gap:14px}.memory p{font-size:16px}.memory strong{font-size:27px;font-weight:300}.spark{width:110px;height:26px;stroke:#83cfe9;stroke-width:1.5;fill:none}
+footer{display:flex;justify-content:space-between;gap:22px;align-items:center;font-size:12px;min-width:0}.completion{display:flex;gap:10px;align-items:center;min-width:0}.completion .eyebrow{font-size:10px;white-space:nowrap}.completion-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#d0e4ef}.footnote{font-size:11px;color:#a4bdcd;white-space:nowrap}.track{position:absolute;bottom:0;left:0;right:0;height:2px;background:#bde6ff13}.track i{display:block;height:100%;width:0;background:linear-gradient(90deg,#1786c7,#8cdfff);box-shadow:0 0 9px #9de3ff44}
+dialog{width:min(880px,94vw);max-height:90vh;background:#0b273d;color:var(--ink);border:1px solid #98cfee55;border-radius:20px;padding:26px;box-shadow:0 30px 100px #000a;overflow:auto}dialog::backdrop{background:#020d19bd;backdrop-filter:blur(8px)}dialog h2{font-size:23px;margin-bottom:14px}dialog p{font-size:15px;line-height:1.55;margin:10px 0;color:#c0d4e1}dialog a{color:#99dcff}dialog .close{float:right}dialog code{font-size:12px;overflow-wrap:anywhere}.detail-grid{display:grid;grid-template-columns:220px 1fr;gap:22px;margin:18px 0}.cores{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}.core{height:21px;border:1px solid #b7dffd30;border-radius:4px;background:color-mix(in srgb,var(--cpu) calc(var(--busy)*1%),#102e42)}.tiers{display:grid;grid-template-columns:1fr 1fr;gap:9px;font-size:14px;align-content:start}.tiers div{padding:10px;background:#d8f2ff08;border-radius:8px}.tiers small{display:block;color:var(--muted);margin-top:5px}.settings{display:flex;gap:10px;align-items:center;margin-top:18px}.settings label{font-size:14px}select{font:inherit;background:#15354e;color:white;border:1px solid #85acc866;border-radius:7px;padding:7px}
+@keyframes float{0%,100%{translate:0 0}50%{translate:0 -3px}}@keyframes exchange{0%,15%{transform:translateX(0);opacity:.35}85%,100%{transform:translateX(45px);opacity:.85}}.paused *{animation-play-state:paused!important}.still *{animation:none!important;transition:none!important}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}@media print{body{overflow:visible}.screen{position:relative;transform:none!important;left:0!important;top:0!important}.controls,dialog{display:none!important}@page{size:landscape;margin:0}}
+.right-column{grid-template-rows:288px 1fr}.gpu-photo{width:140%;height:160px;max-height:none;object-fit:contain}.resources{grid-template-rows:26px 43px 20px 43px 1fr}.metric p:after{content:'Share of attributed CPU work below';display:block;font-size:10px;color:var(--muted);margin-top:4px}
+.machine:last-child .server-plinth{overflow:hidden}
+.fleet{grid-template-rows:44px 1fr 180px}.cycle-node b{font-size:10px}.cycle-node span{font-size:12.5px}
 
-  header.top { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 20px; padding: 2px 4px 0; }
-  header h1 { font-size: 21px; font-weight: 400; margin: 3px 0 0; }
-  header .sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; max-width: 78ch; }
-  .controls { display: flex; gap: 10px; align-items: center; }
-  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--edge); border-radius: 999px; background: var(--glass2); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
-  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 2.4s ease-in-out infinite; }
-  .pill.paused .dot { background: var(--dim); box-shadow: none; animation: none; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-  .btn { font: inherit; font-weight: 400; font-size: 12.5px; color: var(--ink); background: var(--glass2); border: 1px solid var(--edge); border-radius: 10px; padding: 7px 13px; cursor: pointer; }
-  .btn:hover { background: rgba(255,255,255,0.08); }
-  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; }
-  .seg .btn { border: 0; border-radius: 0; background: transparent; padding: 7px 10px; font-family: var(--mono); font-size: 12px; }
-  .seg .btn[aria-pressed="true"] { background: rgba(79,176,240,0.18); color: #fff; }
-
-  /* concept strip: the three-step picture */
-  .concept { display: grid; grid-template-columns: 1fr 28px 1.25fr 28px 1fr; align-items: stretch; gap: 8px; padding: 12px 18px; }
-  .step { display: grid; grid-template-columns: 164px minmax(0, 1fr); gap: 14px; align-items: center; }
-  .step .num { font-family: var(--mono); font-size: 11px; color: var(--eyebrow); letter-spacing: 0.12em; }
-  .step .t { font-size: 14px; font-weight: 400; }
-  .step .d { color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.35; }
-  .step .big { font-size: 28px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
-  .step .big small { font-size: 12px; color: var(--muted); margin-left: 5px; }
-  .arrow { display: grid; place-items: center; color: var(--dim); font-size: 18px; }
-
-  main.grid { display: grid; grid-template-columns: minmax(0, 3.1fr) minmax(0, 5.4fr) minmax(0, 3.5fr); gap: 12px; min-height: 0; }
-
-  /* the agents */
-  .agents { display: grid; grid-template-rows: auto minmax(0, 1fr); }
-  .alist { display: grid; grid-template-rows: repeat(5, minmax(0, 1fr)); padding: 6px 18px 12px; min-height: 0; }
-  .agent { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center; border-bottom: 1px solid var(--edge2); padding: 6px 0; min-height: 0; }
-  .agent:last-child { border-bottom: 0; }
-  .glyph { width: 30px; height: 30px; display: grid; place-items: center; }
-  .agent .name { font-size: 13.5px; font-weight: 400; }
-  .agent .does { color: var(--muted); font-size: 11.5px; line-height: 1.3; margin-top: 1px; }
-  .agent .facts { font-family: var(--mono); font-size: 10.5px; color: var(--dim); margin-top: 3px; }
-  .agent .now { text-align: right; width: 58px; }
-  .agent .now .v { font-family: var(--mono); font-size: 20px; line-height: 1; font-variant-numeric: tabular-nums; }
-  .agent .now .l { font-size: 10px; color: var(--dim); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
-
-  /* on the server now */
-  .server { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
-  .census { display: grid; grid-template-columns: 96px repeat(5, 1fr); gap: 8px; padding: 10px 18px 0; align-items: end; }
-  .census .c { text-align: center; padding-bottom: 8px; border-bottom: 1px solid var(--edge2); }
-  .census .c .v { font-family: var(--mono); font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; min-width: 3ch; display: inline-block; }
-  .census .c .l { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); margin-top: 5px; }
-  .census .c .h { font-size: 10.5px; color: var(--dim); margin-top: 2px; }
-  .census .first { padding-bottom: 8px; border-bottom: 1px solid var(--edge2); }
-  .flowwrap { position: relative; min-height: 0; margin: 4px 18px 6px; }
-  canvas#flow { position: absolute; inset: 0; }
-  .flowkey { display: flex; gap: 16px; padding: 0 18px 12px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
-  .flowkey i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
-
-  /* demand */
-  .demand { display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
-  .dblock { padding: 12px 18px 12px; min-height: 0; overflow: hidden; }
-  .dblock + .dblock { border-top: 1px solid var(--edge2); }
-  .dblock .big { display: flex; align-items: baseline; gap: 10px; margin-top: 4px; }
-  .dblock .big .v { font-size: 34px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; min-width: 2.4ch; }
-  .dblock .big .u { color: var(--muted); font-size: 12px; }
-  .stack { display: flex; height: 9px; border-radius: 5px; overflow: hidden; background: rgba(255,255,255,0.06); margin-top: 10px; }
-  .stack span { display: block; height: 100%; transition: width .6s ease; }
-  .keys { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 11px; color: var(--muted); }
-  .keys i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
-  .cores2 { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; margin-top: 10px; }
-  .coremap { display: grid; gap: 3px; }
-  .core { border-radius: 3px; border: 1px solid var(--edge2); background: rgba(79,176,240,calc(var(--b, 0) * 0.85)); transition: background .5s linear; }
-  .core.tier-rerank { background: rgba(210,166,106,calc(var(--b, 0) * 0.85)); }
-  .core.tier-embed, .core.tier-ingest { background: rgba(95,201,194,calc(var(--b, 0) * 0.85)); }
-  .tiers { display: grid; gap: 5px; }
-  .tier { display: grid; grid-template-columns: 1fr auto; align-items: baseline; border-top: 1px solid var(--edge2); padding-top: 4px; }
-  .tier .v { font-family: var(--mono); font-size: 15px; }
-  .tier .v small { font-size: 10px; color: var(--muted); margin-left: 3px; }
-  .llm3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
-  .llm3 .v { font-family: var(--mono); font-size: 17px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .llm3 .v small { font-size: 10px; color: var(--dim); margin-left: 3px; }
-  .gauge { height: 9px; border-radius: 5px; background: rgba(255,255,255,0.07); overflow: hidden; margin-top: 8px; }
-  .gauge i { display: block; height: 100%; background: linear-gradient(90deg, #2a7fc4, var(--accent)); width: 0; transition: width .6s ease; }
-  .gpu { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; margin-top: 8px; }
-  .gpu .v { font-size: 26px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; min-width: 3.2ch; text-align: right; }
-  .note { font-size: 11px; color: var(--dim); line-height: 1.35; }
-  #gpunote { min-height: 2.7em; }
-
-  .ticker { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 10px 18px; }
-  .ticker .list { display: flex; gap: 20px; overflow: hidden; white-space: nowrap; font-size: 12px; color: var(--muted); }
-  .ticker .list span b { color: var(--ink); font-weight: 400; }
-  .ticker .list span i { font-style: normal; font-family: var(--mono); color: var(--dim); margin-right: 7px; }
-  @media (max-width: 1250px) { .app { height: auto; } main.grid { grid-template-columns: 1fr; } .flowwrap { min-height: 300px; } .demand { grid-template-rows: auto auto; } }
-  @media (prefers-reduced-motion: reduce) { .pill .dot { animation: none; } .core, .stack span, .gauge i { transition: none; } }
+[data-topic]{cursor:pointer;outline-offset:3px;border-radius:10px}[data-topic]:hover{background-color:#b0dfff0b}[data-topic]:focus-visible{outline:2px solid #aee4ff}.lane[data-topic]:hover{border-color:#aee4ff80}.worker-chip[data-topic],.cycle-node[data-topic]{font-family:inherit;text-align:left}.click-hint{font-size:10px;color:#aed3e6;margin-left:8px;font-weight:400}.r770-fleet{height:118px;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:5px 0}.r770-fleet .server-photo{max-height:32px;width:96%;height:32px;flex:none}.r770-fleet .server-photo:nth-child(2){animation-delay:-1s}.r770-fleet .server-photo:nth-child(3){animation-delay:-2s}.server-plinth{height:118px}.machine h3{font-size:16px}.serving-demand{margin-top:7px;padding-top:7px}.serving-demand strong{font-size:21px}.serving-demand p{font-size:10px}.serving-demand small{font-size:10px}.system-note{font-size:10px;margin-top:1px}.hardware .xeon{right:0;bottom:2px;width:31px;height:31px}
+[hidden]{display:none!important}.topic-metrics{display:flex;gap:12px;margin:18px 0}.topic-metric{flex:1;min-width:0;padding:16px;background:linear-gradient(120deg,#7fd4ff17,#b4e8ff04);border:1px solid var(--edge);border-radius:13px;box-shadow:inset 0 1px 0 #dbf4ff1a}.topic-metric strong{display:block;font-size:29px;font-weight:300}.topic-metric span{display:block;color:var(--muted);font-size:13px;margin-top:5px}.topic-steps{padding-left:22px;color:#c6dfea;font-size:15px;line-height:1.5}.topic-steps li{padding:5px 0}.topic-links{display:flex;gap:18px;align-items:center;margin-top:22px}.topic-role{color:var(--cpu);font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
 </style>
-
-<div class="app">
-  <header class="top">
-    <div>
-      <div class="eyebrow">Dell PowerEdge R470 &middot; agent execution tier &middot; steady state</div>
-      <h1>An enterprise agent fleet, running on one server</h1>
-      <div class="sub">One server runs everything the agents do between their model calls; the model itself answers from a GPU tier. This is a measured steady state at <span id="hdr-rate">&ndash;</span> workflow arrivals per second, replayed at <span id="speedword">8&times;</span> speed.</div>
-    </div>
-    <div class="controls">
-      <span class="pill" id="pill"><span class="dot"></span><span id="clock">live</span></span>
-      <div class="seg" role="group" aria-label="Replay speed">
-        <button class="btn" data-speed="1" aria-pressed="false">1&times;</button>
-        <button class="btn" data-speed="4" aria-pressed="false">4&times;</button>
-        <button class="btn" data-speed="8" aria-pressed="true">8&times;</button>
-        <button class="btn" data-speed="16" aria-pressed="false">16&times;</button>
-      </div>
-      <button class="btn" id="play" aria-label="Pause">Pause</button>
-    </div>
-  </header>
-
-  <section class="card concept" aria-label="How the system fits together">
-    <div class="step"><div><div class="num">01</div><div class="big" id="s-arr">&ndash;<small>/ s</small></div></div><div><div class="t">Requests arrive</div><div class="d">A fixed mix: in every twelve, six are quick tasks, two code builds, two data analyses, one research brief, one document ingestion. <span id="s-arr-min"></span></div></div></div>
-    <div class="arrow">&rarr;</div>
-    <div class="step"><div><div class="num">02</div><div class="big" id="s-run">&ndash;<small>running</small></div></div><div><div class="t">Agents work on this server</div><div class="d">Each request becomes an agent that plans, runs its workers, uses tools (sandboxes, retrieval, embedding), is validated, and writes its result. That work is what the CPU does.</div></div></div>
-    <div class="arrow">&rarr;</div>
-    <div class="step"><div><div class="num">03</div><div class="big" id="s-calls">&ndash;<small>calls / s</small></div></div><div><div class="t">Model calls go to the GPU tier</div><div class="d">Every plan, worker turn and validation is a model call. Together they keep <span id="s-gpu">&ndash;</span> of one GPU generating: this server pairs with one GPU of the reference class.</div></div></div>
-  </section>
-
-  <main class="grid">
-    <section class="card agents" aria-label="The five agent types">
-      <div class="panel-head"><div><div class="eyebrow">The five agents</div><div class="lead">What each one does, and how many are on the server right now.</div></div></div>
-      <div class="alist" id="alist"></div>
-    </section>
-
-    <section class="card server" aria-label="On the server now">
-      <div class="panel-head"><div><div class="eyebrow">On the server now</div><div class="lead">Every dot is one agent, moving left to right through its stages. Lanes are the five agent types.</div></div><div class="right" id="census-total"></div></div>
-      <div class="census">
-        <div class="first k">Stage</div>
-        <div class="c"><div class="v" id="st-0">0</div><div class="l">Planning</div><div class="h">first model call</div></div>
-        <div class="c"><div class="v" id="st-1">0</div><div class="l">Working</div><div class="h">workers draft</div></div>
-        <div class="c"><div class="v" id="st-2">0</div><div class="l">Using tools</div><div class="h">CPU-heavy</div></div>
-        <div class="c"><div class="v" id="st-3">0</div><div class="l">Validating</div><div class="h">model checks</div></div>
-        <div class="c"><div class="v" id="st-4">0</div><div class="l">Finishing</div><div class="h">synthesis, record</div></div>
-      </div>
-      <div class="flowwrap"><canvas id="flow"></canvas></div>
-      <div class="flowkey"><span><i style="background:var(--accent)"></i>waiting on the model</span><span><i style="background:var(--sandbox)"></i>sandbox: build or data job</span><span><i style="background:var(--rerank)"></i>retrieval and reranking</span><span><i style="background:var(--embed)"></i>embedding</span><span><i style="background:transparent;border:1px solid var(--accent)"></i>ring: finished</span></div>
-    </section>
-
-    <section class="card demand" aria-label="What this costs">
-      <div class="dblock">
-        <div class="eyebrow">What the agents cost this server</div>
-        <div class="big"><div class="v" id="t-cores">&ndash;</div><div class="u">of 64 physical cores busy</div></div>
-        <div class="stack" id="cpustack"></div>
-        <div class="keys" id="cpukeys"></div>
-        <div class="cores2">
-          <div class="coremap" id="coremap"></div>
-          <div class="tiers">
-            <div class="tier"><div class="k">Application &middot; <span id="n-app"></span> cores</div><div class="v"><span id="t-app">&ndash;</span><small>%</small></div></div>
-            <div class="tier"><div class="k">Reranker &middot; <span id="n-rerank"></span></div><div class="v"><span id="t-rerank">&ndash;</span><small>%</small></div></div>
-            <div class="tier"><div class="k">Ingest embedder &middot; <span id="n-ingest"></span></div><div class="v"><span id="t-ingest">&ndash;</span><small>%</small></div></div>
-            <div class="tier"><div class="k">Query embedder &middot; <span id="n-embed"></span></div><div class="v"><span id="t-embed">&ndash;</span><small>%</small></div></div>
-          </div>
-        </div>
-      </div>
-      <div class="dblock">
-        <div class="eyebrow">What the agents ask of the GPU tier</div>
-        <div class="llm3">
-          <div><div class="k">Model calls</div><div class="v"><span id="l-calls">&ndash;</span><small>/ s</small></div></div>
-          <div><div class="k">Prompt tokens</div><div class="v"><span id="l-in">&ndash;</span><small>/ s</small></div></div>
-          <div><div class="k">Generated</div><div class="v"><span id="l-out">&ndash;</span><small>tok / s</small></div></div>
-        </div>
-        <div class="stack" id="llmstack"></div>
-        <div class="keys" id="llmkeys"></div>
-        <div class="gpu"><div><div class="k">GPUs this server keeps generating, at 3,565 tokens / s per GPU</div><div class="gauge"><i id="gauge"></i></div></div><div class="v" id="t-gpu">&ndash;</div></div>
-        <div class="note" style="margin-top:8px" id="gpunote"></div>
-      </div>
-    </section>
-  </main>
-
-  <section class="card ticker" aria-label="Recent completions">
-    <div class="eyebrow">Just finished</div>
-    <div class="list" id="ticker"></div>
-    <div class="note">Measured on the server: every arrival, completion, core reading and sample. Looped from the run of record's steady window at capacity.</div>
-  </section>
+</head>
+<body>
+<div class="screen" id="screen">
+<header><div><div class="brandline"><img class="dell-logo" data-asset="dell" alt="Dell Technologies"><span class="eyebrow">Enterprise agent capacity</span></div><h1>Enterprise agents put the CPU to work</h1></div><div class="controls"><span class="replay-label"><i class="lamp"></i><span id="clock">Steady-state loop · 1×</span></span><button class="control" id="play">Pause</button><button class="control" id="restart" title="Restart replay (R)">Restart</button><button class="control" id="fullscreen" title="Enter full screen (F)">Full screen</button><button class="control" id="details">Details</button></div></header>
+<section class="glass findings" aria-label="Whitepaper capacity findings"><div class="finding" data-topic="capacity" role="button" tabindex="0" aria-label="Agent capacity details"><strong id="finding-resident"></strong><div class="label">Resident agents per CPU<small>Enterprise mix at capacity</small></div></div><div class="finding" data-topic="cpu-reference" role="button" tabindex="0" aria-label="CPU utilization finding details"><strong id="finding-cpu"></strong><div class="label">CPU utilization<small id="finding-platform"></small></div></div><div class="finding" data-topic="serving" role="button" tabindex="0" aria-label="CPU-to-GPU requirement details"><strong id="finding-ratio"></strong><div class="label ratio-label">CPU-to-GPU requirement<small id="finding-gpu"></small></div></div></section>
+<main>
+<section class="glass fleet" aria-label="Enterprise agent fleet"><div class="panel-title"><div><h2>Five kinds of enterprise work</h2><p>Select an agent, stage, or reading for details.</p></div><div class="census" data-topic="residency" role="button" tabindex="0" aria-label="Current resident agents per CPU"><span id="resident-now">—</span><small>resident per CPU now</small></div></div><div class="lanes" id="lanes"></div><section class="focus" aria-label="Illustrated agent workflow"><div class="focus-head"><h3 id="focus-title"></h3><span>Workflow illustration</span></div><div class="worker-sequence" id="workers"></div><div class="cycle" id="cycle"></div><p class="focus-description" id="focus-description"></p></section></section>
+<div class="right-column">
+<section class="glass systems" aria-label="Separate agent execution and model serving"><div class="eyebrow">Agent execution ↔ model serving</div><div class="hardware"><div class="machine" data-topic="architecture" role="button" tabindex="0" aria-label="Three R770 deployment systems"><h3>3 × PowerEdge R770</h3><small>Agents, tools, and sandboxes</small><div class="server-plinth r770-fleet"><img class="server-photo" data-asset="r770" alt="Dell PowerEdge R770, system 1"><img class="server-photo" data-asset="r770" alt="Dell PowerEdge R770, system 2"><img class="server-photo" data-asset="r770" alt="Dell PowerEdge R770, system 3"><img class="xeon" data-asset="xeon" alt="Intel Xeon processors"></div></div><div class="exchange" data-topic="llm" role="button" tabindex="0" aria-label="LLM call details"><span>LLM calls</span><svg viewBox="0 0 71 28" aria-hidden="true"><path d="M4 14H67M10 9L4 14L10 19M61 9L67 14L61 19" stroke="#a0d4ec" stroke-width="1.5" fill="none"/><circle class="signal" cx="13" cy="14" r="3" fill="#c39bff"/></svg></div><div class="machine" data-topic="architecture" role="button" tabindex="0" aria-label="XE7740 model-serving system"><h3>1 × PowerEdge XE7740</h3><small>Language model inference</small><div class="server-plinth"><img class="server-photo gpu-photo" data-asset="xe7740" alt="Dell PowerEdge XE7740"></div></div></div><p class="system-note">6 CPU sockets · 8 GPUs. Replay readings remain per CPU.</p><div class="serving-demand" data-topic="serving" role="button" tabindex="0" aria-label="Model-serving throughput details"><p>LLM output required<br><span id="model-calls"></span></p><div><strong id="output-demand"></strong><small id="serving-model"></small></div></div></section>
+<section class="glass resources" aria-label="Recorded CPU and memory activity"><div class="resource-top"><span class="eyebrow">CPU work and memory</span><span class="recorded-tag" id="sample-clock"></span></div><div class="metric" data-topic="cpu" role="button" tabindex="0" aria-label="Recorded CPU utilization details"><p>CPU utilization</p><strong id="cpu-now">—</strong></div><div class="cpu-stack" id="cpu-stack" data-topic="cpu-share" role="button" tabindex="0" aria-label="CPU work breakdown details"></div><div class="cpu-key" id="cpu-key"></div><div class="memory" data-topic="memory" role="button" tabindex="0" aria-label="Memory usage details"><div><p>Memory used</p><span class="recorded-tag">Recorded host footprint</span></div><svg class="spark" viewBox="0 0 110 26" aria-label="Recent memory usage"><path id="memory-line"/></svg><strong id="memory-now">—</strong></div></section>
 </div>
-
+</main>
+<footer><div class="completion" data-topic="completion" role="button" tabindex="0" aria-label="Recorded completion details"><span class="eyebrow">Recorded completion</span><span class="completion-text" id="completion">Loading the recorded window</span></div><span class="footnote">Recorded counts and telemetry · Workflow motion is illustrative</span></footer><div class="track" aria-hidden="true"><i id="progress"></i></div>
+</div>
+<dialog id="detail-dialog" aria-label="Demo details"><button class="control close" id="close-details">Close</button><section id="topic-panel" hidden><div class="topic-role" id="topic-role"></div><h2 id="topic-title"></h2><div id="topic-body"></div><div class="topic-links"><button class="control" id="show-reference">Replay and source details</button><a href="../whitepaper/agent-capacity-whitepaper.html#method" id="topic-paper" target="_blank" rel="noopener">Read more in the whitepaper</a></div></section><div id="reference-panel"><h2>Replay and serving reference</h2><p id="detail-source"></p><p id="detail-definition"></p><div class="detail-grid"><div class="cores" id="cores" aria-label="Physical core occupancy"></div><div class="tiers" id="tiers"></div></div><p>CPU utilization uses the busier hardware thread on each physical core. The CPU work bar uses recorded process-family samples, normalized to attributed CPU work. Memory shows the host sample in GB.</p><p>The selected interval keeps all five agent types resident. Lane counts follow recorded arrivals and completions, including agents already resident when the interval begins. Unfinished agents remain resident until the recording ends. The loop returns directly to its recorded steady-state start without replaying startup or drain-down.</p><p>The highlighted workflow explains the agent definition. The recording contains aggregate stage timings, not every worker transition or model-call timestamp. The illustration does not report those events as telemetry.</p><p id="detail-serving"></p><p><a href="../whitepaper/agent-capacity-whitepaper.html" target="_blank" rel="noopener">Read the whitepaper</a> · <a href="agent-replay.html" target="_blank" rel="noopener">Open the benchmark-ladder view</a></p><div class="settings"><label for="speed">Replay speed</label><select id="speed"><option value="1" selected>1×</option><option value="8">8×</option><option value="16">16×</option></select><label><input id="motion" type="checkbox" checked> Workflow motion</label></div><p>Keyboard controls: Space pauses, R restarts, F opens full screen. Escape closes this panel or exits full screen.</p></div></dialog>
 <script>
+'use strict';
 const DATA = /*__DATA__*/null;
-const PLATEAU = 1;              // the capacity point of the ladder in the event file (0.72, 0.84, 0.90)
-const WARMUP_S = 600;           // the analysts take about nine minutes, so steady state starts later
-const GPU_TOKS = 3565;   // record serving rate: gpt-oss-20b on one RTX PRO 6000 under vLLM, 3,753 output tok/s published, prefix caching assumed, less 5% (methodology section 11)
-const SMT_SHARE = 0.8;
-const ARCH = {
-  task_ticket:  { name: "Task agent",      does: "Reads one ticket, looks it up in the knowledge base (32 candidates reranked), files a record, writes the reply; the reply is the deliverable.", workers: 1, calls: 4,  gen: 1390,  coreS: 1,   lat: "17 s",  phrase: "ticket looked up, record filed, reply written" },
-  deep_research:{ name: "Research agent",  does: "Three workers each fetch and parse 30 source pages, run three searches with 128 candidates reranked, and draft; the brief is assembled.", workers: 3, calls: 20, gen: 16100, coreS: 25,  lat: "185 s", phrase: "90 pages parsed, nine searches reranked, brief assembled" },
-  ingestion:    { name: "Ingestion agent", does: "Renders 50 PDF pages, reads them with OCR, redacts personal data, chunks, embeds and indexes the text, checks with a query.", workers: 1, calls: 7,  gen: 3670,  coreS: 100, lat: "160 s", phrase: "50 pages OCR'd and redacted, chunks embedded and indexed" },
-  analyst_large:{ name: "Data analyst",    does: "Three workers pull definitions and run jobs over 100 million events in a sandbox; the second compares this period with the last.", workers: 3, calls: 17, gen: 13380, coreS: 190, lat: "580 s", phrase: "three 100 M-row jobs run, period-over-period change reported" },
-  code_agent:   { name: "Code agent",      does: "Three workers search the codebase, then set up, run CI under the sanitizer with static analysis, and verify the change over Lua and SQLite.", workers: 3, calls: 17, gen: 12850, coreS: 150, lat: "370 s", phrase: "tree built, CI and analysis passed, change verified" },
-};
-
-(function () {
-  const M = DATA.meta, P = DATA.plateaus[PLATEAU], C = DATA.cores[PLATEAU];
-  const sids = M.sids, tile = M.tile;
-  const a = P.t0 + WARMUP_S, b = P.t1, L = b - a;
-  const genPerWf = P.gen_tokens_per_wf;
-  const promptPerS = P.prompt_tokens_total / P.span_s;
-  const tierN = { app: 0, rerank: 0, embed: 0, ingest: 0 }; M.tiers.forEach(t => tierN[t]++);
-  for (const k in tierN) document.getElementById("n-" + k).textContent = tierN[k];
-  document.getElementById("hdr-rate").textContent = P.rate.toFixed(1);
-  document.getElementById("s-arr").innerHTML = `${P.rate.toFixed(1)}<small>/ s</small>`;
-  document.getElementById("s-arr-min").textContent = `That is about ${Math.round(P.rate * 60)} arrivals a minute.`;
-
-  const raw = DATA.units.filter(u => u[0] === PLATEAU && u[2] >= a && u[2] < b);
-  // Units still in flight when the recording ended carry no completion time
-  // and no stage sums; in a steady loop they take their archetype's median
-  // lifetime and median stage shares, so they complete and are replaced.
-  const med = xs => { xs = xs.slice().sort((x, y) => x - y); return xs.length ? xs[xs.length >> 1] : 0; };
-  const done = sids.map((s, li) => raw.filter(u => u[1] === li && u[3] != null));
-  const medLife = done.map(xs => med(xs.map(u => u[3] - u[2])) || 60);
-  const medStage = done.map(xs => [5, 6, 7, 8].map(k => med(xs.map(u => u[k]))));
-  const units = raw.map((u, i) => {
-    const [pl, sid, t0, t1, ok] = u;
-    const censored = t1 == null;
-    const [mw, ret, sb, emb] = censored ? medStage[sid] : u.slice(5, 9);
-    const end = censored ? t0 + medLife[sid] : t1;
-    const life = Math.max(1, end - t0);
-    const ft = Math.min(0.6, (ret + sb + emb) / life);
-    return { i, sid, t0: t0 - a, end: end - a, life, ft, w: (0.72 - ft) / 2, ok: censored ? 1 : ok,
-             tool: sb > ret && sb > emb ? "sandbox" : (emb > ret ? "embed" : (ret > 0 ? "retrieval" : "none")), lane: sid, slot: -1, lat: life };
-  });
-  const isActive = (u, tau) => (tau >= u.t0 && tau < u.end) || (u.end > L && tau < u.end - L);
-  const secs = Math.ceil(L);
-  const comp = sids.map(() => new Uint16Array(secs)), arrivals = new Uint16Array(secs);
-  const compList = [];
-  for (const u of units) { const e = ((u.end % L) + L) % L; comp[u.sid][Math.min(secs - 1, Math.floor(e))]++; compList.push([e, u]); arrivals[Math.min(secs - 1, Math.floor(u.t0))]++; }
-  compList.sort((x, y) => x[0] - y[0]);
-  const roll = (arr, tau, n) => { let s = 0; for (let k = 0; k < n; k++) { let i = Math.floor(tau) - k; i = ((i % secs) + secs) % secs; s += arr[i]; } return s; };
-
-  // ---------- agents panel
-  const alist = document.getElementById("alist");
-  const glyph = (sid, i) => {
-    const three = ARCH[sid].workers === 3, r = sid === "task_ticket" ? 3 : 3.6;
-    if (!three) return `<svg width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="${r}" fill="#4fb0f0"/></svg>`;
-    return `<svg width="30" height="30" viewBox="0 0 30 30">${[0, 1, 2].map(k => { const an = k / 3 * Math.PI * 2 - Math.PI / 2; return `<circle cx="${(15 + Math.cos(an) * 4.2).toFixed(1)}" cy="${(15 + Math.sin(an) * 4.2).toFixed(1)}" r="2.3" fill="#4fb0f0"/>`; }).join("")}</svg>`;
-  };
-  sids.forEach((sid, li) => {
-    const A = ARCH[sid];
-    const d = document.createElement("div"); d.className = "agent";
-    d.innerHTML = `<div class="glyph">${glyph(sid, li)}</div>
-      <div><div class="name">${A.name} <span class="k" style="margin-left:6px">${tile[sid]} in every 12</span></div><div class="does">${A.does}</div>
-      <div class="facts">${A.workers} worker${A.workers > 1 ? "s" : ""} &middot; ${A.calls} model calls &middot; ${A.coreS} core-s of CPU &middot; ${A.lat}</div></div>
-      <div class="now"><div class="v" id="n-${li}">0</div><div class="l">on server</div></div>`;
-    alist.appendChild(d);
-  });
-
-  // ---------- flow canvas
-  const cv = document.getElementById("flow"), ctx = cv.getContext("2d"), wrap = cv.parentElement;
-  let cw = 0, ch = 0, lanes = [];
-  const LANE_LABEL = 96;
-  function resize() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    cw = wrap.clientWidth; ch = wrap.clientHeight;
-    cv.width = cw * dpr; cv.height = ch * dpr; cv.style.width = cw + "px"; cv.style.height = ch + "px"; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const wts = [1.5, 0.8, 0.8, 1.2, 1.2], tot = wts.reduce((x, y) => x + y, 0); let y = 4;
-    lanes = wts.map(w => { const h = (ch - 8) * w / tot; const g = { y, h }; y += h; return g; });
-    sizeCoreMap();
+const RESULTS = /*__RESULTS__*/null;
+const ASSETS = /*__ASSETS__*/null;
+(() => {
+  const $ = id => document.getElementById(id);
+  if (!DATA || !RESULTS || !ASSETS) { $('completion').textContent='Build this page with node docs/dashboard/build-steady-state.cjs.'; return; }
+  const C=RESULTS.capacity, S=RESULTS.serving;
+  const plateauIndex=DATA.plateaus.findIndex(p=>p.keeps_up&&p.resident===C.resident);
+  if(plateauIndex<0) throw new Error('Replay has no capacity plateau matching the paper. Select a matching event file when building.');
+  const P=DATA.plateaus[plateauIndex], selected=DATA.conferenceWindow;
+  if(!selected||selected.plateauIndex!==plateauIndex)throw new Error('Rebuild the conference page to select its steady-state interval.');
+  const start=selected.start, end=selected.end, length=end-start;
+  if(length<=0) throw new Error('No steady-state recording after warmup.');
+  const units=DATA.units.filter(u=>u[0]===plateauIndex&&u[1]>=0);
+  const samples=DATA.samples.filter(s=>s[0]===plateauIndex&&s[1]<=end);
+  const completions=units.filter(u=>u[3]!=null&&u[3]<end).sort((a,b)=>a[3]-b[3]);
+  const colors=['#318fc4','#218e98','#316aad','#7b9aa9','#9063be'];
+  const roleColor={LLM:'var(--llm)','CPU service':'var(--cpu)','CPU sandbox':'var(--sandbox)','CPU check':'var(--check)'};
+  const defs=[
+    {name:'Task',work:'Retrieve ticket guidance, record, and reply',workers:['Ticket worker'],jobs:['Resolve a support request'],cycle:[['LLM','Request lookup'],['CPU service','Retrieve guidance'],['CPU service','Record outcome'],['LLM','Write reply'],['CPU check','Check structure']],note:'The reply is the result. This agent does not run a sandbox job.',icon:'M8 4H18L22 8V24H8ZM17 4V10H22M11 14H19M11 18H17'},
+    {name:'Research',work:'Parse sources, retrieve evidence, assemble a brief',workers:['Research','Analysis','Writing'],jobs:['Parse 30 source pages','Parse 30 source pages','Parse 30 source pages'],cycle:[['LLM','Assign worker'],['CPU sandbox','Parse 30 pages'],['CPU service','Three lookups'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'Each worker parses 30 supplied pages and retrieves evidence three times. The planner combines the reviewed sections.',icon:'M5 6H17V22H5ZM10 3H22V17M9 11H14M9 15H14'},
+    {name:'Ingestion',work:'Read documents with OCR, embed, and index',workers:['Document worker'],jobs:['Prepare 50 PDF pages for search'],cycle:[['LLM','Assign intake'],['CPU sandbox','OCR 50 pages'],['CPU service','Embed and index'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'The sandbox renders and reads pages, redacts patterns, and prepares text. CPU services embed and index the chunks.',icon:'M7 4H19V24H7ZM11 10H15M11 14H17M11 18H17'},
+    {name:'Analyst',work:'Process events, compare periods, prepare a report',workers:['Profile events','Compare periods','Prepare report'],jobs:['Profile 100 million events','Compare two 100-million-row periods','Prepare report data from 100 million rows'],cycle:[['LLM','Assign data job'],['CPU service','Retrieve definitions'],['CPU sandbox','Run NumPy job'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'The first two workers retrieve definitions. The reporting worker skips that lookup, then the planner combines the results.',icon:'M5 23H24M8 19V13M14 19V7M20 19V3'},
+    {name:'Code',work:'Build software, run CI checks, verify the rebuild',workers:['Set up build','Run CI checks','Verify rebuild'],jobs:['Build Lua and SQLite, then run tests','Run an instrumented build and static analysis','Rebuild changed files and rerun checks'],cycle:[['LLM','Assign build job'],['CPU service','Retrieve guidance'],['CPU sandbox','Build and test'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'Workers execute separate build jobs in sequence. Each result passes review before the planner assigns the next job.',icon:'M10 7L4 14L10 21M18 7L24 14L18 21M16 4L12 24'}
+  ];
+  const categories=[['Sandboxed jobs','#31b9e9',['sandbox']],['Retrieval and embedding','#f0be68',['retrieval']],['Agent execution','#b3d1e7',['siblings','executors','control']],['Supporting services','#6e8da6',['mock_router','database','other']]];
+  document.querySelectorAll('[data-asset]').forEach(e=>e.src=ASSETS[e.dataset.asset]);
+  $('finding-resident').textContent=C.resident; $('finding-cpu').textContent=C.cpuPercent+'%';
+  $('finding-platform').textContent=`One ${RESULTS.platform.cores}-core Intel Xeon processor`;
+  $('finding-ratio').textContent='1 : '+(C.outputTokensPerSecond/S.outputTokensPerSecondPerGpu).toFixed(1);
+  $('finding-gpu').textContent='RTX PRO 6000 serving reference';
+  $('model-calls').textContent=`${C.callsPerSecond} model calls per second at capacity`;
+  $('output-demand').textContent=`≈${(C.outputTokensPerSecond/1000).toFixed(1)}K tokens/s`;
+  $('serving-model').textContent=S.model+' · serving requirement';
+  $('detail-source').textContent=`The headline findings use whitepaper ${RESULTS.resultVersion}, ${RESULTS.revisionDate}. Replay source: ${DATA.meta.series}. The selected steady-state segment is ${length.toFixed(1)} seconds, beginning ${format(start-P.t0)} into the capacity hold. It loops continuously at normal speed by default.`;
+  $('detail-definition').textContent=`Headline source: ${RESULTS.sourceRecord.run}. The replay and headline results are separate runs. Counts refer to resident agents per CPU, each including its planner and workers.`;
+  $('detail-serving').textContent=`Model-serving demand uses the paper's ${C.outputTokensPerSecond.toLocaleString()} output tokens per second and ${C.callsPerSecond} calls per second. The GPU reference is ${S.outputTokensPerSecondPerGpu.toLocaleString()} output tokens per second for ${S.model} on ${S.gpu}, with prefix caching and a ${S.cacheAllowancePercent}% allowance for cache misses. The replay does not measure GPU utilization.`;
+  $('lanes').innerHTML=defs.map((d,i)=>`<article class="lane" data-topic="agent:${i}" role="button" tabindex="0" aria-label="${d.name} agent details" style="--lane:${colors[i]}"><div class="agent-icon" aria-hidden="true"><svg viewBox="0 0 28 28"><path d="${d.icon}"/></svg></div><div><h3>${d.name}</h3><small>${RESULTS.definitions.tile[d.name]} in each 12-request mix</small></div><div><p class="workline">${d.work}</p><div class="population" id="population-${i}" title="Each lit segment represents up to four resident agents" aria-hidden="true">${Array.from({length:32},()=>'<i></i>').join('')}</div></div><div class="lane-count"><span id="count-${i}">—</span><small>resident</small></div></article>`).join('');
+  $('cpu-stack').innerHTML=categories.map((c,i)=>`<i id="family-${i}" style="--color:${c[1]}"></i>`).join('');
+  $('cpu-key').innerHTML=categories.map((c,i)=>`<span data-topic="family:${i}" role="button" tabindex="0" aria-label="${c[0]} details" style="--color:${c[1]}"><i></i>${c[0]}</span>`).join('');
+  $('cores').innerHTML=DATA.meta.tiers.map(()=>'<i class="core"></i>').join('');
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+  let playing=!reduced.matches,motion=!reduced.matches,speed=selected.defaultSpeed,tau=0,illustration=0,last=performance.now(),lastPaint=-1,lastFocus='',loops=0;
+  let state={};
+  const fit=()=>{const scale=Math.min(innerWidth/1600,innerHeight/900);Object.assign($('screen').style,{transform:`scale(${scale})`,left:`${(innerWidth-1600*scale)/2}px`,top:`${(innerHeight-900*scale)/2}px`});};
+  addEventListener('resize',fit); fit();
+  function syncControls(){ $('play').textContent=playing?'Pause':'Play'; $('play').setAttribute('aria-label',playing?'Pause replay':'Play replay'); $('screen').classList.toggle('paused',!playing);$('screen').classList.toggle('still',!motion);$('motion').checked=motion; }
+  function focus(){
+    const index=Math.floor(illustration/12)%5, within=illustration%12,d=defs[index];
+    const worker=Math.min(d.workers.length-1,Math.floor(within/(12/d.workers.length)));
+    const key=index+':'+worker;
+    if(key!==lastFocus){
+      lastFocus=key;
+      document.querySelectorAll('.lane').forEach((e,i)=>e.classList.toggle('selected',i===index));
+      $('focus-title').textContent=d.name+' · '+d.jobs[worker];
+      $('workers').innerHTML=d.workers.map((w,i)=>`${i?'<span class="review-step">review →</span>':''}<span class="worker-chip ${i===worker?'active':''}" data-topic="worker:${index}:${i}" role="button" tabindex="0">${d.workers.length>1?i+1+'. ':''}${w}</span>`).join('')+(d.workers.length>1?'<span class="review-step">→ final synthesis and review</span>':'');
+      const cycle=d.cycle.filter(c=>!(index===3&&worker===2&&c[1]==='Retrieve definitions')).flatMap(c=>c[1]==='Record and draft'?[['CPU service','Record outcome'],['LLM','Draft result']]:[c]);
+      $('cycle').innerHTML=cycle.map((c,i)=>`${i?'<span class="cycle-arrow" aria-hidden="true">›</span>':''}<div class="cycle-node" data-topic="stage:${index}:${worker}:${i}" role="button" tabindex="0" aria-label="${c[1]} details" style="--role:${roleColor[c[0]]}"><b>${c[0]}</b><span>${c[1]}</span></div>`).join('');
+      $('focus-description').textContent=d.note;
+    }
+    const nodes=[...$('cycle').querySelectorAll('.cycle-node')],progress=(within%(12/d.workers.length))/(12/d.workers.length);
+    nodes.forEach((e,i)=>e.classList.toggle('active',i===Math.floor(progress*nodes.length)));
   }
-  function sizeCoreMap() {
-    const cm = document.getElementById("coremap"); const cell = 11;
-    cm.style.gridTemplateColumns = `repeat(8, ${cell}px)`; cm.style.gridTemplateRows = `repeat(8, ${cell}px)`;
+  function render(){
+    const abs=start+tau,active=units.filter(u=>u[2]<=abs&&(u[3]==null||u[3]>abs));
+    const counts=defs.map((_,i)=>active.filter(u=>u[1]===i).length);
+    $('resident-now').textContent=active.length;
+    counts.forEach((n,i)=>{ $('count-'+i).textContent=n; [...$('population-'+i).children].forEach((e,k)=>e.classList.toggle('empty',k>=Math.ceil(n/4))); });
+    const sm=samples.findLast(s=>s[1]<=abs&&s[4]!=null),familySample=samples.findLast(s=>s[1]<=abs&&s[5]!=null);
+    const core=DATA.cores[plateauIndex]?.[Math.floor((abs-P.t0)/10)];
+    const cpu=core?core.reduce((a,b)=>a+b,0)/core.length:null;
+    $('cpu-now').textContent=cpu==null?'—':Math.round(cpu)+'%';
+    $('memory-now').textContent=sm==null?'—':Math.round(sm[4])+' GB';
+    const shares=categories.map(c=>c[2].reduce((a,f)=>a+Math.max(0,familySample?.[5]?.[DATA.meta.families.indexOf(f)]||0),0));
+    const total=shares.reduce((a,b)=>a+b,0);
+    shares.forEach((n,i)=>{$('family-'+i).style.width=(total?n/total*100:0)+'%';$('family-'+i).title=categories[i][0]+': '+(total?n/total*100:0).toFixed(1)+'% of attributed CPU';});
+    const history=samples.filter(s=>s[1]<=abs&&s[1]>=abs-120&&s[4]!=null).map(s=>s[4]);
+    const lo=Math.min(...history)-5,hi=Math.max(...history)+5;
+    $('memory-line').setAttribute('d',history.map((n,i)=>(i?'L':'M')+(i/Math.max(1,history.length-1)*110).toFixed(1)+' '+(23-(n-lo)/(hi-lo)*20).toFixed(1)).join(' '));
+    const done=completions.findLast(u=>u[3]<=abs);
+    $('completion').textContent=done?`${defs[done[1]].name} agent ${done[4]?'completed':'ended without success'} · ${Math.round(done[3]-done[2])} seconds · ${format(done[3]-P.t0)} into capacity hold`:'Waiting for the next recorded completion';
+    $('clock').textContent=`${playing?'Steady-state loop':'Replay paused'} · ${speed}× · ${format(tau)}`;
+    $('sample-clock').textContent='Recorded window · '+format(tau);
+    $('progress').style.width=(tau/length*100)+'%';
+    if($('detail-dialog').open){
+      [...$('cores').children].forEach((e,i)=>{e.style.setProperty('--busy',core?.[i]??0);e.title=`Core ${i+1}: ${Math.round(core?.[i]??0)}%`;});
+      const labels={app:'Agent application',rerank:'Reranking',embed:'Query embedding',ingest:'Ingest embedding'};
+      $('tiers').innerHTML=Object.entries(labels).map(([k,label])=>{const indices=DATA.meta.tiers.flatMap((t,i)=>t===k?[i]:[]);return `<div>${label}<small>${indices.length} cores · ${core?Math.round(indices.reduce((a,i)=>a+core[i],0)/indices.length)+'% occupied':'no sample'}</small></div>`;}).join('');
+    }
+    state={time:tau,absoluteTime:abs,counts,resident:active.length,cpu,memory:sm?.[4]??null,shares,completion:done??null,loops,playing,motion,plateauIndex,start,end};
+    focus();
   }
-  window.addEventListener("resize", resize);
-  const coremap = document.getElementById("coremap");
-  const coreEls = M.tiers.map(t => { const d = document.createElement("div"); d.className = "core tier-" + t; coremap.appendChild(d); return d; });
-  const archColors = ["#4fb0f0", "#7cc2ee", "#5fc9c2", "#a9c4e2", "#dfe9f5"];
-  const cpuSpans = sids.map((s, i) => { const e = document.createElement("span"); e.style.background = archColors[i]; document.getElementById("cpustack").appendChild(e); return e; });
-  const llmSpans = sids.map((s, i) => { const e = document.createElement("span"); e.style.background = archColors[i]; document.getElementById("llmstack").appendChild(e); return e; });
-  document.getElementById("cpukeys").innerHTML = sids.map((s, i) => `<span><i style="background:${archColors[i]}"></i>${ARCH[s].name}</span>`).join("");
-  document.getElementById("llmkeys").innerHTML = document.getElementById("cpukeys").innerHTML;
 
-  const colors = { agent: "#4fb0f0", sandbox: "#dfe9f5", retrieval: "#d2a66a", embed: "#5fc9c2" };
-  const rowsPerLane = [6, 3, 3, 5, 5];
-  const slotsFree = sids.map(() => []), slotsNext = sids.map(() => 0);
-  const takeSlot = l => slotsFree[l].length ? slotsFree[l].pop() : slotsNext[l]++;
-  const active = new Map(), counts = sids.map(() => 0), fades = [];
-  let tau = 0, last = performance.now(), lastPanel = -10, playing = true, speed = 8;
-
-  function bandOf(u, prog) {   // 0 plan, 1 working, 2 tools, 3 validate, 4 finishing; and x within the flow
-    const bw = (cw - LANE_LABEL) / 5, x0 = LANE_LABEL;
-    const seg = [[0.08, 0], [u.w, 1], [u.ft, 2], [u.w, 1.5], [0.12, 3], [0.08, 4]];
-    let acc = 0;
-    for (const [len, band] of seg) {
-      if (len <= 0) continue;
-      if (prog <= acc + len || band === 4) {
-        const f = Math.max(0, Math.min(1, (prog - acc) / len));
-        if (band === 1.5) return [1, x0 + bw * (1.5 + f * 0.44)];
-        if (band === 1) return [1, x0 + bw * (1.06 + f * 0.44)];
-        return [band, x0 + bw * (band + 0.08 + f * 0.84)];
+  function showTopic(key){
+    const [kind,a,b,c]=key.split(':'), index=Number(a), worker=Number(b)||0;
+    let title='',role='Conference demo',paragraphs=[],metrics=[],steps=[];
+    const familyNotes=[
+      'Sandbox processes run source parsing, document OCR, NumPy data jobs, and software builds. These jobs account for CPU work beyond the language model calls.',
+      'CPU services embed queries, search the corpus, and rerank candidates. The ingestion service also embeds prepared document chunks.',
+      'The agent runtime schedules workers, manages tool requests, carries workflow state, and coordinates reviews. This category combines the recorded control, executor, and sibling-process families.',
+      'Database commits and supporting processes maintain records and service the running fleet. This category also includes the deterministic model-response router used in the benchmark.'
+    ];
+    if(['agent','worker','stage'].includes(kind)){
+      const d=defs[index],r=RESULTS.archetypes.find(x=>x.name===d.name);
+      role=d.name+' agent';
+      title=kind==='worker'?d.workers[worker]:d.name+' · '+d.work;
+      metrics=[[state.counts[index],'resident per CPU now'],[r.modelCalls,'model calls per workflow'],[(r.coreMs/1000)+'K','core-ms per workflow']];
+      paragraphs=[d.note, r.outputTokens.toLocaleString()+' total output tokens are required across one complete workflow. These workflow budgets describe the archetype, not a single model call.'];
+      steps=kind==='worker'?[d.jobs[worker]]:d.jobs.map((job,i)=>d.workers[i]+': '+job);
+      if(kind==='worker')paragraphs.unshift(index===0?'The task worker handles one support request.':worker===0?'The planner assigns this first job to begin the workflow.':'The planner assigns this job after the preceding worker passes review.');
+      if(kind==='stage'){
+        const cycle=d.cycle.filter(x=>!(index===3&&worker===2&&x[1]==='Retrieve definitions')).flatMap(x=>x[1]==='Record and draft'?[['CPU service','Record outcome'],['LLM','Draft result']]:[x]);
+        const stage=cycle[Number(c)];role=stage[0]+' · '+d.name+' agent';title=stage[1];steps=[];
+        const explanation={
+          'Request lookup':'The worker asks for guidance relevant to the ticket. The model chooses the retrieval request, then the CPU service performs the lookup.',
+          'Retrieve guidance':'The CPU embeds the query, searches the corpus, and reranks the returned candidates. This agent uses '+(index===0?'32':'64')+' candidates per lookup.',
+          'Record outcome':'The CPU commits a durable record to PostgreSQL. Recording is a CPU service, even when a model requests it.',
+          'Write reply':'The model writes the ticket response using the returned guidance. The response is the task agent’s final result.',
+          'Check structure':'The CPU checks the required output structure. This mechanical check is distinct from model-based review.',
+          'Assign worker':'The planner calls the model to assign the next specialist. Workers run in sequence, with a review gate before the next assignment.',
+          'Parse 30 pages':'An isolated CPU sandbox parses 30 supplied HTML pages. Trafilatura extracts source text and removes navigation and boilerplate.',
+          'Three lookups':'The CPU embeds each query, searches the corpus, and reranks 128 candidates for each of three lookups. Each research worker repeats this work.',
+          'Draft result':'The worker calls the model to explain the returned artifacts. The model works with the results of the CPU job.',
+          'Review result':'A separate model judgment reviews the worker’s answer. The planner advances after review passes.',
+          'Assign intake':'The planner assigns a document worker to prepare the supplied PDF pages for search.',
+          'OCR 50 pages':'Inside the CPU sandbox, pypdfium2 renders page images and Tesseract reads them. The job redacts personal-data patterns, normalizes text, chunks it, and removes duplicates.',
+          'Embed and index':'CPU services embed the prepared chunks, build a SQLite FTS5 index, and run a check query. Embedding and indexing happen outside the OCR sandbox.',
+          'Assign data job':'The planner assigns profiling, period comparison, or report preparation to the next worker.',
+          'Retrieve definitions':'The CPU embeds a query, searches, and reranks 64 candidates. The first two analyst workers use this step. Report preparation skips it.',
+          'Run NumPy job':d.jobs[worker]+'. NumPy runs the data processing inside an isolated CPU sandbox and returns structured results.',
+          'Assign build job':'The planner assigns setup, instrumented CI, or rebuild verification. Each job runs after the previous worker passes review.',
+          'Build and test':d.jobs[worker]+'. The CPU sandbox runs the compiler and checks against the supplied Lua and SQLite source trees.'
+        };
+        paragraphs=[explanation[title]||d.note,'This panel explains the workflow definition. The highlighted stage is an illustration, not an exact sub-task timestamp from the recording.'];
+        metrics=[];
       }
-      acc += len;
+    }else if(kind==='capacity'||kind==='residency'){
+      title=kind==='capacity'?'Resident agents per CPU at capacity':'Agents resident at this replay moment';
+      metrics=[[C.resident,'whitepaper capacity'],[state.resident,'resident per CPU now']];
+      paragraphs=['One resident agent is one complete workflow, including its planner and workers. Workers inside that workflow are not counted as additional resident agents.','The incoming mix contains six task workflows, two analyst workflows, two code workflows, one research workflow, and one ingestion workflow per twelve requests. Longer workflows remain resident for more time, so the resident mix differs from the incoming mix.','Recorded arrivals add to the count. Recorded completions remove agents. The replay includes workflows already resident at the start of the window.'];
+    }else if(['cpu','cpu-reference','cpu-share','family'].includes(kind)){
+      title=kind==='family'?categories[index][0]:kind==='cpu-reference'?'CPU utilization at capacity':'Recorded CPU work';
+      const total=state.shares.reduce((x,y)=>x+y,0);
+      metrics=kind==='family'?[[total?(state.shares[index]/total*100).toFixed(1)+'%':'No sample','share of attributed CPU work']]:[[C.cpuPercent+'%','whitepaper capacity average'],[state.cpu==null?'No sample':Math.round(state.cpu)+'%','recorded utilization now'],[RESULTS.platform.cores,'physical cores']];
+      paragraphs=kind==='family'?[familyNotes[index]]:['CPU utilization follows the recorded occupancy of each physical core, using the busier of its two hardware threads. The headline is the capacity average, while the replay reading changes with the recorded workload.','The colored bar divides attributed CPU work among sandboxes, retrieval, agent execution, and supporting services. It is a share-of-work bar, not a second utilization gauge.'];
+      if(kind==='cpu-share')steps=categories.map((cat,i)=>cat[0]+': '+(total?state.shares[i]/total*100:0).toFixed(1)+'% of attributed CPU work. '+familyNotes[i]);
+      paragraphs.push('The Details reference includes the physical-core map and the allocation used by each CPU service.');
+    }else if(kind==='memory'){
+      title='Memory used by the running fleet';
+      metrics=[[state.memory==null?'No sample':Math.round(state.memory)+' GB','recorded footprint now'],[C.memoryGB+' GB','whitepaper capacity average'],[C.memoryPeakGB+' GB','whitepaper peak']];
+      paragraphs=['The footprint includes workflow state, documents, model-service allocations, and active job data on the measured host. The replay shows absolute GB so the reading can be compared with another system’s memory capacity.','The small line follows recent recorded memory samples. Its vertical scale follows that interval, rather than the server’s full memory capacity.'];
+    }else if(kind==='architecture'){
+      title='Three CPU systems share one model-serving system';
+      metrics=[['3 × R770','six CPU sockets'],['1 × XE7740','eight GPUs']];
+      paragraphs=['The R770 systems run agent workflows, CPU services, and isolated sandbox jobs. The XE7740 serves the language model calls for the execution tier. Each tier can be placed and expanded separately.','The six-socket, eight-GPU arrangement is the whitepaper’s deployment illustration. The measured serving requirement is approximately one CPU to '+(C.outputTokensPerSecond/S.outputTokensPerSecondPerGpu).toFixed(1)+' reference GPUs. The illustration is not an exact capacity multiplication.','Every resident count and CPU reading on this replay remains scoped to one CPU. The server images do not turn the replay into a measurement of six CPUs.'];
+    }else if(kind==='serving'||kind==='llm'){
+      title=kind==='llm'?'Model calls connect the two tiers':'Model-serving demand at capacity';
+      metrics=[[C.callsPerSecond,'model calls per second'],[C.outputTokensPerSecond.toLocaleString(),'output tokens per second'],[S.outputTokensPerSecondPerGpu.toLocaleString(),'output tokens per second per GPU']];
+      paragraphs=['CPU systems send prompts and context to the model-serving tier. Model responses guide worker assignments, draft results, and provide model-based review. CPU services still execute retrieval, sandbox jobs, and mechanical checks.',$('detail-serving').textContent,'Dividing '+C.outputTokensPerSecond.toLocaleString()+' by '+S.outputTokensPerSecondPerGpu.toLocaleString()+' gives approximately '+(C.outputTokensPerSecond/S.outputTokensPerSecondPerGpu).toFixed(1)+' reference GPUs per CPU.'];
+    }else if(kind==='completion'){
+      const u=state.completion;title='Latest recorded workflow completion';
+      paragraphs=u?[defs[u[1]].name+' agent '+(u[4]?'completed successfully':'ended without success')+' at '+format(u[3]-P.t0)+' into the recorded capacity hold.','The workflow remained resident for '+Math.round(u[3]-u[2])+' seconds. This message uses its recorded completion timestamp and outcome.']:['No workflow has completed yet inside the selected replay window.'];
+      paragraphs.push('Unfinished workflows receive no invented completion time or successful outcome.');
     }
-    return [4, x0 + bw * 4.9];
+    $('topic-title').textContent=title;$('topic-role').textContent=role;
+    const body=$('topic-body');body.replaceChildren();
+    const add=(tag,text,parent=body,cls='')=>{const e=document.createElement(tag);e.textContent=text;if(cls)e.className=cls;parent.appendChild(e);return e;};
+    if(metrics.length){const grid=add('div','',body,'topic-metrics');metrics.forEach(([value,label])=>{const box=add('div','',grid,'topic-metric');add('strong',value,box);add('span',label,box);});}
+    paragraphs.forEach(p=>add('p',p));
+    if(steps.length){const list=add(kind==='cpu-share'?'ul':'ol','',body,'topic-steps');steps.forEach(p=>add('li',p,list));}
+    $('topic-paper').href='../whitepaper/agent-capacity-whitepaper.html'+(['agent','worker','stage'].includes(kind)?'#method':['architecture','serving','llm'].includes(kind)?'#overview':'#method');
   }
 
-  function step(now) {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (playing) tau = (tau + dt * speed) % L;
-    for (const u of units) {
-      const on = isActive(u, tau);
-      if (on && !active.has(u)) { u.slot = takeSlot(u.lane); active.set(u, true); counts[u.lane]++; }
-      else if (!on && active.has(u)) { active.delete(u); counts[u.lane]--; slotsFree[u.lane].push(u.slot); if (u._x) fades.push({ x: u._x, y: u._y, age: 0 }); }
-    }
-    render();
-    requestAnimationFrame(step);
-  }
+  function format(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0');}
+  function restart(){tau=0;illustration=0;lastFocus='';render();}
+  function toggle(){playing=!playing;last=performance.now();syncControls();render();}
+  async function fullscreen(){try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{$('fullscreen').textContent='Use browser full screen';}}
+  $('play').onclick=toggle; $('restart').onclick=restart; $('fullscreen').onclick=fullscreen;
+  document.addEventListener('fullscreenchange',()=>{$('fullscreen').textContent=document.fullscreenElement?'Exit full screen':'Full screen';});
 
-  const census = [0, 0, 0, 0, 0];
-  function render() {
-    ctx.clearRect(0, 0, cw, ch);
-    const bw = (cw - LANE_LABEL) / 5;
-    lanes.forEach((g, li) => {
-      if (li % 2) { ctx.fillStyle = "rgba(255,255,255,0.025)"; ctx.fillRect(0, g.y, cw, g.h); }
-      ctx.fillStyle = "#c9d6e6"; ctx.font = "400 12px Roboto, sans-serif"; ctx.textBaseline = "middle"; ctx.fillText(ARCH[sids[li]].name, 0, g.y + g.h / 2);
-    });
-    for (let k = 1; k < 5; k++) { ctx.strokeStyle = "rgba(170,205,240,0.08)"; ctx.beginPath(); ctx.moveTo(LANE_LABEL + bw * k, 0); ctx.lineTo(LANE_LABEL + bw * k, ch); ctx.stroke(); }
-    census.fill(0);
-    for (const u of active.keys()) {
-      const lane = lanes[u.lane]; if (!lane) continue;
-      const rows = rowsPerLane[u.lane], row = u.slot % rows, col = Math.floor(u.slot / rows);
-      const age = ((tau - u.t0) % L + L) % L, prog = Math.min(1, age / u.life);
-      const [band, bx] = bandOf(u, prog);
-      census[band]++;
-      const x = bx + (col % 3) * 3, y = lane.y + 7 + (row + 0.5) * ((lane.h - 14) / rows);
-      u._x = x; u._y = y;
-      const color = band === 2 && u.tool !== "none" ? colors[u.tool] : colors.agent;
-      const r = u.sid === 0 ? 2.4 : 3.2;
-      ctx.fillStyle = color;
-      if (ARCH[sids[u.sid]].workers === 3 && band >= 1 && band <= 2) {
-        for (let k = 0; k < 3; k++) { const an = (k / 3) * Math.PI * 2 + prog * 2; ctx.beginPath(); ctx.arc(x + Math.cos(an) * 3, y + Math.sin(an) * 3, r * 0.58, 0, Math.PI * 2); ctx.fill(); }
-      } else { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
-    }
-    for (let i = fades.length - 1; i >= 0; i--) { const f = fades[i]; f.age += 0.06; if (f.age >= 1) { fades.splice(i, 1); continue; } ctx.globalAlpha = 1 - f.age; ctx.strokeStyle = colors.agent; ctx.beginPath(); ctx.arc(f.x, f.y, 3 + f.age * 8, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
-    updatePanels();
+  let resumeAfterDetails=false;
+  function openPanel(topic){
+    if(!$('detail-dialog').open){resumeAfterDetails=playing;playing=false;}
+    $('topic-panel').hidden=!topic;
+    $('reference-panel').hidden=!!topic;
+    if(topic)showTopic(topic);
+    if(!$('detail-dialog').open)$('detail-dialog').showModal();
+    $('detail-dialog').scrollTop=0;
+    syncControls();render();
   }
+  $('details').onclick=()=>openPanel();
+  $('show-reference').onclick=()=>openPanel();
+  document.addEventListener('click',e=>{const target=e.target.closest('[data-topic]');if(target)openPanel(target.dataset.topic);});
+  document.addEventListener('keydown',e=>{const target=e.target.closest('[data-topic]');if(target&&(e.key==='Enter'||e.code==='Space')){e.preventDefault();e.stopImmediatePropagation();openPanel(target.dataset.topic);}});
 
-  const tickerEl = document.getElementById("ticker");
-  let tickerSeen = -1, tickerItems = [];
-  function updatePanels() {
-    const jump = tau - lastPanel; if (jump > -1 && jump < 0.5) return; lastPanel = tau;
-    census.forEach((c, i) => set(`st-${i}`, c));
-    document.getElementById("census-total").textContent = `${active.size} agents on the server`;
-    let attr = 0, genTot = 0, callsTot = 0; const cores = [], gens = [];
-    sids.forEach((sid, li) => {
-      const done = roll(comp[li], tau, 600) / 600;   // completions per second over the last ten minutes: the analysts take nine
-      const c = done * ARCH[sid].coreS * SMT_SHARE, g = done * (genPerWf[sid] || ARCH[sid].gen);
-      cores.push(c); gens.push(g); attr += c; genTot += g; callsTot += done * ARCH[sid].calls;
-      set(`n-${li}`, counts[li]);
-    });
-    cpuSpans.forEach((e, i) => e.style.width = (attr ? 100 * cores[i] / attr : 0).toFixed(1) + "%");
-    llmSpans.forEach((e, i) => e.style.width = (genTot ? 100 * gens[i] / genTot : 0).toFixed(1) + "%");
-    const k = Math.min(C.length - 1, Math.floor((tau + WARMUP_S) / 10)); const row = C[k];
-    let busy = 0; const ts = { app: 0, rerank: 0, embed: 0, ingest: 0 };
-    if (row) row.forEach((v, i) => { coreEls[i].style.setProperty("--b", (v / 100).toFixed(2)); busy += v / 100; ts[M.tiers[i]] += v; });
-    set("t-cores", busy.toFixed(0));
-    set("t-app", Math.round(ts.app / tierN.app)); set("t-rerank", Math.round(ts.rerank / tierN.rerank)); set("t-ingest", Math.round(ts.ingest / tierN.ingest)); set("t-embed", Math.round(ts.embed / tierN.embed));
-    set("l-calls", callsTot.toFixed(1)); set("l-in", Math.round(promptPerS / 1000) + "k"); set("l-out", Math.round(genTot).toLocaleString());
-    const gpus = genTot / GPU_TOKS;
-    document.getElementById("gauge").style.width = Math.min(100, 100 * gpus).toFixed(1) + "%";
-    set("t-gpu", gpus.toFixed(2));
-    document.getElementById("gpunote").textContent = `The whole server, tiers and headroom included, generating ${Math.round(genTot).toLocaleString()} tokens a second against a GPU that generates 3,565: one server to ${gpus.toFixed(2)} GPUs. Averaged over the last ten minutes.`;
-    document.getElementById("s-run").innerHTML = `${active.size}<small>running</small>`;
-    document.getElementById("s-calls").innerHTML = `${callsTot.toFixed(1)}<small>calls / s</small>`;
-    set("s-gpu", gpus.toFixed(2));
-    const s0 = Math.floor(tau);
-    if (s0 !== tickerSeen) {
-      const from = tickerSeen < 0 || s0 < tickerSeen ? s0 : tickerSeen + 1;
-      tickerSeen = s0;
-      for (const [e, u] of compList) if (e >= from && e < s0 + 1) { tickerItems = tickerItems.filter(x => x.u.sid !== u.sid); tickerItems.unshift({ u }); }
-      tickerItems = tickerItems.slice(0, 5);
-      tickerEl.innerHTML = tickerItems.map(({ u }) => `<span><i>${u.lat.toFixed(0)} s</i><b>${ARCH[sids[u.sid]].name}</b> &middot; ${ARCH[sids[u.sid]].phrase}</span>`).join("");
-    }
-    document.getElementById("clock").textContent = "live · " + String(Math.floor(tau / 60)).padStart(2, "0") + ":" + String(Math.floor(tau % 60)).padStart(2, "0");
-  }
-  function set(id, v) { const e = document.getElementById(id); if (e && e.textContent !== String(v)) e.textContent = v; }
-
-  function setPlay() { const bt = document.getElementById("play"); bt.textContent = playing ? "Pause" : "Play"; bt.setAttribute("aria-label", bt.textContent); document.getElementById("pill").classList.toggle("paused", !playing); }
-  document.getElementById("play").addEventListener("click", () => { playing = !playing; setPlay(); });
-  document.querySelectorAll("[data-speed]").forEach(bt => bt.addEventListener("click", () => { speed = +bt.dataset.speed; document.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", x === bt ? "true" : "false")); document.getElementById("speedword").textContent = speed + "×"; }));
-  window.addEventListener("keydown", ev => { if (ev.code === "Space" && ev.target === document.body) { ev.preventDefault(); playing = !playing; setPlay(); } });
-  resize(); requestAnimationFrame(() => { resize(); tau = 30; step(performance.now()); });
-  window.__steady = { seek: t => { tau = ((t % L) + L) % L; lastPanel = -10; render(); }, time: () => tau, pause: () => { playing = false; setPlay(); }, play: () => { playing = true; setPlay(); } };
+  function closePanel(){ $('detail-dialog').close();playing=resumeAfterDetails;last=performance.now();syncControls();render(); }
+  $('close-details').onclick=closePanel;
+  $('detail-dialog').addEventListener('cancel',e=>{e.preventDefault();closePanel();});
+  $('speed').onchange=e=>{speed=Number(e.target.value);render();};
+  $('motion').onchange=e=>{motion=e.target.checked;syncControls();render();};
+  reduced.addEventListener('change',e=>{if(e.matches){playing=false;motion=false;syncControls();render();}});
+  addEventListener('keydown',e=>{if($('detail-dialog').open||/INPUT|SELECT|BUTTON|A/.test(e.target.tagName))return;if(e.code==='Space'){e.preventDefault();toggle();}if(e.key.toLowerCase()==='r')restart();if(e.key.toLowerCase()==='f')fullscreen();});
+  document.addEventListener('visibilitychange',()=>{last=performance.now();});
+  function frame(now){const dt=Math.min((now-last)/1000,.25);last=now;if(!document.hidden&&playing){tau+=dt*speed;if(tau>=length){tau%=length;loops++;}if(motion)illustration+=dt;if(now-lastPaint>=250){render();lastPaint=now;}}requestAnimationFrame(frame);}
+  syncControls();render();requestAnimationFrame(frame);
+  window.__steady={seek:t=>{tau=((t%length)+length)%length;render();},time:()=>tau,pause:()=>{playing=false;syncControls();render();},play:()=>{playing=true;last=performance.now();syncControls();render();},focus:i=>{illustration=i*12;lastFocus='';render();},snapshot:()=>({...state}),restart};
 })();
 </script>
+</body>
+</html>

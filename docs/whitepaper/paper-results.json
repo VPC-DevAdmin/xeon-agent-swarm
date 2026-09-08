@@ -24,7 +24,7 @@
   "serving": {
     "model": "gpt-oss-20b",
     "gpu": "RTX PRO 6000 Blackwell Server Edition",
-    "outputTokensPerSecondPerGpu": 3500,
+    "outputTokensPerSecondPerGpu": 3565,
     "prefixCache": true,
     "cacheAllowancePercent": 5
   },
