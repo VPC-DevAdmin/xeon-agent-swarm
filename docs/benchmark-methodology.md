@@ -59,16 +59,16 @@ run (section 6), so generated tokens are the model's, not a formula's.
 | Archetype | Declared size | Workers | Model calls | Lookups | Host work per workflow, stand-alone | Generated tokens per workflow (gpt-oss-20b, low reasoning) | Core-ms per token, stand-alone |
 |---|---|---|---|---|---|---|---|
 | Task agent | one ticket: one knowledge-base lookup, one record | 1 | 4 | 1 at depth 32 | about 1 core-s | 2,300 | 0.5 |
-| Research agent | 90 source pages fetched and parsed, nine retrievals at rerank depth 128 | 3 | 16 | 9 at depth 128 | about 25 core-s | 12,800 | 2 |
-| Ingestion agent | 50 PDF pages rendered, OCR'd, redacted, chunked, embedded and indexed | 1 | 5 | none | about 100 core-s | 3,400 | 30 |
-| Data analyst | three jobs over 100 million rows, the second over two periods | 3 | 13 | 2 at depth 64 | about 190 core-s | 11,200 | 17 |
-| Code agent | setup, CI and verification over Lua 5.4.7 and SQLite 3.50.4 | 3 | 13 | 3 at depth 64 | about 150 core-s | 9,500 | 16 |
+| Research agent | 90 source pages fetched and parsed, nine retrievals at rerank depth 128 | 3 | 16 | 9 at depth 128 | about 25 core-s | 15,100 | 1.7 |
+| Ingestion agent | 50 PDF pages rendered, OCR'd, redacted, chunked, embedded and indexed | 1 | 5 | none | about 100 core-s | 3,300 | 30 |
+| Data analyst | three jobs over 100 million rows, the second over two periods | 3 | 13 | 2 at depth 64 | about 190 core-s | 12,600 | 15 |
+| Code agent | setup, CI and verification over Lua 5.4.7 and SQLite 3.50.4 | 3 | 13 | 3 at depth 64 | about 150 core-s | 12,000 | 12.5 |
 
 Host work is the stand-alone sum of each archetype's steps (the cost laws
 of section 8); in a mix, busy cores run at about 0.8 times the summed
 weights because sibling threads share physical cores. Generated tokens
-are the completed units' own at the 0.84 workflows/s rung of the
-enterprise set, three seeds. Every archetype that acts looks things up
+are the completed units' own at the capacity rung of the enterprise set
+of record, three seeds. Every archetype that acts looks things up
 first, and the lookup is host work inside the step, never a model turn:
 the query embedder, the index and the reranker are the server's own.
 
@@ -140,8 +140,10 @@ variants of a role at other sizes are not archetypes.
 The unit of load is a **tile** of twelve workflow arrivals. Three tiles
 describe three organisations; small agents dominate by count, as they do
 in a deployment, and the compute-carrying archetypes set the host work
-per token. The enterprise tile is the tile of record; the other two are
-declared and were measured on the previous archetype sizes.
+per token. The enterprise tile is the tile of record. The engineering
+and analytics tiles are declared and have not been measured on the
+archetypes of record; their earlier measurements are superseded
+(section 12).
 
 | Tile | Task agents | Code agents | Data analysts | Research agents | Ingestion agents |
 |---|---|---|---|---|---|
@@ -300,11 +302,9 @@ RERANK_THREADS=4 EMBED_PHYS_CORES=2 INGEST_EMBED_PHYS_CORES=3`, and it
 rides the run fingerprint (`allocation.env`). The allocation is sized
 from the lookups the tile makes (section 8): at capacity the tile
 scores about 140 candidate pairs a second, 2.8 cores of reranking, and
-two processes keep a depth-128 query's wait short at that load. The
-earlier enterprise set without the lookups ran on 4/1/8/51 (the
-reranker as one process of four threads, the ingest embedder sized for
-the previous ingestion agent); the engineering and analytics tiles ran
-on 8/2/0/46 with the reranker as two processes. Pinning is by cpuset,
+two processes keep a depth-128 query's wait short at that load.
+Earlier allocations are listed with the superseded results in section
+12. Pinning is by cpuset,
 not quota: a CPU quota on a 128-thread host lets a many-threaded process
 burn its allowance in milliseconds and sleep for the rest of the period.
 
@@ -617,11 +617,8 @@ and 0.96 workflows/s) with its lower rung `set-20260908-053752` (same seeds,
 seeds each, 25-minute holds (30 for the photographs); run commit
 ebaf94f, evidence commits 5add991 and bce6f26 and 3df029a. Their per-core samples
 are `data/capacity/set-11400-mpstat.log` and `set-11400c-mpstat.log`
-on the reference server. The comparison set without the lookups is
-`set-20260907-184339` with `set-20260908-000736` (seeds 11101, 11201,
-11301; 0.48 to 1.08 workflows/s; allocation 4/1/8/51; evidence commits
-57b5ee8 and 108ae7f; samples `set-11100-mpstat.log` and
-`set-11100b-mpstat.log`). The serving profile of record is
+on the reference server. Earlier sets are superseded and listed in
+section 12. The serving profile of record is
 `data/capacity/serving/gptoss20b-low-faithful/calls.jsonl`, recorded
 from the query set `data/capacity/queryset/enterprise.jsonl`; the
 sensitivity profiles (gpt-oss-120b, Qwen3.8 Flash without thinking,
@@ -700,15 +697,6 @@ retrievals (3.1 s in the reranker) and 2.8 s of fetching; ingestion
 agent 152 s, of which 106 s of OCR intake, 40 s of model wait and 5.8 s
 of embedding; task agent 30 s, of which 26.7 s is model wait and 0.45 s
 the knowledge-base lookup.
-
-The same tile without the lookups, measured the day before on the
-earlier allocation (4/1/8/51, `set-20260907-184339` and
-`set-20260908-000736`), had the same capacity, 0.84 workflows/s with
-0.96 falling behind, at 136 resident agents, 70% of the host busy and
-9.6 core-ms per token: the lookups added 3 to 4 core-s of retrieval per
-workflow on the tiers, a second's latency per agent, and the response
-curve's extra length is the application pool running 87% rather than
-85% occupied. That set is the comparison, not the record.
 
 ### The residency photograph
 
@@ -878,3 +866,48 @@ work nobody can call a lever (builds, data jobs, embedding, reranking),
 and host-side encoder validation is at most a published sensitivity with
 its per-check cost stated for both placements. No generative judging
 runs on the host in any variant.
+
+## 12. Prior versions (superseded)
+
+Everything below was measured with earlier workload definitions and is
+superseded by the results of record in section 11. None of it should
+be quoted as a capacity, residency, token or ratio figure for this
+benchmark; it is kept so the history of the workload can be audited.
+
+- **Enterprise tile without the lookups (v2.1, 7 to 8 September 2026).**
+  The same five archetypes with retrieval only in the research agent,
+  on allocation 4/1/8/51 (the reranker as one process of four threads,
+  the ingest embedder sized for the previous ingestion agent), and with
+  the research agent's draft and every record turn answered with
+  uncalibrated token counts. Capacity 0.84 workflows/s with 0.96 falling
+  behind, 136 resident, 70% of the host busy, 9.6 core-ms per token.
+  Sets `set-20260907-184339` and `set-20260908-000736` (seeds 11101,
+  11201, 11301; 0.48 to 1.08 workflows/s), evidence commits 57b5ee8 and
+  108ae7f, samples `set-11100-mpstat.log` and `set-11100b-mpstat.log`.
+- **First v2 dry run (7 September 2026).** One seed on the raw
+  gpt-oss-20b profile before shape-faithful filtering, 0.32 to 0.68
+  workflows/s, with an engine switch mid-set: `series-10801-20260907-165451`,
+  evidence only.
+- **Organisation tiles on the previous archetypes (5 to 6 September
+  2026).** Research at three retrievals, ingestion parsing 100 pages
+  with no OCR, analysts at 40 million rows, code agents at three
+  optimised builds, task agents with no lookup, and tokens from a
+  weight formula rather than a calibrated model. Enterprise on 4/1/8/51:
+  capacity 2.4 workflows/s, 151 resident, 23.1 core-ms per token
+  (`set-20260906-163941`, `set-20260906-182610`, photographs
+  `photo-10301-20260906-213254`, `photo-10401-20260906-215815`,
+  `photo-10501-20260906-222336`, `photo-10301-20260906-202031`,
+  `photo-10401-20260906-204350`, `photo-10501-20260906-210709`);
+  engineering on 8/2/0/46: 2.4 workflows/s, 150 resident, 19.8
+  (`set-20260905-060903`); analytics on 8/2/0/46: 2.6 workflows/s, 137
+  resident, 19.8 (`set-20260905-090413`). Their per-core samples were
+  `set-10300-mpstat.log`, `set-10300b-mpstat.log`, `set-9900-mpstat.log`
+  and `set-10000-mpstat.log`.
+- **Light reference tile and earlier certified results (v16 to v17,
+  August to early September 2026).** Six-session tiles of light agents
+  with retrieval in every workflow (39.8 to 62.7 workflows/s, up to
+  2,035 resident), the reranker's cores the limit. Under
+  `data/capacity/set-v17-certified` and the archive. These measured a
+  different question, retrieval throughput per core, and are not
+  comparable to the results of record.
+

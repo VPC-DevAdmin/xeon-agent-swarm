@@ -110,3 +110,15 @@ stand-in then answers with the recorded timing so the host is measured
 under a named model's data. Until then the ratio is a host-side
 measurement against a cited serving rate, and the rate's provenance is
 printed beside every ratio.
+
+## Prior versions (superseded)
+
+Earlier results for this ratio are superseded by the 8 September 2026
+result above and should not be quoted: the organisation tiles on the
+previous archetype sizes (enterprise 2.4 workflows/s at 23.1 core-ms per
+token, engineering and analytics at 19.8, 5 and 6 September), the v2
+dry run, and the v2.1 enterprise set without the lookups (0.84
+workflows/s at 9.6 core-ms per token, 7 and 8 September). Their sets and
+the reasons they were superseded are listed in section 12 of the
+methodology.
+
