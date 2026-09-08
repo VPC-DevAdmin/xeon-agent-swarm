@@ -52,7 +52,7 @@ step, never a model turn.
 
 | Archetype | Declared size | Lookups | Host work per workflow | Output tokens, judgments included | Core-ms per token |
 |---|---|---|---|---|---|
-| Task agent | one ticket: a knowledge-base lookup, one record, the worker's answer handed back | 1 at depth 32 | about 1 core-s | about 1,400 (v2.3, being calibrated) | 0.7 |
+| Task agent | one ticket: a knowledge-base lookup, one record, the worker's answer handed back | 1 at depth 32 | about 1 core-s | 1,490 | 0.7 |
 | Research agent | 90 source pages fetched and parsed, nine retrievals | 9 at depth 128 | about 25 core-s | 15,500 | 1.6 |
 | Ingestion agent | 50 PDF pages rendered, OCR'd (Tesseract), redacted, chunked, embedded and indexed | none | about 100 core-s | 3,470 | 29 |
 | Data analyst | three jobs over 100 million rows, the second over two periods, reporting the change | 2 at depth 64 | about 190 core-s | 12,940 | 15 |

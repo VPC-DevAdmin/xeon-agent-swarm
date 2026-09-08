@@ -58,7 +58,7 @@ run (section 6), so generated tokens are the model's, not a formula's.
 
 | Archetype | Declared size | Workers | Model calls (planner and workers + judgments) | Lookups | Host work per workflow, stand-alone | Output tokens per workflow, judgments included (gpt-oss-20b, low reasoning) | Core-ms per token, stand-alone |
 |---|---|---|---|---|---|---|---|
-| Task agent | one ticket: one knowledge-base lookup, one record, the worker's answer handed back | 1 | 4 + 1 | 1 at depth 32 | about 1 core-s | about 1,400 (v2.3 calibration in progress; 2,440 in the v2.2 shape) | 0.7 |
+| Task agent | one ticket: one knowledge-base lookup, one record, the worker's answer handed back | 1 | 3 + 1 | 1 at depth 32 | about 1 core-s | 1,490 (2,440 in the v2.2 shape) | 0.7 |
 | Research agent | 90 source pages fetched and parsed, nine retrievals at rerank depth 128 | 3 | 16 + 4 | 9 at depth 128 | about 25 core-s | 15,500 | 1.6 |
 | Ingestion agent | 50 PDF pages rendered, OCR'd, redacted, chunked, embedded and indexed | 1 | 5 + 2 | none | about 100 core-s | 3,470 | 29 |
 | Data analyst | three jobs over 100 million rows, the second over two periods | 3 | 13 + 4 | 2 at depth 64 | about 190 core-s | 12,940 | 15 |
@@ -78,18 +78,22 @@ the query embedder, the index and the reranker are the server's own.
   thing, dies. The planner delegates the ticket in one turn; one worker
   reads it, looks it up in the knowledge base (one retrieval, 32
   candidates reranked), files a durable record and writes the reply;
-  the reply is judged once and handed back as the deliverable in a
-  short closing turn with only the mechanical check on it (the
-  workflow declares `grade_synthesis: false`). That is the shape of a
-  routed ticket agent: the planner routes, the worker answers, nothing
-  re-drafts the answer. It is most of any deployment by count. Its
-  tokens are the model's for this shape: about 350 in the planner's
-  delegation, 960 in the worker's two turns, 70 in the judgment and a
-  short handoff, about 1,400 in all, against 2,440 when the planner
-  re-drafted the answer and a second judgment graded it (the v2.2
-  shape, section 12). A smaller or non-reasoning model emits fewer
-  (section 11), and the record keeps one model for every archetype.
-  Latency about 20 s at every load, almost all of it model wait.
+  the reply is judged once and is the deliverable: the runtime hands
+  it back with only the mechanical check on it and no closing model
+  call (the workflow declares `handoff: true` and `grade_synthesis:
+  false`). That is the shape of a routed ticket agent: the planner
+  routes, the worker answers, nothing re-drafts the answer. It is most
+  of any deployment by count. Its 1,490 tokens are the model's for this
+  shape: about 400 in the planner's delegation, 1,030 in the worker's
+  two turns and 50 in the judgment, against 2,440 when the planner
+  re-drafted the answer in a closing turn and a second judgment graded
+  it (the v2.2 shape, section 12). The closing turn was tried with an
+  instruction to hand the answer back unchanged and still cost about
+  1,100 tokens, nearly all of it the model's reasoning before a short
+  reply, which is why the shape removes the call rather than shortens
+  it. A smaller or non-reasoning model emits fewer (section 11), and
+  the record keeps one model for every archetype. Latency about 20 s at
+  every load, almost all of it model wait.
 - **Research agent**: three workers each fetch and parse 30 source pages
   in the sandbox (boilerplate removal and main-text extraction over real
   HTML), retrieve three times over the corpus with the cross-encoder
