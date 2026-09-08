@@ -1,0 +1,1771 @@
+{
+ "set": "data/capacity/set-20260908-025329",
+ "series": [
+  "data/capacity/series-11401-20260908-025329",
+  "data/capacity/series-11501-20260908-034801",
+  "data/capacity/series-11601-20260908-044231"
+ ],
+ "rates": [
+  0.21,
+  0.24
+ ],
+ "per_rate": {
+  "0.21": {
+   "achieved_median": 0.84,
+   "achieved_range": [
+    0.84,
+    0.84
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": true,
+   "backlog_per_series": [
+    [
+     156,
+     179,
+     23
+    ],
+    [
+     148,
+     166,
+     18
+    ],
+    [
+     146,
+     164,
+     18
+    ]
+   ],
+   "resident_measured_median": 152,
+   "resident_median": 108,
+   "resident_range": [
+    107,
+    109
+   ],
+   "host_cpu_median": 64.5,
+   "retrieval_cpu_median": 3.0,
+   "per_series": {
+    "series-11401-20260908-025329": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 177,
+     "offered_rate": 0.84,
+     "achieved_ratio": 1.001,
+     "generator_ok": true,
+     "units": 1256,
+     "units_per_ledger": [
+      314,
+      314,
+      314,
+      314
+     ],
+     "cohort_units": 628,
+     "warmup_s": 746.7,
+     "span_s": 746.7,
+     "rate": 0.841,
+     "backlog_start": 156,
+     "backlog_end": 179,
+     "backlog_delta": 23,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 104,
+       "ok": 24,
+       "p50_ms": 582550.7,
+       "p95_ms": 609351.8,
+       "failed": {
+        "inflight_at_end": 80
+       }
+      },
+      "code_agent": {
+       "n": 108,
+       "ok": 52,
+       "p50_ms": 368096.6,
+       "p95_ms": 384082.1,
+       "failed": {
+        "inflight_at_end": 56
+       }
+      },
+      "deep_research": {
+       "n": 52,
+       "ok": 40,
+       "p50_ms": 184814.5,
+       "p95_ms": 200837.8,
+       "failed": {
+        "inflight_at_end": 12
+       }
+      },
+      "ingestion": {
+       "n": 52,
+       "ok": 40,
+       "p50_ms": 159407.3,
+       "p95_ms": 176132.7,
+       "failed": {
+        "inflight_at_end": 12
+       }
+      },
+      "task_ticket": {
+       "n": 312,
+       "ok": 295,
+       "p50_ms": 30391.3,
+       "p95_ms": 35055.1,
+       "failed": {
+        "inflight_at_end": 17
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.0
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         104
+        ],
+        "code_agent": [
+         0,
+         100
+        ],
+        "deep_research": [
+         0,
+         52
+        ],
+        "ingestion": [
+         0,
+         52
+        ],
+        "task_ticket": [
+         0,
+         311
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.982
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         104
+        ],
+        "code_agent": [
+         0,
+         100
+        ],
+        "deep_research": [
+         0,
+         52
+        ],
+        "ingestion": [
+         0,
+         49
+        ],
+        "task_ticket": [
+         295,
+         295
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0427,
+        "task_ticket": 0.982
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         88
+        ],
+        "code_agent": [
+         0,
+         84
+        ],
+        "deep_research": [
+         0,
+         44
+        ],
+        "ingestion": [
+         5,
+         44
+        ],
+        "task_ticket": [
+         295,
+         295
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.9057,
+        "deep_research": 0.8808,
+        "ingestion": 0.8808,
+        "task_ticket": 0.982
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         48
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         40,
+         40
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         295,
+         295
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.816,
+        "code_agent": 0.9057,
+        "deep_research": 0.8808,
+        "ingestion": 0.8808,
+        "task_ticket": 0.982
+       },
+       "counts": {
+        "analyst_large": [
+         24,
+         24
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         40,
+         40
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         295,
+         295
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.816,
+        "code_agent": 0.9057,
+        "deep_research": 0.8808,
+        "ingestion": 0.8808,
+        "task_ticket": 0.982
+       },
+       "counts": {
+        "analyst_large": [
+         24,
+         24
+        ],
+        "code_agent": [
+         52,
+         52
+        ],
+        "deep_research": [
+         40,
+         40
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         295,
+         295
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 107,
+     "resident_measured": 164,
+     "think_s": 3.0,
+     "host_cpu_pct": 76.3,
+     "retrieval_cpu_pct": 2.9,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.21
+    },
+    "series-11501-20260908-034801": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 163,
+     "offered_rate": 0.84,
+     "achieved_ratio": 1.001,
+     "generator_ok": true,
+     "units": 1256,
+     "units_per_ledger": [
+      314,
+      314,
+      314,
+      314
+     ],
+     "cohort_units": 628,
+     "warmup_s": 747.0,
+     "span_s": 747.0,
+     "rate": 0.841,
+     "backlog_start": 148,
+     "backlog_end": 166,
+     "backlog_delta": 18,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 104,
+       "ok": 32,
+       "p50_ms": 524620.6,
+       "p95_ms": 562626.7,
+       "failed": {
+        "inflight_at_end": 72
+       }
+      },
+      "code_agent": {
+       "n": 108,
+       "ok": 56,
+       "p50_ms": 342627.6,
+       "p95_ms": 362621.7,
+       "failed": {
+        "inflight_at_end": 52
+       }
+      },
+      "deep_research": {
+       "n": 52,
+       "ok": 40,
+       "p50_ms": 181648.4,
+       "p95_ms": 213806.5,
+       "failed": {
+        "inflight_at_end": 12
+       }
+      },
+      "ingestion": {
+       "n": 52,
+       "ok": 40,
+       "p50_ms": 151805.3,
+       "p95_ms": 169369.7,
+       "failed": {
+        "inflight_at_end": 12
+       }
+      },
+      "task_ticket": {
+       "n": 312,
+       "ok": 297,
+       "p50_ms": 30324.9,
+       "p95_ms": 35039.2,
+       "failed": {
+        "inflight_at_end": 15
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.0
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         104
+        ],
+        "code_agent": [
+         0,
+         100
+        ],
+        "deep_research": [
+         0,
+         52
+        ],
+        "ingestion": [
+         0,
+         52
+        ],
+        "task_ticket": [
+         0,
+         311
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.9821
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         104
+        ],
+        "code_agent": [
+         0,
+         100
+        ],
+        "deep_research": [
+         0,
+         52
+        ],
+        "ingestion": [
+         0,
+         50
+        ],
+        "task_ticket": [
+         297,
+         297
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.2372,
+        "task_ticket": 0.9821
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         88
+        ],
+        "code_agent": [
+         0,
+         84
+        ],
+        "deep_research": [
+         0,
+         44
+        ],
+        "ingestion": [
+         17,
+         44
+        ],
+        "task_ticket": [
+         297,
+         297
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.9119,
+        "deep_research": 0.8808,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9821
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         48
+        ],
+        "code_agent": [
+         56,
+         56
+        ],
+        "deep_research": [
+         40,
+         40
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         297,
+         297
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8553,
+        "code_agent": 0.9119,
+        "deep_research": 0.8808,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9821
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         56,
+         56
+        ],
+        "deep_research": [
+         40,
+         40
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         297,
+         297
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8553,
+        "code_agent": 0.9119,
+        "deep_research": 0.8808,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9821
+       },
+       "counts": {
+        "analyst_large": [
+         32,
+         32
+        ],
+        "code_agent": [
+         56,
+         56
+        ],
+        "deep_research": [
+         40,
+         40
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         297,
+         297
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 108,
+     "resident_measured": 152,
+     "think_s": 3.0,
+     "host_cpu_pct": 64.5,
+     "retrieval_cpu_pct": 3.0,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.21
+    },
+    "series-11601-20260908-044231": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 162,
+     "offered_rate": 0.84,
+     "achieved_ratio": 1.001,
+     "generator_ok": true,
+     "units": 1256,
+     "units_per_ledger": [
+      314,
+      314,
+      314,
+      314
+     ],
+     "cohort_units": 628,
+     "warmup_s": 747.0,
+     "span_s": 747.0,
+     "rate": 0.841,
+     "backlog_start": 146,
+     "backlog_end": 164,
+     "backlog_delta": 18,
+     "keeps_up": true,
+     "per_type": {
+      "analyst_large": {
+       "n": 104,
+       "ok": 33,
+       "p50_ms": 526512.0,
+       "p95_ms": 556353.7,
+       "failed": {
+        "inflight_at_end": 71
+       }
+      },
+      "code_agent": {
+       "n": 108,
+       "ok": 56,
+       "p50_ms": 341350.0,
+       "p95_ms": 369063.5,
+       "failed": {
+        "inflight_at_end": 52
+       }
+      },
+      "deep_research": {
+       "n": 52,
+       "ok": 40,
+       "p50_ms": 184414.6,
+       "p95_ms": 202485.4,
+       "failed": {
+        "inflight_at_end": 12
+       }
+      },
+      "ingestion": {
+       "n": 52,
+       "ok": 41,
+       "p50_ms": 151645.6,
+       "p95_ms": 163466.0,
+       "failed": {
+        "inflight_at_end": 11
+       }
+      },
+      "task_ticket": {
+       "n": 312,
+       "ok": 296,
+       "p50_ms": 30313.6,
+       "p95_ms": 35157.7,
+       "failed": {
+        "inflight_at_end": 16
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.0
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         104
+        ],
+        "code_agent": [
+         0,
+         100
+        ],
+        "deep_research": [
+         0,
+         52
+        ],
+        "ingestion": [
+         0,
+         52
+        ],
+        "task_ticket": [
+         0,
+         311
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.982
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         104
+        ],
+        "code_agent": [
+         0,
+         100
+        ],
+        "deep_research": [
+         0,
+         52
+        ],
+        "ingestion": [
+         0,
+         50
+        ],
+        "task_ticket": [
+         296,
+         296
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.2372,
+        "task_ticket": 0.982
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         88
+        ],
+        "code_agent": [
+         0,
+         84
+        ],
+        "deep_research": [
+         0,
+         44
+        ],
+        "ingestion": [
+         17,
+         44
+        ],
+        "task_ticket": [
+         296,
+         296
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.9119,
+        "deep_research": 0.8808,
+        "ingestion": 0.8834,
+        "task_ticket": 0.982
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         48
+        ],
+        "code_agent": [
+         56,
+         56
+        ],
+        "deep_research": [
+         40,
+         40
+        ],
+        "ingestion": [
+         41,
+         41
+        ],
+        "task_ticket": [
+         296,
+         296
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.8591,
+        "code_agent": 0.9119,
+        "deep_research": 0.8808,
+        "ingestion": 0.8834,
+        "task_ticket": 0.982
+       },
+       "counts": {
+        "analyst_large": [
+         33,
+         33
+        ],
+        "code_agent": [
+         56,
+         56
+        ],
+        "deep_research": [
+         40,
+         40
+        ],
+        "ingestion": [
+         41,
+         41
+        ],
+        "task_ticket": [
+         296,
+         296
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.8591,
+        "code_agent": 0.9119,
+        "deep_research": 0.8808,
+        "ingestion": 0.8834,
+        "task_ticket": 0.982
+       },
+       "counts": {
+        "analyst_large": [
+         33,
+         33
+        ],
+        "code_agent": [
+         56,
+         56
+        ],
+        "deep_research": [
+         40,
+         40
+        ],
+        "ingestion": [
+         41,
+         41
+        ],
+        "task_ticket": [
+         296,
+         296
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 109,
+     "resident_measured": 151,
+     "think_s": 3.0,
+     "host_cpu_pct": 64.3,
+     "retrieval_cpu_pct": 3.0,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.21
+    }
+   }
+  },
+  "0.24": {
+   "achieved_median": 0.96,
+   "achieved_range": [
+    0.96,
+    0.96
+   ],
+   "generator_ok_all": true,
+   "keeps_up_all": false,
+   "backlog_per_series": [
+    [
+     183,
+     268,
+     85
+    ],
+    [
+     187,
+     271,
+     84
+    ],
+    [
+     184,
+     267,
+     83
+    ]
+   ],
+   "resident_measured_median": 215,
+   "resident_median": 97,
+   "resident_range": [
+    97,
+    101
+   ],
+   "host_cpu_median": 82.8,
+   "retrieval_cpu_median": 3.5,
+   "per_series": {
+    "series-11401-20260908-025329": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 261,
+     "offered_rate": 0.96,
+     "achieved_ratio": 1.002,
+     "generator_ok": true,
+     "units": 1436,
+     "units_per_ledger": [
+      359,
+      359,
+      359,
+      359
+     ],
+     "cohort_units": 718,
+     "warmup_s": 746.8,
+     "span_s": 746.8,
+     "rate": 0.961,
+     "backlog_start": 183,
+     "backlog_end": 268,
+     "backlog_delta": 85,
+     "keeps_up": false,
+     "per_type": {
+      "analyst_large": {
+       "n": 120,
+       "ok": 0,
+       "p50_ms": null,
+       "p95_ms": null,
+       "failed": {
+        "inflight_at_end": 120
+       }
+      },
+      "code_agent": {
+       "n": 120,
+       "ok": 35,
+       "p50_ms": 497823.9,
+       "p95_ms": 545885.7,
+       "failed": {
+        "inflight_at_end": 85
+       }
+      },
+      "deep_research": {
+       "n": 60,
+       "ok": 44,
+       "p50_ms": 187614.4,
+       "p95_ms": 202932.9,
+       "failed": {
+        "inflight_at_end": 16
+       }
+      },
+      "ingestion": {
+       "n": 60,
+       "ok": 40,
+       "p50_ms": 222959.7,
+       "p95_ms": 254873.5,
+       "failed": {
+        "inflight_at_end": 20
+       }
+      },
+      "task_ticket": {
+       "n": 358,
+       "ok": 338,
+       "p50_ms": 30501.7,
+       "p95_ms": 35551.5,
+       "failed": {
+        "inflight_at_end": 20
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.0
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         120
+        ],
+        "code_agent": [
+         0,
+         120
+        ],
+        "deep_research": [
+         0,
+         60
+        ],
+        "ingestion": [
+         0,
+         60
+        ],
+        "task_ticket": [
+         0,
+         346
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         112
+        ],
+        "code_agent": [
+         0,
+         116
+        ],
+        "deep_research": [
+         0,
+         56
+        ],
+        "ingestion": [
+         0,
+         56
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         96
+        ],
+        "code_agent": [
+         0,
+         96
+        ],
+        "deep_research": [
+         0,
+         48
+        ],
+        "ingestion": [
+         0,
+         48
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0029,
+        "deep_research": 0.8905,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         48
+        ],
+        "code_agent": [
+         1,
+         48
+        ],
+        "deep_research": [
+         44,
+         44
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.8661,
+        "deep_research": 0.8905,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         0
+        ],
+        "code_agent": [
+         35,
+         35
+        ],
+        "deep_research": [
+         44,
+         44
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.8661,
+        "deep_research": 0.8905,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         0
+        ],
+        "code_agent": [
+         35,
+         35
+        ],
+        "deep_research": [
+         44,
+         44
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 97,
+     "resident_measured": 218,
+     "think_s": 3.0,
+     "host_cpu_pct": 83.0,
+     "retrieval_cpu_pct": 3.5,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.24
+    },
+    "series-11501-20260908-034801": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 262,
+     "offered_rate": 0.96,
+     "achieved_ratio": 1.001,
+     "generator_ok": true,
+     "units": 1436,
+     "units_per_ledger": [
+      359,
+      359,
+      359,
+      359
+     ],
+     "cohort_units": 718,
+     "warmup_s": 747.3,
+     "span_s": 747.3,
+     "rate": 0.961,
+     "backlog_start": 187,
+     "backlog_end": 271,
+     "backlog_delta": 84,
+     "keeps_up": false,
+     "per_type": {
+      "analyst_large": {
+       "n": 120,
+       "ok": 0,
+       "p50_ms": null,
+       "p95_ms": null,
+       "failed": {
+        "inflight_at_end": 120
+       }
+      },
+      "code_agent": {
+       "n": 120,
+       "ok": 33,
+       "p50_ms": 500883.1,
+       "p95_ms": 553592.8,
+       "failed": {
+        "inflight_at_end": 87
+       }
+      },
+      "deep_research": {
+       "n": 60,
+       "ok": 45,
+       "p50_ms": 183418.2,
+       "p95_ms": 216081.6,
+       "failed": {
+        "inflight_at_end": 15
+       }
+      },
+      "ingestion": {
+       "n": 60,
+       "ok": 40,
+       "p50_ms": 226934.1,
+       "p95_ms": 260896.4,
+       "failed": {
+        "inflight_at_end": 20
+       }
+      },
+      "task_ticket": {
+       "n": 358,
+       "ok": 338,
+       "p50_ms": 30701.7,
+       "p95_ms": 35360.5,
+       "failed": {
+        "inflight_at_end": 20
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.0
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         120
+        ],
+        "code_agent": [
+         0,
+         120
+        ],
+        "deep_research": [
+         0,
+         60
+        ],
+        "ingestion": [
+         0,
+         60
+        ],
+        "task_ticket": [
+         0,
+         347
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         112
+        ],
+        "code_agent": [
+         0,
+         116
+        ],
+        "deep_research": [
+         0,
+         56
+        ],
+        "ingestion": [
+         0,
+         56
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         96
+        ],
+        "code_agent": [
+         0,
+         96
+        ],
+        "deep_research": [
+         0,
+         48
+        ],
+        "ingestion": [
+         0,
+         48
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.8926,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         48
+        ],
+        "code_agent": [
+         0,
+         48
+        ],
+        "deep_research": [
+         45,
+         45
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.8591,
+        "deep_research": 0.8926,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         0
+        ],
+        "code_agent": [
+         33,
+         33
+        ],
+        "deep_research": [
+         45,
+         45
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.8591,
+        "deep_research": 0.8926,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         0
+        ],
+        "code_agent": [
+         33,
+         33
+        ],
+        "deep_research": [
+         45,
+         45
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 97,
+     "resident_measured": 215,
+     "think_s": 3.0,
+     "host_cpu_pct": 82.8,
+     "retrieval_cpu_pct": 3.8,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.24
+    },
+    "series-11601-20260908-044231": {
+     "plateau_version": "plateau-1",
+     "ledgers": 4,
+     "inflight_at_end": 259,
+     "offered_rate": 0.96,
+     "achieved_ratio": 1.0,
+     "generator_ok": true,
+     "units": 1436,
+     "units_per_ledger": [
+      359,
+      359,
+      359,
+      359
+     ],
+     "cohort_units": 718,
+     "warmup_s": 747.6,
+     "span_s": 747.6,
+     "rate": 0.96,
+     "backlog_start": 184,
+     "backlog_end": 267,
+     "backlog_delta": 83,
+     "keeps_up": false,
+     "per_type": {
+      "analyst_large": {
+       "n": 120,
+       "ok": 0,
+       "p50_ms": null,
+       "p95_ms": null,
+       "failed": {
+        "inflight_at_end": 120
+       }
+      },
+      "code_agent": {
+       "n": 120,
+       "ok": 38,
+       "p50_ms": 506753.0,
+       "p95_ms": 543757.6,
+       "failed": {
+        "inflight_at_end": 82
+       }
+      },
+      "deep_research": {
+       "n": 60,
+       "ok": 43,
+       "p50_ms": 188634.5,
+       "p95_ms": 210139.6,
+       "failed": {
+        "inflight_at_end": 17
+       }
+      },
+      "ingestion": {
+       "n": 60,
+       "ok": 40,
+       "p50_ms": 225899.7,
+       "p95_ms": 256379.6,
+       "failed": {
+        "inflight_at_end": 20
+       }
+      },
+      "task_ticket": {
+       "n": 358,
+       "ok": 338,
+       "p50_ms": 30434.7,
+       "p95_ms": 35477.8,
+       "failed": {
+        "inflight_at_end": 20
+       }
+      }
+     },
+     "tiers": {
+      "conversational": {
+       "deadline_s": 15.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.0
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         120
+        ],
+        "code_agent": [
+         0,
+         120
+        ],
+        "deep_research": [
+         0,
+         60
+        ],
+        "ingestion": [
+         0,
+         60
+        ],
+        "task_ticket": [
+         0,
+         347
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "interactive": {
+       "deadline_s": 45.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         112
+        ],
+        "code_agent": [
+         0,
+         117
+        ],
+        "deep_research": [
+         0,
+         56
+        ],
+        "ingestion": [
+         0,
+         56
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "responsive": {
+       "deadline_s": 150.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.0,
+        "ingestion": 0.0,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         96
+        ],
+        "code_agent": [
+         0,
+         96
+        ],
+        "deep_research": [
+         0,
+         48
+        ],
+        "ingestion": [
+         0,
+         48
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "attended": {
+       "deadline_s": 450.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.0,
+        "deep_research": 0.8882,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         48
+        ],
+        "code_agent": [
+         0,
+         48
+        ],
+        "deep_research": [
+         43,
+         43
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "queued": {
+       "deadline_s": 1200.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.8753,
+        "deep_research": 0.8882,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         0
+        ],
+        "code_agent": [
+         38,
+         38
+        ],
+        "deep_research": [
+         43,
+         43
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      },
+      "background": {
+       "deadline_s": 3600.0,
+       "bounds": {
+        "analyst_large": 0.0,
+        "code_agent": 0.8753,
+        "deep_research": 0.8882,
+        "ingestion": 0.8808,
+        "task_ticket": 0.9842
+       },
+       "counts": {
+        "analyst_large": [
+         0,
+         0
+        ],
+        "code_agent": [
+         38,
+         38
+        ],
+        "deep_research": [
+         43,
+         43
+        ],
+        "ingestion": [
+         40,
+         40
+        ],
+        "task_ticket": [
+         338,
+         338
+        ]
+       },
+       "on_time_and_steady": false
+      }
+     },
+     "sustained_tiers": [],
+     "resident_sessions": 101,
+     "resident_measured": 215,
+     "think_s": 3.0,
+     "host_cpu_pct": 82.8,
+     "retrieval_cpu_pct": 3.5,
+     "truncated_ledgers": 0,
+     "per_instance_rate": 0.24
+    }
+   }
+  }
+ },
+ "headline": {
+  "capacity": {
+   "per_instance_rate": 0.21,
+   "fleet_rate_median": 0.84,
+   "fleet_rate_range": [
+    0.84,
+    0.84
+   ],
+   "resident_measured": 152,
+   "resident_median": 108,
+   "resident_range": [
+    107,
+    109
+   ],
+   "first_failing_rate": 0.24
+  }
+ }
+}
