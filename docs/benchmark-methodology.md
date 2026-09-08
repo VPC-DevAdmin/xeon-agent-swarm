@@ -342,9 +342,10 @@ admitted at one rate would otherwise finish under the next. Holding one
 rate for ten minutes lets every cohort complete under the rate that
 admitted it, and the latency-versus-rate curve is read across plateaus.
 Exploration uses five-minute holds to find the region; the result of
-record uses ten-minute holds under three seeds that differ by 100. Rates are offered
-per instance (four instances, so 0.5 per instance is 2.0 box-wide) and
-may be fractional.
+record uses 25-minute holds under three seeds that differ by 100, long
+enough for the nine-minute analysts to reach steady state. Rates are
+offered per instance (four instances, so 0.21 per instance is 0.84
+box-wide) and may be fractional.
 
 The generator keeps its own receipt in every ledger sample: arrivals shed
 by its stall clamp and ticks fired late. A plateau whose achieved arrival
@@ -481,7 +482,7 @@ cores, each job's CPU time rises, and the host reads high until the
 overshoot drains. The drain takes longer as the rate nears the cliff,
 because the excess capacity that drains it shrinks; past the cliff it
 never drains. The judge's warm-up rule (units admitted before 1.5 times
-the slowest completed latency are not in the cohort) and the ten-minute
+the slowest completed latency are not in the cohort) and the 25-minute
 hold are what keep it out of a number of record; a short check hold sits
 inside it and must not be read as steady state.
 
@@ -596,9 +597,9 @@ match.
 The results of record are the enterprise tile's sets (section 11):
 `data/capacity/set-20260908-025329` (seeds 11401, 11501, 11601; 0.84
 and 0.96 workflows/s) with its lower rung `set-20260908-053752` (same seeds,
-0.72) and its residency photographs <<PHOTOS>> (152 sessions). Three
+0.72) and its residency photographs `photo-11401-20260908-070145`, `photo-11501-20260908-075234`, `photo-11601-20260908-084324` (152 sessions). Three
 seeds each, 25-minute holds (30 for the photographs); run commit
-ebaf94f, evidence commits 5add991 and bce6f26<<P_COMMIT>>. Their per-core samples
+ebaf94f, evidence commits 5add991 and bce6f26 and 3df029a. Their per-core samples
 are `data/capacity/set-11400-mpstat.log` and `set-11400c-mpstat.log`
 on the reference server. The comparison set without the lookups is
 `set-20260907-184339` with `set-20260908-000736` (seeds 11101, 11201,
@@ -706,18 +707,20 @@ server then shows what it sustains with that many agents on it.
 
 | Sessions held | In flight, measured | Completions / s | Code agent p50 / p95 | Data analyst | Research / ingestion / task | Drift, first to second half of the hold | Host threads busy | Host memory |
 |---|---|---|---|---|---|---|---|---|
-| 152 | 145 | 2.30 | 185 / 189 s | 136 / 139 s | 34 / 20 / 10 s | within 1% for every type | 90% | 158 GB |
-| 116 | 110 | 2.13 | 141 / 152 s | 109 / 119 s | 34 / 20 / 10 s | within 1% | 64% | 128 GB |
+| 152 | 150 | 0.80 to 0.81 | 337 / 365 s | 526 / 560 s | 183 / 147 / 30 s | within 2% for every type (ingestion +5% in one seed) | 70% | 390 GB |
 
-Three seeds each, ten-minute holds, zero failures in 4,100 and 3,800
-workflows; the seeds agree to the second decimal on throughput and to the
-second on every latency. Little's law closes both: 2.30 a second times
-65 seconds is 149 against 152 held. The 152-session photograph is the
-2.4 workflows/s point seen from the other side: the same server, holding
-145 agents in flight, completes 2.3 workflows a second at the latencies
-the open-loop ladder measured between its 2.2 and 2.4 rungs, and holds
-them for ten minutes without drift. "This server carries about 150
-working agents" is therefore a measurement, not a derivation.
+Three seeds, 30-minute holds, zero failures in 4,254 workflows; the
+seeds agree to the second decimal on throughput and to within a few
+seconds on every latency. Little's law closes it: 0.81 a second times
+189 seconds is 153 against 152 held and 150 measured in flight. The
+152-session photograph is the 0.84 workflows/s point seen from the
+other side: the same server, holding 150 agents in flight, completes
+0.8 workflows a second at the latencies the open-loop ladder measured
+at its capacity rung, and holds them for half an hour without drift.
+"This server carries about 150 working agents" is therefore a
+measurement, not a derivation. The memory figure is real too: the
+analysts' 100-million-row jobs hold about 40 GB each while they run,
+and a dozen of them are in flight at once.
 
 ### The ratio
 

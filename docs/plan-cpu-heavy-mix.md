@@ -92,7 +92,7 @@ one GPU's, with no scaling to busy cores. At capacity the server is 76%
 busy and keeps 1.5 GPUs of the reference class busy at the record rate;
 per core, 9.2 core-ms per token at 3,500 tokens/s is 32 cores per GPU,
 two GPUs per fully busy 64-core socket. The constant held at 9.2 to 10.2
-across the ladder and the seeds. <<PHOTO_SENTENCE>> Sets
+across the ladder and the seeds. The residency was confirmed the other way round: 152 sessions held in a closed loop kept 150 agents in flight and completed 0.8 workflows a second at the capacity rung's latencies with no drift over half an hour, in all three seeds, with zero failures. Sets
 `data/capacity/set-20260908-025329` and `set-20260908-053752`; full curves in
 section 11 of the methodology.
 
