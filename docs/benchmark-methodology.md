@@ -67,8 +67,8 @@ run (section 6), so generated tokens are the model's, not a formula's.
 Host work is the stand-alone sum of each archetype's steps (the cost laws
 of section 8); in a mix, busy cores run at about 0.8 times the summed
 weights because sibling threads share physical cores. Output tokens are
-the completed units' own at the capacity rung of the v2.3 enterprise set
-(first seed; the other two seeds are being measured), plus the
+the completed units' own at the capacity rung of the v2.3 enterprise set,
+three seeds, plus the
 model-based judgments' outputs (one per worker and one on the synthesis,
 52 to 105 tokens each), which the run records keep in a separate
 validation counter. Judgments per workflow are a property of the
@@ -473,16 +473,16 @@ where that archetype's slowdown lives, and what is left after the model
 wait and the stages is the orchestration work the executors did for the
 unit, which is where CPU starvation shows.
 
-Enterprise tile, the record's second series (seed 11501), below capacity
+Enterprise tile, the record's second series (seed 12101), below capacity
 and at it (seconds per unit, medians):
 
 | Archetype | Latency p50, 0.72 → 0.84 wf/s | Model wait (modeled) | Retrieval, sum (calls) | Rerank call, sum | Sandbox wall / CPU, sum (jobs) | Embedding | Remainder: orchestration on the executors |
 |---|---|---|---|---|---|---|---|
-| Task agent | 30.4 → 30.3 | 26.8 | 0.44 → 0.45 (1) | 0.32 → 0.33 | – | – | 3.1 → 3.1 |
-| Research agent | 180.7 → 181.6 | 167.6 | 4.0 → 4.3 (9) | 2.8 → 3.1 | 2.1 / 1.7 → 2.8 / 2.4 (3, fetch) | – | 7.1 → 6.9 |
-| Ingestion agent | 127.0 → 151.8 | 40.0 | – | – | 79.7 / 79.6 → 105.5 / 105.3 (1) | 5.4 → 5.8 | 1.9 → 0.5 |
-| Data analyst | 374.6 → 524.6 | 137.8 | 0.88 → 0.88 (2) | 0.58 → 0.59 | 227.9 / 170.3 → 385.5 / 284.7 (3) | – | 8.0 → 0.3 |
-| Code agent | 276.4 → 342.6 | 125.8 | 1.29 → 1.39 (3) | 0.87 → 0.96 | 140.6 / 140.3 → 207.0 / 206.6 (3) | – | 8.5 → 8.2 |
+| Task agent | 17.2 → 17.2 | 15.1 | 0.51 → 0.51 (1) | 0.37 → 0.39 | – | – | 1.6 → 1.6 |
+| Research agent | 191.2 → 191.9 | 177.8 | 4.5 → 5.7 (9) | 3.1 → 4.4 | 2.0 / 1.7 → 2.8 / 2.4 (3, fetch) | – | 6.9 → 6.6 |
+| Ingestion agent | 136.3 → 154.2 | 41.1 | – | – | 81.3 / 81.2 → 101.0 / 100.9 (1) | 10.0 → 10.4 | 3.9 → 2.3 |
+| Data analyst | 379.9 → 504.5 | 143.2 | 1.0 → 1.1 (2) | 0.68 → 0.75 | 228.5 / 170.6 → 344.5 / 260.1 (3) | – | 7.3 → 16.2 |
+| Code agent | 283.8 → 326.8 | 130.8 | 1.6 → 1.6 (3) | 1.0 → 1.2 | 145.3 / 145.0 → 186.8 / 186.5 (3) | – | 7.1 → 6.6 |
 
 The model wait is identical at both rates to the tenth of a second, which
 is the instrumentation's check on itself: it is modeled, not served. Every
@@ -645,9 +645,10 @@ match.
 
 The result of record is the v2.3 enterprise set (section 11):
 `data/capacity/set-20260908-165351` (seeds 12001, 12101, 12201; 0.72,
-0.84 and 0.90 workflows/s on the allocation of record, the first seed
-complete and the others being measured), with its residency photograph
-to follow. The v2.2 sets it supersedes (section 12):
+0.84 and 0.90 workflows/s on the allocation of record; three seeds,
+25-minute holds; evidence commits 4665ab1 and the set commit that
+follows it; per-core samples `set-12000-mpstat.log`), with its residency
+photograph (144 sessions, 30-minute holds, seeds 12001, 12101, 12201). The v2.2 sets it supersedes (section 12):
 `data/capacity/set-20260908-025329` (seeds 11401, 11501, 11601; 0.84
 and 0.96 workflows/s) with its lower rung `set-20260908-053752` (same seeds,
 0.72), its midpoint rung `set-20260908-115604` (same seeds, 0.90) and its
@@ -695,15 +696,15 @@ the constant of any other tile before it is measured.
 
 ### Results of record
 
-*The v2.3 set's first seed (12001) is complete and is reported below;
-seeds 12101 and 12201 are being measured and the medians replace these
-figures when they land. Latencies are one seed's p50 / p95.*
-
 One set, three seeds, 25-minute holds: enterprise
 `data/capacity/set-20260908-165351` (0.18, 0.21 and 0.225 per instance,
 0.72, 0.84 and 0.90 workflows/s box-wide), on the allocation of record
 (6/1/2/55), the archetypes of section 2 and the v2.3 calibrated
-gpt-oss-20b profile. Latencies are p50 / p95 in
+gpt-oss-20b profile. Latencies are p50 / p95 in seconds, medians of
+three series; host cores busy is the median of the three series'
+time-averaged per-core occupancy over the steady window (section 7);
+resident agents are measured from the fleet's in-flight samples. Zero
+failures in every series at every rung. Latencies are p50 / p95 in
 seconds, medians of three series; host cores busy is the median of the
 three series' time-averaged per-core occupancy over the steady window
 (section 7); resident
@@ -711,17 +712,17 @@ agents are measured from the fleet's in-flight samples. Zero failures in
 every series at every rung, including past the cliff.
 
 **Enterprise.** Capacity 0.84 workflows/s with 143 resident agents; 0.90
-falls behind.
+falls behind in every seed.
 
 | Offered (box-wide) | Code agent | Data analyst | Research | Ingestion | Task | Resident | Backlog over the hold (three seeds) | Host cores busy | Application pool | Verdict |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 0.72/s | 284 / 303 | 379 / 396 | 192 / 213 | 133 / 147 | 17 / 19 | 105 | -5 | 70% (45 cores) | 76% | keeps up |
-| 0.84/s | 329 / 353 | 497 / 533 | 193 / 215 | 156 / 172 | 17 / 26 | 143 | +18 | 85% (54 cores) | 93% | keeps up: capacity |
-| 0.90/s | 384 / 422 | 610 / 642 | 194 / 220 | 175 / 202 | 17 / 27 | 171 and climbing | +44 | 90% (57 cores) | 98% | falls behind |
+| 0.72/s | 284 / 299 | 379 / 399 | 192 / 210 | 133 / 147 | 17 / 19 | 105 | -5, +7, -7 | 70% (45 cores) | 76% | keeps up |
+| 0.84/s | 327 / 356 | 497 / 533 | 192 / 212 | 154 / 170 | 17 / 26 | 143 | +18, +17, +9 | 85% (54 cores) | 93% | keeps up: capacity |
+| 0.90/s | 386 / 417 | 615 / 642 | 194 / 213 | 175 / 202 | 17 / 26 | 171 and climbing | +44, +47, +37 | 90% (57 cores) | 98% | falls behind |
 
-Host memory and attributed CPU over the same steady windows (first
-seed): memory 239 GB at 0.72, 355 GB at capacity (peaks of 430 GB) and
-454 GB at 0.90, almost all of it the analysts' 100-million-row jobs at
+Host memory and attributed CPU over the same steady windows (medians of
+three seeds): memory 240 GB at 0.72, 357 GB at capacity (peaks of 430 to
+445 GB) and 456 GB at 0.90, almost all of it the analysts' 100-million-row jobs at
 about 40 GB each while they run, so memory scales with the resident
 population and a 256 GB server would run out of it before cores at this
 mix; attributed CPU at capacity 71% sandboxed jobs, 3% retrieval and
@@ -744,15 +745,14 @@ against the v2.2 allocation) without making it stable. The retrieval
 tiers run at 42% (reranker, six cores), 14% (query embedder) and 32%
 (ingest embedder) at capacity and barely move past it.
 
-Per unit at capacity (v2.2 set, seed 11501, medians of per-unit sums;
-the v2.3 figures follow with the full set): data
-analyst 525 s, of which 386 s in three jobs (285 core-s), 138 s of
-model wait and 0.9 s in two lookups; code agent 343 s, of which 207 s
-in three CI steps, 125 s of model wait and 1.4 s in three lookups;
-research agent 182 s, of which 167 s of model wait, 4.3 s in nine
-retrievals (3.1 s in the reranker) and 2.8 s of fetching; ingestion
-agent 152 s, of which 106 s of OCR intake, 40 s of model wait and 5.8 s
-of embedding; task agent 30 s, of which 26.7 s is model wait and 0.45 s
+Per unit at capacity (seed 12101, medians of per-unit sums): data
+analyst 505 s, of which 344 s in three jobs (260 core-s), 143 s of
+model wait and 1.1 s in two lookups; code agent 327 s, of which 187 s
+in three CI steps, 132 s of model wait and 1.6 s in three lookups;
+research agent 192 s, of which 177 s of model wait, 5.7 s in nine
+retrievals (4.4 s in the reranker) and 2.8 s of fetching; ingestion
+agent 154 s, of which 101 s of OCR intake, 41 s of model wait and 10 s
+of embedding; task agent 17 s, of which 15.1 s is model wait and 0.5 s
 the knowledge-base lookup.
 
 ### The residency photograph
@@ -810,14 +810,15 @@ and moves within a core-ms across the passing rungs.
 
 | Enterprise tile | Offered | Generated tokens/s | Busy cores | Core-ms per token | GPUs the server keeps busy at 3,565 tokens/s per GPU (record) | at 2,400 / 3,753 |
 |---|---|---|---|---|---|---|
-| below capacity | 0.72 wf/s | 4,850 | 44.7 | 9.2 | 1.36 | 2.02 / 1.29 |
-| **at capacity** | **0.84 wf/s** | **5,660** | **54.5** | **9.6** | **1.59** | 2.36 / 1.51 |
-| first rung past capacity | 0.90 wf/s | 6,060 | 57.4 | 9.5 | 1.70 | 2.52 / 1.61 |
+| below capacity | 0.72 wf/s | 4,855 | 44.8 | 9.2 | 1.36 | 2.02 / 1.29 |
+| **at capacity** | **0.84 wf/s** | **5,660** | **54.3** | **9.6** | **1.59** | 2.36 / 1.51 |
+| first rung past capacity | 0.90 wf/s | 6,060 | 57.5 | 9.5 | 1.70 | 2.52 / 1.61 |
 
-Output tokens per workflow on the declared mix are 6,710 (task 1,390,
+Output tokens per workflow on the declared mix are 6,720 (task 1,390,
 code 12,850, analyst 13,380, research 16,100, ingestion 3,670, judgments
-included, the same to within 5 tokens at every rung). The constant is
-9.2 to 9.6 core-ms per token across the ladder (first seed); the v2.2
+included, the same to within 30 tokens at every rung and seed). The
+constant is 9.2 to 9.6 core-ms per token across the ladder and all three
+seeds; the v2.2
 set read 8.8 to 9.2 with the longer task agent, since the change removed
 tokens and left the host work where it was.
 

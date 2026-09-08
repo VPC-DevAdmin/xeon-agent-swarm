@@ -1,22 +1,25 @@
 {
   "revisionDate": "2026-09-08",
-  "resultVersion": "v2.2",
+  "resultVersion": "v2.3",
   "definitionVersion": "v2.3",
-  "status": "Awaiting the revised mixed-workload benchmark",
+  "status": "Results of record in the September 8 methodology",
+  "sourceRecord": {"commit":"4665ab1","seed":12001,"run":"series-12001-20260908-165351","location":"data/capacity/series-12001-20260908-165351 and docs/benchmark-methodology.md, section 11"},
   "definitions": {
     "residentUnit": "One end-to-end workflow, including its planner and workers",
     "tile": {"Task": 6, "Research": 1, "Ingestion": 1, "Analyst": 2, "Code": 2},
     "workers": {"Task": 1, "Research": 3, "Ingestion": 1, "Analyst": 3, "Code": 3}
   },
-  "platform": {"cores": 64, "memoryGB": 1000},
+  "platform": {"cores": 64, "memoryGB": 1000, "allocation":{"reranking":6,"queryEmbedding":1,"ingestEmbedding":2,"application":55}},
   "capacity": {
-    "resident": 152,
-    "cpuPercent": 83,
-    "memoryGB": 390,
-    "callsPerSecond": 9.2,
-    "outputTokensPerSecond": 5920,
-    "coreMsPerSecond": 53100,
-    "cpuShares": {"sandbox": 70, "retrieval": 3, "execution": 24, "support": 3}
+    "resident": 143,
+    "cpuPercent": 85,
+    "memoryGB": 355,
+    "memoryPeakGB": 430,
+    "callsPerSecond": 8.4,
+    "outputTokensPerSecond": 5660,
+    "coreMsPerSecond": 54500,
+    "cpuShares": {"sandbox":71.1,"retrieval":2.6,"execution":23.4,"support":2.9},
+    "accountingNotes": "Memory and CPU shares use all four rate-0.21 ledgers, +600 to +1500 seconds after each start. Mean memory 355.037 GB, maximum sample 429.3 GB. Mean CPU-family values normalized across the four samplers: sandbox 71.08995%, retrieval 2.58771%, execution (control, executors, siblings) 23.43381%, supporting services 2.88853%. Ratio script returns 5658 output tokens/s, rounded to 5660, and achieved rate 0.843. At 119 model calls per 12-request tile, the serving requirement is 8.36 calls/s, rounded to 8.4."
   },
   "serving": {
     "model": "gpt-oss-20b",
@@ -26,23 +29,21 @@
     "cacheAllowancePercent": 5
   },
   "archetypes": [
-    {"name":"Task", "coreMs":1000, "modelCalls":6, "outputTokens":2440, "label":"retrieve, record, and reply", "color":"#0672CB"},
-    {"name":"Research", "coreMs":25000, "modelCalls":20, "outputTokens":15500, "label":"retrieve and synthesize", "color":"#0B7C84"},
-    {"name":"Ingestion", "coreMs":100000, "modelCalls":7, "outputTokens":3470, "label":"OCR, embed, and index", "color":"#00468B"},
-    {"name":"Analyst", "coreMs":190000, "modelCalls":17, "outputTokens":12940, "label":"analyze and explain", "color":"#40586D"},
-    {"name":"Code", "coreMs":150000, "modelCalls":17, "outputTokens":12400, "label":"set up, CI, and verify", "color":"#66278F"}
+    {"name":"Task", "coreMs":1000, "modelCalls":4, "outputTokens":1390, "label":"retrieve, record, and reply", "color":"#0672CB"},
+    {"name":"Research", "coreMs":25000, "modelCalls":20, "outputTokens":16100, "label":"retrieve and synthesize", "color":"#0B7C84"},
+    {"name":"Ingestion", "coreMs":100000, "modelCalls":7, "outputTokens":3670, "label":"OCR, embed, and index", "color":"#00468B"},
+    {"name":"Analyst", "coreMs":190000, "modelCalls":17, "outputTokens":13430, "label":"analyze and explain", "color":"#40586D"},
+    {"name":"Code", "coreMs":150000, "modelCalls":17, "outputTokens":12820, "label":"set up, CI, and verify", "color":"#66278F"}
   ],
   "responsePoints": [
-    {"resident":107,"sustainable":true,"p95":{"Task":35,"Research":199,"Ingestion":144,"Analyst":392,"Code":293}},
-    {"resident":152,"sustainable":true,"p95":{"Task":35,"Research":202,"Ingestion":169,"Analyst":563,"Code":369}},
-    {"resident":181,"sustainable":false,"p95":{"Task":35,"Research":206,"Ingestion":211,"Analyst":673,"Code":452}},
-    {"resident":215,"sustainable":false,"p95":{"Task":35,"Research":210,"Ingestion":256,"Analyst":null,"Code":546}}
+    {"resident":105,"sustainable":true,"p95":{"Task":19,"Research":213,"Ingestion":147,"Analyst":396,"Code":303}},
+    {"resident":143,"sustainable":true,"p95":{"Task":26,"Research":215,"Ingestion":172,"Analyst":533,"Code":353}},
+    {"resident":171,"sustainable":false,"p95":{"Task":27,"Research":220,"Ingestion":202,"Analyst":642,"Code":422}}
   ],
   "sources": [
     {"id":"methodology","title":"Benchmark methodology","path":"../benchmark-methodology.md"},
     {"id":"configuration","title":"Workflow configuration","path":"../../config/capacity_scenarios.yaml"},
-    {"id":"capacity","title":"Capacity result","path":"../../data/capacity/set-20260908-025329/summary.md"},
-    {"id":"lower-load","title":"Lower-load result","path":"../../data/capacity/set-20260908-053752/summary.md"},
-    {"id":"overload","title":"Intermediate overload result","path":"../../data/capacity/set-20260908-115604/summary.md"}
+    {"id":"serving-profile","title":"Model response profile","path":"../../data/capacity/serving/gptoss20b-low-faithful-v23/summary.md"},
+    {"id":"capacity","title":"Capacity measurement check","path":"capacity-measurement-check.md"}
   ]
 }

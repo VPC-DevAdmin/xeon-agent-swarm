@@ -77,7 +77,7 @@ and the compute-carrying archetypes set the constant.
 | Engineering (an engineering organisation) | 7 | 3 | 1 | 1 | 0 | 8 |
 | Analytics (a data and research organisation) | 6 | 0 | 3 | 2 | 1 | 10 |
 
-## Result (8 September 2026; first seed of the v2.3 set, the other two being measured)
+## Result (8 September 2026)
 
 The enterprise tile is measured with three seeds and 25-minute holds on
 the allocation of record (reranker 6 cores as two processes, query
@@ -95,7 +95,7 @@ hold. At capacity the server is 85% busy and keeps 1.6 GPUs of the
 reference class busy at the record rate; per core, 9.6 core-ms per
 token at 3,565 tokens/s is 34 cores per GPU (1.9 GPUs per socket only
 as an extrapolation to every core busy, which the reserved tiers do not
-permit). The constant held at 9.2 to 9.6 across the ladder. The v2.2
+permit). The constant held at 9.2 to 9.6 across the ladder and the three seeds. The v2.2
 set with the longer task agent measured 152 resident and 9.0 core-ms
 per token at the same capacity; the residency photograph on the v2.3
 shape follows the set. Set `data/capacity/set-20260908-165351`; full

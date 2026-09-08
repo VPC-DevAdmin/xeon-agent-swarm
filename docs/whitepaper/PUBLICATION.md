@@ -1,6 +1,8 @@
 # Updating and sharing the agent-capacity paper
 
-The September 8 editorial pass preserves the current v2.2 results and the chosen 3,500-output-token-per-second GPU assumption. The Task diagram describes the revised v2.3 handoff. The paper states that distinction until the replacement mixed-workload results arrive.
+The paper uses the v2.3 results recorded in the September 8 methodology and the chosen 3,500-output-token-per-second GPU assumption. The headline is 143 resident agents per CPU, 85% CPU utilization, and 1.6 GPU equivalents. The Task diagram and its four model calls describe the direct handoff.
+
+The result record identifies the source commit and seed. The capacity ledgers support 355 GB of memory used, peaks near 430 GB, and the CPU-family stack. `capacity-measurement-check.md` records the sample windows, grouping, rounding, and model-demand calculation.
 
 ## Results update
 
@@ -14,7 +16,7 @@ Text between `<!--result:...-->` and `<!--/result-->` is generated. Edit the res
 
 Ratios use CPU sockets and GPU devices. The three R770 servers and eight-GPU XE7740 remain a deployment illustration, not a dynamically sized configuration. Reassess its caption against the final ratio. A different processor, memory configuration, model, GPU, or cache assumption also needs an editorial check of the platform and source notes.
 
-The Figure 2 CPU segments are shares of attributed CPU work, not whole-host utilization. Its jar shows the twelve-request incoming mixture, not the exact resident population. Component-level CPU totals are intentionally absent from Figure 4 until corresponding evidence is available.
+Figure 2’s stack shows shares of attributed CPU work, separate from the utilization headline. Its jar shows the twelve-request incoming mixture, not the exact resident population. Component-level CPU totals are absent from Figure 4 until corresponding evidence is available.
 
 ## Distribution
 
@@ -22,4 +24,4 @@ Distribute `agent-capacity-whitepaper.html` and `evidence.html` together. Images
 
 Keep `paper-results.json` and `update-paper.cjs` with the editable source. They are not required to read the published paper. The evidence companion is technical supporting material and is not intended to be appended to the main printout.
 
-No files have been published externally. Before external release, review the evidence companion and confirm the final result and definition versions are aligned. Remove any remaining in-flight wording only when its replacement results are available.
+No files have been published externally. Before external release, review the evidence companion and check the run records against the paper’s result record. The source series is `data/capacity/series-12001-20260908-165351`. The portable companion includes the measurement check, while the full raw files remain in the repository.

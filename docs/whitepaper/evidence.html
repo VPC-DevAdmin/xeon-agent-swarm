@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent capacity: methodology and evidence</title><style>body{max-width:1000px;margin:40px auto;padding:0 22px;font:16px/1.6 system-ui;color:#203040;background:#f6f8fa}a{color:#0672cb}nav{display:flex;gap:18px;flex-wrap:wrap}section{margin:48px 0;scroll-margin-top:20px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.6 ui-monospace,monospace;background:white;border:1px solid #d5dfe6;border-radius:12px;padding:24px}.source{font-size:12px;overflow-wrap:anywhere}@media print{section{break-before:page}pre{border:0;padding:0}}</style><a href="agent-capacity-whitepaper.html#summary">Return to the whitepaper</a><h1>Methodology and evidence</h1><p>Source snapshots packaged with the 2026-09-08 paper revision. Results: v2.2. Agent definitions: v2.3. These records preserve the technical detail behind the paper and may describe work still in progress.</p><nav><a href="#methodology">Benchmark methodology</a><a href="#configuration">Workflow configuration</a><a href="#capacity">Capacity result</a><a href="#lower-load">Lower-load result</a><a href="#overload">Intermediate overload result</a></nav><section id="methodology"><h2>Benchmark methodology</h2><p class="source">Repository path: ../benchmark-methodology.md<br>SHA-256: 8f2813e758f1c0bb29caa77aca8ff26917e11f060225bd2b7b74e3da087f5e2a</p><pre># Agent capacity benchmark methodology
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent capacity: methodology and evidence</title><style>body{max-width:1000px;margin:40px auto;padding:0 22px;font:16px/1.6 system-ui;color:#203040;background:#f6f8fa}a{color:#0672cb}nav{display:flex;gap:18px;flex-wrap:wrap}section{margin:48px 0;scroll-margin-top:20px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.6 ui-monospace,monospace;background:white;border:1px solid #d5dfe6;border-radius:12px;padding:24px}.source{font-size:12px;overflow-wrap:anywhere}@media print{section{break-before:page}pre{border:0;padding:0}}</style><a href="agent-capacity-whitepaper.html#summary">Return to the whitepaper</a><h1>Methodology and evidence</h1><p>Source snapshots packaged with the 2026-09-08 paper revision. Results: v2.3. Agent definitions: v2.3. These records preserve the technical detail behind the paper and may describe work still in progress.</p><nav><a href="#methodology">Benchmark methodology</a><a href="#configuration">Workflow configuration</a><a href="#serving-profile">Model response profile</a><a href="#capacity">Capacity measurement check</a></nav><section id="methodology"><h2>Benchmark methodology</h2><p class="source">Repository path: ../benchmark-methodology.md<br>SHA-256: 94ddc6827036c69e7f5306271f9c8810213afb43e81840a53974892c95ace167</p><pre># Agent capacity benchmark methodology
 
 This is the methodology of record for the agent-host capacity benchmark.
 It describes the benchmark as it runs today: the five agent archetypes
@@ -58,23 +58,23 @@ run (section 6), so generated tokens are the model&#39;s, not a formula&#39;s.
 
 | Archetype | Declared size | Workers | Model calls (planner and workers + judgments) | Lookups | Host work per workflow, stand-alone | Output tokens per workflow, judgments included (gpt-oss-20b, low reasoning) | Core-ms per token, stand-alone |
 |---|---|---|---|---|---|---|---|
-| Task agent | one ticket: one knowledge-base lookup, one record, the worker&#39;s answer handed back | 1 | 3 + 1 | 1 at depth 32 | about 1 core-s | 1,490 (2,440 in the v2.2 shape) | 0.7 |
-| Research agent | 90 source pages fetched and parsed, nine retrievals at rerank depth 128 | 3 | 16 + 4 | 9 at depth 128 | about 25 core-s | 15,500 | 1.6 |
-| Ingestion agent | 50 PDF pages rendered, OCR&#39;d, redacted, chunked, embedded and indexed | 1 | 5 + 2 | none | about 100 core-s | 3,470 | 29 |
-| Data analyst | three jobs over 100 million rows, the second over two periods | 3 | 13 + 4 | 2 at depth 64 | about 190 core-s | 12,940 | 15 |
-| Code agent | setup, CI and verification over Lua 5.4.7 and SQLite 3.50.4 | 3 | 13 + 4 | 3 at depth 64 | about 150 core-s | 12,400 | 12 |
+| Task agent | one ticket: one knowledge-base lookup, one record, the worker&#39;s answer handed back | 1 | 3 + 1 | 1 at depth 32 | about 1 core-s | 1,390 (2,440 in the v2.2 shape) | 0.7 |
+| Research agent | 90 source pages fetched and parsed, nine retrievals at rerank depth 128 | 3 | 16 + 4 | 9 at depth 128 | about 25 core-s | 16,100 | 1.6 |
+| Ingestion agent | 50 PDF pages rendered, OCR&#39;d, redacted, chunked, embedded and indexed | 1 | 5 + 2 | none | about 100 core-s | 3,670 | 27 |
+| Data analyst | three jobs over 100 million rows, the second over two periods | 3 | 13 + 4 | 2 at depth 64 | about 190 core-s | 13,380 | 14 |
+| Code agent | setup, CI and verification over Lua 5.4.7 and SQLite 3.50.4 | 3 | 13 + 4 | 3 at depth 64 | about 150 core-s | 12,850 | 12 |
 
 Host work is the stand-alone sum of each archetype&#39;s steps (the cost laws
 of section 8); in a mix, busy cores run at about 0.8 times the summed
 weights because sibling threads share physical cores. Output tokens are
-the completed units&#39; own at the capacity rung of the v2.2 enterprise set,
-three seeds, plus the model-based judgments&#39; outputs (one per worker and
-one on the synthesis, 52 to 105 tokens each), which the run records keep
-in a separate validation counter; the task agent&#39;s figure is its v2.3
-calibration (the replayed handoff shape) and is confirmed by the v2.3
-set. Judgments per workflow are a property of the workload version and
-are read from its versioned query set (`data/capacity/queryset/`), never
-assumed: two per ticket in v2.2, one in v2.3. Every archetype that acts looks things up
+the completed units&#39; own at the capacity rung of the v2.3 enterprise set
+(first seed; the other two seeds are being measured), plus the
+model-based judgments&#39; outputs (one per worker and one on the synthesis,
+52 to 105 tokens each), which the run records keep in a separate
+validation counter. Judgments per workflow are a property of the
+workload version and are read from its versioned query set
+(`data/capacity/queryset/`), never assumed: two per ticket in v2.2, one
+in v2.3. Every archetype that acts looks things up
 first, and the lookup is host work inside the step, never a model turn:
 the query embedder, the index and the reranker are the server&#39;s own.
 
@@ -87,17 +87,18 @@ the query embedder, the index and the reranker are the server&#39;s own.
   call (the workflow declares `handoff: true` and `grade_synthesis:
   false`). That is the shape of a routed ticket agent: the planner
   routes, the worker answers, nothing re-drafts the answer. It is most
-  of any deployment by count. Its 1,490 tokens are the model&#39;s for this
-  shape: about 400 in the planner&#39;s delegation, 1,030 in the worker&#39;s
-  two turns and 50 in the judgment, against 2,440 when the planner
+  of any deployment by count. Its 1,390 tokens are the model&#39;s for this
+  shape (1,490 in the calibration): about 400 in the planner&#39;s
+  delegation, 950 in the worker&#39;s two turns and 50 in the judgment,
+  against 2,440 when the planner
   re-drafted the answer in a closing turn and a second judgment graded
   it (the v2.2 shape, section 12). The closing turn was tried with an
   instruction to hand the answer back unchanged and still cost about
   1,100 tokens, nearly all of it the model&#39;s reasoning before a short
   reply, which is why the shape removes the call rather than shortens
   it. A smaller or non-reasoning model emits fewer (section 11), and
-  the record keeps one model for every archetype. Latency about 20 s at
-  every load, almost all of it model wait.
+  the record keeps one model for every archetype. Latency 17 s at every
+  load, almost all of it model wait.
 - **Research agent**: three workers each fetch and parse 30 source pages
   in the sandbox (boilerplate removal and main-text extraction over real
   HTML), retrieve three times over the corpus with the cross-encoder
@@ -312,19 +313,22 @@ reference server has 64 cores with two SMT threads each and an irregular
 sibling map, so allocations are never written as logical ranges. The
 reranker&#39;s runtime gets one thread per physical core (the first sibling);
 two runtime threads on one core&#39;s siblings were measured to halve each
-other. The allocation of record for the enterprise tile is 8 cores for
-the reranker (two processes of four inference threads each), 2 for the
-query embedder, 3 for the ingest embedder, and the remaining 51 for the
+other. The allocation of record for the enterprise tile is 6 cores for
+the reranker (two processes of three inference threads each), 1 for the
+query embedder, 2 for the ingest embedder, and the remaining 55 for the
 four instances, their executors, stand-ins, databases, and sandboxed
 jobs, which are pinned there so nothing shares AMX units with the tiers.
-Provisioning selects it with `RERANK_PHYS_CORES=8 RERANK_WORKERS=2
-RERANK_THREADS=4 EMBED_PHYS_CORES=2 INGEST_EMBED_PHYS_CORES=3`, and it
+Provisioning selects it with `RERANK_PHYS_CORES=6 RERANK_WORKERS=2
+RERANK_THREADS=3 EMBED_PHYS_CORES=1 INGEST_EMBED_PHYS_CORES=2`, and it
 rides the run fingerprint (`allocation.env`). The allocation is sized
 from the lookups the tile makes (section 8): at capacity the tile
 scores about 140 candidate pairs a second, 2.8 cores of reranking, and
-two processes keep a depth-128 query&#39;s wait short at that load.
-Earlier allocations are listed with the superseded results in section
-12. Pinning is by cpuset,
+two processes keep a depth-128 query&#39;s wait short at that load; at
+capacity the tiers run at 42%, 14% and 32%. The same tile ran on
+8/2/3/51 (v2.2, section 12), whose tiers ran at 40%, 18% and 22% with
+four cores&#39; worth of headroom that the rebalance moved to the
+application pool. Earlier allocations are listed with the superseded
+results in section 12. Pinning is by cpuset,
 not quota: a CPU quota on a 128-thread host lets a many-threaded process
 burn its allowance in milliseconds and sleep for the rest of the period.
 
@@ -333,9 +337,9 @@ past the rate at which the executors&#39; side runs out, which is what makes
 the server, rather than an allocation, the limit: a tier sized to
 saturate at the target queues at the target and shows a knee the cores do
 not have, and a tier sized generously starves the other side. At the
-enterprise tile&#39;s capacity the application pool&#39;s 51 cores are about
-96% occupied over the steady window (time-averaged per core, busier
-sibling) and past the cliff 99 to 100%, full on both threads of most
+enterprise tile&#39;s capacity the application pool&#39;s 55 cores are about
+93% occupied over the steady window (time-averaged per core, busier
+sibling) and past the cliff 98 to 100%, full on both threads of most
 cores, while the retrieval tiers stay under half occupied at every rate. The cliff is the application
 pool&#39;s: builds, OCR and data jobs queue for cores, and the code agent&#39;s
 and analyst&#39;s latencies double while the task and research agents, whose
@@ -613,10 +617,14 @@ be rescaled to a different mix, depth, or job size.
   tile sums to about 68 core-s per workflow and measures 54 to 57.
 - **Allocation.** Cores are divided so that the tiers keep headroom past
   the rate at which the executors&#39; side runs out; for the enterprise tile
-  that is 8 + 2 + 3 cores for the tiers and 51 for everything else. A
+  that is 6 + 1 + 2 cores for the tiers and 55 for everything else. A
   core moved from a tier with headroom to the application pool buys
-  capacity at the same host work per token, and a tier sized below its
-  pair budget turns every lookup into a queue wait.
+  capacity at the same host work per token only while the pool is not
+  yet in sibling contention: the four cores moved from the tiers at v2.3
+  slowed the queue&#39;s growth at 0.90 workflows/s (from +50 to +44 over
+  the hold) without making it stable, because the pool was already at
+  98%. A tier sized below its pair budget turns every lookup into a
+  queue wait.
 
 `scripts/archetype_costs.sh` runs an archetype alone at two rates and
 `scripts/archetype_cost_summary.py` reads its cost; `scripts/cost_table.py`
@@ -635,7 +643,11 @@ the ledger&#39;s SHA-256. Ledgers, judgments, and set summaries are committed
 under `data/capacity/`. Two results compare only when their fingerprints
 match.
 
-The results of record are the enterprise tile&#39;s sets (section 11):
+The result of record is the v2.3 enterprise set (section 11):
+`data/capacity/set-20260908-165351` (seeds 12001, 12101, 12201; 0.72,
+0.84 and 0.90 workflows/s on the allocation of record, the first seed
+complete and the others being measured), with its residency photograph
+to follow. The v2.2 sets it supersedes (section 12):
 `data/capacity/set-20260908-025329` (seeds 11401, 11501, 11601; 0.84
 and 0.96 workflows/s) with its lower rung `set-20260908-053752` (same seeds,
 0.72), its midpoint rung `set-20260908-115604` (same seeds, 0.90) and its
@@ -646,8 +658,10 @@ per-core samples are `data/capacity/set-11400-mpstat.log`,
 `set-11400c-mpstat.log` and `set-11400d-mpstat.log` on the reference
 server. Earlier sets are superseded and listed in
 section 12. The serving profile of record is
-`data/capacity/serving/gptoss20b-low-faithful/calls.jsonl`, recorded
-from the query set `data/capacity/queryset/enterprise.jsonl`; the
+`data/capacity/serving/gptoss20b-low-faithful-v23/calls.jsonl`, recorded
+from the query set `data/capacity/queryset/enterprise-v23.jsonl` (the
+v2.2 profile and query set, `gptoss20b-low-faithful` and
+`enterprise.jsonl`, stay beside them for the superseded set); the
 sensitivity profiles (gpt-oss-120b, Qwen3.8 Flash without thinking,
 gpt-oss-20b at medium reasoning) sit beside it.
 
@@ -681,51 +695,57 @@ the constant of any other tile before it is measured.
 
 ### Results of record
 
-*The v2.3 set (the task agent&#39;s handoff shape, section 2) is being
-measured; the figures below are the v2.2 set&#39;s and are replaced when it
-lands. The definitions, windows and weighting rules are the ones the v2.3
-figures will use.*
+*The v2.3 set&#39;s first seed (12001) is complete and is reported below;
+seeds 12101 and 12201 are being measured and the medians replace these
+figures when they land. Latencies are one seed&#39;s p50 / p95.*
 
 One set, three seeds, 25-minute holds: enterprise
-`data/capacity/set-20260908-025329` (0.21 and 0.24 per instance, 0.84
-and 0.96 workflows/s box-wide) with its lower rung `set-20260908-053752`
-(0.18, 0.72) and its midpoint rung `set-20260908-115604` (0.225, 0.90), on
-the allocation of record, the archetypes of section 2 with the task
-agent in its v2.2 shape (two judgments and a closing turn, section 12)
-and the calibrated gpt-oss-20b profile. Latencies are p50 / p95 in
+`data/capacity/set-20260908-165351` (0.18, 0.21 and 0.225 per instance,
+0.72, 0.84 and 0.90 workflows/s box-wide), on the allocation of record
+(6/1/2/55), the archetypes of section 2 and the v2.3 calibrated
+gpt-oss-20b profile. Latencies are p50 / p95 in
 seconds, medians of three series; host cores busy is the median of the
 three series&#39; time-averaged per-core occupancy over the steady window
 (section 7); resident
 agents are measured from the fleet&#39;s in-flight samples. Zero failures in
 every series at every rung, including past the cliff.
 
-**Enterprise.** Capacity 0.84 workflows/s with 152 resident agents; 0.90
-falls behind in every seed, and 0.96 further.
+**Enterprise.** Capacity 0.84 workflows/s with 143 resident agents; 0.90
+falls behind.
 
 | Offered (box-wide) | Code agent | Data analyst | Research | Ingestion | Task | Resident | Backlog over the hold (three seeds) | Host cores busy | Application pool | Verdict |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 0.72/s | 275 / 293 | 374 / 392 | 182 / 199 | 125 / 144 | 30 / 35 | 107 | -14, -6, -4 | 70% (45 cores) | 81% | keeps up |
-| 0.84/s | 343 / 369 | 527 / 563 | 184 / 202 | 152 / 169 | 30 / 35 | 152 | +18, +18, +23 | 83% (53 cores) | 96% | keeps up: capacity |
-| 0.90/s | 410 / 452 | 654 / 673 | 186 / 206 | 188 / 211 | 30 / 35 | 181 and climbing | +51, +50, +50 | 86% (55 cores) | 99% | falls behind |
-| 0.96/s | 501 / 546 | none completed inside the hold | 188 / 210 | 226 / 256 | 31 / 35 | 215 and climbing | +85, +84, +83 | 87% (56 cores) | 100% | past the cliff |
+| 0.72/s | 284 / 303 | 379 / 396 | 192 / 213 | 133 / 147 | 17 / 19 | 105 | -5 | 70% (45 cores) | 76% | keeps up |
+| 0.84/s | 329 / 353 | 497 / 533 | 193 / 215 | 156 / 172 | 17 / 26 | 143 | +18 | 85% (54 cores) | 93% | keeps up: capacity |
+| 0.90/s | 384 / 422 | 610 / 642 | 194 / 220 | 175 / 202 | 17 / 27 | 171 and climbing | +44 | 90% (57 cores) | 98% | falls behind |
+
+Host memory and attributed CPU over the same steady windows (first
+seed): memory 239 GB at 0.72, 355 GB at capacity (peaks of 430 GB) and
+454 GB at 0.90, almost all of it the analysts&#39; 100-million-row jobs at
+about 40 GB each while they run, so memory scales with the resident
+population and a 256 GB server would run out of it before cores at this
+mix; attributed CPU at capacity 71% sandboxed jobs, 3% retrieval and
+embedding calls, 24% agent execution (the executors and their worker
+processes) and 3% database and other services, the same split to within
+a point at every rung and unchanged from the v2.2 shape.
 
 The response curve is the three sandboxed archetypes&#39;: from 0.72 to
 0.84 the code agent, the analyst and the ingestion agent lengthen as
 their jobs queue for application cores; at 0.90 the backlog grows by
-fifty over the hold with every heavy archetype a quarter slower again,
-and past the cliff the code agent&#39;s median passes 500 s, the analysts
-stop completing inside the hold, and ingestion&#39;s median rises by half; the research and task
-agents, whose time is model wait, hold 184 and 30 s at every rate
-including past the cliff. The cliff is the application pool&#39;s, at 96%
-occupancy at capacity with both threads of most cores busy: under that
-contention each job&#39;s CPU time rises by a third to a half over its
-stand-alone cost (the analyst&#39;s three jobs take 285 core-s at capacity
-against 190 stand-alone, the code agent&#39;s three steps 207 against 150),
-which is what makes the cliff sharp. The retrieval tiers stay at 40%
-(reranker), 18% (query embedder) and 22% (ingest embedder) at capacity
-and barely move past the cliff.
+44 over the hold with the analyst a quarter slower again and the code
+agent a sixth; the research and task agents, whose time is model wait,
+hold 193 and 17 s at every rate. The cliff is the application pool&#39;s,
+at 93% occupancy at capacity and 98% one rung above it with both
+threads of most cores busy: under that contention each job&#39;s CPU time
+rises by a third to a half over its stand-alone cost, which is what
+makes the cliff sharp. The four cores the rebalance moved into the
+pool slowed the queue&#39;s growth at 0.90 (from +50 to +44 over the hold
+against the v2.2 allocation) without making it stable. The retrieval
+tiers run at 42% (reranker, six cores), 14% (query embedder) and 32%
+(ingest embedder) at capacity and barely move past it.
 
-Per unit at capacity (seed 11501, medians of per-unit sums): data
+Per unit at capacity (v2.2 set, seed 11501, medians of per-unit sums;
+the v2.3 figures follow with the full set): data
 analyst 525 s, of which 386 s in three jobs (285 core-s), 138 s of
 model wait and 0.9 s in two lookups; code agent 343 s, of which 207 s
 in three CI steps, 125 s of model wait and 1.4 s in three lookups;
@@ -788,19 +808,18 @@ steady window divided by generated tokens per second
 constant that explains it: it is a property of the tile, not of the load,
 and moves within a core-ms across the passing rungs.
 
-| Enterprise tile | Offered | Generated tokens/s | Busy cores | Core-ms per token | GPUs the server keeps busy at 3,500 tokens/s per GPU (record) | at 2,400 / 4,378 |
+| Enterprise tile | Offered | Generated tokens/s | Busy cores | Core-ms per token | GPUs the server keeps busy at 3,565 tokens/s per GPU (record) | at 2,400 / 3,753 |
 |---|---|---|---|---|---|---|
-| below capacity | 0.72 wf/s | 5,080 | 44.8 | 8.8 | 1.45 | 2.12 / 1.16 |
-| **at capacity** | **0.84 wf/s** | **5,920** | **53.1** | **9.0** | **1.69** | 2.47 / 1.35 |
-| first rung past capacity | 0.90 wf/s | 6,350 | 55.0 | 8.7 | 1.81 | 2.65 / 1.45 |
-| past the cliff | 0.96 wf/s | 6,770 | 55.6 | 8.2 | 1.93 | 2.82 / 1.55 |
+| below capacity | 0.72 wf/s | 4,850 | 44.7 | 9.2 | 1.36 | 2.02 / 1.29 |
+| **at capacity** | **0.84 wf/s** | **5,660** | **54.5** | **9.6** | **1.59** | 2.36 / 1.51 |
+| first rung past capacity | 0.90 wf/s | 6,060 | 57.4 | 9.5 | 1.70 | 2.52 / 1.61 |
 
-Output tokens per workflow on the declared mix are 7,030 (task 2,440,
-code 12,400, analyst 12,940, research 15,500, ingestion 3,470, judgments
-included, the same to within 20 tokens at every rung and seed). The
-constant is 8.8 to 9.2 core-ms per token on the passing rungs across
-all three seeds; past the cliff it reads lower only because the pool is
-saturated and arrivals&#39; tokens outrun the host work being done.
+Output tokens per workflow on the declared mix are 6,710 (task 1,390,
+code 12,850, analyst 13,380, research 16,100, ingestion 3,670, judgments
+included, the same to within 5 tokens at every rung). The constant is
+9.2 to 9.6 core-ms per token across the ladder (first seed); the v2.2
+set read 8.8 to 9.2 with the longer task agent, since the change removed
+tokens and left the host work where it was.
 
 The GPU side is not measured here. The record rate is 3,565 output
 tokens/s per GPU: the published output-only serving rate of the model
@@ -847,10 +866,10 @@ References for the serving rate:
 - CloudRift, GPU benchmarks for LLM inference, October and November 2025: Qwen3-Coder-30B-A3B AWQ under vLLM at 400 concurrent requests, about 8,400 output tokens/s on one RTX PRO 6000; GLM-4.5-Air AWQ at 256 to 512 concurrent requests, 3,140. https://www.cloudrift.ai/gpu-benchmarks
 - Metrum AI, agent-density runs on a PowerEdge R770 with the model served on the same server: about 390 generation tokens/s per GPU at the density boundary with the GPUs 46% busy (the reports supplied with this project).
 
-At capacity one server, 83% busy, keeps 1.7 GPUs busy at the record
-rate and 2.5 at the conservative 2,400. Stated per core, 9.0 core-ms
-per token at 3,500 tokens/s is 31 cores per GPU, so a 64-core socket
-run flat out would pair with two GPUs. That last figure is an
+At capacity one server, 85% busy, keeps 1.6 GPUs busy at the record
+rate and 2.4 at the conservative 2,400. Stated per core, 9.6 core-ms
+per token at 3,565 tokens/s is 34 cores per GPU, so a 64-core socket
+run flat out would pair with 1.9 GPUs. That last figure is an
 extrapolation to all 64 cores being as productive as the busy ones and
 is named as such wherever it appears; the figure of record is the
 direct quotient at the tested operating point, since idle cores in the
@@ -876,26 +895,26 @@ each answer set kept only the turns whose shape matched the position
 so the four token profiles are comparable. The table scales the
 record&#39;s measured tokens per workflow by each profile&#39;s ratio to the
 record&#39;s own profile, holds the host work per workflow at the
-capacity rung (63 core-s, which the model does not change), and takes
+capacity rung (65 core-s, which the model does not change), and takes
 each model&#39;s serving rate from the same source and with the same
 context haircut as the record where one exists.
 
 | Model, as replayed | Tokens per workflow, tile-weighted | Core-ms per token | Generated tokens/s at 0.84 wf/s | Tokens/s per GPU | GPUs one server keeps busy | Cores per GPU |
 |---|---|---|---|---|---|---|
-| gpt-oss-20b, low reasoning (record) | 7,030 measured | 9.0 | 5,920 | 3,500 | 1.69 | 31 |
-| gpt-oss-120b, low reasoning | 4,250 (0.61 of the record) | 14.8 | 3,570 | 1,420 (1,779 at 50 concurrent, same haircut) | 2.5 | 21 |
-| Qwen3.8 Flash, thinking off | 3,800 (0.54) | 16.6 | 3,190 | not cited; shown at 3,500 | 0.91 | 58 |
-| gpt-oss-20b, medium reasoning | 14,700 (2.1) | 4.3 | 12,350 | 3,500 | 3.5 | 15 |
+| gpt-oss-20b, low reasoning (record) | 6,710 measured | 9.6 | 5,660 | 3,565 | 1.59 | 34 |
+| gpt-oss-120b, low reasoning | 4,090 (0.61 of the record) | 15.8 | 3,450 | 1,450 (1,524 output tokens/s published at 50 concurrent, less 5%) | 2.4 | 23 |
+| Qwen3.8 Flash, thinking off | 3,620 (0.54) | 17.9 | 3,060 | not cited; shown at 3,565 | 0.86 | 64 |
+| gpt-oss-20b, medium reasoning | 14,090 (2.1) | 4.6 | 11,890 | 3,565 | 3.3 | 16 |
 
 Two things move the ratio in opposite directions. A larger model
 generates fewer tokens for the same work (the 120B and Qwen replays
 emit about half the record&#39;s tokens, mostly because their tool-call
 turns carry little reasoning) and is served more slowly, so the
 server keeps more GPUs busy per unit of host work only when the second
-effect outweighs the first: for the 120B it does (2.5 GPUs), because its
+effect outweighs the first: for the 120B it does (2.4 GPUs), because its
 serving rate is 40% of the 20B&#39;s while its tokens are 60%. A higher
 reasoning setting on the same model doubles the tokens at the same
-serving rate and the ratio doubles with it (3.5 GPUs), which is the
+serving rate and the ratio doubles with it (3.3 GPUs), which is the
 case for stating the reasoning setting with every ratio. Residency
 and the response curve move with tokens too, through the model wait,
 and are not rescaled here; the host work and the capacity rung are
@@ -926,6 +945,22 @@ Everything below was measured with earlier workload definitions and is
 superseded by the results of record in section 11. None of it should
 be quoted as a capacity, residency, token or ratio figure for this
 benchmark; it is kept so the history of the workload can be audited.
+
+- **Enterprise tile with the v2.2 task agent (8 September 2026).** The
+  archetypes of section 2 except the task agent, which re-drafted its
+  worker&#39;s answer in a closing planner turn and graded that synthesis
+  with a second judgment (2,440 tokens and 30 s per ticket), on
+  allocation 8/2/3/51. Capacity 0.84 workflows/s with 0.90 falling
+  behind in every seed, 152 resident, 83% of the host busy over the
+  steady window, 7,030 output tokens per workflow on the declared mix,
+  5,920 tokens/s, 9.0 core-ms per token, 1.66 GPUs at 3,565 tokens/s.
+  Sets `set-20260908-025329` (0.84, 0.96), `set-20260908-053752` (0.72),
+  `set-20260908-115604` (0.90); photographs `photo-11401-20260908-070145`,
+  `photo-11501-20260908-075234`, `photo-11601-20260908-084324` (152
+  sessions, 150 in flight); evidence commits 5add991, bce6f26, 3df029a,
+  325d7d7; profile `gptoss20b-low-faithful`, query set
+  `enterprise.jsonl`; samples `set-11400-mpstat.log`,
+  `set-11400c-mpstat.log`, `set-11400d-mpstat.log`.
 
 - **Enterprise tile without the lookups (v2.1, 7 to 8 September 2026).**
   The same five archetypes with retrieval only in the research agent,
@@ -1334,37 +1369,54 @@ e2e_workflows:
       Deliverable: a summary table of the top merchants, the peak hour with
       its load, the p95 and p99 transaction values, and a list of anomalies
       with a one-line explanation each.
-</pre></section><section id="capacity"><h2>Capacity result</h2><p class="source">Repository path: ../../data/capacity/set-20260908-025329/summary.md<br>SHA-256: d9dc4e65b650c28bd63703fcb1d7d13810e63e58caccd7f09782262ce078eba5</p><pre># Plateau set set-20260908-025329
+</pre></section><section id="serving-profile"><h2>Model response profile</h2><p class="source">Repository path: ../../data/capacity/serving/gptoss20b-low-faithful-v23/summary.md<br>SHA-256: 93b170408b1a3f7b888be7fa4ce599f4691843a2f33e4db1e509a24b110bbec9</p><pre># gpt-oss-20b (low) shape-faithful profile, v2.3
 
-Series: series-11401-20260908-025329, series-11501-20260908-034801, series-11601-20260908-044231
+The record profile with the task agent&#39;s positions replaced by the v2.3 handoff shape: the planner delegates (planner/0), the worker looks up, records and answers (general-purpose/0, /1), one judgment (judge/0); no closing model call.
 
-| rate/inst | achieved (median, range) | gen ok | keeps up | analyst large p50/p95 | code agent p50/p95 | deep research p50/p95 | ingestion p50/p95 | task ticket p50/p95 | backlog over the hold (per series) | resident, measured (median) | resident, Little | host CPU | retrieval CPU |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 0.21 | 0.84 (0.84-0.84) | yes | yes | 527/563 | 343/369 | 184/202 | 152/169 | 30/35 | 156-&gt;179, 148-&gt;166, 146-&gt;164 | 152 | 108 (107-109) | 64.5% | 3.0% |
-| 0.24 | 0.96 (0.96-0.96) | yes | NO | -/- | 501/546 | 188/210 | 226/256 | 31/35 | 183-&gt;268, 187-&gt;271, 184-&gt;267 | 215 | 97 (97-101) | 82.8% | 3.5% |
+| task position | n | mean completion tokens |
+|---|---|---|
+| task_ticket/general-purpose/0 | 3 | 549 |
+| task_ticket/general-purpose/1 | 56 | 481 |
+| task_ticket/judge/0 | 7 | 52 |
+| task_ticket/planner/0 | 56 | 404 |
 
-## Capacity (the highest rate at which every series keeps up: completions pace arrivals over the hold)
+Task agent output per workflow: about 1486 tokens.
+</pre></section><section id="capacity"><h2>Capacity measurement check</h2><p class="source">Repository path: capacity-measurement-check.md<br>SHA-256: d03d9cfc601c11bec063ed915b93c116b090ef020c02bb1cdf1c9a651180c698</p><pre># Capacity measurement check
 
-- **capacity**: 0.84 workflows/s box-wide (range 0.84-0.84), 152 resident as measured, 108 by Little&#39;s law (range 107-109); the next rung, 0.24 per instance, falls behind
-</pre></section><section id="lower-load"><h2>Lower-load result</h2><p class="source">Repository path: ../../data/capacity/set-20260908-053752/summary.md<br>SHA-256: 490f04a8473ac93725a0fe0c6c65e14c8b927cc81e60d83870ae384fc955a70d</p><pre># Plateau set set-20260908-053752
+Checked September 8, 2026 against repository commit 4665ab1. The source series is `data/capacity/series-12001-20260908-165351`, seed 12001. The capacity measurements use the four `rate-0.21` instance records. The methodology supplies the physical-core result and resident population.
 
-Series: series-11401-20260908-053752, series-11501-20260908-060541, series-11601-20260908-063323
+## Memory and CPU attribution
 
-| rate/inst | achieved (median, range) | gen ok | keeps up | analyst large p50/p95 | code agent p50/p95 | deep research p50/p95 | ingestion p50/p95 | task ticket p50/p95 | backlog over the hold (per series) | resident, measured (median) | resident, Little | host CPU | retrieval CPU |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 0.18 | 0.72 (0.72-0.72) | yes | yes | 374/392 | 275/293 | 182/199 | 125/144 | 30/35 | 115-&gt;101, 107-&gt;101, 110-&gt;106 | 107 | 92 (92-93) | 42.7% | 2.9% |
+The sample window runs from 600 to 1,500 seconds after each instance starts. Across the four ledgers, 1,775 samples report mean memory use of 355.037 GB and a maximum of 429.3 GB. The paper rounds these to 355 GB and a peak near 430 GB.
 
-## Capacity (the highest rate at which every series keeps up: completions pace arrivals over the hold)
+Each instance samples the same host. The calculation averages the CPU-family samples rather than adding four host readings. Normalizing the mean family readings gives the following shares of attributed CPU work.
 
-- **capacity**: 0.72 workflows/s box-wide (range 0.72-0.72), 107 resident as measured, 92 by Little&#39;s law (range 92-93); no higher rung was offered
-</pre></section><section id="overload"><h2>Intermediate overload result</h2><p class="source">Repository path: ../../data/capacity/set-20260908-115604/summary.md<br>SHA-256: 339bb71b9f7724d46ce41a127b6902d55795b85990d0e7231be3ec00bf748131</p><pre># Plateau set set-20260908-115604
+| Function | Raw normalized share | Graphic share |
+|---|---:|---:|
+| Sandboxed jobs | 71.08995% | 71.1% |
+| Retrieval and embedding | 2.58771% | 2.6% |
+| Agent execution | 23.43381% | 23.4% |
+| Database and other services | 2.88853% | 2.9% |
 
-Series: series-11401-20260908-115604, series-11501-20260908-122354, series-11601-20260908-125137
+Agent execution combines the control, executors, and sibling-instance fields. Supporting services combine database, other, and model-stand-in fields. These shares total 100% of attributed work. The separate 85% headline uses the methodology’s physical-core occupancy measure.
 
-| rate/inst | achieved (median, range) | gen ok | keeps up | analyst large p50/p95 | code agent p50/p95 | deep research p50/p95 | ingestion p50/p95 | task ticket p50/p95 | backlog over the hold (per series) | resident, measured (median) | resident, Little | host CPU | retrieval CPU |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 0.225 | 0.9 (0.9-0.9) | yes | NO | 654/673 | 410/452 | 186/206 | 188/211 | 30/35 | 165-&gt;216, 164-&gt;214, 168-&gt;218 | 181 | 110 (109-110) | 77.8% | 3.2% |
+The methodology lists whole-number shares that total 101% after rounding. The graphic uses the normalized sample calculation, rounded to one decimal place, so its segments sum to 100%.
 
-## Capacity (the highest rate at which every series keeps up: completions pace arrivals over the hold)
+## Model demand
 
+The repository’s `scripts/ratio_from_profile.py` host calculation uses the capacity files, the `enterprise-v23.jsonl` query set, and the `gptoss20b-low-faithful-v23/calls.jsonl` judgment profile. It returns 6,714 output tokens per workflow on the declared mixture and 5,658 output tokens per second. The paper reports 5,660 output tokens per second.
+
+The mixture requires 119 model calls across twelve incoming workflows, including judgments. At the script’s reported achieved rate of 0.843 workflows per second, that is 8.36 model calls per second, rounded to 8.4. This is the mix’s serving requirement, not a counter of completed calls over an arbitrary sample interval.
+
+| Archetype | Output tokens including judgments | Paper value |
+|---|---:|---:|
+| Task | 1,386 | 1,390 |
+| Research | 16,082 | 16,100 |
+| Ingestion | 3,666 | 3,670 |
+| Analyst | 13,431 | 13,430 |
+| Code | 12,821 | 12,820 |
+
+The raw-file calculation refines the methodology’s Analyst and Code approximations of 13,380 and 12,850. Their rounded CPU-work-per-token values remain 14 and 12. The paper retains the methodology’s approximate standalone CPU-work totals and its 54.5 busy-core result at capacity. The per-core sampler log is not included in this series directory.
+
+The chosen GPU serving rate remains 3,500 output tokens per second. Dividing 5,660 by 3,500 gives 1.62 GPU equivalents, shown as 1.6 in the narrative. Dividing 54,500 core-ms per second by 5,660 output tokens per second gives 9.6 core-ms per output token.
 </pre></section></html>

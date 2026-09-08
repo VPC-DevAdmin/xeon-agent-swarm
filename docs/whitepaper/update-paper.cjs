@@ -13,11 +13,14 @@ const fmt = value => Number(value).toLocaleString('en-US', {maximumFractionDigit
 function requireNumber(value, name, min=0) {
   if (!Number.isFinite(value) || value < min) throw new Error(`Invalid ${name}`);
 }
-for (const key of ['resident','cpuPercent','memoryGB','callsPerSecond','outputTokensPerSecond','coreMsPerSecond']) requireNumber(c[key],key,0.01);
+for (const key of ['resident','cpuPercent','callsPerSecond','outputTokensPerSecond','coreMsPerSecond']) requireNumber(c[key],key,0.01);
+if(c.memoryGB!==null)requireNumber(c.memoryGB,'memory use',0.01);
 if(c.cpuPercent>100 || c.memoryGB>result.platform.memoryGB) throw new Error('Capacity exceeds the stated platform');
 requireNumber(serving.outputTokensPerSecondPerGpu,'GPU throughput',1);
-if(Math.abs(Object.values(c.cpuShares).reduce((a,b)=>a+b,0)-100)>0.01) throw new Error('CPU shares must total 100');
-for(const value of Object.values(c.cpuShares)) requireNumber(value,'CPU share');
+if(c.cpuShares!==null){
+  if(Math.abs(Object.values(c.cpuShares).reduce((a,b)=>a+b,0)-100)>0.01) throw new Error('CPU shares must total 100');
+  for(const value of Object.values(c.cpuShares)) requireNumber(value,'CPU share');
+}
 if(!points.some(p=>p.resident===c.resident && p.sustainable)) throw new Error('Capacity must be a sustainable response point');
 points.forEach((p,i)=>{
   requireNumber(p.resident,'response population',1);
@@ -27,22 +30,24 @@ points.forEach((p,i)=>{
 for(const a of result.archetypes) for(const key of ['coreMs','modelCalls','outputTokens']) requireNumber(a[key],`${a.name} ${key}`,1);
 const gpu = c.outputTokensPerSecond/serving.outputTokensPerSecondPerGpu;
 const values = {
-  resident:fmt(c.resident), cpu:fmt(c.cpuPercent), memory:fmt(c.memoryGB), calls:fmt(c.callsPerSecond),
+  resident:fmt(c.resident), cpu:fmt(c.cpuPercent), memory:c.memoryGB===null?undefined:fmt(c.memoryGB), calls:fmt(c.callsPerSecond),
   output:fmt(c.outputTokensPerSecond), outputRounded:fmt(Math.round(c.outputTokensPerSecond/100)*100),
   gpu:gpu.toFixed(1), gpuExact:gpu.toFixed(2), gpuRate:fmt(serving.outputTokensPerSecondPerGpu),
   coreRate:fmt(c.coreMsPerSecond/1000)+'K', weight:(c.coreMsPerSecond/c.outputTokensPerSecond).toFixed(1),
-  cores:fmt(result.platform.cores),
+  cores:fmt(result.platform.cores), applicationCores:fmt(result.platform.allocation.application),
+  memoryPeak:c.memoryPeakGB===undefined?undefined:fmt(c.memoryPeakGB),
   versionNote:result.resultVersion===result.definitionVersion
     ? `The capacity figures and agent flows use ${esc(result.resultVersion)}.`
     : `The capacity figures are the completed ${esc(result.resultVersion)} results. The task flow below shows the revised ${esc(result.definitionVersion)} handoff. Its mixed-workload benchmark is pending.`,
   publication:`Revised ${esc(result.revisionDate)} · Results ${esc(result.resultVersion)} · Agent definitions ${esc(result.definitionVersion)}. <a href="evidence.html">Packaged methodology and evidence</a>.`,
 };
 const metric = (label, max, current, level) => `<div class="mix-meter" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${current}"><i style="--level:${level}%"></i></div>`;
-values.memoryMeter=metric(`${fmt(c.memoryGB)} GB of ${fmt(result.platform.memoryGB)} GB memory used`,result.platform.memoryGB,c.memoryGB,100*c.memoryGB/result.platform.memoryGB);
+values.memoryMeter=c.memoryGB===null?undefined:metric(`${fmt(c.memoryGB)} GB of ${fmt(result.platform.memoryGB)} GB memory used`,result.platform.memoryGB,c.memoryGB,100*c.memoryGB/result.platform.memoryGB);
+values.cpuUtilizationMeter=metric(`CPU utilization, ${c.cpuPercent} percent`,100,c.cpuPercent,c.cpuPercent);
 const callScale=Math.max(20,Math.ceil(c.callsPerSecond/10)*10);
 values.callsMeter=metric(`LLM calls per second, scale 0 to ${callScale}`,callScale,c.callsPerSecond,100*c.callsPerSecond/callScale);
 values.outputMeter=metric(`Model-serving demand of ${fmt(c.outputTokensPerSecond)} output tokens per second`,c.outputTokensPerSecond,c.outputTokensPerSecond,100);
-values.cpuStack=`<div class="cpu-stack" role="img" aria-label="Share of CPU work: ${c.cpuShares.sandbox} percent sandboxed jobs, ${c.cpuShares.retrieval} percent retrieval and embedding, ${c.cpuShares.execution} percent agent execution, and ${c.cpuShares.support} percent database and other services">${Object.entries(c.cpuShares).map(([key,n])=>`<i class="${key}" style="--share:${n}%"></i>`).join('')}</div>`;
+values.cpuStack=c.cpuShares===null?undefined:`<div class="cpu-stack" role="img" aria-label="Share of CPU work: ${c.cpuShares.sandbox} percent sandboxed jobs, ${c.cpuShares.retrieval} percent retrieval and embedding, ${c.cpuShares.execution} percent agent execution, and ${c.cpuShares.support} percent database and other services">${Object.entries(c.cpuShares).map(([key,n])=>`<i class="${key}" style="--share:${n}%"></i>`).join('')}</div>`;
 const maxWeight=Math.max(...result.archetypes.map(a=>a.coreMs/a.outputTokens));
 values.archetypeRows=result.archetypes.map(a=>{
   const weight=a.coreMs/a.outputTokens;
@@ -64,6 +69,7 @@ function chart(mobile) {
   out+=`<text x="${left}" y="22" class="s4-axis-title">95th-percentile completion time · minutes</text><line x1="${capacityX}" x2="${capacityX}" y1="53" y2="${bottom}" class="s4-capacity-line"/><text x="${capacityX}" y="44" text-anchor="middle" class="s4-marker-label">${c.resident}${mobile?' · capacity':' resident agents per CPU · capacity'}</text>`;
   if(!mobile&&overload.length)out+=`<text x="${right}" y="44" text-anchor="end" class="s4-overload-label">Work accumulating</text>`;
   const colors={Analyst:'#c3cde8',Code:'#b798e3',Research:'#64d0c8',Ingestion:'#e4ba73',Task:'#5bb8f0'};
+  const labels=[];
   for(const [name,color] of Object.entries(colors)) {
     let previous=null,last=null;
     for(const p of points) {
@@ -74,7 +80,13 @@ function chart(mobile) {
       out+=`<circle cx="${cx}" cy="${cy}" r="${p.resident===c.resident?5:3.5}" fill="${p.resident===c.resident?color:'#10324b'}" stroke="${color}" stroke-width="1.8"/>`;
       previous=last={x:cx,y:cy};
     }
-    if(last)out+=`<text x="${last.x+14}" y="${last.y+4}" class="s4-series-label" style="fill:${color}">${name}</text>`;
+    if(last)labels.push({...last,name,color,labelY:last.y+4});
+  }
+  labels.sort((a,b)=>a.y-b.y);
+  labels.forEach((label,i)=>{if(i)label.labelY=Math.max(label.labelY,labels[i-1].labelY+20);});
+  for(const label of labels){
+    if(label.labelY-label.y>6)out+=`<path d="M${label.x+4},${label.y} L${label.x+11},${label.labelY-4}" fill="none" stroke="${label.color}" stroke-width="1"/>`;
+    out+=`<text x="${label.x+14}" y="${label.labelY}" class="s4-series-label" style="fill:${label.color}">${label.name}</text>`;
   }
   for(const p of points)out+=`<text x="${x(p.resident)}" y="${bottom+24}" text-anchor="middle"${p.resident===c.resident?' class="s4-current-label"':''}>${p.resident}</text>`;
   out+=`<text x="${(left+right)/2}" y="${bottom+57}" text-anchor="middle" class="s4-axis-title">Resident agents per CPU</text>`;
@@ -86,7 +98,7 @@ values.referenceData=`<script type="application/json" id="s4-reference-data">${J
 const paperPath=path.join(root,'agent-capacity-whitepaper.html');
 let html=fs.readFileSync(paperPath,'utf8'), count=0;
 html=html.replace(/<!--result:([\w]+)-->[\s\S]*?<!--\/result-->/g,(whole,key)=>{
-  if(!(key in values))throw new Error(`Unknown result binding: ${key}`);
+  if(!(key in values)||values[key]===undefined)throw new Error(`Missing result for binding: ${key}`);
   count++;
   return `<!--result:${key}-->${values[key]}<!--/result-->`;
 });
