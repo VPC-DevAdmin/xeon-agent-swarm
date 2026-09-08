@@ -42,7 +42,7 @@ Select a headline finding, an agent, a worker, a workflow stage, a server, the L
 
 The deployment graphic shows three dual-socket R770 systems and one eight-GPU XE7740. All replay readings remain scoped to one CPU. The throughput note below the hardware opens the model-serving calculation.
 
-Reduced-motion preferences start the demo paused, with decorative animation disabled. Playback also stops advancing while the browser tab is hidden.
+Reduced-motion preferences start the demo paused, with decorative animation disabled. The replay clock runs on a timer rather than animation frames, so it keeps advancing inside embedded viewers that report the page hidden; the clock never jumps by more than a quarter second after a throttled interval.
 
 ## Browser check
 

@@ -252,8 +252,11 @@ const ASSETS = {"r770":"data:image/webp;base64,UklGRuJJAABXRUJQVlA4WAoAAAAQAAAAM
   reduced.addEventListener('change',e=>{if(e.matches){playing=false;motion=false;syncControls();render();}});
   addEventListener('keydown',e=>{if($('detail-dialog').open||/INPUT|SELECT|BUTTON|A/.test(e.target.tagName))return;if(e.code==='Space'){e.preventDefault();toggle();}if(e.key.toLowerCase()==='r')restart();if(e.key.toLowerCase()==='f')fullscreen();});
   document.addEventListener('visibilitychange',()=>{last=performance.now();});
-  function frame(now){const dt=Math.min((now-last)/1000,.25);last=now;if(!document.hidden&&playing){tau+=dt*speed;if(tau>=length){tau%=length;loops++;}if(motion)illustration+=dt;if(now-lastPaint>=250){render();lastPaint=now;}}requestAnimationFrame(frame);}
-  syncControls();render();requestAnimationFrame(frame);
+  // The clock runs on a timer rather than animation frames: embedded viewers may report the
+  // document hidden or withhold animation frames, and the replay must still advance. The dt
+  // clamp keeps the clock from jumping after a throttled interval.
+  function frame(now){const dt=Math.min((now-last)/1000,.25);last=now;if(playing){tau+=dt*speed;if(tau>=length){tau%=length;loops++;}if(motion)illustration+=dt;if(now-lastPaint>=250){render();lastPaint=now;}}}
+  syncControls();render();setInterval(()=>frame(performance.now()),100);
   window.__steady={seek:t=>{tau=((t%length)+length)%length;render();},time:()=>tau,pause:()=>{playing=false;syncControls();render();},play:()=>{playing=true;last=performance.now();syncControls();render();},focus:i=>{illustration=i*12;lastFocus='';render();},snapshot:()=>({...state}),restart};
 })();
 </script>
