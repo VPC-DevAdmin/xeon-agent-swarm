@@ -371,7 +371,7 @@ const ARCH = {
     document.getElementById("census-total").textContent = `${active.size} agents on the server`;
     let attr = 0, genTot = 0, callsTot = 0; const cores = [], gens = [];
     sids.forEach((sid, li) => {
-      const done = roll(comp[li], tau, 120) / 120;
+      const done = roll(comp[li], tau, 600) / 600;   // completions per second over the last ten minutes: the analysts take nine
       const c = done * ARCH[sid].coreS * SMT_SHARE, g = done * (genPerWf[sid] || ARCH[sid].gen);
       cores.push(c); gens.push(g); attr += c; genTot += g; callsTot += done * ARCH[sid].calls;
       set(`n-${li}`, counts[li]);
@@ -387,7 +387,7 @@ const ARCH = {
     const gpus = genTot / GPU_TOKS;
     document.getElementById("gauge").style.width = Math.min(100, 100 * gpus).toFixed(1) + "%";
     set("t-gpu", gpus.toFixed(2));
-    document.getElementById("gpunote").textContent = `The whole server, tiers and headroom included, generating ${Math.round(genTot).toLocaleString()} tokens a second against a GPU that generates 3,500: one server to ${gpus.toFixed(2)} GPUs. Averaged over the last two minutes.`;
+    document.getElementById("gpunote").textContent = `The whole server, tiers and headroom included, generating ${Math.round(genTot).toLocaleString()} tokens a second against a GPU that generates 3,500: one server to ${gpus.toFixed(2)} GPUs. Averaged over the last ten minutes.`;
     document.getElementById("s-run").innerHTML = `${active.size}<small>running</small>`;
     document.getElementById("s-calls").innerHTML = `${callsTot.toFixed(1)}<small>calls / s</small>`;
     set("s-gpu", gpus.toFixed(2));
