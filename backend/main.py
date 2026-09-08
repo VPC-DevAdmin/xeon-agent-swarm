@@ -386,6 +386,7 @@ async def run_deepagents(
     router_model: str | None = None,
     router_provider: str = "openai",
     toolless: bool = False,
+    grade_synthesis: bool = True,
 ):
     """deepagents (ADL) engine: a single deep agent decomposes + delegates + synthesizes,
     streamed through the event adapter onto the same WS + DB surfaces as the old swarm.
@@ -589,6 +590,7 @@ def launch_run(
                 "router_model": router_model,
                 "router_provider": router_provider,
                 "toolless": toolless,
+                "grade_synthesis": grade_synthesis,
             }
 
             async def _dispatch():
@@ -623,6 +625,7 @@ def launch_run(
         router_model=router_model,
         router_provider=router_provider,
         toolless=toolless,
+        grade_synthesis=grade_synthesis,
     ))
     _run_tasks[run_id] = task
     task.add_done_callback(lambda _t, rid=run_id: _run_tasks.pop(rid, None))
