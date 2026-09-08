@@ -50,13 +50,13 @@ run. Every archetype that acts looks things up first, and the lookup is
 host work (query embedder, index, reranker on the server) inside the
 step, never a model turn.
 
-| Archetype | Declared size | Lookups | Host work per workflow | Generated tokens | Core-ms per token |
+| Archetype | Declared size | Lookups | Host work per workflow | Output tokens, judgments included | Core-ms per token |
 |---|---|---|---|---|---|
-| Task agent | one ticket: a knowledge-base lookup, one record | 1 at depth 32 | about 1 core-s | 2,300 | 0.5 |
-| Research agent | 90 source pages fetched and parsed, nine retrievals | 9 at depth 128 | about 25 core-s | 12,800 | 2 |
-| Ingestion agent | 50 PDF pages rendered, OCR'd (Tesseract), redacted, chunked, embedded and indexed | none | about 100 core-s | 3,400 | 30 |
-| Data analyst | three jobs over 100 million rows, the second over two periods, reporting the change | 2 at depth 64 | about 190 core-s | 11,200 | 17 |
-| Code agent | setup, CI (sanitizer build, both suites, static analysis) and verification over Lua 5.4.7 and SQLite 3.50.4 | 3 at depth 64 | about 150 core-s | 9,500 | 16 |
+| Task agent | one ticket: a knowledge-base lookup, one record | 1 at depth 32 | about 1 core-s | 2,440 | 0.4 |
+| Research agent | 90 source pages fetched and parsed, nine retrievals | 9 at depth 128 | about 25 core-s | 15,500 | 1.6 |
+| Ingestion agent | 50 PDF pages rendered, OCR'd (Tesseract), redacted, chunked, embedded and indexed | none | about 100 core-s | 3,470 | 29 |
+| Data analyst | three jobs over 100 million rows, the second over two periods, reporting the change | 2 at depth 64 | about 190 core-s | 12,940 | 15 |
+| Code agent | setup, CI (sanitizer build, both suites, static analysis) and verification over Lua 5.4.7 and SQLite 3.50.4 | 3 at depth 64 | about 150 core-s | 12,400 | 12 |
 
 In a mix, busy cores run at about 0.8 times the summed weights because
 sibling threads share physical cores, so a tile's constant can be
@@ -85,14 +85,17 @@ embedder 2, ingest embedder 3, 51 for the instances and their jobs):
 
 | Tile | Capacity | Resident agents, measured | Generated tokens/s at capacity | Core-ms per token | GPUs the server keeps busy at 3,500 tok/s per GPU (record) | at 2,400 / 4,378 |
 |---|---|---|---|---|---|---|
-| Enterprise | 0.84 wf/s (0.90 falls behind) | 152 | 5,240 | 9.2 | 1.50 | 2.18 / 1.20 |
+| Enterprise | 0.84 wf/s (0.90 falls behind) | 152 | 5,920 | 9.0 | 1.69 | 2.47 / 1.35 |
 
 The ratio is the server's own: its generated tokens per second against
-one GPU's, with no scaling to busy cores. At capacity the server is 76%
-busy and keeps 1.5 GPUs of the reference class busy at the record rate;
-per core, 9.2 core-ms per token at 3,500 tokens/s is 32 cores per GPU,
-two GPUs per fully busy 64-core socket. The constant held at 9.2 to 10.2
-across the ladder and the seeds. The residency was confirmed the other way round: 152 sessions held in a closed loop kept 150 agents in flight and completed 0.8 workflows a second at the capacity rung's latencies with no drift over half an hour, in all three seeds, with zero failures. Sets
+one GPU's, with no scaling to busy cores. Generated tokens per second
+are the declared mix's output per workflow (judgments included) times
+the rate, and busy cores are averaged over the steady window of the
+hold. At capacity the server is 83% busy and keeps 1.7 GPUs of the
+reference class busy at the record rate; per core, 9.0 core-ms per
+token at 3,500 tokens/s is 31 cores per GPU, two GPUs per fully busy
+64-core socket. The constant held at 8.8 to 9.2 across the passing
+rungs and the seeds. The residency was confirmed the other way round: 152 sessions held in a closed loop kept 150 agents in flight and completed 0.8 workflows a second at the capacity rung's latencies with no drift over half an hour, in all three seeds, with zero failures. Sets
 `data/capacity/set-20260908-025329`, `set-20260908-053752` and `set-20260908-115604`; full curves in
 section 11 of the methodology.
 
