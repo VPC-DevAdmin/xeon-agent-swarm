@@ -719,6 +719,16 @@ falls behind.
 | 0.84/s | 329 / 353 | 497 / 533 | 193 / 215 | 156 / 172 | 17 / 26 | 143 | +18 | 85% (54 cores) | 93% | keeps up: capacity |
 | 0.90/s | 384 / 422 | 610 / 642 | 194 / 220 | 175 / 202 | 17 / 27 | 171 and climbing | +44 | 90% (57 cores) | 98% | falls behind |
 
+Host memory and attributed CPU over the same steady windows (first
+seed): memory 239 GB at 0.72, 355 GB at capacity (peaks of 430 GB) and
+454 GB at 0.90, almost all of it the analysts' 100-million-row jobs at
+about 40 GB each while they run, so memory scales with the resident
+population and a 256 GB server would run out of it before cores at this
+mix; attributed CPU at capacity 71% sandboxed jobs, 3% retrieval and
+embedding calls, 24% agent execution (the executors and their worker
+processes) and 3% database and other services, the same split to within
+a point at every rung and unchanged from the v2.2 shape.
+
 The response curve is the three sandboxed archetypes': from 0.72 to
 0.84 the code agent, the analyst and the ingestion agent lengthen as
 their jobs queue for application cores; at 0.90 the backlog grows by
