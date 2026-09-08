@@ -37,17 +37,40 @@ NCPU_THREADS = 128
 
 
 TILE_DEFAULT = {"task_ticket": 6, "code_agent": 2, "analyst_large": 2, "deep_research": 1, "ingestion": 1}
-# Model-based judgments per workflow (one per worker plus the synthesis) and
-# their mean output tokens in the calibrated profile (gpt-oss-20b, low).
-JUDGE_CALLS = {"task_ticket": 2, "ingestion": 2, "code_agent": 4, "analyst_large": 4, "deep_research": 4}
-JUDGE_TOKENS_DEFAULT = {"task_ticket": 66, "ingestion": 83, "code_agent": 103, "analyst_large": 78, "deep_research": 105}
 
 
-def judge_tokens(profile_path: str | None) -> dict:
-    """Mean judge output tokens per archetype from a recorded profile, else the
-    calibrated defaults."""
+def judge_calls_from_queryset(path: str) -> dict:
+    """Model-based judgments per workflow by archetype, read from the versioned
+    query set of the workload (each judge position carries calls_per_workflow).
+    The count is a property of the workload version (two per ticket in v2.2,
+    one in v2.3), so it is never a constant in this script."""
+    per_key: dict[str, float] = {}
+    arch_of: dict[str, str] = {}
+    with open(path) as fh:
+        for line in fh:
+            try:
+                it = json.loads(line)
+            except ValueError:
+                continue
+            k = str(it.get("key", ""))
+            if "/judge/" in k:
+                # several examples per position; the per-workflow count is the position's, not the sum of examples
+                per_key[k] = float(it.get("calls_per_workflow") or 0)
+                arch_of[k] = it["archetype"]
+    if not per_key:
+        raise SystemExit(f"no judge positions in query set {path}")
+    acc: dict[str, float] = {}
+    for k, v in per_key.items():
+        acc[arch_of[k]] = acc.get(arch_of[k], 0.0) + v
+    return {k: int(round(v)) for k, v in acc.items()}
+
+
+def judge_tokens(profile_path: str) -> dict:
+    """Mean judge output tokens per archetype from the recorded profile of
+    record. A missing profile is an error: the publication figure must not
+    fall back to constants silently."""
     if not profile_path or not os.path.exists(profile_path):
-        return dict(JUDGE_TOKENS_DEFAULT)
+        raise SystemExit(f"judge profile not found: {profile_path!r} (pass --judge-profile, the profile of record)")
     acc: dict[str, list] = {}
     with open(profile_path) as fh:
         for line in fh:
@@ -57,12 +80,13 @@ def judge_tokens(profile_path: str | None) -> dict:
                 continue
             if r.get("ok") and str(r.get("key", "")).endswith("/judge/0"):
                 acc.setdefault(r["archetype"], []).append(int(r.get("completion_tokens") or 0))
-    out = dict(JUDGE_TOKENS_DEFAULT)
-    out.update({k: st.mean(v) for k, v in acc.items() if v})
-    return out
+    if not acc:
+        raise SystemExit(f"no judge turns in profile {profile_path}")
+    return {k: st.mean(v) for k, v in acc.items()}
 
 
-def host_side(series_dir: str, rate: str, tile: dict | None = None, judge: dict | None = None) -> dict:
+def host_side(series_dir: str, rate: str, tile: dict | None = None, judge: dict | None = None,
+              judge_calls: dict | None = None) -> dict:
     """Host side of a plateau. Generated tokens per second are the DECLARED
     MIX times the per-archetype output per completed workflow, plus the
     model-based judgments' outputs: at a plateau that keeps up, completions
@@ -70,7 +94,8 @@ def host_side(series_dir: str, rate: str, tile: dict | None = None, judge: dict 
     of a finite hold over-represents the short workflows (the long ones are
     still in flight when it ends)."""
     tile = tile or TILE_DEFAULT
-    judge = judge or JUDGE_TOKENS_DEFAULT
+    judge = judge or {}
+    judge_calls = judge_calls or {}
     files = sorted(glob.glob(f"{series_dir}/rate-{rate}-i*-evidence-*.jsonl.gz"))
     caps = sorted(glob.glob(f"{series_dir}/rate-{rate}-i*-capacity-*.json"))
     if not files or not caps:
@@ -100,7 +125,7 @@ def host_side(series_dir: str, rate: str, tile: dict | None = None, judge: dict 
     completion_weighted = tokens_out / max(1, completed)
     weight = sum(tile.values())
     per_arch = {sid: (per_sid[sid][0] / per_sid[sid][1] if sid in per_sid and per_sid[sid][1] else 0.0)
-                + JUDGE_CALLS.get(sid, 0) * judge.get(sid, 0) for sid in tile}
+                + judge_calls.get(sid, 0) * judge.get(sid, 0) for sid in tile}
     out_per_wf = sum(tile[sid] * per_arch[sid] for sid in tile) / weight
     wf_per_s = units / span if span else 0.0
     gen_tok_s = wf_per_s * out_per_wf
@@ -176,11 +201,16 @@ def main() -> None:
     ap.add_argument("--window", default="600:1500",
                     help="seconds after the rung starts over which busy cores are averaged; the default skips the "
                          "transient (the slowest archetype takes about nine minutes to reach steady state)")
-    ap.add_argument("--judge-profile", default="data/capacity/serving/gptoss20b-low-faithful/calls.jsonl",
-                    help="recorded profile from which the judges' output tokens per archetype are taken")
+    ap.add_argument("--judge-profile", required=True,
+                    help="the recorded serving profile of record for this set (calls.jsonl): the judges' output tokens per archetype are read from it")
+    ap.add_argument("--queryset", required=True,
+                    help="the versioned query set of record for this set: model-based judgments per workflow by archetype are read from it")
     a = ap.parse_args()
     lo, hi = (float(x) for x in a.window.split(":"))
-    h = host_side(a.series_dir, a.rate, judge=judge_tokens(a.judge_profile))
+    jc = judge_calls_from_queryset(a.queryset)
+    h = host_side(a.series_dir, a.rate, judge=judge_tokens(a.judge_profile), judge_calls=jc)
+    h["judge_calls_per_workflow"] = jc
+    h["accounting"] = {"queryset": a.queryset, "judge_profile": a.judge_profile, "window_s": [lo, hi]}
     if a.mpstat:
         busy = cores_busy_from_mpstat(a.series_dir, a.rate, a.mpstat, a.cores, window=(lo, hi))
         if busy:
@@ -194,14 +224,23 @@ def main() -> None:
           + (f", {h['cores_busy_measured']} cores busy (measured)" if h.get("cores_busy_measured") else "")
           + f" -> {h['core_ms_per_token_cores']} core-ms/token (thread basis {h['core_ms_per_token_threads']})")
     cm = h["core_ms_per_token_cores"]
+    print(f"accounting: judgments per workflow {jc}; profile {a.judge_profile}; query set {a.queryset}; window +{lo:.0f}..+{hi:.0f} s")
+    gen = h["gen_tok_s"]
     if per_gpu:
         print(f"serving: {prof['model']} on {prof['gpus']} GPU(s): ceiling {prof['gen_tok_s_ceiling']:.0f} gen tok/s "
               f"= {per_gpu:.0f} per GPU (levels {prof['levels']})")
-        print(f"GPUs per {a.cores}-core socket = {a.cores * 1000 / (cm * per_gpu):.2f}  (1 : {a.cores * 1000 / (cm * per_gpu):.1f})")
+        print(f"GPUs this server keeps busy at the tested operating point = {gen / per_gpu:.2f}  (1 : {gen / per_gpu:.1f})")
+        print(f"  extrapolation, if all {a.cores} cores were as productive as the busy ones: {a.cores * 1000 / (cm * per_gpu):.2f}")
     else:
         print("serving: profile has no gpus/ceiling (record with --sweep --gpus N); reference points only")
+    # The figure of record is the direct quotient at the tested operating
+    # point: the server's generated tokens per second against one GPU's.
+    # The full-core extrapolation is printed beside it, named as such; it
+    # is not the demand of the tested point, since idle cores in reserved
+    # tiers are not application capacity.
     for ref in (2400, 3565, 3753):
-        print(f"  at {ref} tok/s per GPU: 1 : {a.cores * 1000 / (cm * ref):.1f}")
+        print(f"  at {ref} tok/s per GPU: server keeps {gen / ref:.2f} GPUs busy (1 : {gen / ref:.1f}); "
+              f"extrapolated to all {a.cores} cores busy: {a.cores * 1000 / (cm * ref):.2f}")
 
 
 if __name__ == "__main__":

@@ -151,6 +151,7 @@ class EventAdapter:
             validation_cfg = validation_config()
         self._validation_cfg = validation_cfg or {}
         self.validation_tokens = 0                  # validator spend, separate from generation
+        self.validation_tokens_out = 0              # the judges' OUTPUT tokens alone (audit of the serving requirement)
 
         # L2 frontier synthesis grader (opt-in): graded once in finalize against the
         # objective + the collected subtask results — the most important validator
@@ -203,6 +204,7 @@ class EventAdapter:
         await self._emit(EventType.validator_started, {"task_id": _ORCH_STEP})
         gr = await self._synthesis_grader(self.query, self.final_answer, self._results)
         self.validation_tokens += int(gr.get("tokens_in") or 0) + int(gr.get("tokens_out") or 0)
+        self.validation_tokens_out += int(gr.get("tokens_out") or 0)
         await self.db.record_validation(
             self.run_id, _ORCH_STEP, level=gr.get("level", "frontier"),
             verdict=gr["verdict"], score=gr.get("score"),
@@ -254,6 +256,7 @@ class EventAdapter:
                    "plan_rejections": self.plan_rejections,
                    "tool_clamps": self.tool_clamps,
                    "validation_tokens": self.validation_tokens,
+            "validation_tokens_out": self.validation_tokens_out,
                    "total_tokens": self.total_tokens, **routing.as_dict()}
         if self.budget_exceeded:
             metrics["budget_exceeded"] = self.budget_exceeded
@@ -277,6 +280,7 @@ class EventAdapter:
             "tool_calls": tool_calls,
             "total_tokens": self.total_tokens,
             "validation_tokens": self.validation_tokens,
+            "validation_tokens_out": self.validation_tokens_out,
         })
         return {"routing": routing.as_dict(), "task_count": self._delegation_n,
                 "tool_calls": tool_calls,

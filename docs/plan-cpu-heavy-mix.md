@@ -93,8 +93,9 @@ are the declared mix's output per workflow (judgments included) times
 the rate, and busy cores are averaged over the steady window of the
 hold. At capacity the server is 83% busy and keeps 1.7 GPUs of the
 reference class busy at the record rate; per core, 9.0 core-ms per
-token at 3,500 tokens/s is 31 cores per GPU, two GPUs per fully busy
-64-core socket. The constant held at 8.8 to 9.2 across the passing
+token at 3,500 tokens/s is 31 cores per GPU (two GPUs per socket only
+as an extrapolation to every core busy, which the reserved tiers do not
+permit). The constant held at 8.8 to 9.2 across the passing
 rungs and the seeds. The residency was confirmed the other way round: 152 sessions held in a closed loop kept 150 agents in flight and completed 0.8 workflows a second at the capacity rung's latencies with no drift over half an hour, in all three seeds, with zero failures. Sets
 `data/capacity/set-20260908-025329`, `set-20260908-053752` and `set-20260908-115604`; full curves in
 section 11 of the methodology.

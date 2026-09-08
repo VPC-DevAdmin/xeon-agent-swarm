@@ -67,10 +67,14 @@ run (section 6), so generated tokens are the model's, not a formula's.
 Host work is the stand-alone sum of each archetype's steps (the cost laws
 of section 8); in a mix, busy cores run at about 0.8 times the summed
 weights because sibling threads share physical cores. Output tokens are
-the completed units' own at the capacity rung of the enterprise set of
-record, three seeds, plus the model-based judgments' outputs (one per
-worker and one on the synthesis, 66 to 105 tokens each), which the
-run records keep in a separate validation counter. Every archetype that acts looks things up
+the completed units' own at the capacity rung of the v2.2 enterprise set,
+three seeds, plus the model-based judgments' outputs (one per worker and
+one on the synthesis, 52 to 105 tokens each), which the run records keep
+in a separate validation counter; the task agent's figure is its v2.3
+calibration (the replayed handoff shape) and is confirmed by the v2.3
+set. Judgments per workflow are a property of the workload version and
+are read from its versioned query set (`data/capacity/queryset/`), never
+assumed: two per ticket in v2.2, one in v2.3. Every archetype that acts looks things up
 first, and the lookup is host work inside the step, never a model turn:
 the query embedder, the index and the reranker are the server's own.
 
@@ -173,7 +177,10 @@ delegates the declared subtasks to specialist workers (one, for the task
 and ingestion agents), each worker calls its tools and drafts its
 section, a synthesis step combines the results, mechanical and judge
 validations run on every step and on the synthesis, and steps, attempts,
-validations, and tool records are written durably. Prompts are
+validations, and tool records are written durably. The task agent is
+the exception: its single worker's validated answer is the deliverable
+and the run ends there, with no synthesis turn and only the mechanical
+check on the answer (section 2). Prompts are
 self-contained; no third-party service participates in a measured run.
 
 ### The serving tier is modeled per call, with calibrated tokens
@@ -683,7 +690,8 @@ One set, three seeds, 25-minute holds: enterprise
 `data/capacity/set-20260908-025329` (0.21 and 0.24 per instance, 0.84
 and 0.96 workflows/s box-wide) with its lower rung `set-20260908-053752`
 (0.18, 0.72) and its midpoint rung `set-20260908-115604` (0.225, 0.90), on
-the allocation of record, the archetypes of section 2
+the allocation of record, the archetypes of section 2 with the task
+agent in its v2.2 shape (two judgments and a closing turn, section 12)
 and the calibrated gpt-oss-20b profile. Latencies are p50 / p95 in
 seconds, medians of three series; host cores busy is the median of the
 three series' time-averaged per-core occupancy over the steady window
@@ -842,10 +850,13 @@ References for the serving rate:
 At capacity one server, 83% busy, keeps 1.7 GPUs busy at the record
 rate and 2.5 at the conservative 2,400. Stated per core, 9.0 core-ms
 per token at 3,500 tokens/s is 31 cores per GPU, so a 64-core socket
-run flat out pairs with two GPUs: one server to two GPUs at the record
-rate. A
+run flat out would pair with two GPUs. That last figure is an
+extrapolation to all 64 cores being as productive as the busy ones and
+is named as such wherever it appears; the figure of record is the
+direct quotient at the tested operating point, since idle cores in the
+reserved retrieval tiers are not application capacity. A
 tile of twelve task agents alone, the support-desk case, would generate
-about 2,300 tokens per workflow at a far higher rate and keep several
+about 1,500 tokens per workflow at a far higher rate and keep several
 GPUs busy per server; it is an estimate from the catalog's weights, not
 a measured set.
 What moves the ratio is what agents do between model calls, which sets
