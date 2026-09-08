@@ -398,7 +398,12 @@ def _worker_content(role: str, obj: str) -> str:
 
 
 def _synthesis_text(obj: str) -> str:
-    """Final main-agent answer composed from the canned findings (~200 words)."""
+    """Final main-agent answer composed from the canned findings (~200 words);
+    the task agent's closing turn is a short handoff of its worker's answer."""
+    if "support ticket" in obj:
+        return ("Handoff: the worker's classification, record and reply stand as the "
+                "deliverable. Category configuration; severity low; root cause: the "
+                "export schedule kept the old timezone. Reply attached above.")
     return (
         f"Answer (mock synthesis) for: {obj[:160]}\n\n"
         "Drawing the three subtask results together, the picture is consistent. The "

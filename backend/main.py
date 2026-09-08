@@ -424,7 +424,11 @@ async def run_deepagents(
                           model_override=router_model, provider=router_provider)
         judge = make_judge(mf) if validator_enabled else None
         redispatch = make_redispatch(mf) if validator_enabled else None
-        synthesis_grader = make_synthesis_grader(mf) if validator_enabled else None
+        # The synthesis grader is a model-based judgment on the final answer; a
+        # workflow whose deliverable is its single worker's answer handed back
+        # unchanged (the task agent) declares grade_synthesis: false and keeps
+        # only the mechanical check on it.
+        synthesis_grader = make_synthesis_grader(mf) if (validator_enabled and grade_synthesis) else None
         # Always available: only fires when a budget stop abandons the graph before the
         # main agent synthesized, so partial results still yield a final answer.
         partial_synthesizer = make_partial_synthesizer(mf)
@@ -542,6 +546,7 @@ def launch_run(
     query: str,
     *,
     validator_enabled: bool = True,
+    grade_synthesis: bool = True,
     job_id: str | None = None,
     trigger: str = "manual",
     plan_approval: bool | None = None,

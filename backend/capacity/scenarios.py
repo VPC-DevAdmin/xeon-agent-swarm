@@ -31,6 +31,10 @@ def load_e2e_workflows() -> dict[str, dict]:
                     # real dispatch + durable write per worker).
                     "enabled_tools": list(w.get("tools") or []),
                     "toolless": bool(w.get("toolless", False)),
+                    # v2.3: a single-worker workflow whose deliverable is the
+                    # worker's answer handed back keeps only the mechanical
+                    # check on the final answer (no synthesis judgment).
+                    "grade_synthesis": bool(w.get("grade_synthesis", True)),
                     # Declared shape of a completed unit. `contract` applies to
                     # deterministic backends, `contract_live` to a real planner.
                     "contract": dict(w.get("contract") or {}) or None,

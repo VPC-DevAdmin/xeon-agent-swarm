@@ -591,6 +591,7 @@ class CapacityTest:
                     wid, self._workflow_query(wf, wid, self._user_call_n[idx]), {
                         "enabled_tools": wf.get("enabled_tools"),
                         "validator_enabled": wf.get("validator_enabled", True),
+                        "grade_synthesis": wf.get("grade_synthesis", True),
                         "budgets": wf.get("budgets"),
                         "toolless": wf.get("toolless", False),
                     }, timeout_s=self._profile_timeout_s(wid))
@@ -2428,6 +2429,7 @@ class CapacityTest:
                     sid, self._workflow_query(wf, sid, idx), {
                     "enabled_tools": wf.get("enabled_tools"),
                     "validator_enabled": wf.get("validator_enabled", True),
+                    "grade_synthesis": wf.get("grade_synthesis", True),
                     "budgets": wf.get("budgets"),
                     "toolless": wf.get("toolless", False),
                 }, timeout_s=self._profile_timeout_s(sid))
