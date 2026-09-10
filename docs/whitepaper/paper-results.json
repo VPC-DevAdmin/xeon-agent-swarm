@@ -13,12 +13,12 @@
   "capacity": {
     "resident": 143,
     "cpuPercent": 85,
-    "memoryGB": 355,
-    "memoryPeakGB": 430,
+    "memoryGB": 357,
+    "memoryPeakGB": 450,
     "callsPerSecond": 8.4,
     "outputTokensPerSecond": 5660,
-    "coreMsPerSecond": 54500,
-    "cpuShares": {"sandbox":71.1,"retrieval":2.6,"execution":23.4,"support":2.9},
+    "coreMsPerSecond": 54300,
+    "cpuShares": {"sandbox":70.8,"retrieval":2.6,"execution":23.7,"support":2.9},
     "accountingNotes": "Memory and CPU shares use all four rate-0.21 ledgers, +600 to +1500 seconds after each start. Mean memory 355.037 GB, maximum sample 429.3 GB. Mean CPU-family values normalized across the four samplers: sandbox 71.08995%, retrieval 2.58771%, execution (control, executors, siblings) 23.43381%, supporting services 2.88853%. Ratio script returns 5658 output tokens/s, rounded to 5660, and achieved rate 0.843. At 119 model calls per 12-request tile, the serving requirement is 8.36 calls/s, rounded to 8.4."
   },
   "serving": {
@@ -32,13 +32,13 @@
     {"name":"Task", "coreMs":1000, "modelCalls":4, "outputTokens":1390, "label":"retrieve, record, and reply", "color":"#0672CB"},
     {"name":"Research", "coreMs":25000, "modelCalls":20, "outputTokens":16100, "label":"retrieve and synthesize", "color":"#0B7C84"},
     {"name":"Ingestion", "coreMs":100000, "modelCalls":7, "outputTokens":3670, "label":"OCR, embed, and index", "color":"#00468B"},
-    {"name":"Analyst", "coreMs":190000, "modelCalls":17, "outputTokens":13430, "label":"analyze and explain", "color":"#40586D"},
+    {"name":"Analyst", "coreMs":190000, "modelCalls":17, "outputTokens":13460, "label":"analyze and explain", "color":"#40586D"},
     {"name":"Code", "coreMs":150000, "modelCalls":17, "outputTokens":12820, "label":"set up, CI, and verify", "color":"#66278F"}
   ],
   "responsePoints": [
-    {"resident":105,"sustainable":true,"p95":{"Task":19,"Research":213,"Ingestion":147,"Analyst":396,"Code":303}},
-    {"resident":143,"sustainable":true,"p95":{"Task":26,"Research":215,"Ingestion":172,"Analyst":533,"Code":353}},
-    {"resident":171,"sustainable":false,"p95":{"Task":27,"Research":220,"Ingestion":202,"Analyst":642,"Code":422}}
+    {"resident":105,"sustainable":true,"p95":{"Task":19,"Research":210,"Ingestion":147,"Analyst":399,"Code":299}},
+    {"resident":143,"sustainable":true,"p95":{"Task":26,"Research":212,"Ingestion":170,"Analyst":533,"Code":356}},
+    {"resident":171,"sustainable":false,"p95":{"Task":26,"Research":213,"Ingestion":202,"Analyst":642,"Code":417}}
   ],
   "sources": [
     {"id":"methodology","title":"Benchmark methodology","path":"../benchmark-methodology.md"},

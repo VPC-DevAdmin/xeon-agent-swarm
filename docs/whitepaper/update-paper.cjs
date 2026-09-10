@@ -103,7 +103,7 @@ html=html.replace(/<!--result:([\w]+)-->[\s\S]*?<!--\/result-->/g,(whole,key)=>{
   return `<!--result:${key}-->${values[key]}<!--/result-->`;
 });
 if(count<30)throw new Error('Missing result bindings. Refusing partial generation.');
-html=html.replace(/(class="mix-vessel" aria-label=")[^"]*(")/,`$1Twelve representative incoming workflows. The separate capacity label reports ${c.resident} resident agents per CPU.$2`);
+html=html.replace(/(class="mix-vessel" aria-label=")[^"]*(")/,`$1Enterprise workload shapes indicate relative CPU work. The separate capacity label reports ${c.resident} resident agents per CPU.$2`);
 html=html.replace(/(class="s4-sizing-band" role="img" aria-label=")[^"]*(")/,`$1${fmt(c.outputTokensPerSecond)} required output tokens per second divided by ${fmt(serving.outputTokensPerSecondPerGpu)} output tokens per second per GPU equals ${gpu.toFixed(2)} GPU equivalents.$2`);
 const snapshots=result.sources.map(s=>{
   const source=fs.readFileSync(path.resolve(root,s.path),'utf8');
