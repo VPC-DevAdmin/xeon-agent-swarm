@@ -401,41 +401,45 @@ def test_vary_keys_are_deterministic_per_seed():
 
 # ── Phase 2: end-to-end agent-runtime mode ────────────────────────────────────
 
+_QUERY_ARCHETYPES = (
+    ("Using ONLY the field notes", "deep_research"),
+    ("Using ONLY the build", "code_agent"),
+    ("Using ONLY the dataset", "analyst_large"),
+    ("Using ONLY the document set", "ingestion"),
+    ("Handle this single support ticket", "task_ticket"),
+)
+
+
 def _fake_submit(latency_s=0.05, ok=True, llm_calls=10):
-    """Test double for a completed workflow. The trace matches the declared
-    workload contract (the bundled planner's exact shape), so units are valid
-    unless a test deliberately breaks the contract. tokens_in models the v15
-    context weight: the planner reads the whole prompt and the workers
-    re-carry their slices, roughly doubling the prompt's own tokens."""
+    """Test double for a completed workflow. The trace sits on the declared
+    workload contract read from the catalog itself, so units are valid unless
+    a test deliberately breaks the contract, and the double follows the
+    archetypes as they evolve. tokens_in models the v15 context weight: the
+    planner reads the whole prompt and the workers re-carry their slices,
+    roughly doubling the prompt's own tokens."""
+    from backend.capacity.scenarios import load_e2e_workflows
+    contracts = {sid: wf["contract"] for sid, wf in load_e2e_workflows().items()}
+
     async def submit(query, opts=None):
         await asyncio.sleep(latency_s)
-        # The double mirrors the per-type contract each archetype is judged
-        # by: three-worker archetypes make 13 calls with 6 tool calls, the
-        # ingestion agent one worker with two tool calls, the task agent one.
-        researcher = query.startswith("Using ONLY the field notes")
-        coder = query.startswith("Using ONLY the build")
-        analyst = query.startswith("Using ONLY the dataset")
-        ingest = query.startswith("Using ONLY the document set")
-        task = query.startswith("Handle this single support ticket")
-        calls = 13 if (researcher or analyst or coder) else llm_calls
-        tools = 6 if (researcher or analyst or coder) else 3
-        tin = max(21_000 if researcher else 6500, int(len(query) / 4 * 2))
-        if task:
-            return {"ok": ok, "tokens_in": 2500, "tokens_out": 400,
+        sid = next((sid for prefix, sid in _QUERY_ARCHETYPES
+                    if query.startswith(prefix)), None)
+        contract = contracts.get(sid)
+        if contract is None:
+            # A query outside the catalog: a generic three-worker plan.
+            return {"ok": ok, "tokens_in": max(6500, int(len(query) / 4 * 2)),
+                    "tokens_out": 1400,
                     "error": None if ok else "status=failed",
-                    "trace": {"llm_calls": 4, "steps": 1, "validations": 3,
-                              "task_count": 1, "tool_calls": 1}}
-        if ingest:
-            return {"ok": ok, "tokens_in": 2500, "tokens_out": 400,
-                    "error": None if ok else "status=failed",
-                    "trace": {"llm_calls": 5, "steps": 1, "validations": 3,
-                              "task_count": 1, "tool_calls": 2}}
-        return {"ok": ok,
-                "tokens_in": tin,
-                "tokens_out": 1400,
-                "error": None if ok else "status=failed",
-                "trace": {"llm_calls": calls, "steps": 3,
-                          "validations": 7, "task_count": 3, "tool_calls": tools}}
+                    "trace": {"llm_calls": llm_calls, "steps": 3,
+                              "validations": 7, "task_count": 3, "tool_calls": 3}}
+        trace = {k: contract[k][0] for k in ("llm_calls", "steps", "validations",
+                                              "task_count", "tool_calls")}
+        single = trace["task_count"] == 1
+        tin = (2500 if single
+               else max(21_000 if sid == "deep_research" else 6500,
+                        int(len(query) / 4 * 2)))
+        return {"ok": ok, "tokens_in": tin, "tokens_out": 400 if single else 1400,
+                "error": None if ok else "status=failed", "trace": trace}
     return submit
 
 
@@ -459,9 +463,10 @@ def test_e2e_mode_runs_workflows_and_aggregates_traces(tmp_path, monkeypatch):
     assert r["workflows_per_hour"] is not None and r["workflows_per_hour"] > 0
     for sid, row in r["per_scenario"].items():
         assert row["calls"] > 0 and row["errors"] == 0
-        # measured, not assumed: each archetype's contract shape
-        assert row["trace"]["llm_calls"] == {"task_ticket": 4, "ingestion": 5}.get(sid, 13)
-        assert row["trace"]["validations"] == (3 if sid in ("task_ticket", "ingestion") else 7)
+        # measured, not assumed: each archetype's contract shape, as declared
+        contract = test.scenarios[sid]["contract"]
+        assert row["trace"]["llm_calls"] == contract["llm_calls"][0]
+        assert row["trace"]["validations"] == contract["validations"][0]
     assert r["repro"]["seed"] == 42
 
 

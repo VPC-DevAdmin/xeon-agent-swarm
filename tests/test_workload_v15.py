@@ -72,16 +72,18 @@ def test_mock_planner_hands_each_worker_only_its_section():
 
 def test_contract_tokens_in_reads_from_the_record():
     test = ctl.CapacityTest("e2e", [], _cfg(), mix="tile")
-    rec = {"ok": True, "tokens_in": 100,
-           "trace": {"task_count": 3, "steps": 3, "llm_calls": 13,
-                     "validations": 7, "tool_calls": 6}}
+    # The trace sits at the catalog's own bounds, so the test follows the
+    # research agent's contract as the archetype evolves.
+    contract = test.scenarios["deep_research"]["contract"]
+    trace = {k: contract[k][0] for k in ("task_count", "steps", "llm_calls",
+                                          "validations", "tool_calls")}
+    rec = {"ok": True, "tokens_in": 100, "trace": dict(trace)}
     test._check_contract("deep_research", rec)
-    assert rec.get("invalid") is True          # 100 << the 30k floor
-    rec2 = {"ok": True, "tokens_in": 55_000,
-            "trace": {"task_count": 3, "steps": 3, "llm_calls": 13,
-                      "validations": 7, "tool_calls": 6}}
+    assert rec.get("invalid") is True          # 100 << the tokens_in floor
+    rec2 = {"ok": True, "tokens_in": contract["tokens_in"][0] + 1,
+            "trace": dict(trace)}
     test._check_contract("deep_research", rec2)
-    assert rec2.get("invalid") is None and rec2["ok"] is True
+    assert rec2.get("invalid") is None and rec2["ok"] is True, rec2.get("error")
 
 
 def test_model_wait_scales_with_payload(monkeypatch):

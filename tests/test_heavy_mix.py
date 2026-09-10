@@ -82,8 +82,13 @@ def test_stand_in_policies_pick_the_kind_and_depth():
         assert (name, args["size"]) == ("bench_execute", kind), (obj, name, args)
     name, args = first_call(research, "Research the topic: Using ONLY the field notes below, and retrieving at rerank depth 128, write a brief", ret_tools)
     assert name == "bench_retrieve" and args["depth"] == 128
+    # v2.2: the research agent's one retrieval step scores three queries at
+    # depth 128 from the catalog, whether or not the objective spells it out.
     name, args = first_call(research, "Research the topic: Using ONLY the field notes below, write a brief", ret_tools)
-    assert name == "bench_retrieve" and "depth" not in args
+    assert name == "bench_retrieve" and args["depth"] == 128 and args["count"] == 3
+    # An objective outside the catalog carries no lookup plan.
+    name, args = first_call(research, "Research the topic: summarise the quarterly field report", ret_tools)
+    assert name == "bench_retrieve" and "depth" not in args and "count" not in args
 
 
 def test_organisation_tiles_are_selected_by_name(monkeypatch):

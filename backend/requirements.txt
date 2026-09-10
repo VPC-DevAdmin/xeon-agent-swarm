@@ -107,3 +107,6 @@ xxhash==3.8.0
 yarl==1.24.2
 zstandard==0.25.0
 asyncpg==0.30.0
+# sandboxed jobs (backend/capacity/sandbox_*_job.py): numeric kernels and PDF text extraction
+numpy==2.2.6
+pypdf==6.17.0
