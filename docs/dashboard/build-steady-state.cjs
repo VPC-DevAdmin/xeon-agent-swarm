@@ -15,6 +15,19 @@ const assets = {r770:asset('Dell PowerEdge R770 rack server'), xe7740:asset('Del
 const events = process.argv[2] || 'data/capacity/replay/enterprise-v23-12101.json';
 const data = JSON.parse(fs.readFileSync(path.resolve(root, events), 'utf8'));
 const results = JSON.parse(fs.readFileSync(path.join(root, 'docs/whitepaper/paper-results.json'), 'utf8'));
+const profile = JSON.parse(fs.readFileSync(path.join(base,'simulation-profile.json'),'utf8'));
+if(profile.version!==results.definitionVersion||data.meta.series!=='series-12101-20260908-181459')throw Error('Simulator needs a profile matching the current definitions and timing evidence.');
+if(profile.costs.some((a,i)=>a.name!==results.archetypes[i].name))throw Error('Simulator archetype order mismatch');
+const capacityPlateau=data.plateaus.findIndex(p=>p.keeps_up&&p.resident===results.capacity.resident);
+profile.timings=results.archetypes.map((a,i)=>{
+  const p=data.plateaus[capacityPlateau];
+  const rows=data.units.filter(u=>u[0]===capacityPlateau&&u[1]===i&&u[4]&&u[3]!=null&&u[2]>=p.t0+300&&u[3]<=p.t1);
+  if(rows.length<20)throw Error('Insufficient current timing evidence for '+a.name);
+  const mean=fn=>rows.reduce((s,u)=>s+fn(u),0)/rows.length;
+  return {name:a.name,samples:rows.length,meanSeconds:mean(u=>u[3]-u[2]),sandboxSeconds:mean(u=>u[7]),modelSeconds:mean(u=>u[5])};
+});
+const crypto=require('node:crypto');
+profile.sourceHashes=Object.fromEntries(['config/capacity_scenarios.yaml','docs/benchmark-methodology.md',events].map(p=>[p,crypto.createHash('sha256').update(fs.readFileSync(path.resolve(root,p))).digest('hex')]));
 if (!data.plateaus.some(p=>p.keeps_up&&p.resident===results.capacity.resident)) throw new Error('Replay capacity does not match paper-results.json. Supply the matching event file.');
 if (data.meta.sids.join(',')!=='task_ticket,deep_research,ingestion,analyst_large,code_agent') throw new Error('Replay archetype order changed. Update the conference lane mapping before building.');
 // Select a continuous recorded interval. Never fill a gap with invented agents.
@@ -41,6 +54,8 @@ data.conferenceWindow={...best,plateauIndex,selection:'Longest continuous post-w
 const json = o => JSON.stringify(o).replace(/</g, '\\u003c');
 let html = fs.readFileSync(path.join(base, 'steady-state.src.html'), 'utf8');
 html = html.replace('/*__DATA__*/null', json(data)).replace('/*__RESULTS__*/null', json(results)).replace('/*__ASSETS__*/null', json(assets)).replace('/*__FONTS__*/', [...paper.matchAll(/@font-face\s*\{[^}]+\}/g)].map(m => m[0]).join('\n'));
+html=html.replace('/*__SIM_PROFILE__*/null',json(profile)).replace('/*__SIM_MODEL__*/',()=>fs.readFileSync(path.join(base,'simulation-model.cjs'),'utf8')).replace('/*__SIM_UI__*/',()=>fs.readFileSync(path.join(base,'simulation-ui.js'),'utf8')).replace('/*__SIM_CSS__*/',()=>fs.readFileSync(path.join(base,'simulation.css'),'utf8'));
+html=html.replace('/*__DETAIL_UI__*/',()=>fs.readFileSync(path.join(base,'detail-views.js'),'utf8')).replace('/*__DETAIL_CSS__*/',()=>fs.readFileSync(path.join(base,'detail-views.css'),'utf8'));
 fs.writeFileSync(path.join(base, 'steady-state.html'), html);
 console.log(`Built offline conference replay with ${data.units.length} workflow records and ${results.resultVersion} paper results.`);
 console.log(`Perpetual steady-state segment: ${(best.start-plateau.t0).toFixed(1)}–${(best.end-plateau.t0).toFixed(1)} seconds into capacity hold, ${(best.end-best.start).toFixed(1)} seconds at 1×.`);

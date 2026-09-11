@@ -1,0 +1,85 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const vm=require('node:vm');
+const html=fs.readFileSync(path.join(__dirname,'steady-state.html'),'utf8');
+const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+new vm.Script(script);
+assert.ok(!/\/\*__SIM_/.test(html),'All simulation resources embedded');
+const profile=JSON.parse(script.match(/const SIM_PROFILE = (.*);/)[1]);
+const results=JSON.parse(script.match(/const RESULTS = (.*);/)[1]);
+const replay=JSON.parse(script.match(/const DATA = (.*);/)[1]);
+const model=require('./simulation-model.cjs').create(profile,results);
+const mix=require('./simulation-model.cjs').mix(results,model.times);
+assert.equal(mix.snapshot().target,720);
+const sum=xs=>xs.reduce((a,b)=>a+b,0);
+assert.equal(sum(mix.snapshot().counts),720);
+assert.ok(mix.snapshot().counts[3]>mix.snapshot().counts[0],'Resident shares account for workflow lifetimes');
+mix.setTarget(858);
+assert.equal(sum(mix.snapshot().counts),858);
+assert.deepEqual(mix.snapshot().weights,[50,8,8,17,17]);
+mix.setPercent(0,40);
+assert.equal(mix.snapshot().total,90);assert.equal(mix.snapshot().valid,false);assert.equal(mix.snapshot().counts,null);
+assert.deepEqual(mix.snapshot().weights,[40,8,8,17,17]);
+mix.setPercent(1,20);mix.setPercent(2,10);mix.setPercent(3,15);mix.setPercent(4,15);
+assert.equal(mix.snapshot().valid,true);assert.equal(sum(mix.snapshot().counts),858);
+assert.deepEqual(mix.snapshot().weights,[40,20,10,15,15]);
+mix.remove(3);assert.equal(mix.snapshot().total,85);assert.equal(mix.snapshot().included[3],false);
+mix.add(3);assert.equal(mix.snapshot().weights[3],0);assert.throws(()=>mix.add(3));
+mix.setPercent(3,15);assert.equal(mix.snapshot().valid,true);
+for(let i=0;i<5;i++)mix.remove(i);
+assert.equal(mix.snapshot().total,0);assert.equal(mix.snapshot().counts,null);
+mix.add(4);mix.setPercent(4,100);assert.deepEqual(mix.snapshot().counts,[0,0,0,0,858]);
+mix.setTarget(0);assert.deepEqual(mix.snapshot().counts,[0,0,0,0,0]);
+mix.reset();assert.equal(mix.snapshot().target,720);assert.equal(mix.snapshot().valid,true);
+assert.throws(()=>mix.setPercent(0,8.3));assert.throws(()=>mix.setTarget(-1));
+const sizing=require('./simulation-model.cjs').cpuSystemCount;
+assert.equal(sizing(0),0);assert.equal(sizing(2),1);assert.equal(sizing(2.2),1);
+assert.equal(sizing(2.2001),2);assert.equal(sizing(4.4),2);assert.equal(sizing(4.4001),3);
+console.log('PASS: independent draft percentages, valid-only residency, add/remove, reset, 10% CPU sizing boundaries.');
+const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
+const base=model.calculate(model.defaultCounts);
+assert.equal(base.total,results.capacity.resident*6);
+close(base.output,results.capacity.outputTokensPerSecond*6);
+close(base.memoryPerCPU,results.capacity.memoryGB);
+close(base.cpuPercent,results.capacity.coreMsPerSecond/1000/results.platform.cores*100);
+assert.equal(base.cpuSystems,3);
+assert.equal(base.gpuSystems,2);
+assert.equal(base.extraGPU,1);
+close(base.lastGpuUsage,base.gpuEquivalent-8);
+const zero=model.calculate([0,0,0,0,0]);
+for(const key of ['total','cpuSystems','gpuSystems','output','memoryGB','cpuPercent'])assert.equal(zero[key],0);
+for(let i=0;i<5;i++){
+  const counts=[0,0,0,0,0];counts[i]=100;
+  const r=model.calculate(counts),larger=model.calculate(counts.map(n=>n*2));
+  assert.ok(r.output>0&&r.cpuSystems>0&&r.gpuSystems>0);
+  assert.ok(r.memoryGB>0&&r.cpuPercent>0&&r.cpuPercent<=100);
+  close(larger.output,r.output*2);
+  assert.ok(larger.cpuSystems>=r.cpuSystems&&larger.gpuSystems>=r.gpuSystems);
+  assert.ok(r.lastGpuUsage>0&&r.lastGpuUsage<=8);
+  console.log(`${profile.costs[i].name}: ${r.cpuSystems} R770, ${r.gpuSystems} XE7740, ${r.bottleneck}`);
+}
+const big=model.calculate(model.defaultCounts.map(n=>n*4));
+assert.equal(big.cpuSystems,11);assert.equal(big.gpuSystems,5);
+assert.equal(big.extraCPU,8);assert.equal(big.extraGPU,4);
+assert.throws(()=>model.calculate([-1,0,0,0,0]));
+assert.throws(()=>model.calculate([1.5,0,0,0,0]));
+assert.throws(()=>require('./simulation-model.cjs').create({...profile,version:'obsolete'},results));
+for(let n=1;n<=1000;n++){
+  const counts=Array.from({length:5},(_,i)=>(n*(i+3)*17)%5000),r=model.calculate(counts);
+  for(const key of ['cpuPercent','memoryGB','gpuEquivalent','ratio'])assert.ok(Number.isFinite(r[key]));
+  assert.ok(r.gpuSystems*8+1e-9>=r.gpuEquivalent);
+  assert.ok(r.sockets*1.1+1e-9>=r.cpuEquivalent);
+}
+const start=replay.conferenceWindow.start,end=replay.conferenceWindow.end;
+assert.ok(end-start>=60);
+for(let t=start;t<end;t+=.5){
+  const units=replay.units.filter(u=>u[0]===replay.conferenceWindow.plateauIndex&&u[2]<=t&&(u[3]==null||u[3]>t));
+  for(let i=0;i<5;i++)assert.ok(units.some(u=>u[1]===i),'Recorded replay preserved');
+}
+console.log('PASS: baseline calibration, all archetypes, empty and large fleets, invalid input, current version, embedded syntax, 1,000 mixes, recorded interval.');
+
+const defaultModel=model.calculate(mix.reset().counts);
+assert.equal(defaultModel.total,720);assert.equal(defaultModel.cpuSystems,3);assert.equal(defaultModel.sockets,6);
+assert.ok(defaultModel.cpuPercent>0&&defaultModel.cpuPercent<=100);
+console.log('PASS: 720-agent default and reset, CPU utilization '+defaultModel.cpuPercent.toFixed(1)+'%.');

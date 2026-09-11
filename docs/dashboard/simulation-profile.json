@@ -1,0 +1,26 @@
+{
+  "version": "v2.3",
+  "reference": "data/capacity/set-20260908-165351",
+  "timingSource": "data/capacity/replay/enterprise-v23-12101.json",
+  "methodology": "docs/benchmark-methodology.md sections 2, 8, 11",
+  "serviceTarget": 0.8,
+  "memoryTarget": 0.8,
+  "analystJobGB": 40,
+  "analystMemoryShare": 0.9,
+  "costs": [
+    {"name":"Task","sandboxCoreSeconds":0,"pairs":32,"queryCount":1,"ingestCoreSeconds":0},
+    {"name":"Research","sandboxCoreSeconds":1.5,"pairs":1152,"queryCount":9,"ingestCoreSeconds":0},
+    {"name":"Ingestion","sandboxCoreSeconds":80,"pairs":0,"queryCount":0,"ingestCoreSeconds":12},
+    {"name":"Analyst","sandboxCoreSeconds":189,"pairs":128,"queryCount":2,"ingestCoreSeconds":0},
+    {"name":"Code","sandboxCoreSeconds":148,"pairs":192,"queryCount":3,"ingestCoreSeconds":0}
+  ],
+  "assumptions": [
+    "Agent counts are fixed working pools across the deployment. Each completed workflow is replaced by the same archetype.",
+    "Target mean lifetimes use completed v2.3 capacity records, scaled together to the 143-resident, 5660-output-token reference. They are reference targets, not independently predicted tail latencies.",
+    "CPU scale-out retains 6 reranking, 1 query-embedding, 2 ingest-embedding and 55 application cores per CPU. Application sizing weights sandbox demand 85 percent and call-related demand 15 percent; this extrapolation requires spot checks.",
+    "Resource targets are 80 percent for dedicated services and memory. They are planning assumptions. Application demand is anchored to the measured Enterprise capacity.",
+    "Memory assigns 90 percent of the Enterprise footprint to analyst jobs and 10 percent to a fixed per-CPU residual, a modeling assumption. The 40 GB job size sets an effective active-job fraction calibrated to the footprint. Sandbox wall time includes waiting and cannot be used as a memory-active fraction. Non-analyst memory growth and memory bandwidth remain unvalidated.",
+    "GPU equivalents use the current paper's serving assumption. Output demand is not GPU utilization telemetry. Model latency is held at the reference target, assuming the required GPU capacity is supplied.",
+    "R770 capacity assumes two independent copies of the tested 64-core CPU allocation and 1000 GB per CPU. Multi-socket and fleet scaling require validation."
+  ]
+}

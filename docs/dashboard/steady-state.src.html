@@ -27,6 +27,8 @@ dialog{width:min(880px,94vw);max-height:90vh;background:#0b273d;color:var(--ink)
 
 [data-topic]{cursor:pointer;outline-offset:3px;border-radius:10px}[data-topic]:hover{background-color:#b0dfff0b}[data-topic]:focus-visible{outline:2px solid #aee4ff}.lane[data-topic]:hover{border-color:#aee4ff80}.worker-chip[data-topic],.cycle-node[data-topic]{font-family:inherit;text-align:left}.click-hint{font-size:10px;color:#aed3e6;margin-left:8px;font-weight:400}.r770-fleet{height:118px;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:5px 0}.r770-fleet .server-photo{max-height:32px;width:96%;height:32px;flex:none}.r770-fleet .server-photo:nth-child(2){animation-delay:-1s}.r770-fleet .server-photo:nth-child(3){animation-delay:-2s}.server-plinth{height:118px}.machine h3{font-size:16px}.serving-demand{margin-top:7px;padding-top:7px}.serving-demand strong{font-size:21px}.serving-demand p{font-size:10px}.serving-demand small{font-size:10px}.system-note{font-size:10px;margin-top:1px}.hardware .xeon{right:0;bottom:2px;width:31px;height:31px}
 [hidden]{display:none!important}.topic-metrics{display:flex;gap:12px;margin:18px 0}.topic-metric{flex:1;min-width:0;padding:16px;background:linear-gradient(120deg,#7fd4ff17,#b4e8ff04);border:1px solid var(--edge);border-radius:13px;box-shadow:inset 0 1px 0 #dbf4ff1a}.topic-metric strong{display:block;font-size:29px;font-weight:300}.topic-metric span{display:block;color:var(--muted);font-size:13px;margin-top:5px}.topic-steps{padding-left:22px;color:#c6dfea;font-size:15px;line-height:1.5}.topic-steps li{padding:5px 0}.topic-links{display:flex;gap:18px;align-items:center;margin-top:22px}.topic-role{color:var(--cpu);font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+/*__SIM_CSS__*/
+/*__DETAIL_CSS__*/
 </style>
 </head>
 <body>
@@ -40,17 +42,19 @@ dialog{width:min(880px,94vw);max-height:90vh;background:#0b273d;color:var(--ink)
 <section class="glass resources" aria-label="Recorded CPU and memory activity"><div class="resource-top"><span class="eyebrow">CPU work and memory</span><span class="recorded-tag" id="sample-clock"></span></div><div class="metric" data-topic="cpu" role="button" tabindex="0" aria-label="Recorded CPU utilization details"><p>CPU utilization</p><strong id="cpu-now">—</strong></div><div class="cpu-stack" id="cpu-stack" data-topic="cpu-share" role="button" tabindex="0" aria-label="CPU work breakdown details"></div><div class="cpu-key" id="cpu-key"></div><div class="memory" data-topic="memory" role="button" tabindex="0" aria-label="Memory usage details"><div><p>Memory used</p><span class="recorded-tag">Recorded host footprint</span></div><svg class="spark" viewBox="0 0 110 26" aria-label="Recent memory usage"><path id="memory-line"/></svg><strong id="memory-now">—</strong></div></section>
 </div>
 </main>
-<footer><div class="completion" data-topic="completion" role="button" tabindex="0" aria-label="Recorded completion details"><span class="eyebrow">Recorded completion</span><span class="completion-text" id="completion">Loading the recorded window</span></div><span class="footnote">Recorded counts and telemetry · Workflow motion is illustrative</span></footer><div class="track" aria-hidden="true"><i id="progress"></i></div>
+<footer><span class="footnote">Extrapolated agent execution demo based on single-socket measurements.</span></footer><div class="track" aria-hidden="true"><i id="progress"></i></div>
 </div>
-<dialog id="detail-dialog" aria-label="Demo details"><button class="control close" id="close-details">Close</button><section id="topic-panel" hidden><div class="topic-role" id="topic-role"></div><h2 id="topic-title"></h2><div id="topic-body"></div><div class="topic-links"><button class="control" id="show-reference">Replay and source details</button><a href="../whitepaper/agent-capacity-whitepaper.html#method" id="topic-paper" target="_blank" rel="noopener">Read more in the whitepaper</a></div></section><div id="reference-panel"><h2>Replay and serving reference</h2><p id="detail-source"></p><p id="detail-definition"></p><div class="detail-grid"><div class="cores" id="cores" aria-label="Physical core occupancy"></div><div class="tiers" id="tiers"></div></div><p>CPU utilization uses the busier hardware thread on each physical core. The CPU work bar uses recorded process-family samples, normalized to attributed CPU work. Memory shows the host sample in GB.</p><p>The selected interval keeps all five agent types resident. Lane counts follow recorded arrivals and completions, including agents already resident when the interval begins. Unfinished agents remain resident until the recording ends. The loop returns directly to its recorded steady-state start without replaying startup or drain-down.</p><p>The highlighted workflow explains the agent definition. The recording contains aggregate stage timings, not every worker transition or model-call timestamp. The illustration does not report those events as telemetry.</p><p id="detail-serving"></p><p><a href="../whitepaper/agent-capacity-whitepaper.html" target="_blank" rel="noopener">Read the whitepaper</a> · <a href="agent-replay.html" target="_blank" rel="noopener">Open the benchmark-ladder view</a></p><div class="settings"><label for="speed">Replay speed</label><select id="speed"><option value="1" selected>1×</option><option value="8">8×</option><option value="16">16×</option></select><label><input id="motion" type="checkbox" checked> Workflow motion</label></div><p>Keyboard controls: Space pauses, R restarts, F opens full screen. Escape closes this panel or exits full screen.</p></div></dialog>
+<dialog id="detail-dialog" aria-label="Demo details"><button class="control close" id="close-details">Close</button><section id="topic-panel" hidden><div class="topic-role" id="topic-role"></div><h2 id="topic-title"></h2><div id="topic-body"></div><div class="topic-links"><button class="control" id="show-reference">Source measurements</button><a href="../whitepaper/agent-capacity-whitepaper.html#method" id="topic-paper" target="_blank" rel="noopener">Read more in the whitepaper</a></div></section><div id="reference-panel"><h2>Source measurements and serving reference</h2><p id="detail-source"></p><p id="detail-definition"></p><div class="detail-grid"><div class="cores" id="cores" aria-label="Physical core occupancy"></div><div class="tiers" id="tiers"></div></div><p>CPU utilization uses the busier hardware thread on each physical core. The CPU work bar uses recorded process-family samples, normalized to attributed CPU work. Memory shows the host sample in GB.</p><p>The selected interval keeps all five agent types resident. Lane counts follow recorded arrivals and completions, including agents already resident when the interval begins. Unfinished agents remain resident until the recording ends. The loop returns directly to its recorded steady-state start without replaying startup or drain-down.</p><p>The highlighted workflow explains the agent definition. The recording contains aggregate stage timings, not every worker transition or model-call timestamp. The illustration does not report those events as telemetry.</p><p id="detail-serving"></p><p><a href="../whitepaper/agent-capacity-whitepaper.html" target="_blank" rel="noopener">Read the whitepaper</a> · <a href="agent-replay.html" target="_blank" rel="noopener">Open the benchmark-ladder view</a></p><div class="settings"><label for="speed">Replay speed</label><select id="speed"><option value="1" selected>1×</option><option value="8">8×</option><option value="16">16×</option></select><label><input id="motion" type="checkbox" checked> Workflow motion</label></div><p>Keyboard controls: Space pauses, R restarts, F opens full screen. Escape closes this panel or exits full screen.</p></div></dialog>
 <script>
 'use strict';
 const DATA = /*__DATA__*/null;
 const RESULTS = /*__RESULTS__*/null;
 const ASSETS = /*__ASSETS__*/null;
+const SIM_PROFILE = /*__SIM_PROFILE__*/null;
+/*__SIM_MODEL__*/
 (() => {
   const $ = id => document.getElementById(id);
-  if (!DATA || !RESULTS || !ASSETS) { $('completion').textContent='Build this page with node docs/dashboard/build-steady-state.cjs.'; return; }
+  if (!DATA || !RESULTS || !ASSETS) { document.querySelector('.footnote').textContent='Demo data unavailable. Rebuild the page.'; return; }
   const C=RESULTS.capacity, S=RESULTS.serving;
   const plateauIndex=DATA.plateaus.findIndex(p=>p.keeps_up&&p.resident===C.resident);
   if(plateauIndex<0) throw new Error('Replay has no capacity plateau matching the paper. Select a matching event file when building.');
@@ -89,11 +93,15 @@ const ASSETS = /*__ASSETS__*/null;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   let playing=!reduced.matches,motion=!reduced.matches,speed=selected.defaultSpeed,tau=0,illustration=0,last=performance.now(),lastPaint=-1,lastFocus='',loops=0;
   let state={};
-  const fit=()=>{const scale=Math.min(innerWidth/1600,innerHeight/900);Object.assign($('screen').style,{transform:`scale(${scale})`,left:`${(innerWidth-1600*scale)/2}px`,top:`${(innerHeight-900*scale)/2}px`});};
+  /*__SIM_UI__*/
+  /*__DETAIL_UI__*/
+  const fit=()=>{if(innerWidth<1100){Object.assign($('screen').style,{transform:'none',left:'0',top:'0'});return;}const scale=Math.min(innerWidth/1600,innerHeight/900);Object.assign($('screen').style,{transform:`scale(${scale})`,left:`${(innerWidth-1600*scale)/2}px`,top:`${(innerHeight-900*scale)/2}px`});};
   addEventListener('resize',fit); fit();
-  function syncControls(){ $('play').textContent=playing?'Pause':'Play'; $('play').setAttribute('aria-label',playing?'Pause replay':'Play replay'); $('screen').classList.toggle('paused',!playing);$('screen').classList.toggle('still',!motion);$('motion').checked=motion; }
+  function syncControls(){ updateTour();$('screen').classList.toggle('paused',!playing);$('screen').classList.toggle('still',!motion);$('motion').checked=motion; }
   function focus(){
-    const index=Math.floor(illustration/12)%5, within=illustration%12,d=defs[index];
+    const activeIndices=simulation?mixControl.snapshot().included.flatMap((on,i)=>on?[i]:[]):defs.map((_,i)=>i);
+    if(!activeIndices.length){$('focus-title').textContent='Choose an archetype to explore its workflow';$('workers').replaceChildren();$('cycle').replaceChildren();$('focus-description').textContent='The add menu contains the five current agent archetypes.';lastFocus='';return;}
+    const index=activeIndices[Math.floor(illustration/12)%activeIndices.length], within=illustration%12,d=defs[index];
     const worker=Math.min(d.workers.length-1,Math.floor(within/(12/d.workers.length)));
     const key=index+':'+worker;
     if(key!==lastFocus){
@@ -107,40 +115,16 @@ const ASSETS = /*__ASSETS__*/null;
     }
     const nodes=[...$('cycle').querySelectorAll('.cycle-node')],progress=(within%(12/d.workers.length))/(12/d.workers.length);
     nodes.forEach((e,i)=>e.classList.toggle('active',i===Math.floor(progress*nodes.length)));
+    highlightResources(nodes[Math.floor(progress*nodes.length)]);
   }
   function render(){
-    const abs=start+tau,active=units.filter(u=>u[2]<=abs&&(u[3]==null||u[3]>abs));
-    const counts=defs.map((_,i)=>active.filter(u=>u[1]===i).length);
-    $('resident-now').textContent=active.length;
-    counts.forEach((n,i)=>{ $('count-'+i).textContent=n; [...$('population-'+i).children].forEach((e,k)=>e.classList.toggle('empty',k>=Math.ceil(n/4))); });
-    const sm=samples.findLast(s=>s[1]<=abs&&s[4]!=null),familySample=samples.findLast(s=>s[1]<=abs&&s[5]!=null);
-    const core=DATA.cores[plateauIndex]?.[Math.floor((abs-P.t0)/10)];
-    const cpu=core?core.reduce((a,b)=>a+b,0)/core.length:null;
-    $('cpu-now').textContent=cpu==null?'—':Math.round(cpu)+'%';
-    $('memory-now').textContent=sm==null?'—':Math.round(sm[4])+' GB';
-    const shares=categories.map(c=>c[2].reduce((a,f)=>a+Math.max(0,familySample?.[5]?.[DATA.meta.families.indexOf(f)]||0),0));
-    const total=shares.reduce((a,b)=>a+b,0);
-    shares.forEach((n,i)=>{$('family-'+i).style.width=(total?n/total*100:0)+'%';$('family-'+i).title=categories[i][0]+': '+(total?n/total*100:0).toFixed(1)+'% of attributed CPU';});
-    const history=samples.filter(s=>s[1]<=abs&&s[1]>=abs-120&&s[4]!=null).map(s=>s[4]);
-    const lo=Math.min(...history)-5,hi=Math.max(...history)+5;
-    $('memory-line').setAttribute('d',history.map((n,i)=>(i?'L':'M')+(i/Math.max(1,history.length-1)*110).toFixed(1)+' '+(23-(n-lo)/(hi-lo)*20).toFixed(1)).join(' '));
-    const done=completions.findLast(u=>u[3]<=abs);
-    $('completion').textContent=done?`${defs[done[1]].name} agent ${done[4]?'completed':'ended without success'} · ${Math.round(done[3]-done[2])} seconds · ${format(done[3]-P.t0)} into capacity hold`:'Waiting for the next recorded completion';
-    $('clock').textContent=`${playing?'Steady-state loop':'Replay paused'} · ${speed}× · ${format(tau)}`;
-    $('sample-clock').textContent='Recorded window · '+format(tau);
-    $('progress').style.width=(tau/length*100)+'%';
-    if($('detail-dialog').open){
-      [...$('cores').children].forEach((e,i)=>{e.style.setProperty('--busy',core?.[i]??0);e.title=`Core ${i+1}: ${Math.round(core?.[i]??0)}%`;});
-      const labels={app:'Agent application',rerank:'Reranking',embed:'Query embedding',ingest:'Ingest embedding'};
-      $('tiers').innerHTML=Object.entries(labels).map(([k,label])=>{const indices=DATA.meta.tiers.flatMap((t,i)=>t===k?[i]:[]);return `<div>${label}<small>${indices.length} cores · ${core?Math.round(indices.reduce((a,i)=>a+core[i],0)/indices.length)+'% occupied':'no sample'}</small></div>`;}).join('');
-    }
-    state={time:tau,absoluteTime:abs,counts,resident:active.length,cpu,memory:sm?.[4]??null,shares,completion:done??null,loops,playing,motion,plateauIndex,start,end};
-    focus();
+    renderSimulation();
   }
 
   function showTopic(key){
+    if(simulation){showSimulationTopic(key);return;}
     const [kind,a,b,c]=key.split(':'), index=Number(a), worker=Number(b)||0;
-    let title='',role='Conference demo',paragraphs=[],metrics=[],steps=[];
+    let title='',role='Single-CPU source · R770 reference scales these readings ×2',paragraphs=[],metrics=[],steps=[];
     const familyNotes=[
       'Sandbox processes run source parsing, document OCR, NumPy data jobs, and software builds. These jobs account for CPU work beyond the language model calls.',
       'CPU services embed queries, search the corpus, and rerank candidates. The ingestion service also embeds prepared document chunks.',
@@ -222,11 +206,12 @@ const ASSETS = /*__ASSETS__*/null;
   function restart(){tau=0;illustration=0;lastFocus='';render();}
   function toggle(){playing=!playing;last=performance.now();syncControls();render();}
   async function fullscreen(){try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{$('fullscreen').textContent='Use browser full screen';}}
-  $('play').onclick=toggle; $('restart').onclick=restart; $('fullscreen').onclick=fullscreen;
+  $('fullscreen').onclick=fullscreen;
   document.addEventListener('fullscreenchange',()=>{$('fullscreen').textContent=document.fullscreenElement?'Exit full screen':'Full screen';});
 
   let resumeAfterDetails=false;
   function openPanel(topic){
+    if(!topic)topic='methodology';
     if(!$('detail-dialog').open){resumeAfterDetails=playing;playing=false;}
     $('topic-panel').hidden=!topic;
     $('reference-panel').hidden=!!topic;
@@ -246,12 +231,12 @@ const ASSETS = /*__ASSETS__*/null;
   $('speed').onchange=e=>{speed=Number(e.target.value);render();};
   $('motion').onchange=e=>{motion=e.target.checked;syncControls();render();};
   reduced.addEventListener('change',e=>{if(e.matches){playing=false;motion=false;syncControls();render();}});
-  addEventListener('keydown',e=>{if($('detail-dialog').open||/INPUT|SELECT|BUTTON|A/.test(e.target.tagName))return;if(e.code==='Space'){e.preventDefault();toggle();}if(e.key.toLowerCase()==='r')restart();if(e.key.toLowerCase()==='f')fullscreen();});
+  addEventListener('keydown',e=>{if($('detail-dialog').open||/INPUT|SELECT|BUTTON|A/.test(e.target.tagName))return;if(e.code==='Space'){e.preventDefault();toggleTour();}if(e.key.toLowerCase()==='f')fullscreen();});
   document.addEventListener('visibilitychange',()=>{last=performance.now();});
   // The clock runs on a timer rather than animation frames: embedded viewers may report the
   // document hidden or withhold animation frames, and the replay must still advance. The dt
   // clamp keeps the clock from jumping after a throttled interval.
-  function frame(now){const dt=Math.min((now-last)/1000,.25);last=now;if(playing){tau+=dt*speed;if(tau>=length){tau%=length;loops++;}if(motion)illustration+=dt;if(now-lastPaint>=250){render();lastPaint=now;}}}
+  function frame(now){const dt=Math.min((now-last)/1000,.25);last=now;if(playing){transitionClock+=dt;tau+=dt*speed;if(tau>=length){tau%=length;loops++;}if(motion&&tourRunning)illustration+=dt;if(now-lastPaint>=250){render();lastPaint=now;}}}
   syncControls();render();setInterval(()=>frame(performance.now()),100);
   window.__steady={seek:t=>{tau=((t%length)+length)%length;render();},time:()=>tau,pause:()=>{playing=false;syncControls();render();},play:()=>{playing=true;last=performance.now();syncControls();render();},focus:i=>{illustration=i*12;lastFocus='';render();},snapshot:()=>({...state}),restart};
 })();

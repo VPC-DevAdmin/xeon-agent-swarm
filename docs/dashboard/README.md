@@ -40,9 +40,28 @@ Space pauses the replay and motion. R restarts the recorded window. F enters ful
 
 Select a headline finding, an agent, a worker, a workflow stage, a server, the LLM connection, a resource reading, a CPU category, or the completion message to open its explanation. Each target also accepts Enter or Space when focused. Closing a topic restores the prior playback state. The source-reference button opens the full presenter notes.
 
-The deployment graphic shows three dual-socket R770 systems and one eight-GPU XE7740. All replay readings remain scoped to one CPU. The throughput note below the hardware opens the model-serving calculation.
+The deployment graphic sizes whole dual-socket R770 and eight-GPU XE7740 systems to the chosen working pool; the sizing model and its assumptions are described in `SIMULATION.md`. Recorded readings remain scoped to one CPU. The throughput note below the hardware opens the model-serving calculation.
 
 Reduced-motion preferences start the demo paused, with decorative animation disabled. The replay clock runs on a timer rather than animation frames, so it keeps advancing inside embedded viewers that report the page hidden; the clock never jumps by more than a quarter second after a throttled interval.
+
+## Working-pool simulation
+
+The demo opens as a simulation of 720 working agents in the Enterprise mix and lets the presenter change the incoming percentages, add or remove archetypes, and set the deployment total. `simulation-model.cjs` holds the sizing arithmetic, `simulation-profile.json` the per-workflow component costs from the methodology, `simulation-ui.js` and `simulation.css` the controls, and `detail-views.js` and `detail-views.css` the click-through views. The build embeds all of them and refuses to run against a profile or timing series that does not match the current definitions. `SIMULATION.md` explains the calculation, its assumptions, and the spot checks that would validate it.
+
+Run the offline checks from the project root after every rebuild:
+
+```sh
+node docs/dashboard/check-simulation.cjs
+node docs/dashboard/check-details.cjs
+```
+
+## Local preview
+
+The `replay-demo` entry in `.claude/launch.json` serves this directory on http://127.0.0.1:8766; open `steady-state.html` there. Without the launcher:
+
+```sh
+python3 -m http.server 8766 --bind 127.0.0.1 --directory docs/dashboard
+```
 
 ## Browser check
 
