@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Panel A · Enterprise agent capacity</title>
+<style>
+/*__FONTS__*/
+/*__DETAIL_CSS__*/
+/*__PANEL_CSS__*/
+</style>
+</head>
+<body>
+<nav class="study-tabs" aria-label="Layout studies"><span>Layout studies</span><button id="tab-current" aria-pressed="false">Current page</button><button id="tab-a" aria-pressed="true">A · Work to hardware</button></nav>
+<iframe id="current" title="Current conference demo" src="steady-state.html" hidden></iframe>
+<main id="panel-a">
+  <header class="hero">
+    <div class="headline"><div class="brand"><img data-asset="dell" alt="Dell Technologies"><span>Enterprise agent capacity</span></div><h1>Agentic AI needs more CPU capacity.</h1><p id="result-sentence"></p></div>
+    <div class="hero-tools"><button class="ratio glass" data-topic="ratio"><strong id="ratio"></strong><span>CPU sockets : GPUs<small>Before system rounding</small></span></button><div class="controls"><button id="reset">Reset to Default</button><button id="tour">Pause Tour</button><button id="fullscreen">Full screen</button><button data-topic="methodology">Details</button></div></div>
+  </header>
+  <div class="layout">
+    <section class="glass workload">
+      <div class="tier-heading"><span class="eyebrow">1 · Agent workload</span><h2 class="mix-title"><span id="mix-name">Enterprise mix</span><span aria-hidden="true">⌄</span><select id="mix" aria-label="Choose agent mix"></select></h2></div>
+      <div class="target-line"><label for="target">Target working agents</label><input id="target" type="number" value="720" min="0" max="100000" step="1"></div>
+      <div id="rows" class="rows"></div>
+      <p id="mix-status" role="status" class="status">Incoming shares total 100%.</p>
+      <p class="mix-help">Incoming share sets how often each workflow starts. Longer jobs account for more of the agents working now.</p>
+    </section>
+    <div class="connector first" aria-hidden="true"><svg viewBox="0 0 32 64"><path d="M8 12 24 32 8 52"/></svg></div>
+    <section class="glass execution">
+      <div class="tier-heading"><span class="eyebrow">2 · CPU execution</span><h2>Run agents and their jobs</h2></div>
+      <button class="hardware-heading" data-topic="r770"><strong id="cpu-count"></strong><span>PowerEdge R770<small id="cpu-sockets"></small></span><span class="detail-cue" aria-hidden="true">↗</span></button>
+      <button class="hardware-art" data-topic="r770" aria-label="PowerEdge R770 specifications"><div id="cpu-photos" class="server-stack"></div><img class="xeon" data-asset="xeon" alt="Intel Xeon processors"></button>
+      <button class="metric cpu-metric" data-topic="cpu"><span>CPU utilization<small>Average across the R770 servers</small></span><strong id="cpu"></strong></button>
+      <div class="cpu-stack" id="cpu-stack" role="img" aria-label="CPU utilization by function, including idle capacity"></div><div id="cpu-key" class="legend"></div>
+      <button class="metric" data-topic="memory"><span>Memory per R770</span><strong id="memory"></strong></button>
+      <button class="metric" data-topic="capacity"><span>Working agents per R770</span><strong id="per-server"></strong></button>
+    </section>
+    <div class="connector exchange" aria-hidden="true"><svg viewBox="0 0 32 64"><path d="M8 12 24 32 8 52"/></svg></div>
+    <section class="glass serving">
+      <div class="tier-heading"><span class="eyebrow">3 · Model serving</span><h2>Answer the agents’ calls</h2></div>
+      <button class="hardware-heading" data-topic="xe7740"><strong id="gpu-count"></strong><span>PowerEdge XE7740<small id="gpu-allocation"></small></span><span class="detail-cue" aria-hidden="true">↗</span></button>
+      <button class="hardware-art" data-topic="xe7740" aria-label="PowerEdge XE7740 specifications"><div id="gpu-photos" class="gpu-photos"></div></button>
+      <button class="metric" data-topic="serving"><span>Model-serving demand<small>Share of installed serving capacity</small></span><strong id="gpu-demand"></strong></button>
+      <div class="demand-track"><i id="gpu-bar"></i></div>
+      <button class="metric" data-topic="serving"><span>Output tokens required</span><strong id="tokens"></strong></button>
+      <button class="metric" data-topic="serving"><span>Model calls per second</span><strong id="calls"></strong></button>
+      <p id="serving-reference" class="serving-reference"></p>
+    </section>
+  </div>
+  <section class="glass workflow" aria-label="Selected agent workflow">
+    <div class="workflow-heading"><div><h2 id="flow-title"></h2><p id="flow-sub"></p></div><button id="agent-details">Agent details ↗</button></div>
+    <div id="worker-sequence" class="worker-sequence"></div><div id="flow" class="flow"></div>
+    <p class="flow-note">Workflow illustration · worker results pass review before the next job starts.</p>
+  </section>
+  <footer>Extrapolated agent execution demo based on single-socket measurements.</footer>
+</main>
+<dialog id="detail-dialog" aria-labelledby="topic-title"><button class="close" id="close-details">Close</button><div id="topic-role" class="eyebrow"></div><h2 id="topic-title"></h2><div id="topic-body"></div><div class="topic-links"><button id="show-reference">Testing and methodology</button><a id="topic-paper" href="../whitepaper/agent-capacity-whitepaper.html#method" target="_blank" rel="noopener">Read the whitepaper ↗</a></div></dialog>
+<dialog id="agent-picker" aria-labelledby="picker-title"><button id="close-picker" class="close">Close</button><h2 id="picker-title">Add an agent</h2><div id="agent-options"></div></dialog>
+<script>
+const RESULTS = /*__RESULTS__*/null;
+const ASSETS = /*__ASSETS__*/null;
+const SIM_PROFILE = /*__SIM_PROFILE__*/null;
+const TRACE = /*__TRACE__*/null;
+/*__SIM_MODEL__*/
+(() => {
+const defs = /*__DEFS__*/null;
+/*__DETAIL_UI__*/
+/*__PANEL_UI__*/
+})();
+</script>
+</body></html>

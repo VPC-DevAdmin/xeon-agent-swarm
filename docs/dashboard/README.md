@@ -71,7 +71,9 @@ python3 -m http.server 8766 --bind 127.0.0.1 --directory docs/dashboard
 node docs/dashboard/build-layout-studies.cjs
 ```
 
-The source is `layout-studies.src.html`; the current page is not changed by the study.
+Panel A uses `panel-a.src.html`, `panel-a.css`, and `panel-a.js`. The builder embeds the shared simulation model, archetype definitions, assets, and illustrated detail views. `layout-studies.src.html` retains the earlier study for reference. The current page is not changed by the study.
+
+Run `node docs/dashboard/check-panel-a.cjs` for source-level checks of initialization, presets, saved Custom settings, incomplete drafts, transitions, zero and large populations, and reset. This check does not verify visual layout in a browser.
 
 ## Cloudflare preview
 
