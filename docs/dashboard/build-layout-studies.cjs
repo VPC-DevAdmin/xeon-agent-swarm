@@ -33,9 +33,17 @@ profile.timings = results.archetypes.map((a, i) => {
   return {name: a.name, samples: rows.length, meanSeconds: mean(u => u[3] - u[2])};
 });
 profile.sourceHashes = Object.fromEntries(['config/capacity_scenarios.yaml', 'docs/benchmark-methodology.md', events].map(p => [p, crypto.createHash('sha256').update(fs.readFileSync(path.resolve(root, p))).digest('hex')]));
+// Recorded host activity in the capacity plateau's steady window, normalized to its means:
+// [seconds, CPU factor, memory factor]. The studies breathe with it; they never invent events.
+const plateau = data.plateaus[capacityPlateau];
+const window = data.samples.filter(s => s[0] === capacityPlateau && s[1] >= plateau.t0 + 600 && s[1] <= plateau.t1 && s[3] > 0 && s[4] > 0);
+const meanOf = i => window.reduce((a, s) => a + s[i], 0) / window.length;
+const meanCpu = meanOf(3), meanMem = meanOf(4);
+const trace = window.map(s => [Number((s[1] - window[0][1]).toFixed(1)), Number((s[3] / meanCpu).toFixed(3)), Number((s[4] / meanMem).toFixed(3))]);
+if (trace.length < 60) throw new Error('Too few activity samples in the capacity window');
 const json = o => JSON.stringify(o).replace(/</g, '\\u003c');
 let html = fs.readFileSync(path.join(base, 'layout-studies.src.html'), 'utf8');
-html = html.replace('/*__RESULTS__*/null', json(results)).replace('/*__ASSETS__*/null', json(assets)).replace('/*__SIM_PROFILE__*/null', json(profile));
+html = html.replace('/*__TRACE__*/null', json(trace)).replace('/*__RESULTS__*/null', json(results)).replace('/*__ASSETS__*/null', json(assets)).replace('/*__SIM_PROFILE__*/null', json(profile));
 html = html.replace('/*__FONTS__*/', [...paper.matchAll(/@font-face\s*\{[^}]+\}/g)].map(m => m[0]).join('\n'));
 html = html.replace('/*__SIM_MODEL__*/', () => fs.readFileSync(path.join(base, 'simulation-model.cjs'), 'utf8'));
 if (/\/\*__[A-Z_]+__\*\//.test(html)) throw new Error('Unfilled placeholder in layout studies page');

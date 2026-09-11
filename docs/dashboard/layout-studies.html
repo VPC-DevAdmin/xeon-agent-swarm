@@ -15,11 +15,11 @@
 button,input,select{font:inherit;color:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:3px solid #fff;outline-offset:3px}
 h1,h2,h3,p{margin:0}
 /* Tab bar */
-.tabs{flex:none;height:56px;display:flex;align-items:center;gap:6px;padding:0 20px;background:#04101c;border-bottom:1px solid var(--edge)}
+.tabs{flex:none;height:56px;display:flex;align-items:center;gap:6px;padding:0 20px;background:#04101c;border-bottom:1px solid var(--edge);white-space:nowrap;overflow:hidden}
 .tabs .kicker{font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#9ed9ef;margin-right:16px;white-space:nowrap}
 .tab{border:1px solid transparent;background:none;padding:8px 14px;border-radius:10px;font-size:14px;color:var(--muted)}
 .tab[aria-selected="true"]{background:#10304a;border-color:var(--edge);color:var(--ink)}
-.tabs .spacer{flex:1}.tabs .note{font-size:12px;color:var(--faint)}
+.tabs .spacer{flex:1}.tabs .note{font-size:12px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;min-width:0}
 /* Stage: every study is drawn on the same 1600×900 canvas as the current page and scaled to fit */
 .stage{flex:1;position:relative;overflow:hidden}
 .screen{width:1600px;height:900px;position:absolute;transform-origin:top left;padding:26px 30px 18px;display:none;flex-direction:column;gap:18px;background:radial-gradient(ellipse at 10% 8%,#17496d 0,transparent 53%),radial-gradient(ellipse at 96% 76%,#104553 0,transparent 55%),linear-gradient(145deg,#082943,#071c30 65%,#0b293b)}
@@ -51,6 +51,11 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
 .a-photos{display:flex;gap:6px;align-items:center;height:110px}.a-photos img{flex:1;min-width:0;max-height:100%;height:auto}
 .a-card .why{font-size:15px;color:var(--muted);line-height:1.45}
 .a-stack{display:flex;flex-direction:column;gap:8px}.a-stack .key{display:flex;gap:16px;font-size:12px;color:var(--muted)}.a-stack .key i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.a-controls{display:flex;flex-direction:column;gap:12px;align-items:flex-end}.live{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}.lamp{width:7px;height:7px;border-radius:50%;background:#61dcca;box-shadow:0 0 12px #61dcca80}.paused .lamp{background:#a9b7c4;box-shadow:none}
+.a-row input[type=range]{grid-column:2/4;accent-color:#53c3ff;width:100%;height:18px;margin:0}
+.a-row .meta{grid-column:2/4;display:flex;justify-content:space-between;color:var(--faint);font-size:12px;margin-top:-2px}.a-row .meta b{color:var(--muted);font-weight:400;font-variant-numeric:tabular-nums}
+.tag{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#61dcca;margin-left:6px;vertical-align:middle}
+.a-live-row{display:flex;gap:12px;align-items:center}.spark{width:120px;height:36px;flex:none}.spark path{fill:none;stroke:#53c3ff;stroke-width:1.5}
 /* ---------- Study B: dial and answer ---------- */
 .b-main{flex:1;display:grid;grid-template-columns:460px 1fr;gap:20px;min-height:0}
 .b-rail{padding:24px;display:flex;flex-direction:column;gap:18px}
@@ -98,7 +103,7 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
 <div class="stage" id="stage">
   <iframe class="current active" id="current" title="Current conference page" src="steady-state.html" loading="lazy"></iframe>
 
-  <!-- A: one sentence, one flow -->
+  <!-- A: one sentence, one flow, live -->
   <section class="screen" id="screen-a" aria-label="Study A">
     <div class="a-head">
       <div>
@@ -106,7 +111,8 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
         <h1 id="a-title" style="margin-top:14px"></h1>
         <div class="sub"><span class="badge modeled">Sized from the measurement</span><span id="a-sub"></span></div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-end">
+      <div class="a-controls">
+        <div class="live"><i class="lamp"></i><span id="a-clock">Live simulation</span><button class="chip" id="a-pause">Pause</button></div>
         <label class="target">Working agents <input type="number" min="0" max="100000" step="1" data-target></label>
         <div class="chips" data-presets></div>
       </div>
@@ -114,16 +120,18 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
     <div class="a-flow">
       <section class="glass a-card" aria-label="Workload">
         <div class="head"><h2>The work</h2><span class="badge">1 · Workload</span></div>
-        <p class="why">Five kinds of agent, each running as one end-to-end workflow. Share is the incoming mix; the count is how many are working at once.</p>
+        <p class="why">Five kinds of agent, each an end-to-end workflow. Slide the incoming share; the working population follows.</p>
         <div class="a-rows" id="a-rows"></div>
+        <p class="b-status" id="a-status"></p>
       </section>
       <div class="a-arrow" aria-hidden="true">→</div>
       <section class="glass a-card" aria-label="Host CPUs">
         <div class="head"><h2>Runs on CPUs</h2><span class="badge">2 · Agent execution</span></div>
         <div class="a-big"><span class="num" id="a-cpu-count"></span><span>PowerEdge R770<br><span id="a-cpu-sockets"></span></span></div>
         <div class="a-photos" id="a-cpu-photos"></div>
-        <div class="a-stack"><div class="kv"><span>Average CPU utilization</span><b id="a-cpu-util"></b></div><div class="bar" id="a-cpu-bar"></div><div class="key" id="a-cpu-key"></div></div>
-        <div class="kv"><span>Memory per R770</span><b id="a-mem"></b></div>
+        <div class="a-stack"><div class="kv"><span>Working agents per CPU socket</span><b id="a-load"></b></div><div class="bar" id="a-load-bar"></div><div class="key"><span id="a-load-note"></span></div></div>
+        <div class="a-stack"><div class="kv"><span>CPU utilization <small class="tag">live</small></span><b id="a-cpu-util"></b></div><div class="a-live-row"><svg class="spark" id="a-spark" viewBox="0 0 220 36" preserveAspectRatio="none" aria-hidden="true"><path id="a-spark-path" d=""/></svg><div style="flex:1"><div class="bar" id="a-cpu-bar"></div><div class="key" id="a-cpu-key"></div></div></div></div>
+        <div class="kv"><span>Memory per R770 <small class="tag">live</small></span><b id="a-mem"></b></div>
         <p class="why" id="a-cpu-why"></p>
       </section>
       <div class="a-arrow" aria-hidden="true">→</div>
@@ -131,13 +139,14 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
         <div class="head"><h2>Calls the model</h2><span class="badge">3 · Model serving</span></div>
         <div class="a-big"><span class="num" id="a-gpu-count"></span><span>PowerEdge XE7740<br><span id="a-gpu-alloc"></span></span></div>
         <div class="a-photos" id="a-gpu-photos"></div>
+        <div class="a-stack"><div class="kv"><span>GPU serving capacity used</span><b id="a-gpu-use"></b></div><div class="bar" id="a-gpu-bar"></div></div>
         <div class="kv"><span>Output the fleet needs</span><b id="a-tokens"></b></div>
-        <div class="kv"><span>Model calls</span><b id="a-calls"></b></div>
+        <div class="kv"><span>Model calls <small class="tag">live</small></span><b id="a-calls"></b></div>
         <div class="kv"><span>Serving reference</span><b id="a-serving"></b></div>
         <p class="why" id="a-gpu-why"></p>
       </section>
     </div>
-    <p class="footnote">Measured on one Xeon 6 CPU at the v2.3 enterprise mix; deployment counts are sized from that measurement and need multi-socket validation.</p>
+    <p class="footnote">Measured on one Xeon 6 CPU at the v2.3 enterprise mix; deployment counts are sized from that measurement and need multi-socket validation. Live readings vary with the recorded host trace.</p>
   </section>
 
   <!-- B: controls left, answer right -->
@@ -331,6 +340,7 @@ const SIM_PROFILE = {"version":"v2.3","reference":"data/capacity/set-20260908-16
 
 (() => {
   const $ = id => document.getElementById(id);
+  const screens = {a: $('screen-a'), b: $('screen-b'), c: $('screen-c')};
   document.querySelectorAll('[data-asset]').forEach(e => { e.src = ASSETS[e.dataset.asset]; });
   const C = RESULTS.capacity, S = RESULTS.serving, A = RESULTS.archetypes;
   const sim = AgentSimulator.create(SIM_PROFILE, RESULTS);
@@ -357,24 +367,66 @@ const SIM_PROFILE = {"version":"v2.3","reference":"data/capacity/set-20260908-16
   document.addEventListener('click', e => { const b = e.target.closest('[data-preset]'); if (b) applyPreset(b.dataset.preset); });
   document.addEventListener('input', e => { if (e.target.matches('[data-target]')) { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 0 && n <= 100000) { mix.setTarget(n); render(); } } });
   function sentence(r) { return r ? `<b>${fmt(r.total)}</b> working agents need <b>${r.cpuSystems}</b> PowerEdge R770${r.cpuSystems === 1 ? '' : 's'} and <b>${r.gpuSystems}</b> XE7740${r.gpuSystems === 1 ? '' : 's'}.` : 'Percentages must total 100 before the sizing updates.'; }
-  /* ---- A ---- */
-  function renderA(m, r) {
-    $('a-title').innerHTML = sentence(r);
-    $('a-sub').textContent = r ? `${preset} mix · CPU-to-GPU ${ratioText(r)} per socket · ${Math.round(r.cpuPercent)}% average CPU` : '';
-    $('a-rows').innerHTML = A.map((a, i) => `<div class="a-row">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div><div class="pct">${m.weights[i]}%</div><div class="bar" style="grid-column:2/4"><i style="width:${m.weights[i]}%;background:${a.color};filter:brightness(1.35)"></i></div><small style="grid-column:2/4;color:var(--faint);font-size:12px;margin-top:-4px">${r ? fmt(r.counts[i]) + ' working now · ' + fmt(r.rates[i] * 3600) + ' finished per hour' : ''}</small></div>`).join('');
-    if (!r) return;
-    $('a-cpu-count').textContent = r.cpuSystems; $('a-cpu-sockets').textContent = `${r.sockets} CPU sockets`;
-    photos($('a-cpu-photos'), ASSETS.r770, r.cpuSystems, 'Dell PowerEdge R770');
-    $('a-cpu-util').textContent = Math.round(r.cpuPercent) + '%';
-    bar($('a-cpu-bar'), [...r.families, Math.max(0, r.sockets * RESULTS.platform.cores - r.families.reduce((a, b) => a + b, 0))], [...familyColors, '#0d2b41']); key($('a-cpu-key'), familyNames, familyColors);
-    $('a-mem').textContent = fmt(r.memoryPerCPU) + ' GB';
-    $('a-cpu-why').textContent = `${r.bottleneck} sets the CPU count. One measured CPU carries ${C.resident} agents at this mix; the fleet is ${r.cpuEquivalent.toFixed(1)} CPU equivalents rounded up to whole two-socket systems with a 10% margin.`;
-    $('a-gpu-count').textContent = r.gpuSystems; $('a-gpu-alloc').textContent = `${Math.ceil(r.gpuEquivalent - 1e-9)} of ${r.gpuSystems * 8} GPUs allocated`;
-    photos($('a-gpu-photos'), ASSETS.xe7740, r.gpuSystems, 'Dell PowerEdge XE7740');
-    $('a-tokens').textContent = compact(r.output) + ' tokens/s'; $('a-calls').textContent = r.calls.toFixed(1) + ' per second';
-    $('a-serving').textContent = `${S.model} · ${fmt(S.outputTokensPerSecondPerGpu)} tok/s per GPU`;
-    $('a-gpu-why').textContent = `Output demand divided by the serving reference gives ${r.gpuEquivalent.toFixed(1)} GPUs, rounded up to eight-GPU systems. Demand, not GPU telemetry.`;
+  /* ---- A: static structure on mix change, live readings on a clock ---- */
+  const TRACE = [[0,0.909,0.79],[2,0.923,0.82],[4,0.905,0.856],[6,0.915,0.898],[8,0.941,0.925],[10,0.92,0.939],[12,0.976,0.958],[14,0.989,0.939],[16,1.015,0.97],[18,1.01,0.977],[20,1.015,0.987],[22,1.04,0.949],[24,0.999,0.952],[26,0.983,0.939],[28,0.946,0.883],[30,0.915,0.909],[32,0.877,0.931],[34,0.867,0.94],[36,0.868,0.943],[38,0.798,0.899],[40,0.759,0.913],[42,0.771,0.878],[44,0.708,0.806],[46,0.698,0.82],[48,0.733,0.803],[50,0.716,0.791],[52,0.772,0.807],[54,0.81,0.827],[56,0.88,0.845],[58,0.932,0.831],[60,0.925,0.795],[62,0.908,0.814],[64,0.883,0.858],[66,0.911,0.898],[68,0.96,0.939],[70,0.949,0.951],[72,0.996,0.949],[74,1.027,0.97],[76,1.036,0.906],[78,1.011,0.926],[80,0.973,0.885],[82,0.975,0.873],[84,0.937,0.898],[86,0.877,0.895],[88,0.865,0.886],[90,0.891,0.885],[92,0.853,0.837],[94,0.835,0.848],[96,0.82,0.818],[98,0.804,0.828],[100,0.786,0.855],[102,0.763,0.838],[104,0.783,0.837],[106,0.772,0.807],[108,0.749,0.777],[110,0.836,0.784],[112,0.856,0.797],[114,0.865,0.825],[116,0.938,0.866],[118,0.938,0.897],[120,0.946,0.925],[122,0.943,0.933],[124,0.972,0.956],[126,0.992,0.988],[128,1.037,1.022],[130,1.018,1.048],[132,1.075,1.045],[134,1.066,1.025],[136,1.069,1.043],[138,1.071,1.042],[140,1.089,1.082],[142,1.059,1.117],[144,1.062,1.081],[146,1.027,1.04],[148,0.986,1.048],[150,0.949,0.998],[152,0.903,0.993],[154,0.887,0.97],[156,0.858,0.947],[158,0.836,0.863],[160,0.789,0.865],[162,0.774,0.882],[164,0.829,0.881],[166,0.883,0.866],[168,0.88,0.838],[170,0.88,0.829],[172,0.903,0.857],[174,0.94,0.867],[176,0.978,0.903],[178,1.018,0.923],[180,0.986,0.897],[182,0.964,0.922],[184,0.94,0.92],[186,0.975,0.942],[188,0.999,0.938],[190,1.004,0.959],[192,0.995,0.95],[194,0.987,0.975],[196,1.03,1.003],[198,1.033,0.996],[200,1.045,0.985],[202,1.005,0.936],[204,0.943,0.888],[206,0.914,0.892],[208,0.941,0.917],[210,0.946,0.927],[212,0.902,0.958],[214,0.908,0.97],[216,0.882,0.919],[218,0.842,0.916],[220,0.853,0.849],[222,0.842,0.845],[224,0.873,0.859],[226,0.835,0.875],[228,0.894,0.896],[230,0.917,0.888],[232,0.926,0.905],[234,0.973,0.941],[236,0.964,0.954],[238,0.958,0.954],[240,0.915,0.975],[242,0.935,0.963],[244,0.935,0.928],[246,0.946,0.928],[248,0.938,0.959],[250,0.94,0.985],[252,0.96,1.012],[254,0.967,0.973],[256,1.007,0.989],[258,0.941,0.923],[260,0.946,0.923],[262,0.975,0.945],[264,0.957,0.943],[266,0.931,0.977],[268,0.914,0.942],[270,0.896,0.943],[272,0.874,0.93],[274,0.862,0.892],[276,0.845,0.901],[278,0.87,0.887],[280,0.835,0.897],[282,0.839,0.834],[284,0.883,0.803],[286,0.882,0.823],[288,0.944,0.836],[290,0.995,0.884],[292,1.05,0.92],[294,0.975,0.966],[296,0.981,1.004],[298,0.998,1.009],[300,1.022,0.971],[302,1.016,0.972],[304,1.021,0.947],[306,0.999,0.975],[308,1.011,0.975],[310,0.993,0.98],[312,0.99,0.943],[314,1.001,0.964],[316,0.99,0.907],[318,0.932,0.898],[320,0.908,0.912],[322,0.911,0.883],[324,0.909,0.89],[326,0.89,0.854],[328,0.848,0.866],[330,0.844,0.891],[332,0.838,0.869],[334,0.861,0.885],[336,0.855,0.85],[338,0.906,0.866],[340,0.935,0.849],[342,0.984,0.88],[344,0.957,0.909],[346,0.981,0.944],[348,1.016,0.948],[350,1.005,0.958],[352,1.021,0.964],[354,0.983,0.981],[356,1.01,0.995],[358,0.996,0.936],[360,0.976,0.95],[362,1.001,0.941],[364,0.976,0.959],[366,1.033,0.98],[368,1.018,1],[370,1.007,1.023],[372,1.001,1.043],[374,0.983,1.067],[376,0.984,1.022],[378,0.96,0.99],[380,0.97,0.988],[382,0.995,1.009],[384,0.961,1.038],[386,0.928,1.067],[388,0.922,1.065],[390,0.964,1.046],[392,0.963,1.034],[394,1.001,1.037],[396,1.013,1.049],[398,1.039,1.049],[400,1.043,1.078],[402,1.036,1.036],[404,1.05,1.038],[406,1.051,1.066],[408,1.065,1.074],[410,1.092,1.067],[412,1.05,1.079],[414,1.033,1.094],[416,1.074,1.09],[418,1.04,1.107],[420,1.085,1.119],[422,1.077,1.137],[424,1.112,1.133],[426,1.11,1.091],[428,1.069,1.11],[430,1.089,1.047],[432,1.007,1.029],[434,0.993,1.032],[436,1.018,0.994],[438,0.989,1.027],[440,0.976,0.991],[442,0.972,0.979],[444,0.919,0.981],[446,0.888,0.909],[448,0.85,0.913],[450,0.87,0.936],[452,0.912,0.876],[454,0.925,0.859],[456,0.957,0.864],[458,0.987,0.893],[460,1.002,0.938],[462,1.034,0.972],[464,0.992,0.987],[466,1.022,1.021],[468,1.015,1.021],[470,0.979,1.024],[472,1.001,0.999],[474,1.024,0.962],[476,1.036,0.965],[478,0.973,0.971],[480,0.96,0.959],[482,0.996,0.975],[484,0.992,0.869],[486,0.941,0.882],[488,0.905,0.899],[490,0.912,0.91],[492,0.887,0.919],[494,0.885,0.929],[496,0.89,0.929],[498,0.883,0.9],[500,0.874,0.924],[502,0.883,0.929],[504,0.883,0.937],[506,0.891,0.966],[508,0.975,0.946],[510,0.99,0.953],[512,1.011,0.92],[514,1.048,0.956],[516,1.074,0.972],[518,1.085,0.985],[520,1.086,1.03],[522,1.121,1.062],[524,1.159,1.083],[526,1.104,1.071],[528,1.068,1.068],[530,1.12,1.063],[532,1.127,1.093],[534,1.135,1.107],[536,1.118,1.049],[538,1.12,1.068],[540,1.124,1.071],[542,1.141,1.047],[544,1.091,1.072],[546,1.075,1.091],[548,1.068,1.096],[550,1.042,1.078],[552,1.025,1.103],[554,1.01,1.079],[556,0.967,1.09],[558,0.928,1.05],[560,0.932,1.061],[562,0.951,1.013],[564,0.937,0.965],[566,0.906,0.981],[568,0.964,0.968],[570,1.015,0.957],[572,1.028,0.953],[574,1.013,0.986],[576,1.025,1.01],[578,1.043,1.034],[580,1.034,1.008],[582,1.05,1.031],[584,1.082,1.04],[586,1.106,1.056],[588,1.103,1.07],[590,1.071,1.037],[592,1.098,1.071],[594,1.121,1.089],[596,1.124,1.106],[598,1.123,1.133],[600,1.132,1.1],[602,1.11,1.08],[604,1.075,1.065],[606,1.068,1.093],[608,1.05,1.015],[610,1.036,1.05],[612,1.039,1.077],[614,1.001,1.075],[616,0.984,1.081],[618,0.957,0.998],[620,0.957,1.027],[622,0.952,0.993],[624,0.983,1.01],[626,0.986,0.986],[628,0.97,1.005],[630,0.995,0.989],[632,1.051,1.026],[634,1.051,1.03],[636,1.071,1.052],[638,1.114,1.089],[640,1.139,1.114],[642,1.135,1.112],[644,1.046,1.046],[646,1.045,1.065],[648,1.025,1.046],[650,1.005,1.017],[652,1.005,1.029],[654,1.021,1.055],[656,1.056,1.055],[658,1.03,1.082],[660,1.024,1.033],[662,1.034,1.032],[664,0.981,1.015],[666,0.976,0.977],[668,0.983,0.985],[670,0.979,1.014],[672,0.966,1.054],[674,0.995,1.055],[676,0.986,1.088],[678,0.973,1.04],[680,0.992,1.065],[682,1.001,1.049],[684,1.04,1.076],[686,1.054,1.081],[688,1.046,1.076],[690,1.072,1.095],[692,1.095,1.102],[694,1.117,1.119],[696,1.159,1.164],[698,1.165,1.184],[700,1.182,1.224],[702,1.181,1.239],[704,1.191,1.231],[706,1.173,1.211],[708,1.115,1.198],[710,1.097,1.131],[712,1.092,1.133],[714,1.065,1.146],[716,1.098,1.163],[718,1.107,1.119],[720,1.098,1.085],[722,1.066,1.08],[724,0.998,1.071],[726,1.031,1.082],[728,1.027,1.098],[730,0.963,1.038],[732,0.949,1.01],[734,0.949,0.99],[736,0.92,0.947],[738,0.943,0.95],[740,1.06,0.937],[742,1.031,0.93],[744,1.019,0.958],[746,1.039,0.98],[748,1.103,1.015],[750,1.112,1.041],[752,1.156,1.076],[754,1.199,1.116],[756,1.193,1.138],[758,1.167,1.141],[760,1.152,1.134],[762,1.132,1.132],[764,1.12,1.161],[766,1.136,1.171],[768,1.136,1.204],[770,1.174,1.139],[772,1.08,1.129],[774,1.063,1.082],[776,1.039,1.064],[778,1.013,1.016],[780,0.999,1.033],[782,0.979,1.007],[784,0.951,1.017],[786,0.926,1.031],[788,0.914,0.997],[790,0.879,0.979],[792,0.912,0.967],[794,0.951,0.958],[796,1.001,0.975],[798,1.059,1.002],[800,1.103,0.991],[802,1.138,1.027],[804,1.176,1.085],[806,1.206,1.076],[808,1.196,1.131],[810,1.234,1.164],[812,1.229,1.184],[814,1.219,1.197],[816,1.223,1.198],[818,1.203,1.222],[820,1.17,1.189],[822,1.164,1.194],[824,1.188,1.208],[826,1.156,1.201],[828,1.155,1.212],[830,1.191,1.206],[832,1.176,1.151],[834,1.185,1.177],[836,1.165,1.205],[838,1.126,1.205],[840,1.106,1.191],[842,1.071,1.212],[844,1.048,1.125],[846,1.015,1.119],[848,0.981,1.02],[850,0.955,1.035],[852,1.019,1.036],[854,1.018,1.038],[856,1.106,1.048],[858,1.092,1.056],[860,1.115,1.054],[862,1.133,1.084],[864,1.173,1.095],[866,1.159,1.126],[868,1.167,1.146],[870,1.176,1.129],[872,1.168,1.15],[874,1.187,1.146],[876,1.133,1.161],[878,1.165,1.083],[880,1.118,1.088],[882,1.1,1.1],[884,1.139,1.12],[886,1.167,1.128],[888,1.173,1.118],[890,1.164,1.144],[892,1.129,1.167],[894,1.109,1.192],[896,1.098,1.207],[898,1.098,1.225],[900,1.072,1.182],[902,1.066,1.159]];
+  const traceLength = TRACE[TRACE.length - 1][0];
+  function traceAt(t) {
+    const x = ((t % traceLength) + traceLength) % traceLength;
+    let hi = TRACE.findIndex(s => s[0] > x); if (hi < 0) hi = TRACE.length - 1;
+    const a = TRACE[Math.max(0, hi - 1)], b = TRACE[hi], f = b[0] === a[0] ? 0 : (x - a[0]) / (b[0] - a[0]);
+    return [a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
   }
+  const live = {clock: 0, playing: true, shown: null, from: null, started: 0, done: [0, 0, 0, 0, 0], spark: [], last: performance.now()};
+  function renderA(m, r) {
+    $('a-rows').innerHTML = A.map((a, i) => `<div class="a-row">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div><div class="pct" id="a-pct-${i}">${m.weights[i]}%</div><input type="range" min="0" max="100" value="${m.weights[i]}" data-slider-a="${i}" aria-label="${a.name} incoming share"><div class="meta"><span><b id="a-now-${i}">—</b> working now</span><span><b id="a-done-${i}">0</b> finished</span></div></div>`).join('');
+    $('a-status').textContent = m.valid ? `Mix totals 100% · ${preset === 'Custom' ? 'custom mix' : preset + ' preset'}` : `Mix totals ${m.total}% · ${m.total < 100 ? 'add ' + (100 - m.total) : 'reduce ' + (m.total - 100)}% · showing the last valid mix`;
+    $('a-status').classList.toggle('bad', !m.valid);
+    if (!r) return;
+    if (live.shown && !r.counts.every((n, i) => n === live.shown.counts[i])) { live.from = live.shown.counts.slice(); live.started = live.clock; }
+    live.target = r;
+    $('a-serving').textContent = `${S.model} · ${fmt(S.outputTokensPerSecondPerGpu)} tok/s per GPU`;
+    $('a-cpu-key').innerHTML = familyNames.map((n, i) => `<span><i style="background:${familyColors[i]}"></i>${n}</span>`).join('');
+    liveA(true);
+  }
+  function liveA(force) {
+    if (!live.target) return;
+    let counts = live.target.counts;
+    if (live.from) { const t = Math.min(1, (live.clock - live.started) / 6), e = t * t * (3 - 2 * t); counts = live.target.counts.map((n, i) => Math.round(live.from[i] + (n - live.from[i]) * e)); if (t >= 1) live.from = null; }
+    const r = live.shown = counts.every((n, i) => live.shown && n === live.shown.counts[i]) && !force ? live.shown : sim.calculate(counts);
+    const [cpuF, memF] = traceAt(live.clock);
+    const cpu = r.total ? Math.min(100, r.cpuPercent * cpuF) : 0;
+    const memBase = r.sockets * C.memoryGB * (1 - SIM_PROFILE.analystMemoryShare);
+    const mem = r.total ? memBase + (r.memoryGB - memBase) * memF : 0;
+    const sentenceText = sentence(r); if ($('a-title').innerHTML !== sentenceText) $('a-title').innerHTML = sentenceText;
+    $('a-sub').textContent = r.total ? `${preset} mix · CPU-to-GPU ${ratioText(r)} per socket · ${r.bottleneck} sets the CPU count` : 'No workload';
+    r.counts.forEach((n, i) => { $('a-now-' + i).textContent = fmt(n); $('a-done-' + i).textContent = fmt(live.done[i]); });
+    $('a-cpu-count').textContent = r.cpuSystems; $('a-cpu-sockets').textContent = `${r.sockets} CPU sockets`;
+    if (force || $('a-cpu-photos').childElementCount !== Math.min(4, Math.max(1, r.cpuSystems))) { photos($('a-cpu-photos'), ASSETS.r770, r.cpuSystems, 'Dell PowerEdge R770'); photos($('a-gpu-photos'), ASSETS.xe7740, r.gpuSystems, 'Dell PowerEdge XE7740'); }
+    const perSocket = r.sockets ? r.total / r.sockets : 0;
+    $('a-load').textContent = `${fmt(perSocket)} of ${C.resident} measured`; bar($('a-load-bar'), [Math.min(perSocket, C.resident), Math.max(0, C.resident - perSocket)], ['#56dcbf', '#0d2b41']);
+    $('a-load-note').textContent = perSocket > C.resident ? 'Above the measured capacity of one socket' : `${Math.round(perSocket / C.resident * 100)}% of the measured 143-agent capacity, with a 10% sizing margin`;
+    $('a-cpu-util').textContent = Math.round(cpu) + '%';
+    const scale = r.families.reduce((a, b) => a + b, 0) || 1, busy = cpu / 100 * r.sockets * RESULTS.platform.cores;
+    bar($('a-cpu-bar'), [...r.families.map(f => f / scale * busy), Math.max(0, r.sockets * RESULTS.platform.cores - busy)], [...familyColors, '#0d2b41']);
+    live.spark.push(cpu); if (live.spark.length > 120) live.spark.shift();
+    $('a-spark-path').setAttribute('d', live.spark.map((v, i) => (i ? 'L' : 'M') + (i / 119 * 220).toFixed(1) + ' ' + (34 - v / 100 * 32).toFixed(1)).join(' '));
+    $('a-mem').textContent = fmt(r.sockets ? mem / r.cpuSystems : 0) + ' GB';
+    $('a-cpu-why').textContent = `One measured CPU carries ${C.resident} agents at this mix. This fleet is ${r.cpuEquivalent.toFixed(1)} CPU equivalents, rounded up to whole two-socket systems with a 10% margin.`;
+    $('a-gpu-count').textContent = r.gpuSystems; $('a-gpu-alloc').textContent = `${Math.ceil(r.gpuEquivalent - 1e-9)} of ${r.gpuSystems * 8} GPUs allocated`;
+    $('a-gpu-use').textContent = Math.round(r.gpuUsage) + '%'; bar($('a-gpu-bar'), [r.gpuUsage, 100 - r.gpuUsage], ['#c39bff', '#0d2b41']);
+    $('a-tokens').textContent = compact(r.output) + ' tokens/s'; $('a-calls').textContent = `${(r.calls * cpuF).toFixed(1)} per second`;
+    $('a-gpu-why').textContent = `Output demand over the serving reference gives ${r.gpuEquivalent.toFixed(1)} GPUs, rounded up to eight-GPU systems. Demand, not GPU telemetry.`;
+  }
+  function tick() {
+    const now = performance.now(), dt = Math.min((now - live.last) / 1000, .25); live.last = now;
+    if (!live.playing) return;
+    live.clock += dt;
+    if (live.shown) live.shown.rates.forEach((rate, i) => { live.done[i] += rate * dt; });
+    if (screens.a.classList.contains('active')) liveA(false);
+    $('a-clock').textContent = `Live simulation · ${Math.floor(live.clock / 60)}:${String(Math.floor(live.clock % 60)).padStart(2, '0')}`;
+  }
+  $('a-pause').onclick = () => { live.playing = !live.playing; live.last = performance.now(); $('a-pause').textContent = live.playing ? 'Pause' : 'Resume'; screens.a.classList.toggle('paused', !live.playing); };
+  document.addEventListener('input', e => { if (e.target.matches('[data-slider-a]')) { preset = 'Custom'; const i = Number(e.target.dataset.sliderA); mix.setPercent(i, Number(e.target.value)); const {m, r} = calc(); $('a-pct-' + i).textContent = m.weights[i] + '%'; $('a-status').textContent = m.valid ? 'Mix totals 100% · custom mix' : `Mix totals ${m.total}% · ${m.total < 100 ? 'add ' + (100 - m.total) : 'reduce ' + (m.total - 100)}% · showing the last valid mix`; $('a-status').classList.toggle('bad', !m.valid); if (r) { lastValid = r; syncControls(m); if (live.shown && !r.counts.every((n, k) => n === live.shown.counts[k])) { live.from = live.shown.counts.slice(); live.started = live.clock; } live.target = r; renderB(m, r); renderC(m, r); } } });
   /* ---- B ---- */
   function renderB(m, r) {
     $('b-rows').innerHTML = A.map((a, i) => `<div class="b-row">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div><div class="pct">${m.weights[i]}%<small>${r ? fmt(r.counts[i]) + ' working' : ''}</small></div><input type="range" min="0" max="100" value="${m.weights[i]}" data-slider="${i}" aria-label="${a.name} incoming share"></div>`).join('');
@@ -421,7 +473,6 @@ const SIM_PROFILE = {"version":"v2.3","reference":"data/capacity/set-20260908-16
   }
   function render() { const {m, r} = calc(); if (r) lastValid = r; syncControls(m); renderA(m, r || lastValid); renderB(m, r); renderC(m, r || lastValid); }
   /* ---- tabs and scaling ---- */
-  const screens = {a: $('screen-a'), b: $('screen-b'), c: $('screen-c')};
   function fit() { const stage = $('stage'); const scale = Math.min(stage.clientWidth / 1600, stage.clientHeight / 900); Object.values(screens).forEach(s => Object.assign(s.style, {transform: `scale(${scale})`, left: `${(stage.clientWidth - 1600 * scale) / 2}px`, top: `${(stage.clientHeight - 900 * scale) / 2}px`})); }
   function showTab(name) {
     document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
@@ -431,6 +482,7 @@ const SIM_PROFILE = {"version":"v2.3","reference":"data/capacity/set-20260908-16
   }
   document.querySelectorAll('.tab').forEach(t => t.onclick = () => showTab(t.dataset.tab));
   addEventListener('resize', fit); fit();
+  setInterval(tick, 100);
   mix.setTarget(720); applyPreset('Enterprise'); showScene(0);
   let initial = 'current'; try { initial = localStorage.getItem('layout-study-tab') || 'current'; } catch {}
   showTab(initial);

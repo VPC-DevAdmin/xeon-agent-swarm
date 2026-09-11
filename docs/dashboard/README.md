@@ -65,7 +65,7 @@ python3 -m http.server 8766 --bind 127.0.0.1 --directory docs/dashboard
 
 ## Layout studies
 
-`layout-studies.html` is a design exploration, not the demo: a tab bar with the current page embedded for comparison and three alternative compositions of the same content, all driven by the same paper results, simulation profile and sizing model. Study A leads with the answer as one sentence and a three-stage flow (workload, CPUs, model serving). Study B puts the workload dial on the left and a single hardware answer on the right. Study C walks through four scenes: the work, the measurement, the sizing, and an explore step. Presets and the agent target carry across tabs. Rebuild with:
+`layout-studies.html` is a design exploration, not the demo: a tab bar with the current page embedded for comparison and three alternative compositions of the same content, all driven by the same paper results, simulation profile and sizing model. Study A leads with the answer as one sentence and a three-stage flow (workload, CPUs, model serving); it is live, with a slider per agent kind, working populations that ease into a new mix over six seconds, running completion counters, and CPU and memory readings that follow the recorded host trace. Study B puts the workload dial on the left and a single hardware answer on the right. Study C walks through four scenes: the work, the measurement, the sizing, and an explore step. Presets and the agent target carry across tabs. Rebuild with:
 
 ```sh
 node docs/dashboard/build-layout-studies.cjs

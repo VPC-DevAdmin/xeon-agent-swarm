@@ -11,11 +11,11 @@
 button,input,select{font:inherit;color:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:3px solid #fff;outline-offset:3px}
 h1,h2,h3,p{margin:0}
 /* Tab bar */
-.tabs{flex:none;height:56px;display:flex;align-items:center;gap:6px;padding:0 20px;background:#04101c;border-bottom:1px solid var(--edge)}
+.tabs{flex:none;height:56px;display:flex;align-items:center;gap:6px;padding:0 20px;background:#04101c;border-bottom:1px solid var(--edge);white-space:nowrap;overflow:hidden}
 .tabs .kicker{font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#9ed9ef;margin-right:16px;white-space:nowrap}
 .tab{border:1px solid transparent;background:none;padding:8px 14px;border-radius:10px;font-size:14px;color:var(--muted)}
 .tab[aria-selected="true"]{background:#10304a;border-color:var(--edge);color:var(--ink)}
-.tabs .spacer{flex:1}.tabs .note{font-size:12px;color:var(--faint)}
+.tabs .spacer{flex:1}.tabs .note{font-size:12px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;min-width:0}
 /* Stage: every study is drawn on the same 1600×900 canvas as the current page and scaled to fit */
 .stage{flex:1;position:relative;overflow:hidden}
 .screen{width:1600px;height:900px;position:absolute;transform-origin:top left;padding:26px 30px 18px;display:none;flex-direction:column;gap:18px;background:radial-gradient(ellipse at 10% 8%,#17496d 0,transparent 53%),radial-gradient(ellipse at 96% 76%,#104553 0,transparent 55%),linear-gradient(145deg,#082943,#071c30 65%,#0b293b)}
@@ -47,6 +47,11 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
 .a-photos{display:flex;gap:6px;align-items:center;height:110px}.a-photos img{flex:1;min-width:0;max-height:100%;height:auto}
 .a-card .why{font-size:15px;color:var(--muted);line-height:1.45}
 .a-stack{display:flex;flex-direction:column;gap:8px}.a-stack .key{display:flex;gap:16px;font-size:12px;color:var(--muted)}.a-stack .key i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.a-controls{display:flex;flex-direction:column;gap:12px;align-items:flex-end}.live{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}.lamp{width:7px;height:7px;border-radius:50%;background:#61dcca;box-shadow:0 0 12px #61dcca80}.paused .lamp{background:#a9b7c4;box-shadow:none}
+.a-row input[type=range]{grid-column:2/4;accent-color:#53c3ff;width:100%;height:18px;margin:0}
+.a-row .meta{grid-column:2/4;display:flex;justify-content:space-between;color:var(--faint);font-size:12px;margin-top:-2px}.a-row .meta b{color:var(--muted);font-weight:400;font-variant-numeric:tabular-nums}
+.tag{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#61dcca;margin-left:6px;vertical-align:middle}
+.a-live-row{display:flex;gap:12px;align-items:center}.spark{width:120px;height:36px;flex:none}.spark path{fill:none;stroke:#53c3ff;stroke-width:1.5}
 /* ---------- Study B: dial and answer ---------- */
 .b-main{flex:1;display:grid;grid-template-columns:460px 1fr;gap:20px;min-height:0}
 .b-rail{padding:24px;display:flex;flex-direction:column;gap:18px}
@@ -94,7 +99,7 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
 <div class="stage" id="stage">
   <iframe class="current active" id="current" title="Current conference page" src="steady-state.html" loading="lazy"></iframe>
 
-  <!-- A: one sentence, one flow -->
+  <!-- A: one sentence, one flow, live -->
   <section class="screen" id="screen-a" aria-label="Study A">
     <div class="a-head">
       <div>
@@ -102,7 +107,8 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
         <h1 id="a-title" style="margin-top:14px"></h1>
         <div class="sub"><span class="badge modeled">Sized from the measurement</span><span id="a-sub"></span></div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-end">
+      <div class="a-controls">
+        <div class="live"><i class="lamp"></i><span id="a-clock">Live simulation</span><button class="chip" id="a-pause">Pause</button></div>
         <label class="target">Working agents <input type="number" min="0" max="100000" step="1" data-target></label>
         <div class="chips" data-presets></div>
       </div>
@@ -110,16 +116,18 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
     <div class="a-flow">
       <section class="glass a-card" aria-label="Workload">
         <div class="head"><h2>The work</h2><span class="badge">1 · Workload</span></div>
-        <p class="why">Five kinds of agent, each running as one end-to-end workflow. Share is the incoming mix; the count is how many are working at once.</p>
+        <p class="why">Five kinds of agent, each an end-to-end workflow. Slide the incoming share; the working population follows.</p>
         <div class="a-rows" id="a-rows"></div>
+        <p class="b-status" id="a-status"></p>
       </section>
       <div class="a-arrow" aria-hidden="true">→</div>
       <section class="glass a-card" aria-label="Host CPUs">
         <div class="head"><h2>Runs on CPUs</h2><span class="badge">2 · Agent execution</span></div>
         <div class="a-big"><span class="num" id="a-cpu-count"></span><span>PowerEdge R770<br><span id="a-cpu-sockets"></span></span></div>
         <div class="a-photos" id="a-cpu-photos"></div>
-        <div class="a-stack"><div class="kv"><span>Average CPU utilization</span><b id="a-cpu-util"></b></div><div class="bar" id="a-cpu-bar"></div><div class="key" id="a-cpu-key"></div></div>
-        <div class="kv"><span>Memory per R770</span><b id="a-mem"></b></div>
+        <div class="a-stack"><div class="kv"><span>Working agents per CPU socket</span><b id="a-load"></b></div><div class="bar" id="a-load-bar"></div><div class="key"><span id="a-load-note"></span></div></div>
+        <div class="a-stack"><div class="kv"><span>CPU utilization <small class="tag">live</small></span><b id="a-cpu-util"></b></div><div class="a-live-row"><svg class="spark" id="a-spark" viewBox="0 0 220 36" preserveAspectRatio="none" aria-hidden="true"><path id="a-spark-path" d=""/></svg><div style="flex:1"><div class="bar" id="a-cpu-bar"></div><div class="key" id="a-cpu-key"></div></div></div></div>
+        <div class="kv"><span>Memory per R770 <small class="tag">live</small></span><b id="a-mem"></b></div>
         <p class="why" id="a-cpu-why"></p>
       </section>
       <div class="a-arrow" aria-hidden="true">→</div>
@@ -127,13 +135,14 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
         <div class="head"><h2>Calls the model</h2><span class="badge">3 · Model serving</span></div>
         <div class="a-big"><span class="num" id="a-gpu-count"></span><span>PowerEdge XE7740<br><span id="a-gpu-alloc"></span></span></div>
         <div class="a-photos" id="a-gpu-photos"></div>
+        <div class="a-stack"><div class="kv"><span>GPU serving capacity used</span><b id="a-gpu-use"></b></div><div class="bar" id="a-gpu-bar"></div></div>
         <div class="kv"><span>Output the fleet needs</span><b id="a-tokens"></b></div>
-        <div class="kv"><span>Model calls</span><b id="a-calls"></b></div>
+        <div class="kv"><span>Model calls <small class="tag">live</small></span><b id="a-calls"></b></div>
         <div class="kv"><span>Serving reference</span><b id="a-serving"></b></div>
         <p class="why" id="a-gpu-why"></p>
       </section>
     </div>
-    <p class="footnote">Measured on one Xeon 6 CPU at the v2.3 enterprise mix; deployment counts are sized from that measurement and need multi-socket validation.</p>
+    <p class="footnote">Measured on one Xeon 6 CPU at the v2.3 enterprise mix; deployment counts are sized from that measurement and need multi-socket validation. Live readings vary with the recorded host trace.</p>
   </section>
 
   <!-- B: controls left, answer right -->
@@ -212,6 +221,7 @@ const SIM_PROFILE = /*__SIM_PROFILE__*/null;
 /*__SIM_MODEL__*/
 (() => {
   const $ = id => document.getElementById(id);
+  const screens = {a: $('screen-a'), b: $('screen-b'), c: $('screen-c')};
   document.querySelectorAll('[data-asset]').forEach(e => { e.src = ASSETS[e.dataset.asset]; });
   const C = RESULTS.capacity, S = RESULTS.serving, A = RESULTS.archetypes;
   const sim = AgentSimulator.create(SIM_PROFILE, RESULTS);
@@ -238,24 +248,66 @@ const SIM_PROFILE = /*__SIM_PROFILE__*/null;
   document.addEventListener('click', e => { const b = e.target.closest('[data-preset]'); if (b) applyPreset(b.dataset.preset); });
   document.addEventListener('input', e => { if (e.target.matches('[data-target]')) { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 0 && n <= 100000) { mix.setTarget(n); render(); } } });
   function sentence(r) { return r ? `<b>${fmt(r.total)}</b> working agents need <b>${r.cpuSystems}</b> PowerEdge R770${r.cpuSystems === 1 ? '' : 's'} and <b>${r.gpuSystems}</b> XE7740${r.gpuSystems === 1 ? '' : 's'}.` : 'Percentages must total 100 before the sizing updates.'; }
-  /* ---- A ---- */
-  function renderA(m, r) {
-    $('a-title').innerHTML = sentence(r);
-    $('a-sub').textContent = r ? `${preset} mix · CPU-to-GPU ${ratioText(r)} per socket · ${Math.round(r.cpuPercent)}% average CPU` : '';
-    $('a-rows').innerHTML = A.map((a, i) => `<div class="a-row">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div><div class="pct">${m.weights[i]}%</div><div class="bar" style="grid-column:2/4"><i style="width:${m.weights[i]}%;background:${a.color};filter:brightness(1.35)"></i></div><small style="grid-column:2/4;color:var(--faint);font-size:12px;margin-top:-4px">${r ? fmt(r.counts[i]) + ' working now · ' + fmt(r.rates[i] * 3600) + ' finished per hour' : ''}</small></div>`).join('');
-    if (!r) return;
-    $('a-cpu-count').textContent = r.cpuSystems; $('a-cpu-sockets').textContent = `${r.sockets} CPU sockets`;
-    photos($('a-cpu-photos'), ASSETS.r770, r.cpuSystems, 'Dell PowerEdge R770');
-    $('a-cpu-util').textContent = Math.round(r.cpuPercent) + '%';
-    bar($('a-cpu-bar'), [...r.families, Math.max(0, r.sockets * RESULTS.platform.cores - r.families.reduce((a, b) => a + b, 0))], [...familyColors, '#0d2b41']); key($('a-cpu-key'), familyNames, familyColors);
-    $('a-mem').textContent = fmt(r.memoryPerCPU) + ' GB';
-    $('a-cpu-why').textContent = `${r.bottleneck} sets the CPU count. One measured CPU carries ${C.resident} agents at this mix; the fleet is ${r.cpuEquivalent.toFixed(1)} CPU equivalents rounded up to whole two-socket systems with a 10% margin.`;
-    $('a-gpu-count').textContent = r.gpuSystems; $('a-gpu-alloc').textContent = `${Math.ceil(r.gpuEquivalent - 1e-9)} of ${r.gpuSystems * 8} GPUs allocated`;
-    photos($('a-gpu-photos'), ASSETS.xe7740, r.gpuSystems, 'Dell PowerEdge XE7740');
-    $('a-tokens').textContent = compact(r.output) + ' tokens/s'; $('a-calls').textContent = r.calls.toFixed(1) + ' per second';
-    $('a-serving').textContent = `${S.model} · ${fmt(S.outputTokensPerSecondPerGpu)} tok/s per GPU`;
-    $('a-gpu-why').textContent = `Output demand divided by the serving reference gives ${r.gpuEquivalent.toFixed(1)} GPUs, rounded up to eight-GPU systems. Demand, not GPU telemetry.`;
+  /* ---- A: static structure on mix change, live readings on a clock ---- */
+  const TRACE = /*__TRACE__*/null;
+  const traceLength = TRACE[TRACE.length - 1][0];
+  function traceAt(t) {
+    const x = ((t % traceLength) + traceLength) % traceLength;
+    let hi = TRACE.findIndex(s => s[0] > x); if (hi < 0) hi = TRACE.length - 1;
+    const a = TRACE[Math.max(0, hi - 1)], b = TRACE[hi], f = b[0] === a[0] ? 0 : (x - a[0]) / (b[0] - a[0]);
+    return [a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
   }
+  const live = {clock: 0, playing: true, shown: null, from: null, started: 0, done: [0, 0, 0, 0, 0], spark: [], last: performance.now()};
+  function renderA(m, r) {
+    $('a-rows').innerHTML = A.map((a, i) => `<div class="a-row">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div><div class="pct" id="a-pct-${i}">${m.weights[i]}%</div><input type="range" min="0" max="100" value="${m.weights[i]}" data-slider-a="${i}" aria-label="${a.name} incoming share"><div class="meta"><span><b id="a-now-${i}">—</b> working now</span><span><b id="a-done-${i}">0</b> finished</span></div></div>`).join('');
+    $('a-status').textContent = m.valid ? `Mix totals 100% · ${preset === 'Custom' ? 'custom mix' : preset + ' preset'}` : `Mix totals ${m.total}% · ${m.total < 100 ? 'add ' + (100 - m.total) : 'reduce ' + (m.total - 100)}% · showing the last valid mix`;
+    $('a-status').classList.toggle('bad', !m.valid);
+    if (!r) return;
+    if (live.shown && !r.counts.every((n, i) => n === live.shown.counts[i])) { live.from = live.shown.counts.slice(); live.started = live.clock; }
+    live.target = r;
+    $('a-serving').textContent = `${S.model} · ${fmt(S.outputTokensPerSecondPerGpu)} tok/s per GPU`;
+    $('a-cpu-key').innerHTML = familyNames.map((n, i) => `<span><i style="background:${familyColors[i]}"></i>${n}</span>`).join('');
+    liveA(true);
+  }
+  function liveA(force) {
+    if (!live.target) return;
+    let counts = live.target.counts;
+    if (live.from) { const t = Math.min(1, (live.clock - live.started) / 6), e = t * t * (3 - 2 * t); counts = live.target.counts.map((n, i) => Math.round(live.from[i] + (n - live.from[i]) * e)); if (t >= 1) live.from = null; }
+    const r = live.shown = counts.every((n, i) => live.shown && n === live.shown.counts[i]) && !force ? live.shown : sim.calculate(counts);
+    const [cpuF, memF] = traceAt(live.clock);
+    const cpu = r.total ? Math.min(100, r.cpuPercent * cpuF) : 0;
+    const memBase = r.sockets * C.memoryGB * (1 - SIM_PROFILE.analystMemoryShare);
+    const mem = r.total ? memBase + (r.memoryGB - memBase) * memF : 0;
+    const sentenceText = sentence(r); if ($('a-title').innerHTML !== sentenceText) $('a-title').innerHTML = sentenceText;
+    $('a-sub').textContent = r.total ? `${preset} mix · CPU-to-GPU ${ratioText(r)} per socket · ${r.bottleneck} sets the CPU count` : 'No workload';
+    r.counts.forEach((n, i) => { $('a-now-' + i).textContent = fmt(n); $('a-done-' + i).textContent = fmt(live.done[i]); });
+    $('a-cpu-count').textContent = r.cpuSystems; $('a-cpu-sockets').textContent = `${r.sockets} CPU sockets`;
+    if (force || $('a-cpu-photos').childElementCount !== Math.min(4, Math.max(1, r.cpuSystems))) { photos($('a-cpu-photos'), ASSETS.r770, r.cpuSystems, 'Dell PowerEdge R770'); photos($('a-gpu-photos'), ASSETS.xe7740, r.gpuSystems, 'Dell PowerEdge XE7740'); }
+    const perSocket = r.sockets ? r.total / r.sockets : 0;
+    $('a-load').textContent = `${fmt(perSocket)} of ${C.resident} measured`; bar($('a-load-bar'), [Math.min(perSocket, C.resident), Math.max(0, C.resident - perSocket)], ['#56dcbf', '#0d2b41']);
+    $('a-load-note').textContent = perSocket > C.resident ? 'Above the measured capacity of one socket' : `${Math.round(perSocket / C.resident * 100)}% of the measured 143-agent capacity, with a 10% sizing margin`;
+    $('a-cpu-util').textContent = Math.round(cpu) + '%';
+    const scale = r.families.reduce((a, b) => a + b, 0) || 1, busy = cpu / 100 * r.sockets * RESULTS.platform.cores;
+    bar($('a-cpu-bar'), [...r.families.map(f => f / scale * busy), Math.max(0, r.sockets * RESULTS.platform.cores - busy)], [...familyColors, '#0d2b41']);
+    live.spark.push(cpu); if (live.spark.length > 120) live.spark.shift();
+    $('a-spark-path').setAttribute('d', live.spark.map((v, i) => (i ? 'L' : 'M') + (i / 119 * 220).toFixed(1) + ' ' + (34 - v / 100 * 32).toFixed(1)).join(' '));
+    $('a-mem').textContent = fmt(r.sockets ? mem / r.cpuSystems : 0) + ' GB';
+    $('a-cpu-why').textContent = `One measured CPU carries ${C.resident} agents at this mix. This fleet is ${r.cpuEquivalent.toFixed(1)} CPU equivalents, rounded up to whole two-socket systems with a 10% margin.`;
+    $('a-gpu-count').textContent = r.gpuSystems; $('a-gpu-alloc').textContent = `${Math.ceil(r.gpuEquivalent - 1e-9)} of ${r.gpuSystems * 8} GPUs allocated`;
+    $('a-gpu-use').textContent = Math.round(r.gpuUsage) + '%'; bar($('a-gpu-bar'), [r.gpuUsage, 100 - r.gpuUsage], ['#c39bff', '#0d2b41']);
+    $('a-tokens').textContent = compact(r.output) + ' tokens/s'; $('a-calls').textContent = `${(r.calls * cpuF).toFixed(1)} per second`;
+    $('a-gpu-why').textContent = `Output demand over the serving reference gives ${r.gpuEquivalent.toFixed(1)} GPUs, rounded up to eight-GPU systems. Demand, not GPU telemetry.`;
+  }
+  function tick() {
+    const now = performance.now(), dt = Math.min((now - live.last) / 1000, .25); live.last = now;
+    if (!live.playing) return;
+    live.clock += dt;
+    if (live.shown) live.shown.rates.forEach((rate, i) => { live.done[i] += rate * dt; });
+    if (screens.a.classList.contains('active')) liveA(false);
+    $('a-clock').textContent = `Live simulation · ${Math.floor(live.clock / 60)}:${String(Math.floor(live.clock % 60)).padStart(2, '0')}`;
+  }
+  $('a-pause').onclick = () => { live.playing = !live.playing; live.last = performance.now(); $('a-pause').textContent = live.playing ? 'Pause' : 'Resume'; screens.a.classList.toggle('paused', !live.playing); };
+  document.addEventListener('input', e => { if (e.target.matches('[data-slider-a]')) { preset = 'Custom'; const i = Number(e.target.dataset.sliderA); mix.setPercent(i, Number(e.target.value)); const {m, r} = calc(); $('a-pct-' + i).textContent = m.weights[i] + '%'; $('a-status').textContent = m.valid ? 'Mix totals 100% · custom mix' : `Mix totals ${m.total}% · ${m.total < 100 ? 'add ' + (100 - m.total) : 'reduce ' + (m.total - 100)}% · showing the last valid mix`; $('a-status').classList.toggle('bad', !m.valid); if (r) { lastValid = r; syncControls(m); if (live.shown && !r.counts.every((n, k) => n === live.shown.counts[k])) { live.from = live.shown.counts.slice(); live.started = live.clock; } live.target = r; renderB(m, r); renderC(m, r); } } });
   /* ---- B ---- */
   function renderB(m, r) {
     $('b-rows').innerHTML = A.map((a, i) => `<div class="b-row">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div><div class="pct">${m.weights[i]}%<small>${r ? fmt(r.counts[i]) + ' working' : ''}</small></div><input type="range" min="0" max="100" value="${m.weights[i]}" data-slider="${i}" aria-label="${a.name} incoming share"></div>`).join('');
@@ -302,7 +354,6 @@ const SIM_PROFILE = /*__SIM_PROFILE__*/null;
   }
   function render() { const {m, r} = calc(); if (r) lastValid = r; syncControls(m); renderA(m, r || lastValid); renderB(m, r); renderC(m, r || lastValid); }
   /* ---- tabs and scaling ---- */
-  const screens = {a: $('screen-a'), b: $('screen-b'), c: $('screen-c')};
   function fit() { const stage = $('stage'); const scale = Math.min(stage.clientWidth / 1600, stage.clientHeight / 900); Object.values(screens).forEach(s => Object.assign(s.style, {transform: `scale(${scale})`, left: `${(stage.clientWidth - 1600 * scale) / 2}px`, top: `${(stage.clientHeight - 900 * scale) / 2}px`})); }
   function showTab(name) {
     document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
@@ -312,6 +363,7 @@ const SIM_PROFILE = /*__SIM_PROFILE__*/null;
   }
   document.querySelectorAll('.tab').forEach(t => t.onclick = () => showTab(t.dataset.tab));
   addEventListener('resize', fit); fit();
+  setInterval(tick, 100);
   mix.setTarget(720); applyPreset('Enterprise'); showScene(0);
   let initial = 'current'; try { initial = localStorage.getItem('layout-study-tab') || 'current'; } catch {}
   showTab(initial);
