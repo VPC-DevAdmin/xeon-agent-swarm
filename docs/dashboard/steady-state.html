@@ -482,8 +482,9 @@ const SIM_PROFILE = {"version":"v2.3","reference":"data/capacity/set-20260908-16
   function activityReadings(r){
     const factors=motion?recordedFactors(tau):[1,1,1,1,1,1];
     const families=r.families.map((n,i)=>n*factors[i+2]);
-    const base=r.families.reduce((a,b)=>a+b,0),varied=families.reduce((a,b)=>a+b,0);
-    const target={cpu:r.total?Math.min(100,r.cpuPercent*(base?varied/base:factors[0])):0,
+    // The model already divides this mix's CPU work by allocated physical cores.
+    // Whole-host variation moves that baseline; family traces only shape the split.
+    const target={cpu:r.total?Math.min(100,r.cpuPercent*factors[0]):0,
       memoryGB:r.memoryGB*(1+(factors[1]-1)*(r.memoryGB?Math.max(0,r.memoryGB-r.sockets*C.memoryGB*(1-SIM_PROFILE.analystMemoryShare))/r.memoryGB:0))};
     const dt=Math.max(0,transitionClock-activityClock);activityClock=transitionClock;
     const alpha=reduced.matches?1:1-Math.exp(-dt/1.2);
@@ -582,7 +583,7 @@ const SIM_PROFILE = {"version":"v2.3","reference":"data/capacity/set-20260908-16
     else if(['cpu','cpu-share','cpu-reference'].includes(kind)){title='Where the CPU work goes';html=detailCPU(r);}
     else if(kind==='memory'){title='Memory behind the agents';html=detailMemory(r);}
     else if(['serving','llm'].includes(kind)){title='From model calls to GPU capacity';html=detailServing(r);}
-    else if(kind==='methodology'||kind==='simulation'){title='Measurements and methodology';html=detailMethod()+'<div class="dv-method"><section><h3>Activity and setting changes</h3><p>Valid mix changes ease into the new working population over eight seconds. This is a presentation transition, not a measured settling time. While percentages are being edited, the last valid workload continues running.</p><p>CPU activity uses the recorded steady-state traces for sandbox, retrieval, execution, and supporting services, scaled by the modeled demand of the selected mix. Memory uses recorded variation weighted by the modeled active analyst working set. Samples are interpolated and looped; the recording does not identify which archetype caused each resource spike. These activity readings do not determine server counts or GPU requirements.</p></section></div>';}
+    else if(kind==='methodology'||kind==='simulation'){title='Measurements and methodology';html=detailMethod()+'<div class="dv-method"><section><h3>Activity and setting changes</h3><p>Valid mix changes ease into the new working population over eight seconds. This is a presentation transition, not a measured settling time. While percentages are being edited, the last valid workload continues running.</p><p>CPU utilization starts with the selected mix’s modeled CPU work divided by the allocated physical cores. The recorded whole-host CPU trace supplies relative variation around that baseline. Process-family traces animate the breakdown separately; they do not set total utilization. Memory uses recorded variation weighted by the modeled active analyst working set. Samples are interpolated and looped; the recording does not identify which archetype caused each resource spike. These activity readings do not determine server counts or GPU requirements.</p></section></div>';}
     else{title='Capacity for this agent mix';html=detailPopulation(r);}
     const dialog=$('detail-dialog');dialog.classList.add('visual-detail');dialog.classList.toggle('detail-still',!motion||reduced.matches);
     $('topic-role').textContent=kind==='methodology'?'Benchmark foundation · '+RESULTS.definitionVersion:'Agent execution · current workload';

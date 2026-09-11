@@ -156,8 +156,9 @@
   function activityReadings(r){
     const factors=motion?recordedFactors(tau):[1,1,1,1,1,1];
     const families=r.families.map((n,i)=>n*factors[i+2]);
-    const base=r.families.reduce((a,b)=>a+b,0),varied=families.reduce((a,b)=>a+b,0);
-    const target={cpu:r.total?Math.min(100,r.cpuPercent*(base?varied/base:factors[0])):0,
+    // The model already divides this mix's CPU work by allocated physical cores.
+    // Whole-host variation moves that baseline; family traces only shape the split.
+    const target={cpu:r.total?Math.min(100,r.cpuPercent*factors[0]):0,
       memoryGB:r.memoryGB*(1+(factors[1]-1)*(r.memoryGB?Math.max(0,r.memoryGB-r.sockets*C.memoryGB*(1-SIM_PROFILE.analystMemoryShare))/r.memoryGB:0))};
     const dt=Math.max(0,transitionClock-activityClock);activityClock=transitionClock;
     const alpha=reduced.matches?1:1-Math.exp(-dt/1.2);
