@@ -63,6 +63,10 @@ The `replay-demo` entry in `.claude/launch.json` serves this directory on http:/
 python3 -m http.server 8766 --bind 127.0.0.1 --directory docs/dashboard
 ```
 
+## Cloudflare preview
+
+`deploy/replay-demo` publishes the built pages as a static-assets Worker. From that directory, `npm run preview` uploads a version with its own preview URL and `npm run deploy` updates the stable one, https://xeon-replay-demo.devadmin-19b.workers.dev. Its README has the details.
+
 ## Browser check
 
 With Playwright and Chrome available, run:

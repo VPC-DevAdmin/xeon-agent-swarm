@@ -256,3 +256,6 @@ data/capacity/ingest/
 !data/capacity/build/*.zip
 data/capacity/build/src/
 data/capacity/build/.extract.lock
+
+# wrangler local state
+.wrangler/

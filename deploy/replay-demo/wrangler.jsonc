@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Static-assets-only Worker: no script, just the built conference pages.
+  "name": "xeon-replay-demo",
+  "compatibility_date": "2026-09-10",
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  // <name>.<subdomain>.workers.dev is the stable URL; each `wrangler versions upload`
+  // also gets its own <version>-<name>.<subdomain>.workers.dev preview link.
+  "workers_dev": true,
+  "preview_urls": true
+}

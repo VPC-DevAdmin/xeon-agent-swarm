@@ -1,0 +1,14 @@
+{
+  "name": "replay-demo-deploy",
+  "private": true,
+  "description": "Cloudflare Workers static-assets deployment of the conference replay demo (docs/dashboard)",
+  "scripts": {
+    "build": "node build.cjs",
+    "preview": "npm run build && wrangler versions upload",
+    "deploy": "npm run build && wrangler deploy",
+    "dev": "npm run build && wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.131.0"
+  }
+}
