@@ -17,6 +17,6 @@ Then:
 | `npm run deploy` | Deploys to the stable `xeon-replay-demo.<account>.workers.dev` URL. |
 | `npm run dev` | Serves the staged pages locally through workerd on http://localhost:8787. |
 
-Both build steps copy `steady-state.html` to `index.html` and keep `agent-replay.html` alongside it, add a `robots.txt` and a `noindex` header, and refuse a page that still has unbuilt placeholders.
+Both build steps copy `steady-state.html` to `index.html` and keep `agent-replay.html` and `layout-studies.html` alongside it, add a `robots.txt` and a `noindex` header, and refuse a page that still has unbuilt placeholders.
 
 The workers.dev URLs are public to anyone holding the link. For a gated preview, put the Worker behind Cloudflare Access (Zero Trust → Access → Applications → self-hosted, using the workers.dev hostname) or restrict it with a Worker route on a zone you control.

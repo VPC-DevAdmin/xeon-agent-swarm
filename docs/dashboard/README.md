@@ -63,6 +63,16 @@ The `replay-demo` entry in `.claude/launch.json` serves this directory on http:/
 python3 -m http.server 8766 --bind 127.0.0.1 --directory docs/dashboard
 ```
 
+## Layout studies
+
+`layout-studies.html` is a design exploration, not the demo: a tab bar with the current page embedded for comparison and three alternative compositions of the same content, all driven by the same paper results, simulation profile and sizing model. Study A leads with the answer as one sentence and a three-stage flow (workload, CPUs, model serving). Study B puts the workload dial on the left and a single hardware answer on the right. Study C walks through four scenes: the work, the measurement, the sizing, and an explore step. Presets and the agent target carry across tabs. Rebuild with:
+
+```sh
+node docs/dashboard/build-layout-studies.cjs
+```
+
+The source is `layout-studies.src.html`; the current page is not changed by the studies.
+
 ## Cloudflare preview
 
 `deploy/replay-demo` publishes the built pages as a static-assets Worker. From that directory, `npm run preview` uploads a version with its own preview URL and `npm run deploy` updates the stable one, https://xeon-replay-demo.devadmin-19b.workers.dev. Its README has the details.

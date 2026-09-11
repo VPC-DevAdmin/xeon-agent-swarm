@@ -7,7 +7,7 @@ const src = path.join(root, 'docs/dashboard');
 const dist = path.join(__dirname, 'dist');
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist);
-const pages = { 'steady-state.html': ['index.html', 'steady-state.html'], 'agent-replay.html': ['agent-replay.html'] };
+const pages = { 'steady-state.html': ['index.html', 'steady-state.html'], 'agent-replay.html': ['agent-replay.html'], 'layout-studies.html': ['layout-studies.html'] };
 for (const [file, names] of Object.entries(pages)) {
   const html = fs.readFileSync(path.join(src, file), 'utf8');
   if (/\/\*__(DATA|RESULTS|SIM_)/.test(html)) throw new Error(`${file} still has unbuilt placeholders; run node docs/dashboard/build-steady-state.cjs first`);
