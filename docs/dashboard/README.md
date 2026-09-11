@@ -65,13 +65,13 @@ python3 -m http.server 8766 --bind 127.0.0.1 --directory docs/dashboard
 
 ## Layout studies
 
-`layout-studies.html` is a design exploration, not the demo: a tab bar with the current page embedded for comparison and three alternative compositions of the same content, all driven by the same paper results, simulation profile and sizing model. Study A leads with the answer as one sentence and a three-stage flow (workload, CPUs, model serving); it is live, with a slider per agent kind, working populations that ease into a new mix over six seconds, running completion counters, and CPU and memory readings that follow the recorded host trace. Study B puts the workload dial on the left and a single hardware answer on the right. Study C walks through four scenes: the work, the measurement, the sizing, and an explore step. Presets and the agent target carry across tabs. Rebuild with:
+`layout-studies.html` is the answer-first redesign of the demo, built beside the current page rather than in it: a tab bar with the current page embedded for comparison and the redesign as Study A. The study is driven by the same paper results, simulation profile, sizing model and archetype step definitions as the current page (the build extracts the step definitions from `steady-state.src.html`). It leads with the sizing sentence and the CPU-to-GPU ratio, then a three-stage flow: workload, CPUs, model serving. The mix is a single select with the agent total beside it; each kind of agent has a slider, a typed percentage and steppers. Working populations ease into a new mix over six seconds, completion counters run, the load per R770 is shown against twice the measured single-CPU capacity, and CPU and memory readings follow the recorded host trace. A strip along the bottom animates the selected agent's workflow; the details dialog carries each agent's steps, jobs and per-workflow figures, and the CPU, serving and ratio explanations. Rebuild with:
 
 ```sh
 node docs/dashboard/build-layout-studies.cjs
 ```
 
-The source is `layout-studies.src.html`; the current page is not changed by the studies.
+The source is `layout-studies.src.html`; the current page is not changed by the study.
 
 ## Cloudflare preview
 
