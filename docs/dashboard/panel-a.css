@@ -32,3 +32,16 @@ body{background:#061625}#panel-a{background:radial-gradient(ellipse at 10% 8%,#1
   .workflow{padding:12px 16px;grid-template-columns:165px minmax(0,1fr) 108px;gap:12px}.flow{gap:6px}.flow-node{padding:8px;min-height:60px}.workflow-heading>button{font-size:13px;padding:8px}.workflow-heading p{max-width:160px}.flow-node small{letter-spacing:0}.flow-node b{line-height:1.3}footer{font-size:12px}
 }
 @media(max-width:899px){.workflow{grid-template-columns:1fr auto}.workflow-heading>button{grid-column:2}.flow{grid-column:1/-1;grid-row:2;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* Fit and alignment on the scaled 1440×820 stage: rows sized to their track, the execution and
+   serving columns on one vertical rhythm (heading, art, metric with bar, key line, metric, metric). */
+@media(min-width:900px){
+  .rows{gap:5px;overflow:hidden}.agent-row{padding:6px 9px;gap:3px 8px;min-height:0}.agent-meta{line-height:1.2}.agent-meta b{font-size:13px}
+  .agent-select .icon{width:27px;height:28px}.edit input{font-size:16px;padding:3px 0;width:44px}.stepper button{height:17px}.remove{height:24px}
+  .target-line{margin-bottom:2px}.mix-help{margin-top:2px}
+  .execution>.metric:last-child{margin-top:0}.layout>section>.hardware-art{flex:1;min-height:90px}
+  .serving>.tier-heading{order:0}.serving>.hardware-heading{order:1}.serving>.hardware-art{order:2}.serving>.metric{order:6}.serving>.metric:has(#gpu-demand){order:3}.serving>.demand-track{order:4}.serving>.serving-reference{order:5;margin-top:0;min-height:34px;font-size:12px;line-height:1.35}
+  .legend{min-height:34px;align-content:flex-start}.cpu-stack,.demand-track{height:12px}
+  .metric{padding-top:9px}.metric strong{font-size:26px}
+  .hardware-art .xeon{width:46px;height:46px;right:2px;bottom:6px}.server-stack{margin-right:56px}
+}
