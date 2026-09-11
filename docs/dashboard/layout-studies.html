@@ -39,23 +39,32 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
 .footnote{font-size:12px;color:var(--faint);text-align:center}
 /* ---------- Study A: answer first ---------- */
 .a-head{display:flex;justify-content:space-between;align-items:flex-start;gap:30px}
-.a-head h1{font-size:44px;font-weight:300;letter-spacing:-.8px;line-height:1.15;max-width:1150px;text-wrap:balance}.a-head h1 b{font-weight:500;color:#fff}
-.a-head .sub{margin-top:12px;font-size:17px;color:var(--muted);display:flex;gap:22px;align-items:center}
-.a-flow{flex:1;display:grid;grid-template-columns:1fr 34px 1.1fr 34px 1fr;gap:0;align-items:stretch;min-height:0}
-.a-card{padding:24px 26px;display:flex;flex-direction:column;gap:16px;min-height:0}
-.a-card .head{display:flex;justify-content:space-between;align-items:center}.a-card h2{font-size:22px;font-weight:500}
-.a-arrow{display:grid;place-items:center;color:#7fbfe0;font-size:28px}
-.a-rows{display:flex;flex-direction:column;gap:9px}.a-row{display:grid;grid-template-columns:34px 1fr 64px;gap:12px;align-items:center}.a-row .name{font-size:16px}.a-row .name small{display:block;color:var(--faint);font-size:12px;margin-top:2px}.a-row .pct{font-size:20px;font-weight:300;text-align:right;font-variant-numeric:tabular-nums}
-.a-row .bar{grid-column:2/4;height:6px}
-.a-big{display:flex;align-items:baseline;gap:14px}.a-big .num{font-size:64px;line-height:1}.a-big span{font-size:16px;color:var(--muted)}
-.a-photos{display:flex;gap:6px;align-items:center;height:110px}.a-photos img{flex:1;min-width:0;max-height:100%;height:auto}
-.a-card .why{font-size:15px;color:var(--muted);line-height:1.45}
-.a-stack{display:flex;flex-direction:column;gap:8px}.a-stack .key{display:flex;gap:16px;font-size:12px;color:var(--muted)}.a-stack .key i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
-.a-controls{display:flex;flex-direction:column;gap:12px;align-items:flex-end}.live{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}.lamp{width:7px;height:7px;border-radius:50%;background:#61dcca;box-shadow:0 0 12px #61dcca80}.paused .lamp{background:#a9b7c4;box-shadow:none}
+.a-head h1{font-size:44px;font-weight:300;letter-spacing:-.8px;line-height:1.15;max-width:1000px;text-wrap:balance}.a-head h1 b{font-weight:500;color:#fff}
+.a-right{display:flex;flex-direction:column;align-items:flex-end;gap:12px}
+.a-ratio{display:flex;align-items:center;gap:16px;border:1px solid var(--edge);background:#0b2a4088;border-radius:18px;padding:12px 22px;text-align:left}.a-ratio .num{font-size:54px;line-height:1}.a-ratio .lbl{font-size:16px;line-height:1.3}.a-ratio .lbl small{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+.a-toolbar{display:flex;gap:8px;align-items:center}.control{border:1px solid var(--edge);background:#102d44aa;padding:9px 12px;border-radius:10px;font-size:13px}.control:hover{background:#1a4664aa}
+.live{display:flex;gap:9px;align-items:center;font-size:13px;color:var(--muted);margin-right:6px}.lamp{width:7px;height:7px;border-radius:50%;background:#61dcca;box-shadow:0 0 12px #61dcca80}.paused .lamp{background:#a9b7c4;box-shadow:none}
+.a-flow{flex:1;display:grid;grid-template-columns:1.05fr 40px 1fr 72px 1fr;align-items:stretch;min-height:0}
+.a-card{padding:22px 24px;display:flex;flex-direction:column;gap:16px;min-height:0}.a-card .head{display:flex;justify-content:space-between;align-items:center;gap:12px}.a-card h2{font-size:21px;font-weight:500}
+.a-card.clickable{cursor:pointer}.a-card.clickable:hover{border-color:#aee4ff80}
+.a-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#7fbfe0;font-size:28px}.a-arrow span{font-size:12px;color:var(--muted);letter-spacing:.3px;text-align:center;line-height:1.3;font-variant-numeric:tabular-nums;white-space:pre-line}
+.a-mixbar{display:flex;gap:10px;align-items:center}.select select{appearance:none;background:#0b2337 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23b6d0e0' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;border:1px solid var(--edge);border-radius:10px;padding:8px 32px 8px 12px;font-size:14px;color:var(--ink)}
+.target{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}.target input{width:82px;background:#0b2337;border:1px solid var(--edge);border-radius:10px;padding:7px 10px;font-size:18px;font-weight:300;color:var(--ink);text-align:right}
+.a-rows{display:flex;flex-direction:column;gap:8px;flex:1;justify-content:space-around}.a-row{display:grid;grid-template-columns:34px 1fr 64px;gap:12px;align-items:center}
+.a-row .who{display:contents}.a-row button.who{display:contents;cursor:pointer}.a-row .name{font-size:16px;text-align:left}.a-row .name small{display:block;color:var(--faint);font-size:12px;margin-top:2px}.a-row .name:hover{color:#fff}
+.a-row .pct{font-size:20px;font-weight:300;text-align:right;font-variant-numeric:tabular-nums}
 .a-row input[type=range]{grid-column:2/4;accent-color:#53c3ff;width:100%;height:18px;margin:0}
 .a-row .meta{grid-column:2/4;display:flex;justify-content:space-between;color:var(--faint);font-size:12px;margin-top:-2px}.a-row .meta b{color:var(--muted);font-weight:400;font-variant-numeric:tabular-nums}
+.a-big{display:flex;align-items:baseline;gap:14px}.a-big .num{font-size:64px;line-height:1}.a-big span{font-size:16px;color:var(--muted)}
+.a-photos{display:flex;gap:6px;align-items:center;height:104px}.a-photos img{flex:1;min-width:0;max-height:100%;height:auto}
+.a-stack{display:flex;flex-direction:column;gap:8px}.a-stack .key{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.a-stack .key i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
 .tag{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#61dcca;margin-left:6px;vertical-align:middle}
-.a-live-row{display:flex;gap:12px;align-items:center}.spark{width:120px;height:36px;flex:none}.spark path{fill:none;stroke:#53c3ff;stroke-width:1.5}
+/* details dialog */
+.a-dialog{width:min(820px,94vw);max-height:88vh;background:#0b273d;color:var(--ink);border:1px solid var(--edge);border-radius:22px;padding:30px 34px;box-shadow:0 30px 60px #00000080}.a-dialog::backdrop{background:#02101cbb}
+.a-dialog .close{position:absolute;top:18px;right:18px}.a-dialog h2{font-size:26px;font-weight:500;margin:6px 0 14px}.a-dialog p{font-size:15px;line-height:1.5;color:var(--muted);margin-bottom:12px;max-width:68ch}
+.a-metrics{display:flex;gap:12px;margin:16px 0}.a-metric{flex:1;min-width:0;padding:14px;border:1px solid var(--edge);border-radius:14px;background:#7fd4ff10}.a-metric strong{display:block;font-size:26px;font-weight:300;letter-spacing:-.5px;font-variant-numeric:tabular-nums}.a-metric span{font-size:12px;color:var(--muted)}
+.a-steps{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:14px 0}.a-step{border:1px solid var(--edge);border-radius:10px;padding:8px 12px;min-width:120px;background:#08233855}.a-step b{display:block;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}.a-step span{font-size:13px}.a-step.LLM b{color:var(--llm)}.a-step.sandbox b{color:var(--sandbox)}.a-step.service b{color:var(--cpu)}.a-step.check b{color:var(--check)}
+.a-dialog ul{margin:0 0 12px;padding-left:20px;color:var(--muted);font-size:14px;line-height:1.5}.a-dialog a{color:#8fd4ff}
 /* ---------- Study B: dial and answer ---------- */
 .b-main{flex:1;display:grid;grid-template-columns:460px 1fr;gap:20px;min-height:0}
 .b-rail{padding:24px;display:flex;flex-direction:column;gap:18px}
@@ -109,44 +118,38 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
       <div>
         <div class="brandline"><img class="dell-logo" data-asset="dell" alt="Dell Technologies"><span class="eyebrow">Enterprise agent capacity</span></div>
         <h1 id="a-title" style="margin-top:14px"></h1>
-        <div class="sub"><span class="badge modeled">Sized from the measurement</span><span id="a-sub"></span></div>
       </div>
-      <div class="a-controls">
-        <div class="live"><i class="lamp"></i><span id="a-clock">Live simulation</span><button class="chip" id="a-pause">Pause</button></div>
-        <label class="target">Working agents <input type="number" min="0" max="100000" step="1" data-target></label>
-        <div class="chips" data-presets></div>
+      <div class="a-right">
+        <button class="a-ratio" data-topic="ratio" aria-label="CPU-to-GPU ratio details"><span class="num" id="a-ratio"></span><span class="lbl">CPU-to-GPU ratio<small>per CPU socket</small></span></button>
+        <div class="a-toolbar"><span class="live"><i class="lamp"></i><span id="a-clock">Live</span></span><button class="control" id="a-pause">Pause</button><button class="control" data-topic="method">Details</button></div>
       </div>
     </div>
     <div class="a-flow">
       <section class="glass a-card" aria-label="Workload">
-        <div class="head"><h2>The work</h2><span class="badge">1 · Workload</span></div>
-        <p class="why">Five kinds of agent, each an end-to-end workflow. Slide the incoming share; the working population follows.</p>
+        <div class="head"><h2>The work</h2><div class="a-mixbar"><label class="select"><select id="a-mix" aria-label="Agent mix"></select></label><label class="target"><input type="number" min="0" max="100000" step="1" data-target aria-label="Working agents"><span>agents</span></label></div></div>
         <div class="a-rows" id="a-rows"></div>
-        <p class="b-status" id="a-status"></p>
+        <p class="b-status" id="a-status" hidden></p>
       </section>
       <div class="a-arrow" aria-hidden="true">→</div>
-      <section class="glass a-card" aria-label="Host CPUs">
-        <div class="head"><h2>Runs on CPUs</h2><span class="badge">2 · Agent execution</span></div>
+      <section class="glass a-card clickable" aria-label="Host CPUs" data-topic="cpu" role="button" tabindex="0">
+        <div class="head"><h2>Runs on CPUs</h2></div>
         <div class="a-big"><span class="num" id="a-cpu-count"></span><span>PowerEdge R770<br><span id="a-cpu-sockets"></span></span></div>
         <div class="a-photos" id="a-cpu-photos"></div>
-        <div class="a-stack"><div class="kv"><span>Working agents per CPU socket</span><b id="a-load"></b></div><div class="bar" id="a-load-bar"></div><div class="key"><span id="a-load-note"></span></div></div>
-        <div class="a-stack"><div class="kv"><span>CPU utilization <small class="tag">live</small></span><b id="a-cpu-util"></b></div><div class="a-live-row"><svg class="spark" id="a-spark" viewBox="0 0 220 36" preserveAspectRatio="none" aria-hidden="true"><path id="a-spark-path" d=""/></svg><div style="flex:1"><div class="bar" id="a-cpu-bar"></div><div class="key" id="a-cpu-key"></div></div></div></div>
+        <div class="a-stack"><div class="kv"><span>Working agents per socket</span><b id="a-load"></b></div><div class="bar" id="a-load-bar"></div></div>
+        <div class="a-stack"><div class="kv"><span>CPU utilization <small class="tag">live</small></span><b id="a-cpu-util"></b></div><div class="bar" id="a-cpu-bar"></div><div class="key" id="a-cpu-key"></div></div>
         <div class="kv"><span>Memory per R770 <small class="tag">live</small></span><b id="a-mem"></b></div>
-        <p class="why" id="a-cpu-why"></p>
       </section>
-      <div class="a-arrow" aria-hidden="true">→</div>
-      <section class="glass a-card" aria-label="Model serving">
-        <div class="head"><h2>Calls the model</h2><span class="badge">3 · Model serving</span></div>
+      <div class="a-arrow" aria-hidden="true"><span id="a-calls"></span>→</div>
+      <section class="glass a-card clickable" aria-label="Model serving" data-topic="serving" role="button" tabindex="0">
+        <div class="head"><h2>Calls the model</h2></div>
         <div class="a-big"><span class="num" id="a-gpu-count"></span><span>PowerEdge XE7740<br><span id="a-gpu-alloc"></span></span></div>
         <div class="a-photos" id="a-gpu-photos"></div>
-        <div class="a-stack"><div class="kv"><span>GPU serving capacity used</span><b id="a-gpu-use"></b></div><div class="bar" id="a-gpu-bar"></div></div>
-        <div class="kv"><span>Output the fleet needs</span><b id="a-tokens"></b></div>
-        <div class="kv"><span>Model calls <small class="tag">live</small></span><b id="a-calls"></b></div>
+        <div class="a-stack"><div class="kv"><span>Serving capacity used</span><b id="a-gpu-use"></b></div><div class="bar" id="a-gpu-bar"></div></div>
+        <div class="kv"><span>Output required</span><b id="a-tokens"></b></div>
         <div class="kv"><span>Serving reference</span><b id="a-serving"></b></div>
-        <p class="why" id="a-gpu-why"></p>
       </section>
     </div>
-    <p class="footnote">Measured on one Xeon 6 CPU at the v2.3 enterprise mix; deployment counts are sized from that measurement and need multi-socket validation. Live readings vary with the recorded host trace.</p>
+    <p class="footnote">Sized from a single-CPU measurement at the v2.3 enterprise mix. Multi-socket counts need validation. Live readings follow the recorded host trace.</p>
   </section>
 
   <!-- B: controls left, answer right -->
@@ -217,6 +220,7 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
     <div class="c-nav"><button id="c-back">Back</button><span class="footnote" id="c-foot"></span><button id="c-next">Next</button></div>
   </section>
 </div>
+<dialog class="a-dialog" id="a-dialog" aria-labelledby="a-dialog-title"><button class="control close" id="a-dialog-close">Close</button><div class="eyebrow" id="a-dialog-role"></div><h2 id="a-dialog-title"></h2><div id="a-dialog-body"></div></dialog>
 <script>
 'use strict';
 const RESULTS = {"revisionDate":"2026-09-08","resultVersion":"v2.3","definitionVersion":"v2.3","status":"Results of record in the September 8 methodology","sourceRecord":{"commit":"4665ab1","seed":12001,"run":"series-12001-20260908-165351","location":"data/capacity/series-12001-20260908-165351 and docs/benchmark-methodology.md, section 11"},"definitions":{"residentUnit":"One end-to-end workflow, including its planner and workers","tile":{"Task":6,"Research":1,"Ingestion":1,"Analyst":2,"Code":2},"workers":{"Task":1,"Research":3,"Ingestion":1,"Analyst":3,"Code":3}},"platform":{"cores":64,"memoryGB":1000,"allocation":{"reranking":6,"queryEmbedding":1,"ingestEmbedding":2,"application":55}},"capacity":{"resident":143,"cpuPercent":85,"memoryGB":357,"memoryPeakGB":450,"callsPerSecond":8.4,"outputTokensPerSecond":5660,"coreMsPerSecond":54300,"cpuShares":{"sandbox":70.8,"retrieval":2.6,"execution":23.7,"support":2.9},"accountingNotes":"Memory and CPU shares use all four rate-0.21 ledgers, +600 to +1500 seconds after each start. Mean memory 355.037 GB, maximum sample 429.3 GB. Mean CPU-family values normalized across the four samplers: sandbox 71.08995%, retrieval 2.58771%, execution (control, executors, siblings) 23.43381%, supporting services 2.88853%. Ratio script returns 5658 output tokens/s, rounded to 5660, and achieved rate 0.843. At 119 model calls per 12-request tile, the serving requirement is 8.36 calls/s, rounded to 8.4."},"serving":{"model":"gpt-oss-20b","gpu":"RTX PRO 6000 Blackwell Server Edition","outputTokensPerSecondPerGpu":3565,"prefixCache":true,"cacheAllowancePercent":5},"archetypes":[{"name":"Task","coreMs":1000,"modelCalls":4,"outputTokens":1390,"label":"retrieve, record, and reply","color":"#0672CB"},{"name":"Research","coreMs":25000,"modelCalls":20,"outputTokens":16100,"label":"retrieve and synthesize","color":"#0B7C84"},{"name":"Ingestion","coreMs":100000,"modelCalls":7,"outputTokens":3670,"label":"OCR, embed, and index","color":"#00468B"},{"name":"Analyst","coreMs":190000,"modelCalls":17,"outputTokens":13460,"label":"analyze and explain","color":"#40586D"},{"name":"Code","coreMs":150000,"modelCalls":17,"outputTokens":12820,"label":"set up, CI, and verify","color":"#66278F"}],"responsePoints":[{"resident":105,"sustainable":true,"p95":{"Task":19,"Research":210,"Ingestion":147,"Analyst":399,"Code":299}},{"resident":143,"sustainable":true,"p95":{"Task":26,"Research":212,"Ingestion":170,"Analyst":533,"Code":356}},{"resident":171,"sustainable":false,"p95":{"Task":26,"Research":213,"Ingestion":202,"Analyst":642,"Code":417}}],"sources":[{"id":"methodology","title":"Benchmark methodology","path":"../benchmark-methodology.md"},{"id":"configuration","title":"Workflow configuration","path":"../../config/capacity_scenarios.yaml"},{"id":"serving-profile","title":"Model response profile","path":"../../data/capacity/serving/gptoss20b-low-faithful-v23/summary.md"},{"id":"capacity","title":"Capacity measurement check","path":"capacity-measurement-check.md"}]};
@@ -367,8 +371,15 @@ const SIM_PROFILE = {"version":"v2.3","reference":"data/capacity/set-20260908-16
   document.addEventListener('click', e => { const b = e.target.closest('[data-preset]'); if (b) applyPreset(b.dataset.preset); });
   document.addEventListener('input', e => { if (e.target.matches('[data-target]')) { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 0 && n <= 100000) { mix.setTarget(n); render(); } } });
   function sentence(r) { return r ? `<b>${fmt(r.total)}</b> working agents need <b>${r.cpuSystems}</b> PowerEdge R770${r.cpuSystems === 1 ? '' : 's'} and <b>${r.gpuSystems}</b> XE7740${r.gpuSystems === 1 ? '' : 's'}.` : 'Percentages must total 100 before the sizing updates.'; }
-  /* ---- A: static structure on mix change, live readings on a clock ---- */
+  /* ---- A: static structure on mix change, live readings on a clock, details on demand ---- */
   const TRACE = [[0,0.909,0.79],[2,0.923,0.82],[4,0.905,0.856],[6,0.915,0.898],[8,0.941,0.925],[10,0.92,0.939],[12,0.976,0.958],[14,0.989,0.939],[16,1.015,0.97],[18,1.01,0.977],[20,1.015,0.987],[22,1.04,0.949],[24,0.999,0.952],[26,0.983,0.939],[28,0.946,0.883],[30,0.915,0.909],[32,0.877,0.931],[34,0.867,0.94],[36,0.868,0.943],[38,0.798,0.899],[40,0.759,0.913],[42,0.771,0.878],[44,0.708,0.806],[46,0.698,0.82],[48,0.733,0.803],[50,0.716,0.791],[52,0.772,0.807],[54,0.81,0.827],[56,0.88,0.845],[58,0.932,0.831],[60,0.925,0.795],[62,0.908,0.814],[64,0.883,0.858],[66,0.911,0.898],[68,0.96,0.939],[70,0.949,0.951],[72,0.996,0.949],[74,1.027,0.97],[76,1.036,0.906],[78,1.011,0.926],[80,0.973,0.885],[82,0.975,0.873],[84,0.937,0.898],[86,0.877,0.895],[88,0.865,0.886],[90,0.891,0.885],[92,0.853,0.837],[94,0.835,0.848],[96,0.82,0.818],[98,0.804,0.828],[100,0.786,0.855],[102,0.763,0.838],[104,0.783,0.837],[106,0.772,0.807],[108,0.749,0.777],[110,0.836,0.784],[112,0.856,0.797],[114,0.865,0.825],[116,0.938,0.866],[118,0.938,0.897],[120,0.946,0.925],[122,0.943,0.933],[124,0.972,0.956],[126,0.992,0.988],[128,1.037,1.022],[130,1.018,1.048],[132,1.075,1.045],[134,1.066,1.025],[136,1.069,1.043],[138,1.071,1.042],[140,1.089,1.082],[142,1.059,1.117],[144,1.062,1.081],[146,1.027,1.04],[148,0.986,1.048],[150,0.949,0.998],[152,0.903,0.993],[154,0.887,0.97],[156,0.858,0.947],[158,0.836,0.863],[160,0.789,0.865],[162,0.774,0.882],[164,0.829,0.881],[166,0.883,0.866],[168,0.88,0.838],[170,0.88,0.829],[172,0.903,0.857],[174,0.94,0.867],[176,0.978,0.903],[178,1.018,0.923],[180,0.986,0.897],[182,0.964,0.922],[184,0.94,0.92],[186,0.975,0.942],[188,0.999,0.938],[190,1.004,0.959],[192,0.995,0.95],[194,0.987,0.975],[196,1.03,1.003],[198,1.033,0.996],[200,1.045,0.985],[202,1.005,0.936],[204,0.943,0.888],[206,0.914,0.892],[208,0.941,0.917],[210,0.946,0.927],[212,0.902,0.958],[214,0.908,0.97],[216,0.882,0.919],[218,0.842,0.916],[220,0.853,0.849],[222,0.842,0.845],[224,0.873,0.859],[226,0.835,0.875],[228,0.894,0.896],[230,0.917,0.888],[232,0.926,0.905],[234,0.973,0.941],[236,0.964,0.954],[238,0.958,0.954],[240,0.915,0.975],[242,0.935,0.963],[244,0.935,0.928],[246,0.946,0.928],[248,0.938,0.959],[250,0.94,0.985],[252,0.96,1.012],[254,0.967,0.973],[256,1.007,0.989],[258,0.941,0.923],[260,0.946,0.923],[262,0.975,0.945],[264,0.957,0.943],[266,0.931,0.977],[268,0.914,0.942],[270,0.896,0.943],[272,0.874,0.93],[274,0.862,0.892],[276,0.845,0.901],[278,0.87,0.887],[280,0.835,0.897],[282,0.839,0.834],[284,0.883,0.803],[286,0.882,0.823],[288,0.944,0.836],[290,0.995,0.884],[292,1.05,0.92],[294,0.975,0.966],[296,0.981,1.004],[298,0.998,1.009],[300,1.022,0.971],[302,1.016,0.972],[304,1.021,0.947],[306,0.999,0.975],[308,1.011,0.975],[310,0.993,0.98],[312,0.99,0.943],[314,1.001,0.964],[316,0.99,0.907],[318,0.932,0.898],[320,0.908,0.912],[322,0.911,0.883],[324,0.909,0.89],[326,0.89,0.854],[328,0.848,0.866],[330,0.844,0.891],[332,0.838,0.869],[334,0.861,0.885],[336,0.855,0.85],[338,0.906,0.866],[340,0.935,0.849],[342,0.984,0.88],[344,0.957,0.909],[346,0.981,0.944],[348,1.016,0.948],[350,1.005,0.958],[352,1.021,0.964],[354,0.983,0.981],[356,1.01,0.995],[358,0.996,0.936],[360,0.976,0.95],[362,1.001,0.941],[364,0.976,0.959],[366,1.033,0.98],[368,1.018,1],[370,1.007,1.023],[372,1.001,1.043],[374,0.983,1.067],[376,0.984,1.022],[378,0.96,0.99],[380,0.97,0.988],[382,0.995,1.009],[384,0.961,1.038],[386,0.928,1.067],[388,0.922,1.065],[390,0.964,1.046],[392,0.963,1.034],[394,1.001,1.037],[396,1.013,1.049],[398,1.039,1.049],[400,1.043,1.078],[402,1.036,1.036],[404,1.05,1.038],[406,1.051,1.066],[408,1.065,1.074],[410,1.092,1.067],[412,1.05,1.079],[414,1.033,1.094],[416,1.074,1.09],[418,1.04,1.107],[420,1.085,1.119],[422,1.077,1.137],[424,1.112,1.133],[426,1.11,1.091],[428,1.069,1.11],[430,1.089,1.047],[432,1.007,1.029],[434,0.993,1.032],[436,1.018,0.994],[438,0.989,1.027],[440,0.976,0.991],[442,0.972,0.979],[444,0.919,0.981],[446,0.888,0.909],[448,0.85,0.913],[450,0.87,0.936],[452,0.912,0.876],[454,0.925,0.859],[456,0.957,0.864],[458,0.987,0.893],[460,1.002,0.938],[462,1.034,0.972],[464,0.992,0.987],[466,1.022,1.021],[468,1.015,1.021],[470,0.979,1.024],[472,1.001,0.999],[474,1.024,0.962],[476,1.036,0.965],[478,0.973,0.971],[480,0.96,0.959],[482,0.996,0.975],[484,0.992,0.869],[486,0.941,0.882],[488,0.905,0.899],[490,0.912,0.91],[492,0.887,0.919],[494,0.885,0.929],[496,0.89,0.929],[498,0.883,0.9],[500,0.874,0.924],[502,0.883,0.929],[504,0.883,0.937],[506,0.891,0.966],[508,0.975,0.946],[510,0.99,0.953],[512,1.011,0.92],[514,1.048,0.956],[516,1.074,0.972],[518,1.085,0.985],[520,1.086,1.03],[522,1.121,1.062],[524,1.159,1.083],[526,1.104,1.071],[528,1.068,1.068],[530,1.12,1.063],[532,1.127,1.093],[534,1.135,1.107],[536,1.118,1.049],[538,1.12,1.068],[540,1.124,1.071],[542,1.141,1.047],[544,1.091,1.072],[546,1.075,1.091],[548,1.068,1.096],[550,1.042,1.078],[552,1.025,1.103],[554,1.01,1.079],[556,0.967,1.09],[558,0.928,1.05],[560,0.932,1.061],[562,0.951,1.013],[564,0.937,0.965],[566,0.906,0.981],[568,0.964,0.968],[570,1.015,0.957],[572,1.028,0.953],[574,1.013,0.986],[576,1.025,1.01],[578,1.043,1.034],[580,1.034,1.008],[582,1.05,1.031],[584,1.082,1.04],[586,1.106,1.056],[588,1.103,1.07],[590,1.071,1.037],[592,1.098,1.071],[594,1.121,1.089],[596,1.124,1.106],[598,1.123,1.133],[600,1.132,1.1],[602,1.11,1.08],[604,1.075,1.065],[606,1.068,1.093],[608,1.05,1.015],[610,1.036,1.05],[612,1.039,1.077],[614,1.001,1.075],[616,0.984,1.081],[618,0.957,0.998],[620,0.957,1.027],[622,0.952,0.993],[624,0.983,1.01],[626,0.986,0.986],[628,0.97,1.005],[630,0.995,0.989],[632,1.051,1.026],[634,1.051,1.03],[636,1.071,1.052],[638,1.114,1.089],[640,1.139,1.114],[642,1.135,1.112],[644,1.046,1.046],[646,1.045,1.065],[648,1.025,1.046],[650,1.005,1.017],[652,1.005,1.029],[654,1.021,1.055],[656,1.056,1.055],[658,1.03,1.082],[660,1.024,1.033],[662,1.034,1.032],[664,0.981,1.015],[666,0.976,0.977],[668,0.983,0.985],[670,0.979,1.014],[672,0.966,1.054],[674,0.995,1.055],[676,0.986,1.088],[678,0.973,1.04],[680,0.992,1.065],[682,1.001,1.049],[684,1.04,1.076],[686,1.054,1.081],[688,1.046,1.076],[690,1.072,1.095],[692,1.095,1.102],[694,1.117,1.119],[696,1.159,1.164],[698,1.165,1.184],[700,1.182,1.224],[702,1.181,1.239],[704,1.191,1.231],[706,1.173,1.211],[708,1.115,1.198],[710,1.097,1.131],[712,1.092,1.133],[714,1.065,1.146],[716,1.098,1.163],[718,1.107,1.119],[720,1.098,1.085],[722,1.066,1.08],[724,0.998,1.071],[726,1.031,1.082],[728,1.027,1.098],[730,0.963,1.038],[732,0.949,1.01],[734,0.949,0.99],[736,0.92,0.947],[738,0.943,0.95],[740,1.06,0.937],[742,1.031,0.93],[744,1.019,0.958],[746,1.039,0.98],[748,1.103,1.015],[750,1.112,1.041],[752,1.156,1.076],[754,1.199,1.116],[756,1.193,1.138],[758,1.167,1.141],[760,1.152,1.134],[762,1.132,1.132],[764,1.12,1.161],[766,1.136,1.171],[768,1.136,1.204],[770,1.174,1.139],[772,1.08,1.129],[774,1.063,1.082],[776,1.039,1.064],[778,1.013,1.016],[780,0.999,1.033],[782,0.979,1.007],[784,0.951,1.017],[786,0.926,1.031],[788,0.914,0.997],[790,0.879,0.979],[792,0.912,0.967],[794,0.951,0.958],[796,1.001,0.975],[798,1.059,1.002],[800,1.103,0.991],[802,1.138,1.027],[804,1.176,1.085],[806,1.206,1.076],[808,1.196,1.131],[810,1.234,1.164],[812,1.229,1.184],[814,1.219,1.197],[816,1.223,1.198],[818,1.203,1.222],[820,1.17,1.189],[822,1.164,1.194],[824,1.188,1.208],[826,1.156,1.201],[828,1.155,1.212],[830,1.191,1.206],[832,1.176,1.151],[834,1.185,1.177],[836,1.165,1.205],[838,1.126,1.205],[840,1.106,1.191],[842,1.071,1.212],[844,1.048,1.125],[846,1.015,1.119],[848,0.981,1.02],[850,0.955,1.035],[852,1.019,1.036],[854,1.018,1.038],[856,1.106,1.048],[858,1.092,1.056],[860,1.115,1.054],[862,1.133,1.084],[864,1.173,1.095],[866,1.159,1.126],[868,1.167,1.146],[870,1.176,1.129],[872,1.168,1.15],[874,1.187,1.146],[876,1.133,1.161],[878,1.165,1.083],[880,1.118,1.088],[882,1.1,1.1],[884,1.139,1.12],[886,1.167,1.128],[888,1.173,1.118],[890,1.164,1.144],[892,1.129,1.167],[894,1.109,1.192],[896,1.098,1.207],[898,1.098,1.225],[900,1.072,1.182],[902,1.066,1.159]];
+  const DEFS = [
+    {name:'Task',work:'Retrieve ticket guidance, record, and reply',workers:['Ticket worker'],jobs:['Resolve a support request'],cycle:[['LLM','Request lookup'],['CPU service','Retrieve guidance'],['CPU service','Record outcome'],['LLM','Write reply'],['CPU check','Check structure']],note:'The reply is the result. This agent does not run a sandbox job.',icon:'M8 4H18L22 8V24H8ZM17 4V10H22M11 14H19M11 18H17'},
+    {name:'Research',work:'Parse sources, retrieve evidence, assemble a brief',workers:['Research','Analysis','Writing'],jobs:['Parse 30 source pages','Parse 30 source pages','Parse 30 source pages'],cycle:[['LLM','Assign worker'],['CPU sandbox','Parse 30 pages'],['CPU service','Three lookups'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'Each worker parses 30 supplied pages and retrieves evidence three times. The planner combines the reviewed sections.',icon:'M5 6H17V22H5ZM10 3H22V17M9 11H14M9 15H14'},
+    {name:'Ingestion',work:'Read documents with OCR, embed, and index',workers:['Document worker'],jobs:['Prepare 50 PDF pages for search'],cycle:[['LLM','Assign intake'],['CPU sandbox','OCR 50 pages'],['CPU service','Embed and index'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'The sandbox renders and reads pages, redacts patterns, and prepares text. CPU services embed and index the chunks.',icon:'M7 4H19V24H7ZM11 10H15M11 14H17M11 18H17'},
+    {name:'Analyst',work:'Process events, compare periods, prepare a report',workers:['Profile events','Compare periods','Prepare report'],jobs:['Profile 100 million events','Compare two 100-million-row periods','Prepare report data from 100 million rows'],cycle:[['LLM','Assign data job'],['CPU service','Retrieve definitions'],['CPU sandbox','Run NumPy job'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'The first two workers retrieve definitions. The reporting worker skips that lookup, then the planner combines the results.',icon:'M5 23H24M8 19V13M14 19V7M20 19V3'},
+    {name:'Code',work:'Build software, run CI checks, verify the rebuild',workers:['Set up build','Run CI checks','Verify rebuild'],jobs:['Build Lua and SQLite, then run tests','Run an instrumented build and static analysis','Rebuild changed files and rerun checks'],cycle:[['LLM','Assign build job'],['CPU service','Retrieve guidance'],['CPU sandbox','Build and test'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'Workers execute separate build jobs in sequence. Each result passes review before the planner assigns the next job.',icon:'M10 7L4 14L10 21M18 7L24 14L18 21M16 4L12 24'}
+  ];
   const traceLength = TRACE[TRACE.length - 1][0];
   function traceAt(t) {
     const x = ((t % traceLength) + traceLength) % traceLength;
@@ -376,14 +387,18 @@ const SIM_PROFILE = {"version":"v2.3","reference":"data/capacity/set-20260908-16
     const a = TRACE[Math.max(0, hi - 1)], b = TRACE[hi], f = b[0] === a[0] ? 0 : (x - a[0]) / (b[0] - a[0]);
     return [a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
   }
-  const live = {clock: 0, playing: true, shown: null, from: null, started: 0, done: [0, 0, 0, 0, 0], spark: [], last: performance.now()};
+  const live = {clock: 0, playing: true, shown: null, from: null, started: 0, done: [0, 0, 0, 0, 0], last: performance.now(), cpu: 0, mem: 0};
+  const mixSelect = $('a-mix');
+  mixSelect.innerHTML = [...Object.keys(presets), 'Custom'].map(n => `<option value="${n}">${n} mix</option>`).join('');
+  mixSelect.onchange = e => { if (e.target.value !== 'Custom') applyPreset(e.target.value); };
+  function statusA(m) { $('a-status').hidden = m.valid; $('a-status').textContent = m.valid ? '' : `Shares total ${m.total}% · ${m.total < 100 ? 'add ' + (100 - m.total) : 'reduce ' + (m.total - 100)}% · the last valid mix keeps running`; $('a-status').classList.toggle('bad', !m.valid); }
+  function retarget(r) { if (live.shown && !r.counts.every((n, i) => n === live.shown.counts[i])) { live.from = live.shown.counts.slice(); live.started = live.clock; } live.target = r; }
   function renderA(m, r) {
-    $('a-rows').innerHTML = A.map((a, i) => `<div class="a-row">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div><div class="pct" id="a-pct-${i}">${m.weights[i]}%</div><input type="range" min="0" max="100" value="${m.weights[i]}" data-slider-a="${i}" aria-label="${a.name} incoming share"><div class="meta"><span><b id="a-now-${i}">—</b> working now</span><span><b id="a-done-${i}">0</b> finished</span></div></div>`).join('');
-    $('a-status').textContent = m.valid ? `Mix totals 100% · ${preset === 'Custom' ? 'custom mix' : preset + ' preset'}` : `Mix totals ${m.total}% · ${m.total < 100 ? 'add ' + (100 - m.total) : 'reduce ' + (m.total - 100)}% · showing the last valid mix`;
-    $('a-status').classList.toggle('bad', !m.valid);
+    mixSelect.value = preset;
+    $('a-rows').innerHTML = A.map((a, i) => `<div class="a-row"><button class="who" data-topic="agent:${i}" aria-label="${a.name} agent details">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div></button><div class="pct" id="a-pct-${i}">${m.weights[i]}%</div><input type="range" min="0" max="100" value="${m.weights[i]}" data-slider-a="${i}" aria-label="${a.name} incoming share"><div class="meta"><span><b id="a-now-${i}">—</b> working now</span><span><b id="a-done-${i}">0</b> finished</span></div></div>`).join('');
+    statusA(m);
     if (!r) return;
-    if (live.shown && !r.counts.every((n, i) => n === live.shown.counts[i])) { live.from = live.shown.counts.slice(); live.started = live.clock; }
-    live.target = r;
+    retarget(r);
     $('a-serving').textContent = `${S.model} · ${fmt(S.outputTokensPerSecondPerGpu)} tok/s per GPU`;
     $('a-cpu-key').innerHTML = familyNames.map((n, i) => `<span><i style="background:${familyColors[i]}"></i>${n}</span>`).join('');
     liveA(true);
@@ -394,28 +409,24 @@ const SIM_PROFILE = {"version":"v2.3","reference":"data/capacity/set-20260908-16
     if (live.from) { const t = Math.min(1, (live.clock - live.started) / 6), e = t * t * (3 - 2 * t); counts = live.target.counts.map((n, i) => Math.round(live.from[i] + (n - live.from[i]) * e)); if (t >= 1) live.from = null; }
     const r = live.shown = counts.every((n, i) => live.shown && n === live.shown.counts[i]) && !force ? live.shown : sim.calculate(counts);
     const [cpuF, memF] = traceAt(live.clock);
-    const cpu = r.total ? Math.min(100, r.cpuPercent * cpuF) : 0;
+    live.cpu = r.total ? Math.min(100, r.cpuPercent * cpuF) : 0;
     const memBase = r.sockets * C.memoryGB * (1 - SIM_PROFILE.analystMemoryShare);
-    const mem = r.total ? memBase + (r.memoryGB - memBase) * memF : 0;
+    live.mem = r.total ? memBase + (r.memoryGB - memBase) * memF : 0;
     const sentenceText = sentence(r); if ($('a-title').innerHTML !== sentenceText) $('a-title').innerHTML = sentenceText;
-    $('a-sub').textContent = r.total ? `${preset} mix · CPU-to-GPU ${ratioText(r)} per socket · ${r.bottleneck} sets the CPU count` : 'No workload';
+    $('a-ratio').textContent = ratioText(r);
     r.counts.forEach((n, i) => { $('a-now-' + i).textContent = fmt(n); $('a-done-' + i).textContent = fmt(live.done[i]); });
     $('a-cpu-count').textContent = r.cpuSystems; $('a-cpu-sockets').textContent = `${r.sockets} CPU sockets`;
-    if (force || $('a-cpu-photos').childElementCount !== Math.min(4, Math.max(1, r.cpuSystems))) { photos($('a-cpu-photos'), ASSETS.r770, r.cpuSystems, 'Dell PowerEdge R770'); photos($('a-gpu-photos'), ASSETS.xe7740, r.gpuSystems, 'Dell PowerEdge XE7740'); }
+    if (force || $('a-cpu-photos').childElementCount !== Math.min(4, Math.max(1, r.cpuSystems)) + (r.cpuSystems > 4 ? 1 : 0)) photos($('a-cpu-photos'), ASSETS.r770, r.cpuSystems, 'Dell PowerEdge R770');
+    if (force || $('a-gpu-photos').childElementCount !== Math.min(4, Math.max(1, r.gpuSystems)) + (r.gpuSystems > 4 ? 1 : 0)) photos($('a-gpu-photos'), ASSETS.xe7740, r.gpuSystems, 'Dell PowerEdge XE7740');
     const perSocket = r.sockets ? r.total / r.sockets : 0;
     $('a-load').textContent = `${fmt(perSocket)} of ${C.resident} measured`; bar($('a-load-bar'), [Math.min(perSocket, C.resident), Math.max(0, C.resident - perSocket)], ['#56dcbf', '#0d2b41']);
-    $('a-load-note').textContent = perSocket > C.resident ? 'Above the measured capacity of one socket' : `${Math.round(perSocket / C.resident * 100)}% of the measured 143-agent capacity, with a 10% sizing margin`;
-    $('a-cpu-util').textContent = Math.round(cpu) + '%';
-    const scale = r.families.reduce((a, b) => a + b, 0) || 1, busy = cpu / 100 * r.sockets * RESULTS.platform.cores;
+    $('a-cpu-util').textContent = Math.round(live.cpu) + '%';
+    const scale = r.families.reduce((a, b) => a + b, 0) || 1, busy = live.cpu / 100 * r.sockets * RESULTS.platform.cores;
     bar($('a-cpu-bar'), [...r.families.map(f => f / scale * busy), Math.max(0, r.sockets * RESULTS.platform.cores - busy)], [...familyColors, '#0d2b41']);
-    live.spark.push(cpu); if (live.spark.length > 120) live.spark.shift();
-    $('a-spark-path').setAttribute('d', live.spark.map((v, i) => (i ? 'L' : 'M') + (i / 119 * 220).toFixed(1) + ' ' + (34 - v / 100 * 32).toFixed(1)).join(' '));
-    $('a-mem').textContent = fmt(r.sockets ? mem / r.cpuSystems : 0) + ' GB';
-    $('a-cpu-why').textContent = `One measured CPU carries ${C.resident} agents at this mix. This fleet is ${r.cpuEquivalent.toFixed(1)} CPU equivalents, rounded up to whole two-socket systems with a 10% margin.`;
-    $('a-gpu-count').textContent = r.gpuSystems; $('a-gpu-alloc').textContent = `${Math.ceil(r.gpuEquivalent - 1e-9)} of ${r.gpuSystems * 8} GPUs allocated`;
+    $('a-mem').textContent = fmt(r.cpuSystems ? live.mem / r.cpuSystems : 0) + ' GB';
+    $('a-gpu-count').textContent = r.gpuSystems; $('a-gpu-alloc').textContent = `${Math.ceil(r.gpuEquivalent - 1e-9)} of ${r.gpuSystems * 8} GPUs`;
     $('a-gpu-use').textContent = Math.round(r.gpuUsage) + '%'; bar($('a-gpu-bar'), [r.gpuUsage, 100 - r.gpuUsage], ['#c39bff', '#0d2b41']);
-    $('a-tokens').textContent = compact(r.output) + ' tokens/s'; $('a-calls').textContent = `${(r.calls * cpuF).toFixed(1)} per second`;
-    $('a-gpu-why').textContent = `Output demand over the serving reference gives ${r.gpuEquivalent.toFixed(1)} GPUs, rounded up to eight-GPU systems. Demand, not GPU telemetry.`;
+    $('a-tokens').textContent = compact(r.output) + ' tokens/s'; $('a-calls').textContent = `${(r.calls * cpuF).toFixed(1)} model\ncalls/s`;
   }
   function tick() {
     const now = performance.now(), dt = Math.min((now - live.last) / 1000, .25); live.last = now;
@@ -423,10 +434,42 @@ const SIM_PROFILE = {"version":"v2.3","reference":"data/capacity/set-20260908-16
     live.clock += dt;
     if (live.shown) live.shown.rates.forEach((rate, i) => { live.done[i] += rate * dt; });
     if (screens.a.classList.contains('active')) liveA(false);
-    $('a-clock').textContent = `Live simulation · ${Math.floor(live.clock / 60)}:${String(Math.floor(live.clock % 60)).padStart(2, '0')}`;
+    $('a-clock').textContent = `Live · ${Math.floor(live.clock / 60)}:${String(Math.floor(live.clock % 60)).padStart(2, '0')}`;
   }
   $('a-pause').onclick = () => { live.playing = !live.playing; live.last = performance.now(); $('a-pause').textContent = live.playing ? 'Pause' : 'Resume'; screens.a.classList.toggle('paused', !live.playing); };
-  document.addEventListener('input', e => { if (e.target.matches('[data-slider-a]')) { preset = 'Custom'; const i = Number(e.target.dataset.sliderA); mix.setPercent(i, Number(e.target.value)); const {m, r} = calc(); $('a-pct-' + i).textContent = m.weights[i] + '%'; $('a-status').textContent = m.valid ? 'Mix totals 100% · custom mix' : `Mix totals ${m.total}% · ${m.total < 100 ? 'add ' + (100 - m.total) : 'reduce ' + (m.total - 100)}% · showing the last valid mix`; $('a-status').classList.toggle('bad', !m.valid); if (r) { lastValid = r; syncControls(m); if (live.shown && !r.counts.every((n, k) => n === live.shown.counts[k])) { live.from = live.shown.counts.slice(); live.started = live.clock; } live.target = r; renderB(m, r); renderC(m, r); } } });
+  document.addEventListener('input', e => { if (e.target.matches('[data-slider-a]')) { preset = 'Custom'; mixSelect.value = 'Custom'; const i = Number(e.target.dataset.sliderA); mix.setPercent(i, Number(e.target.value)); const {m, r} = calc(); $('a-pct-' + i).textContent = m.weights[i] + '%'; statusA(m); if (r) { lastValid = r; syncControls(m); retarget(r); renderB(m, r); renderC(m, r); } } });
+  /* details */
+  const stepClass = kind => kind === 'LLM' ? 'LLM' : /sandbox/.test(kind) ? 'sandbox' : /check/.test(kind) ? 'check' : 'service';
+  function topicA(key) {
+    const r = live.shown || lastValid, m = mix.snapshot();
+    const [kind, idx] = key.split(':'), i = Number(idx);
+    let role = 'Live simulation', title = '', html = '';
+    const metrics = list => `<div class="a-metrics">${list.map(([v, l]) => `<div class="a-metric"><strong>${v}</strong><span>${l}</span></div>`).join('')}</div>`;
+    const p = t => `<p>${t}</p>`;
+    if (kind === 'agent') {
+      const d = DEFS[i], a = A[i], t = SIM_PROFILE.timings[i];
+      role = `${a.name} agent · ${d.workers.length} worker${d.workers.length === 1 ? '' : 's'}`; title = d.work;
+      html = p(d.note) + `<div class="a-steps">${d.cycle.map(([k, s]) => `<div class="a-step ${stepClass(k)}"><b>${k}</b><span>${s}</span></div>`).join('')}</div>` + `<ul>${d.jobs.map((j, k) => `<li><b>${d.workers[k]}</b>: ${j}</li>`).join('')}</ul>` + metrics([[a.modelCalls, 'model calls per workflow'], [fmt(a.outputTokens), 'output tokens per workflow'], [fmt(a.coreMs / 1000) + ' s', 'CPU core-seconds per workflow'], [fmt(t.meanSeconds) + ' s', `mean lifetime, ${t.samples} recorded`], [r ? fmt(r.counts[i]) : '—', 'working now'], [r ? fmt(r.rates[i] * 3600) : '—', 'finished per hour']]) + p(`${m.weights[i]}% of incoming work in the ${preset} mix. Working count = incoming rate × mean lifetime, rounded to whole agents.`);
+    } else if (kind === 'cpu') {
+      role = 'Agent execution'; title = 'How the R770 count is sized';
+      html = p(`One measured Xeon 6 CPU carries ${C.resident} working agents at the enterprise mix, ${C.cpuPercent}% of 64 cores busy, ${C.memoryGB} GB in use. Each CPU keeps the tested allocation: ${RESULTS.platform.allocation.application} application cores, ${RESULTS.platform.allocation.reranking} reranking, ${RESULTS.platform.allocation.queryEmbedding} query embedding, ${RESULTS.platform.allocation.ingestEmbedding} document embedding.`) + p(`CPU equivalents take the largest requirement across agent execution, reranking, query embedding, document embedding and memory, with dedicated services and memory planned at ${Math.round(SIM_PROFILE.serviceTarget * 100)}%. Whole R770s are pairs of that CPU with a 10% margin: ceil(equivalents ÷ 2 ÷ 1.1).`) + (r ? metrics([[r.cpuEquivalent.toFixed(1), 'CPU equivalents'], [r.cpuSystems, 'R770 systems'], [r.bottleneck, 'limiting resource'], [Math.round(r.cpuPercent) + '%', 'modeled average utilization'], [fmt(r.memoryPerCPU) + ' GB', 'memory per R770']]) : '') + p(`Memory assigns ${Math.round(SIM_PROFILE.analystMemoryShare * 100)}% of the measured footprint to analyst working sets and the rest to a fixed per-CPU residual; this is a modeling assumption. Utilization varies with the recorded host trace from the capacity plateau.`);
+    } else if (kind === 'serving') {
+      role = 'Model serving'; title = 'How the XE7740 count is sized';
+      html = p(`Output demand is the sum over working agents of output tokens per workflow divided by mean lifetime. GPU equivalents divide that by the serving reference, ${S.model} on one ${S.gpu} at ${fmt(S.outputTokensPerSecondPerGpu)} output tokens per second, which assumes prefix caching and carries a ${S.cacheAllowancePercent}% allowance. XE7740s hold eight GPUs.`) + (r ? metrics([[compact(r.output), 'output tokens/s'], [r.calls.toFixed(1), 'model calls/s'], [r.gpuEquivalent.toFixed(1), 'GPUs required'], [r.gpuSystems, 'XE7740 systems'], [Math.round(r.gpuUsage) + '%', 'of allocated GPUs']]) : '') + p('This is demand against a serving reference, not GPU telemetry. Model latency is held at the reference target on the assumption that the required capacity is supplied.');
+    } else if (kind === 'ratio') {
+      role = 'Headline'; title = 'CPU-to-GPU ratio';
+      html = p('GPUs required divided by CPU sockets required, before rounding to whole systems. It says how much model serving one host CPU keeps busy at this mix.') + (r ? metrics([[ratioText(r), 'this mix'], [r.cpuEquivalent.toFixed(1), 'CPU equivalents'], [r.gpuEquivalent.toFixed(1), 'GPU equivalents']]) : '') + p(`The whitepaper record at the enterprise mix is 1 : ${(C.outputTokensPerSecond / S.outputTokensPerSecondPerGpu).toFixed(2)} at ${fmt(S.outputTokensPerSecondPerGpu)} output tokens per second per GPU. Mixes heavy in sandbox work push the ratio toward the CPU; mixes heavy in short model-bound tasks push it toward the GPU.`);
+    } else {
+      role = 'Sources'; title = 'Measurement and method';
+      html = p(`${RESULTS.status}. Record ${RESULTS.sourceRecord.run} at commit ${RESULTS.sourceRecord.commit}; definitions ${RESULTS.definitionVersion}.`) + `<ul>${SIM_PROFILE.assumptions.map(a => `<li>${a}</li>`).join('')}</ul>` + `<ul>${RESULTS.sources.map(sr => `<li><a href="../whitepaper/${sr.path}" target="_blank" rel="noopener">${sr.title}</a></li>`).join('')}<li><a href="../whitepaper/agent-capacity-whitepaper.html" target="_blank" rel="noopener">Whitepaper</a></li></ul>`;
+    }
+    $('a-dialog-role').textContent = role; $('a-dialog-title').textContent = title; $('a-dialog-body').innerHTML = html;
+    $('a-dialog').showModal();
+  }
+  document.addEventListener('click', e => { const t = e.target.closest('[data-topic]'); if (t && screens.a.contains(t)) { e.stopPropagation(); topicA(t.dataset.topic); } });
+  document.addEventListener('keydown', e => { const t = e.target.closest('[data-topic][tabindex]'); if (t && screens.a.contains(t) && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); topicA(t.dataset.topic); } });
+  $('a-dialog-close').onclick = () => $('a-dialog').close();
+  $('a-dialog').addEventListener('click', e => { if (e.target === $('a-dialog')) $('a-dialog').close(); });
   /* ---- B ---- */
   function renderB(m, r) {
     $('b-rows').innerHTML = A.map((a, i) => `<div class="b-row">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div><div class="pct">${m.weights[i]}%<small>${r ? fmt(r.counts[i]) + ' working' : ''}</small></div><input type="range" min="0" max="100" value="${m.weights[i]}" data-slider="${i}" aria-label="${a.name} incoming share"></div>`).join('');

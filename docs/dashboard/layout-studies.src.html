@@ -35,23 +35,32 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
 .footnote{font-size:12px;color:var(--faint);text-align:center}
 /* ---------- Study A: answer first ---------- */
 .a-head{display:flex;justify-content:space-between;align-items:flex-start;gap:30px}
-.a-head h1{font-size:44px;font-weight:300;letter-spacing:-.8px;line-height:1.15;max-width:1150px;text-wrap:balance}.a-head h1 b{font-weight:500;color:#fff}
-.a-head .sub{margin-top:12px;font-size:17px;color:var(--muted);display:flex;gap:22px;align-items:center}
-.a-flow{flex:1;display:grid;grid-template-columns:1fr 34px 1.1fr 34px 1fr;gap:0;align-items:stretch;min-height:0}
-.a-card{padding:24px 26px;display:flex;flex-direction:column;gap:16px;min-height:0}
-.a-card .head{display:flex;justify-content:space-between;align-items:center}.a-card h2{font-size:22px;font-weight:500}
-.a-arrow{display:grid;place-items:center;color:#7fbfe0;font-size:28px}
-.a-rows{display:flex;flex-direction:column;gap:9px}.a-row{display:grid;grid-template-columns:34px 1fr 64px;gap:12px;align-items:center}.a-row .name{font-size:16px}.a-row .name small{display:block;color:var(--faint);font-size:12px;margin-top:2px}.a-row .pct{font-size:20px;font-weight:300;text-align:right;font-variant-numeric:tabular-nums}
-.a-row .bar{grid-column:2/4;height:6px}
-.a-big{display:flex;align-items:baseline;gap:14px}.a-big .num{font-size:64px;line-height:1}.a-big span{font-size:16px;color:var(--muted)}
-.a-photos{display:flex;gap:6px;align-items:center;height:110px}.a-photos img{flex:1;min-width:0;max-height:100%;height:auto}
-.a-card .why{font-size:15px;color:var(--muted);line-height:1.45}
-.a-stack{display:flex;flex-direction:column;gap:8px}.a-stack .key{display:flex;gap:16px;font-size:12px;color:var(--muted)}.a-stack .key i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
-.a-controls{display:flex;flex-direction:column;gap:12px;align-items:flex-end}.live{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}.lamp{width:7px;height:7px;border-radius:50%;background:#61dcca;box-shadow:0 0 12px #61dcca80}.paused .lamp{background:#a9b7c4;box-shadow:none}
+.a-head h1{font-size:44px;font-weight:300;letter-spacing:-.8px;line-height:1.15;max-width:1000px;text-wrap:balance}.a-head h1 b{font-weight:500;color:#fff}
+.a-right{display:flex;flex-direction:column;align-items:flex-end;gap:12px}
+.a-ratio{display:flex;align-items:center;gap:16px;border:1px solid var(--edge);background:#0b2a4088;border-radius:18px;padding:12px 22px;text-align:left}.a-ratio .num{font-size:54px;line-height:1}.a-ratio .lbl{font-size:16px;line-height:1.3}.a-ratio .lbl small{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+.a-toolbar{display:flex;gap:8px;align-items:center}.control{border:1px solid var(--edge);background:#102d44aa;padding:9px 12px;border-radius:10px;font-size:13px}.control:hover{background:#1a4664aa}
+.live{display:flex;gap:9px;align-items:center;font-size:13px;color:var(--muted);margin-right:6px}.lamp{width:7px;height:7px;border-radius:50%;background:#61dcca;box-shadow:0 0 12px #61dcca80}.paused .lamp{background:#a9b7c4;box-shadow:none}
+.a-flow{flex:1;display:grid;grid-template-columns:1.05fr 40px 1fr 72px 1fr;align-items:stretch;min-height:0}
+.a-card{padding:22px 24px;display:flex;flex-direction:column;gap:16px;min-height:0}.a-card .head{display:flex;justify-content:space-between;align-items:center;gap:12px}.a-card h2{font-size:21px;font-weight:500}
+.a-card.clickable{cursor:pointer}.a-card.clickable:hover{border-color:#aee4ff80}
+.a-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#7fbfe0;font-size:28px}.a-arrow span{font-size:12px;color:var(--muted);letter-spacing:.3px;text-align:center;line-height:1.3;font-variant-numeric:tabular-nums;white-space:pre-line}
+.a-mixbar{display:flex;gap:10px;align-items:center}.select select{appearance:none;background:#0b2337 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23b6d0e0' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;border:1px solid var(--edge);border-radius:10px;padding:8px 32px 8px 12px;font-size:14px;color:var(--ink)}
+.target{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}.target input{width:82px;background:#0b2337;border:1px solid var(--edge);border-radius:10px;padding:7px 10px;font-size:18px;font-weight:300;color:var(--ink);text-align:right}
+.a-rows{display:flex;flex-direction:column;gap:8px;flex:1;justify-content:space-around}.a-row{display:grid;grid-template-columns:34px 1fr 64px;gap:12px;align-items:center}
+.a-row .who{display:contents}.a-row button.who{display:contents;cursor:pointer}.a-row .name{font-size:16px;text-align:left}.a-row .name small{display:block;color:var(--faint);font-size:12px;margin-top:2px}.a-row .name:hover{color:#fff}
+.a-row .pct{font-size:20px;font-weight:300;text-align:right;font-variant-numeric:tabular-nums}
 .a-row input[type=range]{grid-column:2/4;accent-color:#53c3ff;width:100%;height:18px;margin:0}
 .a-row .meta{grid-column:2/4;display:flex;justify-content:space-between;color:var(--faint);font-size:12px;margin-top:-2px}.a-row .meta b{color:var(--muted);font-weight:400;font-variant-numeric:tabular-nums}
+.a-big{display:flex;align-items:baseline;gap:14px}.a-big .num{font-size:64px;line-height:1}.a-big span{font-size:16px;color:var(--muted)}
+.a-photos{display:flex;gap:6px;align-items:center;height:104px}.a-photos img{flex:1;min-width:0;max-height:100%;height:auto}
+.a-stack{display:flex;flex-direction:column;gap:8px}.a-stack .key{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.a-stack .key i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
 .tag{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#61dcca;margin-left:6px;vertical-align:middle}
-.a-live-row{display:flex;gap:12px;align-items:center}.spark{width:120px;height:36px;flex:none}.spark path{fill:none;stroke:#53c3ff;stroke-width:1.5}
+/* details dialog */
+.a-dialog{width:min(820px,94vw);max-height:88vh;background:#0b273d;color:var(--ink);border:1px solid var(--edge);border-radius:22px;padding:30px 34px;box-shadow:0 30px 60px #00000080}.a-dialog::backdrop{background:#02101cbb}
+.a-dialog .close{position:absolute;top:18px;right:18px}.a-dialog h2{font-size:26px;font-weight:500;margin:6px 0 14px}.a-dialog p{font-size:15px;line-height:1.5;color:var(--muted);margin-bottom:12px;max-width:68ch}
+.a-metrics{display:flex;gap:12px;margin:16px 0}.a-metric{flex:1;min-width:0;padding:14px;border:1px solid var(--edge);border-radius:14px;background:#7fd4ff10}.a-metric strong{display:block;font-size:26px;font-weight:300;letter-spacing:-.5px;font-variant-numeric:tabular-nums}.a-metric span{font-size:12px;color:var(--muted)}
+.a-steps{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:14px 0}.a-step{border:1px solid var(--edge);border-radius:10px;padding:8px 12px;min-width:120px;background:#08233855}.a-step b{display:block;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}.a-step span{font-size:13px}.a-step.LLM b{color:var(--llm)}.a-step.sandbox b{color:var(--sandbox)}.a-step.service b{color:var(--cpu)}.a-step.check b{color:var(--check)}
+.a-dialog ul{margin:0 0 12px;padding-left:20px;color:var(--muted);font-size:14px;line-height:1.5}.a-dialog a{color:#8fd4ff}
 /* ---------- Study B: dial and answer ---------- */
 .b-main{flex:1;display:grid;grid-template-columns:460px 1fr;gap:20px;min-height:0}
 .b-rail{padding:24px;display:flex;flex-direction:column;gap:18px}
@@ -105,44 +114,38 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
       <div>
         <div class="brandline"><img class="dell-logo" data-asset="dell" alt="Dell Technologies"><span class="eyebrow">Enterprise agent capacity</span></div>
         <h1 id="a-title" style="margin-top:14px"></h1>
-        <div class="sub"><span class="badge modeled">Sized from the measurement</span><span id="a-sub"></span></div>
       </div>
-      <div class="a-controls">
-        <div class="live"><i class="lamp"></i><span id="a-clock">Live simulation</span><button class="chip" id="a-pause">Pause</button></div>
-        <label class="target">Working agents <input type="number" min="0" max="100000" step="1" data-target></label>
-        <div class="chips" data-presets></div>
+      <div class="a-right">
+        <button class="a-ratio" data-topic="ratio" aria-label="CPU-to-GPU ratio details"><span class="num" id="a-ratio"></span><span class="lbl">CPU-to-GPU ratio<small>per CPU socket</small></span></button>
+        <div class="a-toolbar"><span class="live"><i class="lamp"></i><span id="a-clock">Live</span></span><button class="control" id="a-pause">Pause</button><button class="control" data-topic="method">Details</button></div>
       </div>
     </div>
     <div class="a-flow">
       <section class="glass a-card" aria-label="Workload">
-        <div class="head"><h2>The work</h2><span class="badge">1 · Workload</span></div>
-        <p class="why">Five kinds of agent, each an end-to-end workflow. Slide the incoming share; the working population follows.</p>
+        <div class="head"><h2>The work</h2><div class="a-mixbar"><label class="select"><select id="a-mix" aria-label="Agent mix"></select></label><label class="target"><input type="number" min="0" max="100000" step="1" data-target aria-label="Working agents"><span>agents</span></label></div></div>
         <div class="a-rows" id="a-rows"></div>
-        <p class="b-status" id="a-status"></p>
+        <p class="b-status" id="a-status" hidden></p>
       </section>
       <div class="a-arrow" aria-hidden="true">→</div>
-      <section class="glass a-card" aria-label="Host CPUs">
-        <div class="head"><h2>Runs on CPUs</h2><span class="badge">2 · Agent execution</span></div>
+      <section class="glass a-card clickable" aria-label="Host CPUs" data-topic="cpu" role="button" tabindex="0">
+        <div class="head"><h2>Runs on CPUs</h2></div>
         <div class="a-big"><span class="num" id="a-cpu-count"></span><span>PowerEdge R770<br><span id="a-cpu-sockets"></span></span></div>
         <div class="a-photos" id="a-cpu-photos"></div>
-        <div class="a-stack"><div class="kv"><span>Working agents per CPU socket</span><b id="a-load"></b></div><div class="bar" id="a-load-bar"></div><div class="key"><span id="a-load-note"></span></div></div>
-        <div class="a-stack"><div class="kv"><span>CPU utilization <small class="tag">live</small></span><b id="a-cpu-util"></b></div><div class="a-live-row"><svg class="spark" id="a-spark" viewBox="0 0 220 36" preserveAspectRatio="none" aria-hidden="true"><path id="a-spark-path" d=""/></svg><div style="flex:1"><div class="bar" id="a-cpu-bar"></div><div class="key" id="a-cpu-key"></div></div></div></div>
+        <div class="a-stack"><div class="kv"><span>Working agents per socket</span><b id="a-load"></b></div><div class="bar" id="a-load-bar"></div></div>
+        <div class="a-stack"><div class="kv"><span>CPU utilization <small class="tag">live</small></span><b id="a-cpu-util"></b></div><div class="bar" id="a-cpu-bar"></div><div class="key" id="a-cpu-key"></div></div>
         <div class="kv"><span>Memory per R770 <small class="tag">live</small></span><b id="a-mem"></b></div>
-        <p class="why" id="a-cpu-why"></p>
       </section>
-      <div class="a-arrow" aria-hidden="true">→</div>
-      <section class="glass a-card" aria-label="Model serving">
-        <div class="head"><h2>Calls the model</h2><span class="badge">3 · Model serving</span></div>
+      <div class="a-arrow" aria-hidden="true"><span id="a-calls"></span>→</div>
+      <section class="glass a-card clickable" aria-label="Model serving" data-topic="serving" role="button" tabindex="0">
+        <div class="head"><h2>Calls the model</h2></div>
         <div class="a-big"><span class="num" id="a-gpu-count"></span><span>PowerEdge XE7740<br><span id="a-gpu-alloc"></span></span></div>
         <div class="a-photos" id="a-gpu-photos"></div>
-        <div class="a-stack"><div class="kv"><span>GPU serving capacity used</span><b id="a-gpu-use"></b></div><div class="bar" id="a-gpu-bar"></div></div>
-        <div class="kv"><span>Output the fleet needs</span><b id="a-tokens"></b></div>
-        <div class="kv"><span>Model calls <small class="tag">live</small></span><b id="a-calls"></b></div>
+        <div class="a-stack"><div class="kv"><span>Serving capacity used</span><b id="a-gpu-use"></b></div><div class="bar" id="a-gpu-bar"></div></div>
+        <div class="kv"><span>Output required</span><b id="a-tokens"></b></div>
         <div class="kv"><span>Serving reference</span><b id="a-serving"></b></div>
-        <p class="why" id="a-gpu-why"></p>
       </section>
     </div>
-    <p class="footnote">Measured on one Xeon 6 CPU at the v2.3 enterprise mix; deployment counts are sized from that measurement and need multi-socket validation. Live readings vary with the recorded host trace.</p>
+    <p class="footnote">Sized from a single-CPU measurement at the v2.3 enterprise mix. Multi-socket counts need validation. Live readings follow the recorded host trace.</p>
   </section>
 
   <!-- B: controls left, answer right -->
@@ -213,6 +216,7 @@ iframe.current{position:absolute;inset:0;width:100%;height:100%;border:0;backgro
     <div class="c-nav"><button id="c-back">Back</button><span class="footnote" id="c-foot"></span><button id="c-next">Next</button></div>
   </section>
 </div>
+<dialog class="a-dialog" id="a-dialog" aria-labelledby="a-dialog-title"><button class="control close" id="a-dialog-close">Close</button><div class="eyebrow" id="a-dialog-role"></div><h2 id="a-dialog-title"></h2><div id="a-dialog-body"></div></dialog>
 <script>
 'use strict';
 const RESULTS = /*__RESULTS__*/null;
@@ -248,8 +252,9 @@ const SIM_PROFILE = /*__SIM_PROFILE__*/null;
   document.addEventListener('click', e => { const b = e.target.closest('[data-preset]'); if (b) applyPreset(b.dataset.preset); });
   document.addEventListener('input', e => { if (e.target.matches('[data-target]')) { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 0 && n <= 100000) { mix.setTarget(n); render(); } } });
   function sentence(r) { return r ? `<b>${fmt(r.total)}</b> working agents need <b>${r.cpuSystems}</b> PowerEdge R770${r.cpuSystems === 1 ? '' : 's'} and <b>${r.gpuSystems}</b> XE7740${r.gpuSystems === 1 ? '' : 's'}.` : 'Percentages must total 100 before the sizing updates.'; }
-  /* ---- A: static structure on mix change, live readings on a clock ---- */
+  /* ---- A: static structure on mix change, live readings on a clock, details on demand ---- */
   const TRACE = /*__TRACE__*/null;
+  const DEFS = /*__DEFS__*/null;
   const traceLength = TRACE[TRACE.length - 1][0];
   function traceAt(t) {
     const x = ((t % traceLength) + traceLength) % traceLength;
@@ -257,14 +262,18 @@ const SIM_PROFILE = /*__SIM_PROFILE__*/null;
     const a = TRACE[Math.max(0, hi - 1)], b = TRACE[hi], f = b[0] === a[0] ? 0 : (x - a[0]) / (b[0] - a[0]);
     return [a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
   }
-  const live = {clock: 0, playing: true, shown: null, from: null, started: 0, done: [0, 0, 0, 0, 0], spark: [], last: performance.now()};
+  const live = {clock: 0, playing: true, shown: null, from: null, started: 0, done: [0, 0, 0, 0, 0], last: performance.now(), cpu: 0, mem: 0};
+  const mixSelect = $('a-mix');
+  mixSelect.innerHTML = [...Object.keys(presets), 'Custom'].map(n => `<option value="${n}">${n} mix</option>`).join('');
+  mixSelect.onchange = e => { if (e.target.value !== 'Custom') applyPreset(e.target.value); };
+  function statusA(m) { $('a-status').hidden = m.valid; $('a-status').textContent = m.valid ? '' : `Shares total ${m.total}% · ${m.total < 100 ? 'add ' + (100 - m.total) : 'reduce ' + (m.total - 100)}% · the last valid mix keeps running`; $('a-status').classList.toggle('bad', !m.valid); }
+  function retarget(r) { if (live.shown && !r.counts.every((n, i) => n === live.shown.counts[i])) { live.from = live.shown.counts.slice(); live.started = live.clock; } live.target = r; }
   function renderA(m, r) {
-    $('a-rows').innerHTML = A.map((a, i) => `<div class="a-row">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div><div class="pct" id="a-pct-${i}">${m.weights[i]}%</div><input type="range" min="0" max="100" value="${m.weights[i]}" data-slider-a="${i}" aria-label="${a.name} incoming share"><div class="meta"><span><b id="a-now-${i}">—</b> working now</span><span><b id="a-done-${i}">0</b> finished</span></div></div>`).join('');
-    $('a-status').textContent = m.valid ? `Mix totals 100% · ${preset === 'Custom' ? 'custom mix' : preset + ' preset'}` : `Mix totals ${m.total}% · ${m.total < 100 ? 'add ' + (100 - m.total) : 'reduce ' + (m.total - 100)}% · showing the last valid mix`;
-    $('a-status').classList.toggle('bad', !m.valid);
+    mixSelect.value = preset;
+    $('a-rows').innerHTML = A.map((a, i) => `<div class="a-row"><button class="who" data-topic="agent:${i}" aria-label="${a.name} agent details">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div></button><div class="pct" id="a-pct-${i}">${m.weights[i]}%</div><input type="range" min="0" max="100" value="${m.weights[i]}" data-slider-a="${i}" aria-label="${a.name} incoming share"><div class="meta"><span><b id="a-now-${i}">—</b> working now</span><span><b id="a-done-${i}">0</b> finished</span></div></div>`).join('');
+    statusA(m);
     if (!r) return;
-    if (live.shown && !r.counts.every((n, i) => n === live.shown.counts[i])) { live.from = live.shown.counts.slice(); live.started = live.clock; }
-    live.target = r;
+    retarget(r);
     $('a-serving').textContent = `${S.model} · ${fmt(S.outputTokensPerSecondPerGpu)} tok/s per GPU`;
     $('a-cpu-key').innerHTML = familyNames.map((n, i) => `<span><i style="background:${familyColors[i]}"></i>${n}</span>`).join('');
     liveA(true);
@@ -275,28 +284,24 @@ const SIM_PROFILE = /*__SIM_PROFILE__*/null;
     if (live.from) { const t = Math.min(1, (live.clock - live.started) / 6), e = t * t * (3 - 2 * t); counts = live.target.counts.map((n, i) => Math.round(live.from[i] + (n - live.from[i]) * e)); if (t >= 1) live.from = null; }
     const r = live.shown = counts.every((n, i) => live.shown && n === live.shown.counts[i]) && !force ? live.shown : sim.calculate(counts);
     const [cpuF, memF] = traceAt(live.clock);
-    const cpu = r.total ? Math.min(100, r.cpuPercent * cpuF) : 0;
+    live.cpu = r.total ? Math.min(100, r.cpuPercent * cpuF) : 0;
     const memBase = r.sockets * C.memoryGB * (1 - SIM_PROFILE.analystMemoryShare);
-    const mem = r.total ? memBase + (r.memoryGB - memBase) * memF : 0;
+    live.mem = r.total ? memBase + (r.memoryGB - memBase) * memF : 0;
     const sentenceText = sentence(r); if ($('a-title').innerHTML !== sentenceText) $('a-title').innerHTML = sentenceText;
-    $('a-sub').textContent = r.total ? `${preset} mix · CPU-to-GPU ${ratioText(r)} per socket · ${r.bottleneck} sets the CPU count` : 'No workload';
+    $('a-ratio').textContent = ratioText(r);
     r.counts.forEach((n, i) => { $('a-now-' + i).textContent = fmt(n); $('a-done-' + i).textContent = fmt(live.done[i]); });
     $('a-cpu-count').textContent = r.cpuSystems; $('a-cpu-sockets').textContent = `${r.sockets} CPU sockets`;
-    if (force || $('a-cpu-photos').childElementCount !== Math.min(4, Math.max(1, r.cpuSystems))) { photos($('a-cpu-photos'), ASSETS.r770, r.cpuSystems, 'Dell PowerEdge R770'); photos($('a-gpu-photos'), ASSETS.xe7740, r.gpuSystems, 'Dell PowerEdge XE7740'); }
+    if (force || $('a-cpu-photos').childElementCount !== Math.min(4, Math.max(1, r.cpuSystems)) + (r.cpuSystems > 4 ? 1 : 0)) photos($('a-cpu-photos'), ASSETS.r770, r.cpuSystems, 'Dell PowerEdge R770');
+    if (force || $('a-gpu-photos').childElementCount !== Math.min(4, Math.max(1, r.gpuSystems)) + (r.gpuSystems > 4 ? 1 : 0)) photos($('a-gpu-photos'), ASSETS.xe7740, r.gpuSystems, 'Dell PowerEdge XE7740');
     const perSocket = r.sockets ? r.total / r.sockets : 0;
     $('a-load').textContent = `${fmt(perSocket)} of ${C.resident} measured`; bar($('a-load-bar'), [Math.min(perSocket, C.resident), Math.max(0, C.resident - perSocket)], ['#56dcbf', '#0d2b41']);
-    $('a-load-note').textContent = perSocket > C.resident ? 'Above the measured capacity of one socket' : `${Math.round(perSocket / C.resident * 100)}% of the measured 143-agent capacity, with a 10% sizing margin`;
-    $('a-cpu-util').textContent = Math.round(cpu) + '%';
-    const scale = r.families.reduce((a, b) => a + b, 0) || 1, busy = cpu / 100 * r.sockets * RESULTS.platform.cores;
+    $('a-cpu-util').textContent = Math.round(live.cpu) + '%';
+    const scale = r.families.reduce((a, b) => a + b, 0) || 1, busy = live.cpu / 100 * r.sockets * RESULTS.platform.cores;
     bar($('a-cpu-bar'), [...r.families.map(f => f / scale * busy), Math.max(0, r.sockets * RESULTS.platform.cores - busy)], [...familyColors, '#0d2b41']);
-    live.spark.push(cpu); if (live.spark.length > 120) live.spark.shift();
-    $('a-spark-path').setAttribute('d', live.spark.map((v, i) => (i ? 'L' : 'M') + (i / 119 * 220).toFixed(1) + ' ' + (34 - v / 100 * 32).toFixed(1)).join(' '));
-    $('a-mem').textContent = fmt(r.sockets ? mem / r.cpuSystems : 0) + ' GB';
-    $('a-cpu-why').textContent = `One measured CPU carries ${C.resident} agents at this mix. This fleet is ${r.cpuEquivalent.toFixed(1)} CPU equivalents, rounded up to whole two-socket systems with a 10% margin.`;
-    $('a-gpu-count').textContent = r.gpuSystems; $('a-gpu-alloc').textContent = `${Math.ceil(r.gpuEquivalent - 1e-9)} of ${r.gpuSystems * 8} GPUs allocated`;
+    $('a-mem').textContent = fmt(r.cpuSystems ? live.mem / r.cpuSystems : 0) + ' GB';
+    $('a-gpu-count').textContent = r.gpuSystems; $('a-gpu-alloc').textContent = `${Math.ceil(r.gpuEquivalent - 1e-9)} of ${r.gpuSystems * 8} GPUs`;
     $('a-gpu-use').textContent = Math.round(r.gpuUsage) + '%'; bar($('a-gpu-bar'), [r.gpuUsage, 100 - r.gpuUsage], ['#c39bff', '#0d2b41']);
-    $('a-tokens').textContent = compact(r.output) + ' tokens/s'; $('a-calls').textContent = `${(r.calls * cpuF).toFixed(1)} per second`;
-    $('a-gpu-why').textContent = `Output demand over the serving reference gives ${r.gpuEquivalent.toFixed(1)} GPUs, rounded up to eight-GPU systems. Demand, not GPU telemetry.`;
+    $('a-tokens').textContent = compact(r.output) + ' tokens/s'; $('a-calls').textContent = `${(r.calls * cpuF).toFixed(1)} model\ncalls/s`;
   }
   function tick() {
     const now = performance.now(), dt = Math.min((now - live.last) / 1000, .25); live.last = now;
@@ -304,10 +309,42 @@ const SIM_PROFILE = /*__SIM_PROFILE__*/null;
     live.clock += dt;
     if (live.shown) live.shown.rates.forEach((rate, i) => { live.done[i] += rate * dt; });
     if (screens.a.classList.contains('active')) liveA(false);
-    $('a-clock').textContent = `Live simulation · ${Math.floor(live.clock / 60)}:${String(Math.floor(live.clock % 60)).padStart(2, '0')}`;
+    $('a-clock').textContent = `Live · ${Math.floor(live.clock / 60)}:${String(Math.floor(live.clock % 60)).padStart(2, '0')}`;
   }
   $('a-pause').onclick = () => { live.playing = !live.playing; live.last = performance.now(); $('a-pause').textContent = live.playing ? 'Pause' : 'Resume'; screens.a.classList.toggle('paused', !live.playing); };
-  document.addEventListener('input', e => { if (e.target.matches('[data-slider-a]')) { preset = 'Custom'; const i = Number(e.target.dataset.sliderA); mix.setPercent(i, Number(e.target.value)); const {m, r} = calc(); $('a-pct-' + i).textContent = m.weights[i] + '%'; $('a-status').textContent = m.valid ? 'Mix totals 100% · custom mix' : `Mix totals ${m.total}% · ${m.total < 100 ? 'add ' + (100 - m.total) : 'reduce ' + (m.total - 100)}% · showing the last valid mix`; $('a-status').classList.toggle('bad', !m.valid); if (r) { lastValid = r; syncControls(m); if (live.shown && !r.counts.every((n, k) => n === live.shown.counts[k])) { live.from = live.shown.counts.slice(); live.started = live.clock; } live.target = r; renderB(m, r); renderC(m, r); } } });
+  document.addEventListener('input', e => { if (e.target.matches('[data-slider-a]')) { preset = 'Custom'; mixSelect.value = 'Custom'; const i = Number(e.target.dataset.sliderA); mix.setPercent(i, Number(e.target.value)); const {m, r} = calc(); $('a-pct-' + i).textContent = m.weights[i] + '%'; statusA(m); if (r) { lastValid = r; syncControls(m); retarget(r); renderB(m, r); renderC(m, r); } } });
+  /* details */
+  const stepClass = kind => kind === 'LLM' ? 'LLM' : /sandbox/.test(kind) ? 'sandbox' : /check/.test(kind) ? 'check' : 'service';
+  function topicA(key) {
+    const r = live.shown || lastValid, m = mix.snapshot();
+    const [kind, idx] = key.split(':'), i = Number(idx);
+    let role = 'Live simulation', title = '', html = '';
+    const metrics = list => `<div class="a-metrics">${list.map(([v, l]) => `<div class="a-metric"><strong>${v}</strong><span>${l}</span></div>`).join('')}</div>`;
+    const p = t => `<p>${t}</p>`;
+    if (kind === 'agent') {
+      const d = DEFS[i], a = A[i], t = SIM_PROFILE.timings[i];
+      role = `${a.name} agent · ${d.workers.length} worker${d.workers.length === 1 ? '' : 's'}`; title = d.work;
+      html = p(d.note) + `<div class="a-steps">${d.cycle.map(([k, s]) => `<div class="a-step ${stepClass(k)}"><b>${k}</b><span>${s}</span></div>`).join('')}</div>` + `<ul>${d.jobs.map((j, k) => `<li><b>${d.workers[k]}</b>: ${j}</li>`).join('')}</ul>` + metrics([[a.modelCalls, 'model calls per workflow'], [fmt(a.outputTokens), 'output tokens per workflow'], [fmt(a.coreMs / 1000) + ' s', 'CPU core-seconds per workflow'], [fmt(t.meanSeconds) + ' s', `mean lifetime, ${t.samples} recorded`], [r ? fmt(r.counts[i]) : '—', 'working now'], [r ? fmt(r.rates[i] * 3600) : '—', 'finished per hour']]) + p(`${m.weights[i]}% of incoming work in the ${preset} mix. Working count = incoming rate × mean lifetime, rounded to whole agents.`);
+    } else if (kind === 'cpu') {
+      role = 'Agent execution'; title = 'How the R770 count is sized';
+      html = p(`One measured Xeon 6 CPU carries ${C.resident} working agents at the enterprise mix, ${C.cpuPercent}% of 64 cores busy, ${C.memoryGB} GB in use. Each CPU keeps the tested allocation: ${RESULTS.platform.allocation.application} application cores, ${RESULTS.platform.allocation.reranking} reranking, ${RESULTS.platform.allocation.queryEmbedding} query embedding, ${RESULTS.platform.allocation.ingestEmbedding} document embedding.`) + p(`CPU equivalents take the largest requirement across agent execution, reranking, query embedding, document embedding and memory, with dedicated services and memory planned at ${Math.round(SIM_PROFILE.serviceTarget * 100)}%. Whole R770s are pairs of that CPU with a 10% margin: ceil(equivalents ÷ 2 ÷ 1.1).`) + (r ? metrics([[r.cpuEquivalent.toFixed(1), 'CPU equivalents'], [r.cpuSystems, 'R770 systems'], [r.bottleneck, 'limiting resource'], [Math.round(r.cpuPercent) + '%', 'modeled average utilization'], [fmt(r.memoryPerCPU) + ' GB', 'memory per R770']]) : '') + p(`Memory assigns ${Math.round(SIM_PROFILE.analystMemoryShare * 100)}% of the measured footprint to analyst working sets and the rest to a fixed per-CPU residual; this is a modeling assumption. Utilization varies with the recorded host trace from the capacity plateau.`);
+    } else if (kind === 'serving') {
+      role = 'Model serving'; title = 'How the XE7740 count is sized';
+      html = p(`Output demand is the sum over working agents of output tokens per workflow divided by mean lifetime. GPU equivalents divide that by the serving reference, ${S.model} on one ${S.gpu} at ${fmt(S.outputTokensPerSecondPerGpu)} output tokens per second, which assumes prefix caching and carries a ${S.cacheAllowancePercent}% allowance. XE7740s hold eight GPUs.`) + (r ? metrics([[compact(r.output), 'output tokens/s'], [r.calls.toFixed(1), 'model calls/s'], [r.gpuEquivalent.toFixed(1), 'GPUs required'], [r.gpuSystems, 'XE7740 systems'], [Math.round(r.gpuUsage) + '%', 'of allocated GPUs']]) : '') + p('This is demand against a serving reference, not GPU telemetry. Model latency is held at the reference target on the assumption that the required capacity is supplied.');
+    } else if (kind === 'ratio') {
+      role = 'Headline'; title = 'CPU-to-GPU ratio';
+      html = p('GPUs required divided by CPU sockets required, before rounding to whole systems. It says how much model serving one host CPU keeps busy at this mix.') + (r ? metrics([[ratioText(r), 'this mix'], [r.cpuEquivalent.toFixed(1), 'CPU equivalents'], [r.gpuEquivalent.toFixed(1), 'GPU equivalents']]) : '') + p(`The whitepaper record at the enterprise mix is 1 : ${(C.outputTokensPerSecond / S.outputTokensPerSecondPerGpu).toFixed(2)} at ${fmt(S.outputTokensPerSecondPerGpu)} output tokens per second per GPU. Mixes heavy in sandbox work push the ratio toward the CPU; mixes heavy in short model-bound tasks push it toward the GPU.`);
+    } else {
+      role = 'Sources'; title = 'Measurement and method';
+      html = p(`${RESULTS.status}. Record ${RESULTS.sourceRecord.run} at commit ${RESULTS.sourceRecord.commit}; definitions ${RESULTS.definitionVersion}.`) + `<ul>${SIM_PROFILE.assumptions.map(a => `<li>${a}</li>`).join('')}</ul>` + `<ul>${RESULTS.sources.map(sr => `<li><a href="../whitepaper/${sr.path}" target="_blank" rel="noopener">${sr.title}</a></li>`).join('')}<li><a href="../whitepaper/agent-capacity-whitepaper.html" target="_blank" rel="noopener">Whitepaper</a></li></ul>`;
+    }
+    $('a-dialog-role').textContent = role; $('a-dialog-title').textContent = title; $('a-dialog-body').innerHTML = html;
+    $('a-dialog').showModal();
+  }
+  document.addEventListener('click', e => { const t = e.target.closest('[data-topic]'); if (t && screens.a.contains(t)) { e.stopPropagation(); topicA(t.dataset.topic); } });
+  document.addEventListener('keydown', e => { const t = e.target.closest('[data-topic][tabindex]'); if (t && screens.a.contains(t) && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); topicA(t.dataset.topic); } });
+  $('a-dialog-close').onclick = () => $('a-dialog').close();
+  $('a-dialog').addEventListener('click', e => { if (e.target === $('a-dialog')) $('a-dialog').close(); });
   /* ---- B ---- */
   function renderB(m, r) {
     $('b-rows').innerHTML = A.map((a, i) => `<div class="b-row">${icon(i)}<div class="name">${a.name}<small>${a.label}</small></div><div class="pct">${m.weights[i]}%<small>${r ? fmt(r.counts[i]) + ' working' : ''}</small></div><input type="range" min="0" max="100" value="${m.weights[i]}" data-slider="${i}" aria-label="${a.name} incoming share"></div>`).join('');
