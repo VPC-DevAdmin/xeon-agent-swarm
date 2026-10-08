@@ -135,13 +135,13 @@ $('tour').onclick=()=>{tour=!tour;if(tour&&flowClock===0)flowKey='';updateTour()
 $('reset').onclick=()=>{preset='Enterprise';appliedMix=mix.reset();buildRows();applyDraft(false);agent=0;flowClock=0;flowKey='';tour=motion;updateTour();};
 $('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{$('fullscreen').textContent='Use browser full screen';}};
 function showTab(name){activeTab=name;$('panel-a').hidden=name!=='a';$('current').hidden=name!=='current';$('tab-a').setAttribute('aria-pressed',name==='a');$('tab-current').setAttribute('aria-pressed',name==='current');last=performance.now();}
-$('tab-a').onclick=()=>showTab('a');$('tab-current').onclick=()=>showTab('current');
+if($('tab-a')){$('tab-a').onclick=()=>showTab('a');$('tab-current').onclick=()=>showTab('current');}
 reduced.addEventListener('change',e=>{motion=!e.matches;if(!motion){tour=false;transition=null;currentCounts=simCounts.slice();}updateTour();render(0);});
 document.addEventListener('visibilitychange',()=>last=performance.now());
 function fitPanel(){
   const panel=$('panel-a');
   if(innerWidth<900){panel.style.transform='none';panel.style.marginLeft='0';panel.style.marginTop='0';return;}
-  const available=innerHeight-44,scale=Math.min(innerWidth/1440,available/820);
+  const offset=$('tab-a')?44:0,available=innerHeight-offset,scale=Math.min(innerWidth/1440,available/820);
   panel.style.transform=`scale(${scale})`;panel.style.marginLeft=`${Math.max(0,(innerWidth-1440*scale)/2)}px`;panel.style.marginTop=`${Math.max(0,(available-820*scale)/2)}px`;
 }
 addEventListener('resize',fitPanel);fitPanel();

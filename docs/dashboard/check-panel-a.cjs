@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
-const html=fs.readFileSync(path.join(__dirname,'layout-studies.html'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,process.argv[2]||'layout-studies.html'),'utf8');
 const nodes=new Map(),listeners=new Map(),timers=[];let now=0;
 class Element{
   constructor(id){this.id=id;this.style={setProperty(){}};this.dataset={};this.value='';this.hidden=false;this.open=false;this.classList={add(){},toggle(){}};this.listeners={};}

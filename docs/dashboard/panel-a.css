@@ -64,3 +64,6 @@ body{background:#061625}#panel-a{background:radial-gradient(ellipse at 10% 8%,#1
   .workflow .flow-node small{font-size:11px;letter-spacing:.8px;margin-bottom:4px}.workflow .flow-node b{font-size:16px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .workflow .flow-node.active{background:linear-gradient(125deg,color-mix(in srgb,var(--role) 26%,transparent),#08243899);box-shadow:0 0 16px color-mix(in srgb,var(--role) 20%,transparent)}
 }
+
+/* Standalone page: no study tab bar above the stage */
+@media(min-width:900px){body.standalone #panel-a{top:0}}

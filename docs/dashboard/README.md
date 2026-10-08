@@ -63,6 +63,10 @@ The `replay-demo` entry in `.claude/launch.json` serves this directory on http:/
 python3 -m http.server 8766 --bind 127.0.0.1 --directory docs/dashboard
 ```
 
+## Demo page
+
+`agent-capacity.html` is the demo page: Panel A on its own, without the study tab bar. `build-layout-studies.cjs` writes it alongside `layout-studies.html`, and the Cloudflare site serves it at the root URL. The original page, `steady-state.html`, stays available at `/steady-state`.
+
 ## Layout studies
 
 `layout-studies.html` is the answer-first redesign of the demo, built beside the current page rather than in it: a tab bar with the current page embedded for comparison and the redesign as Study A. The study is driven by the same paper results, simulation profile, sizing model and archetype step definitions as the current page (the build extracts the step definitions from `steady-state.src.html`). It leads with the sizing sentence and the CPU-to-GPU ratio, then a three-stage flow: workload, CPUs, model serving. The mix is a single select with the agent total beside it; each kind of agent has a slider, a typed percentage and steppers. Working populations ease into a new mix over six seconds, completion counters run, the load per R770 is shown against twice the measured single-CPU capacity, and CPU and memory readings follow the recorded host trace. A strip along the bottom animates the selected agent's workflow; the details dialog carries each agent's steps, jobs and per-workflow figures, and the CPU, serving and ratio explanations. Rebuild with:
@@ -73,7 +77,7 @@ node docs/dashboard/build-layout-studies.cjs
 
 Panel A uses `panel-a.src.html`, `panel-a.css`, and `panel-a.js`. The builder embeds the shared simulation model, archetype definitions, assets, and illustrated detail views. `layout-studies.src.html` retains the earlier study for reference. The current page is not changed by the study.
 
-Run `node docs/dashboard/check-panel-a.cjs` for source-level checks of initialization, presets, saved Custom settings, incomplete drafts, transitions, zero and large populations, and reset. This check does not verify visual layout in a browser.
+Run `node docs/dashboard/check-panel-a.cjs` (and `node docs/dashboard/check-panel-a.cjs agent-capacity.html` for the demo page) for source-level checks of initialization, presets, saved Custom settings, incomplete drafts, transitions, zero and large populations, and reset. This check does not verify visual layout in a browser.
 
 ## Cloudflare preview
 

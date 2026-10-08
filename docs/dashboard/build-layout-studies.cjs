@@ -56,4 +56,12 @@ html = html.replace('/*__FONTS__*/', [...paper.matchAll(/@font-face\s*\{[^}]+\}/
 html = html.replace('/*__SIM_MODEL__*/', () => fs.readFileSync(path.join(base, 'simulation-model.cjs'), 'utf8'));
 if (/\/\*__[A-Z_]+__\*\//.test(html)) throw new Error('Unfilled placeholder in layout studies page');
 fs.writeFileSync(path.join(base, 'layout-studies.html'), html);
+// The demo page itself: Panel A without the study tab bar or the embedded comparison page.
+const standalone = html
+  .replace(/<title>[^<]*<\/title>/, '<title>Enterprise agent capacity | Dell Technologies</title>')
+  .replace(/<nav class="study-tabs"[\s\S]*?<\/nav>\s*/, '')
+  .replace(/<iframe id="current"[^>]*><\/iframe>\s*/, '')
+  .replace('<body>', '<body class="standalone">');
+if (standalone.includes('study-tabs"') || standalone.includes('id="current"') || !standalone.includes('class="standalone"')) throw new Error('Standalone page still carries the study tab bar');
+fs.writeFileSync(path.join(base, 'agent-capacity.html'), standalone);
 console.log(`Built layout studies on ${results.resultVersion} results (${(html.length / 1024).toFixed(0)} KB).`);
