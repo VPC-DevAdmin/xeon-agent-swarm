@@ -15,7 +15,7 @@ for(const key of ['agent:0','agent:1','agent:2','agent:3','agent:4','worker:3:1'
   assert.ok(content.length>150,key);assert.ok(!/undefined(?!-behavior)|NaN|Infinity/.test(content),key);
   if(key.startsWith('agent:'))assert.ok(content.includes('dv-flow'));
   if(['r770','xe7740'].includes(key)){assert.ok(content.includes('dv-product'));assert.ok(content.includes('Intel Xeon'));}
-  if(key==='cpu')assert.ok(content.includes('dv-sweep')&&content.includes('Reserved core pools'));
+  if(key==='cpu')assert.ok(content.includes('dv-sweep')&&content.includes('Core pools · this deployment'));
   if(key==='methodology')assert.ok(content.includes('Model boundaries and provenance'));
 }
 context.simResult=simulator.calculate([0,0,0,0,0]);
