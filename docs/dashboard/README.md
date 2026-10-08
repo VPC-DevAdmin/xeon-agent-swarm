@@ -6,7 +6,7 @@ Playback uses only a continuous post-warmup segment at the capacity point. The b
 
 Counts remain the recorded counts. The builder does not clamp zeroes, add agents, or invent completions. It stops with an error if a replacement recording has no suitable interval of at least 60 seconds.
 
-The header carries the whitepaper's capacity findings. The five lanes count actual resident workflows per CPU. The lower box shows the selected agent's whole workflow: every worker's steps in order, then the final synthesis and review, with the active step advancing every 1.2 seconds. Selecting an agent shows its workflow; the tour moves to the next agent after each full pass. The strip is `workflow-strip.js` and `workflow-strip.css`, shared with Panel A.
+The header carries the whitepaper's capacity findings. The five lanes count actual resident workflows per CPU. The lower workflow illustration cycles through the archetypes in one minute, separately from the recorded clock. The three-worker agents advance sequentially through review gates.
 
 ## Rebuild after a data update
 
@@ -38,7 +38,7 @@ The builder rejects replay data whose capacity point no longer matches the paper
 
 Space pauses the replay and motion. R restarts the recorded window. F enters full screen. Details pauses playback while the presenter reads the source notes, core map, or serving conditions. Closing Details restores the previous playback state.
 
-Select an agent to show its workflow; Agent details opens its full breakdown. Select a headline finding, a server, the LLM connection, a resource reading, a CPU category, or the completion message to open its explanation. Each target also accepts Enter or Space when focused. Closing a topic restores the prior playback state. The source-reference button opens the full presenter notes.
+Select a headline finding, an agent, a worker, a workflow stage, a server, the LLM connection, a resource reading, a CPU category, or the completion message to open its explanation. Each target also accepts Enter or Space when focused. Closing a topic restores the prior playback state. The source-reference button opens the full presenter notes.
 
 The deployment graphic sizes whole dual-socket R770 and eight-GPU XE7740 systems to the chosen working pool; the sizing model and its assumptions are described in `SIMULATION.md`. Recorded readings remain scoped to one CPU. The throughput note below the hardware opens the model-serving calculation.
 

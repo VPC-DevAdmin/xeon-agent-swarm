@@ -28,22 +28,6 @@
 @media(max-width:850px){.dv-flow{grid-template-columns:1fr 1fr}.dv-two{grid-template-columns:1fr}.dv-jobs{grid-template-columns:1fr}.visual-detail{padding:20px}.dv-server-hero{min-height:230px}.dv-product{height:130px}}
 @media(max-width:520px){.dv-flow{grid-template-columns:1fr}.dv-stats{grid-template-columns:1fr 1fr}.dv-comparison>div{gap:6px;font-size:12px}.dv-brand img:last-child{width:58px;height:58px}}
 
-/* Full workflow strip: every worker's steps in order, then the final step. Shared by both demo pages. */
-.wf-strip{display:flex;align-items:stretch;gap:6px;min-width:0}
-.wf-stage{display:flex;flex-direction:column;gap:5px;min-width:0;padding:7px 9px 8px;border:1px solid #add7ed2e;border-radius:10px;background:linear-gradient(130deg,#ddf3ff0a,#06223560);transition:border-color .4s,background .4s}
-.wf-stage.current{border-color:#a9dcf27a;background:linear-gradient(130deg,#ddf3ff14,#0c3350a0)}
-.wf-stage header{display:flex;gap:8px;align-items:baseline;min-width:0;white-space:nowrap}
-.wf-stage header b{font-size:12px;font-weight:600;color:#e8f6fd}.wf-stage header span{font-size:11px;color:#9fc4d6;overflow:hidden;text-overflow:ellipsis}
-.wf-steps{list-style:none;margin:0;padding:0;display:grid;grid-auto-flow:column;grid-template-rows:repeat(var(--wf-rows,3),auto);grid-auto-columns:minmax(0,1fr);gap:3px 7px;min-width:0}
-.wf-step{display:flex;align-items:center;gap:5px;font-size:11.5px;line-height:1.3;color:#cfe4ef;min-width:0;padding:1px 5px 1px 3px;border-radius:5px;transition:background .3s,color .3s}
-.wf-step i{flex:none;width:7px;height:7px;border-radius:2px;background:var(--role)}
-.wf-step span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wf-step.done{color:#87a9bc}.wf-step.done i{opacity:.55}
-.wf-step.active{background:color-mix(in srgb,var(--role) 26%,transparent);color:#fff;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--role) 70%,transparent)}
-.wf-arrow{align-self:center;color:#8cc8e3;font-size:15px;flex:none}
-.wf-legend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:#9fc4d6}.wf-legend span{display:inline-flex;align-items:center;gap:5px}.wf-legend i{width:7px;height:7px;border-radius:2px;display:inline-block}
-@media(prefers-reduced-motion:reduce){.wf-stage,.wf-step{transition:none}}
-
 :root{color-scheme:dark;--ink:#f3f9ff;--muted:#b9d3e3;--edge:#b2dff940;--llm:#c39bff;--cpu:#53c3ff;--sandbox:#f0be68;--check:#70d9bd}
 *{box-sizing:border-box}body{margin:0;background:#061b2b;color:var(--ink);font-family:Roboto,Arial,sans-serif}button,input,select,a{font:inherit}button,select{cursor:pointer}button,a{color:inherit}button{border:1px solid var(--edge);background:#bde8ff09;border-radius:10px;padding:9px 12px;font-size:14px}button:hover{background:#d2efff14;border-color:#a9d8f077}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #bee9ff;outline-offset:3px}h1,h2,p{margin:0}h2{font-size:21px;font-weight:500;line-height:1.3}small{display:block}button:disabled{opacity:.4;cursor:default}[hidden]{display:none!important}
 .study-tabs{display:flex;gap:10px;padding:10px 22px;background:#04121f;align-items:center;border-bottom:1px solid var(--edge);min-height:54px}.study-tabs>span{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-right:12px}.study-tabs button[aria-pressed=true]{background:#24536e}#current{width:100%;height:calc(100vh - 58px);border:0}#panel-a{padding:24px 28px 16px;max-width:1920px;margin:auto;background:radial-gradient(ellipse at 0 0,#20567b77,transparent 58%),radial-gradient(ellipse at 100% 90%,#17606455,transparent 55%);display:grid;gap:20px;min-height:calc(100vh - 58px)}
@@ -92,15 +76,23 @@ body{background:#061625}#panel-a{background:radial-gradient(ellipse at 10% 8%,#1
   .hardware-art .xeon{width:46px;height:46px;right:2px;bottom:6px}.server-stack{margin-right:56px}
 }
 
-/* Full workflow strip in the bottom box: heading on one line, the whole workflow across the full width */
+/* Bottom box: title, stage chips and details on one line; the current stage's steps below */
 @media(min-width:900px){
   #panel-a{grid-template-rows:104px minmax(0,1fr) 127px 17px}
-  .workflow{display:flex;flex-direction:column;align-items:stretch;gap:7px;padding:9px 16px 10px}
-  .workflow .wf-stage{padding:5px 8px 6px;gap:4px}
-  .workflow-heading{display:flex;align-items:center;gap:14px}.workflow-heading>div{display:flex;align-items:baseline;gap:12px;flex:1;min-width:0}
-  .workflow-heading h2{font-size:17px;white-space:nowrap}.workflow-heading p{max-width:none;margin:0;white-space:nowrap}.workflow-heading .wf-legend{margin:0 0 0 auto;max-width:none;flex-wrap:nowrap}
-  .workflow-heading>button{padding:5px 10px;font-size:12px;flex:none}
-  .flow.wf-strip{display:flex;align-items:stretch;flex:1;min-height:0}
+  .workflow{display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:12px 18px 14px}
+  .workflow-heading{display:flex;align-items:center;gap:18px;min-width:0}
+  .workflow-heading h2{font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+  .workflow-heading>button{margin-left:auto;padding:6px 11px;font-size:13px;flex:none}
+  .workflow .worker-sequence{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0}
+  .workflow .worker-sequence span{font-size:13px;padding:4px 12px;border:1px solid #aad7ed33;border-radius:999px;color:var(--muted);white-space:nowrap}
+  .workflow .worker-sequence span.done{color:#9fbfcf}
+  .workflow .worker-sequence span.current{color:#fff;border-color:#c0a9f1a0;background:#bfa2eb22}
+  .workflow .worker-sequence .seq-link{border:0;padding:0;color:#8cc8e3}
+  .workflow .flow{display:flex;align-items:stretch;gap:8px;flex:1;min-height:0}
+  .workflow .flow-link{display:block;align-self:center;color:#8cc8e3;font-size:16px}
+  .workflow .flow-node{flex:1;min-width:0;min-height:0;padding:8px 13px;border:1px solid color-mix(in srgb,var(--role) 40%,transparent);border-top:2px solid var(--role);background:linear-gradient(125deg,color-mix(in srgb,var(--role) 11%,transparent),#08243899)}
+  .workflow .flow-node small{font-size:11px;letter-spacing:.8px;margin-bottom:4px}.workflow .flow-node b{font-size:16px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .workflow .flow-node.active{background:linear-gradient(125deg,color-mix(in srgb,var(--role) 26%,transparent),#08243899);box-shadow:0 0 16px color-mix(in srgb,var(--role) 20%,transparent)}
 }
 
 </style>
@@ -144,8 +136,8 @@ body{background:#061625}#panel-a{background:radial-gradient(ellipse at 10% 8%,#1
     </section>
   </div>
   <section class="glass workflow" aria-label="Selected agent workflow">
-    <div class="workflow-heading"><div><h2 id="flow-title"></h2><p id="flow-sub"></p><div class="wf-legend" id="flow-legend"></div></div><button id="agent-details">Agent details ↗</button></div>
-    <div id="worker-sequence" class="worker-sequence"></div><div id="flow" class="flow"></div>
+    <div class="workflow-heading"><h2 id="flow-title"></h2><div id="worker-sequence" class="worker-sequence"></div><button id="agent-details">Agent details ↗</button></div>
+    <div id="flow" class="flow"></div>
     <p class="flow-note">Workflow illustration · worker results pass review before the next job starts.</p>
   </section>
   <footer>Extrapolated agent execution demo based on single-socket measurements.</footer>
@@ -286,7 +278,7 @@ const defs = [
     {name:'Task',work:'Retrieve ticket guidance, record, and reply',workers:['Ticket worker'],jobs:['Resolve a support request'],cycle:[['LLM','Request lookup'],['CPU service','Retrieve guidance'],['CPU service','Record outcome'],['LLM','Write reply'],['CPU check','Check structure']],note:'The reply is the result. This agent does not run a sandbox job.',icon:'M8 4H18L22 8V24H8ZM17 4V10H22M11 14H19M11 18H17'},
     {name:'Research',work:'Parse sources, retrieve evidence, assemble a brief',workers:['Research','Analysis','Writing'],jobs:['Parse 30 source pages','Parse 30 source pages','Parse 30 source pages'],cycle:[['LLM','Assign worker'],['CPU sandbox','Parse 30 pages'],['CPU service','Three lookups'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'Each worker parses 30 supplied pages and retrieves evidence three times. The planner combines the reviewed sections.',icon:'M5 6H17V22H5ZM10 3H22V17M9 11H14M9 15H14'},
     {name:'Ingestion',work:'Read documents with OCR, embed, and index',workers:['Document worker'],jobs:['Prepare 50 PDF pages for search'],cycle:[['LLM','Assign intake'],['CPU sandbox','OCR 50 pages'],['CPU service','Embed and index'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'The sandbox renders and reads pages, redacts patterns, and prepares text. CPU services embed and index the chunks.',icon:'M7 4H19V24H7ZM11 10H15M11 14H17M11 18H17'},
-    {name:'Analyst',work:'Process events, compare periods, prepare a report',workers:['Profile events','Compare periods','Prepare report'],jobs:['Profile 100 million events','Compare two 100-million-row periods','Prepare report data from 100 million rows'],cycle:[['LLM','Assign data job'],['CPU service','Fetch definitions'],['CPU sandbox','Run NumPy job'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'The first two workers retrieve definitions. The reporting worker skips that lookup, then the planner combines the results.',icon:'M5 23H24M8 19V13M14 19V7M20 19V3'},
+    {name:'Analyst',work:'Process events, compare periods, prepare a report',workers:['Profile events','Compare periods','Prepare report'],jobs:['Profile 100 million events','Compare two 100-million-row periods','Prepare report data from 100 million rows'],cycle:[['LLM','Assign data job'],['CPU service','Retrieve definitions'],['CPU sandbox','Run NumPy job'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'The first two workers retrieve definitions. The reporting worker skips that lookup, then the planner combines the results.',icon:'M5 23H24M8 19V13M14 19V7M20 19V3'},
     {name:'Code',work:'Build software, run CI checks, verify the rebuild',workers:['Set up build','Run CI checks','Verify rebuild'],jobs:['Build Lua and SQLite, then run tests','Run an instrumented build and static analysis','Rebuild changed files and rerun checks'],cycle:[['LLM','Assign build job'],['CPU service','Retrieve guidance'],['CPU sandbox','Build and test'],['LLM','Record and draft'],['CPU check','Check structure'],['LLM','Review result']],note:'Workers execute separate build jobs in sequence. Each result passes review before the planner assigns the next job.',icon:'M10 7L4 14L10 21M18 7L24 14L18 21M16 4L12 24'}
   ];
   // Illustrated drill-downs. Values come from the applied mix, not an incomplete draft.
@@ -354,50 +346,6 @@ const defs = [
     $('topic-paper').href='../whitepaper/agent-capacity-whitepaper.html#method';
   }
 
-  /* Full workflow strip: every worker's steps in order, then the final step. Shared by both demo pages.
-     The active step advances on the caller's clock; tick() reports when one full pass completes. */
-  const WorkflowStrip=(()=>{
-    const roleColor={'LLM':'#c39bff','CPU service':'#53c3ff','CPU sandbox':'#f0be68','CPU check':'#56dcbf'};
-    const STEP_SECONDS=1.2;
-    const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-    function cycleFor(defs,i,worker){return defs[i].cycle.filter(c=>!(i===3&&worker===2&&c[1]==='Fetch definitions')).flatMap(c=>c[1]==='Record and draft'?[['CPU service','Record outcome'],['LLM','Draft result']]:[c]);}
-    function stages(defs,i){
-      const d=defs[i],many=d.workers.length>1;
-      const list=d.workers.map((w,k)=>({title:(many?(k+1)+' · ':'')+w,job:d.jobs[k],steps:cycleFor(defs,i,k)}));
-      list.push(i===0?{title:'Answer',job:'Reply is the result',steps:[['CPU check','Return the checked answer']]}:{title:'Final',job:'Synthesis and review',steps:[['LLM','Synthesize results'],['CPU check','Check final structure'],['LLM','Review final answer']]});
-      return list;
-    }
-    function legend(){return Object.entries(roleColor).map(([r,c])=>`<span><i style="background:${c}"></i>${r}</span>`).join('');}
-    function create(container,{defs,onStep,rows=3}={}){
-      let agent=-1,clock=0,flat=[],els=[],stageEls=[],shown=-1;
-      container.classList.add('wf-strip');container.style.setProperty('--wf-rows',rows);
-      function paint(idx){
-        if(idx===shown)return;shown=idx;
-        els.forEach((e,k)=>{e.classList.toggle('active',k===idx);e.classList.toggle('done',k<idx);});
-        stageEls.forEach((s,k)=>s.classList.toggle('current',!!flat[idx]&&flat[idx][2]===k));
-        if(onStep)onStep(flat[idx]?{role:flat[idx][0],label:flat[idx][1]}:null);
-      }
-      function select(i){
-        agent=i;clock=0;shown=-1;flat=[];
-        if(i<0){container.replaceChildren();els=[];stageEls=[];if(onStep)onStep(null);return;}
-        const list=stages(defs,i);
-        container.innerHTML=list.map((s,si)=>`<section class="wf-stage" style="flex:${Math.max(1.6,Math.ceil(s.steps.length/rows))} 1 0"><header title="${esc(s.title+' · '+s.job)}"><b>${esc(s.title)}</b><span>${esc(s.job)}</span></header><ol class="wf-steps">${s.steps.map(([role,label])=>{flat.push([role,label,si]);return `<li class="wf-step" style="--role:${roleColor[role]}" title="${esc(role+' · '+label)}"><i></i><span>${esc(label)}</span></li>`;}).join('')}</ol></section>`).join('<span class="wf-arrow" aria-hidden="true">›</span>');
-        els=[...container.querySelectorAll('.wf-step')];stageEls=[...container.querySelectorAll('.wf-stage')];
-        paint(0);
-      }
-      // Advance by dt seconds; returns true once a full pass (plus a held final beat) completes.
-      function tick(dt){
-        if(agent<0||!flat.length)return false;
-        clock+=dt;
-        const idx=Math.floor(clock/STEP_SECONDS);
-        if(idx>flat.length){clock=0;shown=-1;paint(0);return true;}
-        paint(Math.min(idx,flat.length-1));return false;
-      }
-      return {select,tick,agent:()=>agent,stepCount:()=>flat.length,stages:i=>stages(defs,i)};
-    }
-    return {create,legend,stages,roleColor};
-  })();
-
 const $=id=>document.getElementById(id),C=RESULTS.capacity,S=RESULTS.serving;
 const simulator=AgentSimulator.create(SIM_PROFILE,RESULTS),mix=AgentSimulator.mix(RESULTS,simulator.times);
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');let motion=!reduced.matches;
@@ -434,6 +382,7 @@ function loadMix(name){
   preset=name;const selected=name==='Custom'?custom:{weights:presets[name],included:defs.map(()=>true)};
   selected.weights.forEach((n,i)=>{const included=mix.snapshot().included[i];if(selected.included[i]){if(!included)mix.add(i);mix.setPercent(i,n);}else if(included)mix.remove(i);});
   buildRows();applyDraft(false);stopTour();
+  if(name!=='Custom'){agent=largestShare();flowClock=0;flowKey='';renderFlow(0);}
 }
 function icon(i){return `<span class="icon" aria-hidden="true"><svg viewBox="0 0 28 28"><path d="${defs[i].icon}"/></svg></span>`;}
 function buildRows(){
@@ -476,23 +425,38 @@ function render(dt){
   $('gpu-demand').textContent=Math.round(r.gpuUsage)+'%';$('gpu-bar').style.width=Math.min(100,r.gpuUsage)+'%';$('tokens').textContent=compact(r.output)+'/s';$('calls').textContent=decimal(r.calls);
   renderFlow(dt);
 }
-const strip=WorkflowStrip.create($('flow'),{defs,onStep:step=>{
-  const role=step?.role,label=step?.label||'',family=role==='CPU sandbox'?0:role==='CPU check'?2:role==='CPU service'?(/retriev|lookup|embed/i.test(label)?1:/record/i.test(label)?3:2):-1;
-  colors.forEach((_,i)=>$('cpu-family-'+i).classList.toggle('active',motion&&i===family));document.querySelector('.exchange').classList.toggle('active',motion&&role==='LLM');
-}});
-$('flow-legend').innerHTML=WorkflowStrip.legend();
-// The selected agent's whole workflow animates continuously; the tour only decides whether to move on after a full pass.
+// Bottom box: the selected agent's stages as chips (1 · Research, 2 · Analysis, 3 · Writing, 4 · Finalize),
+// with the current stage's steps below. Steps advance continuously; the tour only moves to the next agent.
+const WORKER_SECONDS=12,FINAL_SECONDS=6;
+function cycleFor(i,worker){return defs[i].cycle.filter(c=>!(i===3&&worker===2&&c[1]==='Retrieve definitions')).flatMap(c=>c[1]==='Record and draft'?[['CPU service','Record outcome'],['LLM','Draft result']]:[c]);}
+function stagesFor(i){
+  const d=defs[i],many=d.workers.length>1;
+  const list=d.workers.map((w,k)=>({chip:(many?(k+1)+' · ':'')+w,job:d.jobs[k],steps:cycleFor(i,k),seconds:WORKER_SECONDS}));
+  if(i!==0)list.push({chip:(many?(d.workers.length+1)+' · ':'')+'Finalize',job:'Synthesis and review',steps:[['LLM','Synthesize results'],['CPU check','Check final structure'],['LLM','Review final answer']],seconds:FINAL_SECONDS});
+  return list;
+}
+function largestShare(){const m=mix.snapshot();let best=-1;m.weights.forEach((w,i)=>{if(m.included[i]&&(best<0||w>m.weights[best]))best=i;});return best;}
 function renderFlow(dt){
   const included=mix.snapshot().included.flatMap((yes,i)=>yes?[i]:[]);
-  if(agent<0||!included.length){$('flow-title').textContent='Add an agent to explore its workflow';$('flow-sub').textContent='';strip.select(-1);$('agent-details').disabled=true;return;}
-  if(!included.includes(agent))agent=included[0];
+  if(agent<0||!included.length){$('flow-title').textContent='Add an agent to explore its workflow';$('worker-sequence').replaceChildren();$('flow').replaceChildren();$('agent-details').disabled=true;flowKey='';return;}
+  if(!included.includes(agent)){agent=included[0];flowClock=0;}
   $('agent-details').disabled=false;
-  if(strip.agent()!==agent){
-    strip.select(agent);const d=defs[agent],w=d.workers.length;
-    $('flow-title').textContent=d.name+' agent';$('flow-sub').textContent=`${w} worker${w===1?'':'s'} · ${RESULTS.archetypes[agent].modelCalls} model calls · ${strip.stepCount()} steps`;
-    defs.forEach((_,i)=>$('row-'+i)?.classList.toggle('selected',i===agent));
+  if(motion)flowClock+=dt;
+  const stages=stagesFor(agent),total=stages.reduce((a,s)=>a+s.seconds,0);
+  if(flowClock>=total){flowClock%=total;if(tour){agent=included[(included.indexOf(agent)+1)%included.length];flowClock=0;flowKey='';renderFlow(0);return;}}
+  let t=flowClock,stage=0;while(stage<stages.length-1&&t>=stages[stage].seconds){t-=stages[stage].seconds;stage++;}
+  const current=stages[stage],key=agent+':'+stage;
+  if(key!==flowKey){
+    flowKey=key;const d=defs[agent];
+    $('flow-title').textContent=d.name+' · '+current.job;
+    $('worker-sequence').innerHTML=stages.map((s,k)=>`${k?'<span class="seq-link" aria-hidden="true">›</span>':''}<span class="${k===stage?'current':k<stage?'done':''}">${s.chip}</span>`).join('');
+    $('flow').innerHTML=current.steps.map(([role,label],i)=>`${i?'<span class="flow-link" aria-hidden="true">›</span>':''}<button class="flow-node" data-topic="agent:${agent}" style="--role:${roles[role]}"><small>${role}</small><b>${label}</b></button>`).join('');
   }
-  if(motion&&strip.tick(dt)&&tour){agent=included[(included.indexOf(agent)+1)%included.length];renderFlow(0);}
+  defs.forEach((_,i)=>$('row-'+i)?.classList.toggle('selected',i===agent));
+  const index=Math.min(current.steps.length-1,Math.floor(t/current.seconds*current.steps.length));
+  document.querySelectorAll('.flow-node').forEach((n,i)=>n.classList.toggle('active',i===index));
+  const [role,label]=current.steps[index],family=role==='CPU sandbox'?0:role==='CPU check'?2:role==='CPU service'?(/retriev|lookup|embed/i.test(label)?1:/record/i.test(label)?3:2):-1;
+  colors.forEach((_,i)=>$('cpu-family-'+i).classList.toggle('active',motion&&i===family));document.querySelector('.exchange').classList.toggle('active',motion&&role==='LLM');
 }
 function openTopic(key){
   returnFocus=document.activeElement;stopTour();renderDetailView(key==='ratio'?'serving':key);

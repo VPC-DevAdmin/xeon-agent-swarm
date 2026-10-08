@@ -34,6 +34,7 @@ function loadMix(name){
   preset=name;const selected=name==='Custom'?custom:{weights:presets[name],included:defs.map(()=>true)};
   selected.weights.forEach((n,i)=>{const included=mix.snapshot().included[i];if(selected.included[i]){if(!included)mix.add(i);mix.setPercent(i,n);}else if(included)mix.remove(i);});
   buildRows();applyDraft(false);stopTour();
+  if(name!=='Custom'){agent=largestShare();flowClock=0;flowKey='';renderFlow(0);}
 }
 function icon(i){return `<span class="icon" aria-hidden="true"><svg viewBox="0 0 28 28"><path d="${defs[i].icon}"/></svg></span>`;}
 function buildRows(){
@@ -76,23 +77,38 @@ function render(dt){
   $('gpu-demand').textContent=Math.round(r.gpuUsage)+'%';$('gpu-bar').style.width=Math.min(100,r.gpuUsage)+'%';$('tokens').textContent=compact(r.output)+'/s';$('calls').textContent=decimal(r.calls);
   renderFlow(dt);
 }
-const strip=WorkflowStrip.create($('flow'),{defs,onStep:step=>{
-  const role=step?.role,label=step?.label||'',family=role==='CPU sandbox'?0:role==='CPU check'?2:role==='CPU service'?(/retriev|lookup|embed/i.test(label)?1:/record/i.test(label)?3:2):-1;
-  colors.forEach((_,i)=>$('cpu-family-'+i).classList.toggle('active',motion&&i===family));document.querySelector('.exchange').classList.toggle('active',motion&&role==='LLM');
-}});
-$('flow-legend').innerHTML=WorkflowStrip.legend();
-// The selected agent's whole workflow animates continuously; the tour only decides whether to move on after a full pass.
+// Bottom box: the selected agent's stages as chips (1 · Research, 2 · Analysis, 3 · Writing, 4 · Finalize),
+// with the current stage's steps below. Steps advance continuously; the tour only moves to the next agent.
+const WORKER_SECONDS=12,FINAL_SECONDS=6;
+function cycleFor(i,worker){return defs[i].cycle.filter(c=>!(i===3&&worker===2&&c[1]==='Retrieve definitions')).flatMap(c=>c[1]==='Record and draft'?[['CPU service','Record outcome'],['LLM','Draft result']]:[c]);}
+function stagesFor(i){
+  const d=defs[i],many=d.workers.length>1;
+  const list=d.workers.map((w,k)=>({chip:(many?(k+1)+' · ':'')+w,job:d.jobs[k],steps:cycleFor(i,k),seconds:WORKER_SECONDS}));
+  if(i!==0)list.push({chip:(many?(d.workers.length+1)+' · ':'')+'Finalize',job:'Synthesis and review',steps:[['LLM','Synthesize results'],['CPU check','Check final structure'],['LLM','Review final answer']],seconds:FINAL_SECONDS});
+  return list;
+}
+function largestShare(){const m=mix.snapshot();let best=-1;m.weights.forEach((w,i)=>{if(m.included[i]&&(best<0||w>m.weights[best]))best=i;});return best;}
 function renderFlow(dt){
   const included=mix.snapshot().included.flatMap((yes,i)=>yes?[i]:[]);
-  if(agent<0||!included.length){$('flow-title').textContent='Add an agent to explore its workflow';$('flow-sub').textContent='';strip.select(-1);$('agent-details').disabled=true;return;}
-  if(!included.includes(agent))agent=included[0];
+  if(agent<0||!included.length){$('flow-title').textContent='Add an agent to explore its workflow';$('worker-sequence').replaceChildren();$('flow').replaceChildren();$('agent-details').disabled=true;flowKey='';return;}
+  if(!included.includes(agent)){agent=included[0];flowClock=0;}
   $('agent-details').disabled=false;
-  if(strip.agent()!==agent){
-    strip.select(agent);const d=defs[agent],w=d.workers.length;
-    $('flow-title').textContent=d.name+' agent';$('flow-sub').textContent=`${w} worker${w===1?'':'s'} · ${RESULTS.archetypes[agent].modelCalls} model calls · ${strip.stepCount()} steps`;
-    defs.forEach((_,i)=>$('row-'+i)?.classList.toggle('selected',i===agent));
+  if(motion)flowClock+=dt;
+  const stages=stagesFor(agent),total=stages.reduce((a,s)=>a+s.seconds,0);
+  if(flowClock>=total){flowClock%=total;if(tour){agent=included[(included.indexOf(agent)+1)%included.length];flowClock=0;flowKey='';renderFlow(0);return;}}
+  let t=flowClock,stage=0;while(stage<stages.length-1&&t>=stages[stage].seconds){t-=stages[stage].seconds;stage++;}
+  const current=stages[stage],key=agent+':'+stage;
+  if(key!==flowKey){
+    flowKey=key;const d=defs[agent];
+    $('flow-title').textContent=d.name+' · '+current.job;
+    $('worker-sequence').innerHTML=stages.map((s,k)=>`${k?'<span class="seq-link" aria-hidden="true">›</span>':''}<span class="${k===stage?'current':k<stage?'done':''}">${s.chip}</span>`).join('');
+    $('flow').innerHTML=current.steps.map(([role,label],i)=>`${i?'<span class="flow-link" aria-hidden="true">›</span>':''}<button class="flow-node" data-topic="agent:${agent}" style="--role:${roles[role]}"><small>${role}</small><b>${label}</b></button>`).join('');
   }
-  if(motion&&strip.tick(dt)&&tour){agent=included[(included.indexOf(agent)+1)%included.length];renderFlow(0);}
+  defs.forEach((_,i)=>$('row-'+i)?.classList.toggle('selected',i===agent));
+  const index=Math.min(current.steps.length-1,Math.floor(t/current.seconds*current.steps.length));
+  document.querySelectorAll('.flow-node').forEach((n,i)=>n.classList.toggle('active',i===index));
+  const [role,label]=current.steps[index],family=role==='CPU sandbox'?0:role==='CPU check'?2:role==='CPU service'?(/retriev|lookup|embed/i.test(label)?1:/record/i.test(label)?3:2):-1;
+  colors.forEach((_,i)=>$('cpu-family-'+i).classList.toggle('active',motion&&i===family));document.querySelector('.exchange').classList.toggle('active',motion&&role==='LLM');
 }
 function openTopic(key){
   returnFocus=document.activeElement;stopTour();renderDetailView(key==='ratio'?'serving':key);

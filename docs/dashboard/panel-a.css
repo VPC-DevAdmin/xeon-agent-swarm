@@ -46,13 +46,21 @@ body{background:#061625}#panel-a{background:radial-gradient(ellipse at 10% 8%,#1
   .hardware-art .xeon{width:46px;height:46px;right:2px;bottom:6px}.server-stack{margin-right:56px}
 }
 
-/* Full workflow strip in the bottom box: heading on one line, the whole workflow across the full width */
+/* Bottom box: title, stage chips and details on one line; the current stage's steps below */
 @media(min-width:900px){
   #panel-a{grid-template-rows:104px minmax(0,1fr) 127px 17px}
-  .workflow{display:flex;flex-direction:column;align-items:stretch;gap:7px;padding:9px 16px 10px}
-  .workflow .wf-stage{padding:5px 8px 6px;gap:4px}
-  .workflow-heading{display:flex;align-items:center;gap:14px}.workflow-heading>div{display:flex;align-items:baseline;gap:12px;flex:1;min-width:0}
-  .workflow-heading h2{font-size:17px;white-space:nowrap}.workflow-heading p{max-width:none;margin:0;white-space:nowrap}.workflow-heading .wf-legend{margin:0 0 0 auto;max-width:none;flex-wrap:nowrap}
-  .workflow-heading>button{padding:5px 10px;font-size:12px;flex:none}
-  .flow.wf-strip{display:flex;align-items:stretch;flex:1;min-height:0}
+  .workflow{display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:12px 18px 14px}
+  .workflow-heading{display:flex;align-items:center;gap:18px;min-width:0}
+  .workflow-heading h2{font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+  .workflow-heading>button{margin-left:auto;padding:6px 11px;font-size:13px;flex:none}
+  .workflow .worker-sequence{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0}
+  .workflow .worker-sequence span{font-size:13px;padding:4px 12px;border:1px solid #aad7ed33;border-radius:999px;color:var(--muted);white-space:nowrap}
+  .workflow .worker-sequence span.done{color:#9fbfcf}
+  .workflow .worker-sequence span.current{color:#fff;border-color:#c0a9f1a0;background:#bfa2eb22}
+  .workflow .worker-sequence .seq-link{border:0;padding:0;color:#8cc8e3}
+  .workflow .flow{display:flex;align-items:stretch;gap:8px;flex:1;min-height:0}
+  .workflow .flow-link{display:block;align-self:center;color:#8cc8e3;font-size:16px}
+  .workflow .flow-node{flex:1;min-width:0;min-height:0;padding:8px 13px;border:1px solid color-mix(in srgb,var(--role) 40%,transparent);border-top:2px solid var(--role);background:linear-gradient(125deg,color-mix(in srgb,var(--role) 11%,transparent),#08243899)}
+  .workflow .flow-node small{font-size:11px;letter-spacing:.8px;margin-bottom:4px}.workflow .flow-node b{font-size:16px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .workflow .flow-node.active{background:linear-gradient(125deg,color-mix(in srgb,var(--role) 26%,transparent),#08243899);box-shadow:0 0 16px color-mix(in srgb,var(--role) 20%,transparent)}
 }

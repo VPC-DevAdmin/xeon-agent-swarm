@@ -62,7 +62,7 @@ const fs=require('node:fs');
    assert.equal(await page.locator('.focus').evaluate(e=>e.scrollHeight>e.clientHeight+2||e.scrollWidth>e.clientWidth+2),false,'Worker sequence overflow at '+i);
   }
   await page.evaluate(()=>window.__steady.focus(3.72));
-  assert.ok(!(await page.locator('#cycle').innerText()).includes('Fetch definitions'),'Third analyst worker skips retrieval');
+  assert.ok(!(await page.locator('#cycle').innerText()).includes('Retrieve definitions'),'Third analyst worker skips retrieval');
   await page.setViewportSize({width:1920,height:1080});
   await page.evaluate(()=>window.__steady.focus(4));
   const topics=await page.locator('[data-topic]').evaluateAll(es=>[...new Set(es.map(e=>e.dataset.topic))]);

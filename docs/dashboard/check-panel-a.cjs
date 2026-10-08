@@ -23,9 +23,13 @@ api.preset('Enterprise');advance();api.preset('Custom');advance();assert.deepEqu
 const target=nodes.get('target');target.value='0';target.listeners.input({target});advance();assert.equal(api.snapshot().result.cpuSystems,0);assert.equal(api.snapshot().result.gpuSystems,0);assert.equal(api.snapshot().cpu,0);assert(nodes.get('cpu-photos').innerHTML.includes('No systems allocated'));
 target.value='100000';target.listeners.input({target});advance();assert.equal(api.snapshot().result.total,100000);assert(Number.isFinite(api.snapshot().memory));
 nodes.get('reset').onclick();advance();assert.equal(api.snapshot().result.total,720);
-// The bottom box shows the whole workflow of the agent the user selects, and keeps animating.
-listeners.get('click')({target:{closest:s=>s==='[data-agent]'?{dataset:{agent:'1'}}:null}});advance();
-const flow=nodes.get('flow').innerHTML;assert.equal((flow.match(/class="wf-stage"/g)||[]).length,4);assert.equal((flow.match(/class="wf-step"/g)||[]).length,24);assert(flow.includes('Synthesize results'));
-assert(/24 steps/.test(nodes.get('flow-sub').textContent||''));
+// The bottom box shows the selected agent's stages as chips and the current stage's steps, and keeps animating.
+listeners.get('click')({target:{closest:s=>s==='[data-agent]'?{dataset:{agent:'1'}}:null}});
+let chips=nodes.get('worker-sequence').innerHTML;assert(chips.includes('1 · Research')&&chips.includes('3 · Writing')&&chips.includes('4 · Finalize'));
+advance();advance();assert.notEqual(nodes.get('worker-sequence').innerHTML,chips,'Stages advance with the tour stopped');
+// Choosing a preset shows the workflow of its largest agent.
+api.preset('Development team');assert(nodes.get('flow-title').textContent.startsWith('Code'),'Development team shows Code');
+api.preset('Document operations');assert(nodes.get('flow-title').textContent.startsWith('Ingestion'));
+api.preset('Service desk');assert(nodes.get('flow-title').textContent.startsWith('Task'));assert(!nodes.get('worker-sequence').innerHTML.includes('Finalize'));
 assert(!/\/\*__[A-Z_]+__\*\//.test(html));assert(!html.includes('of 286 measured'));assert(html.includes('workers per agent'));assert(html.includes('CPU sockets : GPUs'));
-console.log('PASS: Panel A initializes; presets, saved Custom, incomplete drafts, transitions, zero and large fleets, reset, shared details, and the full workflow of the selected agent. Source-level DOM harness; not a visual browser test.');
+console.log('PASS: Panel A initializes; presets, saved Custom, incomplete drafts, transitions, zero and large fleets, reset, shared details, stage chips that advance, and presets that show their largest agent. Source-level DOM harness; not a visual browser test.');
