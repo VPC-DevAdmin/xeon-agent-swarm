@@ -76,26 +76,23 @@ function render(dt){
   $('gpu-demand').textContent=Math.round(r.gpuUsage)+'%';$('gpu-bar').style.width=Math.min(100,r.gpuUsage)+'%';$('tokens').textContent=compact(r.output)+'/s';$('calls').textContent=decimal(r.calls);
   renderFlow(dt);
 }
-function cycleFor(i,worker){return defs[i].cycle.filter(c=>!(i===3&&worker===2&&c[1]==='Retrieve definitions')).flatMap(c=>c[1]==='Record and draft'?[['CPU service','Record outcome'],['LLM','Draft result']]:[c]);}
+const strip=WorkflowStrip.create($('flow'),{defs,onStep:step=>{
+  const role=step?.role,label=step?.label||'',family=role==='CPU sandbox'?0:role==='CPU check'?2:role==='CPU service'?(/retriev|lookup|embed/i.test(label)?1:/record/i.test(label)?3:2):-1;
+  colors.forEach((_,i)=>$('cpu-family-'+i).classList.toggle('active',motion&&i===family));document.querySelector('.exchange').classList.toggle('active',motion&&role==='LLM');
+}});
+$('flow-legend').innerHTML=WorkflowStrip.legend();
+// The selected agent's whole workflow animates continuously; the tour only decides whether to move on after a full pass.
 function renderFlow(dt){
   const included=mix.snapshot().included.flatMap((yes,i)=>yes?[i]:[]);
-  if(agent<0||!included.length){$('flow-title').textContent='Add an agent to explore its workflow';$('flow-sub').textContent='';$('flow').replaceChildren();$('worker-sequence').replaceChildren();$('agent-details').disabled=true;return;}
-  $('agent-details').disabled=false;if(tour&&motion)flowClock+=dt;
-  const d=defs[agent],workers=d.workers.length,worker=Math.min(workers-1,Math.floor(flowClock/12));
-  if(flowClock>=workers*12+6&&tour){agent=included[(included.indexOf(agent)+1)%included.length];flowClock=0;flowKey='';renderFlow(0);return;}
-  const final=flowClock>=workers*12,key=agent+':'+worker+':'+final;
-  const cycle=final?(agent===0?[['CPU check','Return the checked answer']]:[['LLM','Synthesize reviewed results'],['CPU check','Check final structure'],['LLM','Review final answer']]):cycleFor(agent,worker);
-  if(key!==flowKey){
-    flowKey=key;$('flow-title').textContent=d.name+' agent';
-    $('flow-sub').textContent=final?(agent===0?'Return the checked answer':'Final synthesis and review'):`Worker ${worker+1} of ${workers} · ${d.workers[worker]}`;
-    $('worker-sequence').innerHTML=d.workers.map((w,i)=>`<span class="${!final&&worker===i?'current':''}">${i+1}. ${w}</span>`).join('')+`<span class="${final?'current':''}">${agent===0?'Checked answer':'Final synthesis and review'}</span>`;
-    $('flow').innerHTML=cycle.map(([role,label],i)=>`${i?'<span class="flow-link" aria-hidden="true">›</span>':''}<button class="flow-node" data-topic="agent:${agent}" style="--role:${roles[role]}"><small>${role}</small><b>${label}</b></button>`).join('');
+  if(agent<0||!included.length){$('flow-title').textContent='Add an agent to explore its workflow';$('flow-sub').textContent='';strip.select(-1);$('agent-details').disabled=true;return;}
+  if(!included.includes(agent))agent=included[0];
+  $('agent-details').disabled=false;
+  if(strip.agent()!==agent){
+    strip.select(agent);const d=defs[agent],w=d.workers.length;
+    $('flow-title').textContent=d.name+' agent';$('flow-sub').textContent=`${w} worker${w===1?'':'s'} · ${RESULTS.archetypes[agent].modelCalls} model calls · ${strip.stepCount()} steps`;
     defs.forEach((_,i)=>$('row-'+i)?.classList.toggle('selected',i===agent));
   }
-  const index=Math.min(cycle.length-1,Math.floor(((final?flowClock-workers*12:flowClock%12)/(final?6:12))*cycle.length));
-  document.querySelectorAll('.flow-node').forEach((n,i)=>n.classList.toggle('active',i===index));
-  const [role,label]=cycle[index],family=role==='CPU sandbox'?0:role==='CPU check'?2:role==='CPU service'?(/retriev|lookup|embed/i.test(label)?1:/record/i.test(label)?3:2):-1;
-  colors.forEach((_,i)=>$('cpu-family-'+i).classList.toggle('active',motion&&i===family));document.querySelector('.exchange').classList.toggle('active',motion&&role==='LLM');
+  if(motion&&strip.tick(dt)&&tour){agent=included[(included.indexOf(agent)+1)%included.length];renderFlow(0);}
 }
 function openTopic(key){
   returnFocus=document.activeElement;stopTour();renderDetailView(key==='ratio'?'serving':key);
@@ -133,5 +130,6 @@ function fitPanel(){
 }
 addEventListener('resize',fitPanel);fitPanel();
 buildRows();syncEditor();updateTour();render(0);
-setInterval(()=>{const now=performance.now(),dt=Math.min(.25,(now-last)/1000);last=now;if(document.hidden||activeTab!=='a')return;elapsed+=dt;render(dt);},100);
+// Timer-driven, not gated on document visibility: embedded viewers can report the page hidden while showing it.
+setInterval(()=>{const now=performance.now(),dt=Math.min(.25,(now-last)/1000);last=now;if(activeTab!=='a')return;elapsed+=dt;render(dt);},100);
 window.__panelA={snapshot:()=>({result:simResult,preset,draft:mix.snapshot(),transition:!!transition,cpu:cpuDisplay,memory:memoryDisplay}),preset:loadMix};

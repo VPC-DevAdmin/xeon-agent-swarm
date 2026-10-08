@@ -6,6 +6,7 @@
 <style>
 /*__FONTS__*/
 /*__DETAIL_CSS__*/
+/*__WORKFLOW_CSS__*/
 /*__PANEL_CSS__*/
 </style>
 </head>
@@ -48,7 +49,7 @@
     </section>
   </div>
   <section class="glass workflow" aria-label="Selected agent workflow">
-    <div class="workflow-heading"><div><h2 id="flow-title"></h2><p id="flow-sub"></p></div><button id="agent-details">Agent details ↗</button></div>
+    <div class="workflow-heading"><div><h2 id="flow-title"></h2><p id="flow-sub"></p><div class="wf-legend" id="flow-legend"></div></div><button id="agent-details">Agent details ↗</button></div>
     <div id="worker-sequence" class="worker-sequence"></div><div id="flow" class="flow"></div>
     <p class="flow-note">Workflow illustration · worker results pass review before the next job starts.</p>
   </section>
@@ -65,6 +66,7 @@ const TRACE = /*__TRACE__*/null;
 (() => {
 const defs = /*__DEFS__*/null;
 /*__DETAIL_UI__*/
+/*__WORKFLOW_STRIP__*/
 /*__PANEL_UI__*/
 })();
 </script>

@@ -45,3 +45,14 @@ body{background:#061625}#panel-a{background:radial-gradient(ellipse at 10% 8%,#1
   .metric{padding-top:9px}.metric strong{font-size:26px}
   .hardware-art .xeon{width:46px;height:46px;right:2px;bottom:6px}.server-stack{margin-right:56px}
 }
+
+/* Full workflow strip in the bottom box: heading on one line, the whole workflow across the full width */
+@media(min-width:900px){
+  #panel-a{grid-template-rows:104px minmax(0,1fr) 127px 17px}
+  .workflow{display:flex;flex-direction:column;align-items:stretch;gap:7px;padding:9px 16px 10px}
+  .workflow .wf-stage{padding:5px 8px 6px;gap:4px}
+  .workflow-heading{display:flex;align-items:center;gap:14px}.workflow-heading>div{display:flex;align-items:baseline;gap:12px;flex:1;min-width:0}
+  .workflow-heading h2{font-size:17px;white-space:nowrap}.workflow-heading p{max-width:none;margin:0;white-space:nowrap}.workflow-heading .wf-legend{margin:0 0 0 auto;max-width:none;flex-wrap:nowrap}
+  .workflow-heading>button{padding:5px 10px;font-size:12px;flex:none}
+  .flow.wf-strip{display:flex;align-items:stretch;flex:1;min-height:0}
+}

@@ -46,6 +46,7 @@ const currentSource = fs.readFileSync(path.join(base, 'steady-state.src.html'), 
 const defsMatch = currentSource.match(/const defs=(\[[\s\S]*?\n  \]);/);
 if (!defsMatch) throw new Error('Archetype step definitions not found in steady-state.src.html');
 let html = fs.readFileSync(path.join(base, 'panel-a.src.html'), 'utf8');
+html = html.replace('/*__WORKFLOW_STRIP__*/', () => fs.readFileSync(path.join(base, 'workflow-strip.js'), 'utf8')).replace('/*__WORKFLOW_CSS__*/', () => fs.readFileSync(path.join(base, 'workflow-strip.css'), 'utf8'));
 html = html.replace('/*__PANEL_UI__*/', () => fs.readFileSync(path.join(base, 'panel-a.js'), 'utf8'));
 html = html.replace('/*__PANEL_CSS__*/', () => fs.readFileSync(path.join(base, 'panel-a.css'), 'utf8'));
 html = html.replace('/*__DETAIL_UI__*/', () => fs.readFileSync(path.join(base, 'detail-views.js'), 'utf8'));

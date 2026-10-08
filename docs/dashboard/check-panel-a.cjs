@@ -2,10 +2,10 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),asse
 const html=fs.readFileSync(path.join(__dirname,'layout-studies.html'),'utf8');
 const nodes=new Map(),listeners=new Map(),timers=[];let now=0;
 class Element{
-  constructor(id){this.id=id;this.style={};this.dataset={};this.value='';this.hidden=false;this.open=false;this.classList={add(){},toggle(){}};this.listeners={};}
+  constructor(id){this.id=id;this.style={setProperty(){}};this.dataset={};this.value='';this.hidden=false;this.open=false;this.classList={add(){},toggle(){}};this.listeners={};}
   set innerHTML(value){this.html=value;for(const match of value.matchAll(/\bid="([^"]+)"/g))if(!nodes.has(match[1]))nodes.set(match[1],new Element(match[1]));}
   get innerHTML(){return this.html||'';}
-  setAttribute(){} addEventListener(name,fn){this.listeners[name]=fn;} setCustomValidity(){} focus(){} replaceChildren(){this.innerHTML='';} showModal(){this.open=true;} close(){this.open=false;}
+  setAttribute(){} querySelectorAll(){return [];} addEventListener(name,fn){this.listeners[name]=fn;} setCustomValidity(){} focus(){} replaceChildren(){this.innerHTML='';} showModal(){this.open=true;} close(){this.open=false;}
 }
 for(const m of html.matchAll(/\bid="([^"]+)"/g))nodes.set(m[1],new Element(m[1]));
 const exchange=new Element('exchange');
@@ -23,5 +23,9 @@ api.preset('Enterprise');advance();api.preset('Custom');advance();assert.deepEqu
 const target=nodes.get('target');target.value='0';target.listeners.input({target});advance();assert.equal(api.snapshot().result.cpuSystems,0);assert.equal(api.snapshot().result.gpuSystems,0);assert.equal(api.snapshot().cpu,0);assert(nodes.get('cpu-photos').innerHTML.includes('No systems allocated'));
 target.value='100000';target.listeners.input({target});advance();assert.equal(api.snapshot().result.total,100000);assert(Number.isFinite(api.snapshot().memory));
 nodes.get('reset').onclick();advance();assert.equal(api.snapshot().result.total,720);
+// The bottom box shows the whole workflow of the agent the user selects, and keeps animating.
+listeners.get('click')({target:{closest:s=>s==='[data-agent]'?{dataset:{agent:'1'}}:null}});advance();
+const flow=nodes.get('flow').innerHTML;assert.equal((flow.match(/class="wf-stage"/g)||[]).length,4);assert.equal((flow.match(/class="wf-step"/g)||[]).length,24);assert(flow.includes('Synthesize results'));
+assert(/24 steps/.test(nodes.get('flow-sub').textContent||''));
 assert(!/\/\*__[A-Z_]+__\*\//.test(html));assert(!html.includes('of 286 measured'));assert(html.includes('workers per agent'));assert(html.includes('CPU sockets : GPUs'));
-console.log('PASS: Panel A initializes; presets, saved Custom, incomplete drafts, transitions, zero and large fleets, reset, and shared details. Source-level DOM harness; not a visual browser test.');
+console.log('PASS: Panel A initializes; presets, saved Custom, incomplete drafts, transitions, zero and large fleets, reset, shared details, and the full workflow of the selected agent. Source-level DOM harness; not a visual browser test.');

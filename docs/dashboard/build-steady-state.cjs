@@ -55,6 +55,7 @@ const json = o => JSON.stringify(o).replace(/</g, '\\u003c');
 let html = fs.readFileSync(path.join(base, 'steady-state.src.html'), 'utf8');
 html = html.replace('/*__DATA__*/null', json(data)).replace('/*__RESULTS__*/null', json(results)).replace('/*__ASSETS__*/null', json(assets)).replace('/*__FONTS__*/', [...paper.matchAll(/@font-face\s*\{[^}]+\}/g)].map(m => m[0]).join('\n'));
 html=html.replace('/*__SIM_PROFILE__*/null',json(profile)).replace('/*__SIM_MODEL__*/',()=>fs.readFileSync(path.join(base,'simulation-model.cjs'),'utf8')).replace('/*__SIM_UI__*/',()=>fs.readFileSync(path.join(base,'simulation-ui.js'),'utf8')).replace('/*__SIM_CSS__*/',()=>fs.readFileSync(path.join(base,'simulation.css'),'utf8'));
+html=html.replace('/*__WORKFLOW_STRIP__*/',()=>fs.readFileSync(path.join(base,'workflow-strip.js'),'utf8')).replace('/*__WORKFLOW_CSS__*/',()=>fs.readFileSync(path.join(base,'workflow-strip.css'),'utf8'));
 html=html.replace('/*__DETAIL_UI__*/',()=>fs.readFileSync(path.join(base,'detail-views.js'),'utf8')).replace('/*__DETAIL_CSS__*/',()=>fs.readFileSync(path.join(base,'detail-views.css'),'utf8'));
 fs.writeFileSync(path.join(base, 'steady-state.html'), html);
 console.log(`Built offline conference replay with ${data.units.length} workflow records and ${results.resultVersion} paper results.`);

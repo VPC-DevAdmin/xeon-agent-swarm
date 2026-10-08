@@ -40,8 +40,8 @@
     }
     previousSizing={cpu:r.cpuSystems,gpu:r.gpuSystems};
   }
-  function highlightResources(node){
-    const role=node?.querySelector('b')?.textContent||'',label=node?.querySelector('span')?.textContent||'';
+  function highlightResources(step){
+    const role=step?.role||'',label=step?.label||'';
     const family=role==='CPU sandbox'?0:role==='CPU service'?(/retriev|lookup|embed/i.test(label)?1:/record/i.test(label)?3:2):role==='CPU check'?2:-1;
     for(let i=0;i<4;i++)$('family-'+i).classList.toggle('activity-highlight',motion&&family===i);
     document.querySelector('.hardware .exchange')?.classList.toggle('activity-highlight',motion&&role==='LLM');

@@ -10,7 +10,7 @@
   "costs": [
     {"name":"Task","sandboxCoreSeconds":0,"pairs":32,"queryCount":1,"ingestCoreSeconds":0},
     {"name":"Research","sandboxCoreSeconds":1.5,"pairs":1152,"queryCount":9,"ingestCoreSeconds":0},
-    {"name":"Ingestion","sandboxCoreSeconds":80,"pairs":0,"queryCount":0,"ingestCoreSeconds":12},
+    {"name":"Ingestion","sandboxCoreSeconds":80,"pairs":0,"queryCount":0,"ingestCoreSeconds":26},
     {"name":"Analyst","sandboxCoreSeconds":189,"pairs":128,"queryCount":2,"ingestCoreSeconds":0},
     {"name":"Code","sandboxCoreSeconds":148,"pairs":192,"queryCount":3,"ingestCoreSeconds":0}
   ],
@@ -18,6 +18,7 @@
     "Agent counts are fixed working pools across the deployment. Each completed workflow is replaced by the same archetype.",
     "Target mean lifetimes use completed v2.3 capacity records, scaled together to the 143-resident, 5660-output-token reference. They are reference targets, not independently predicted tail latencies.",
     "Core pools are sized to each mix across the deployment: service cores from the reranking, query-embedding and ingest cost laws at the planning target, application cores scaled from the measured Enterprise point so that it needs exactly one CPU per measured resident population. Application sizing weights sandbox demand 85 percent and call-related demand 15 percent; this extrapolation requires spot checks.",
+    "Document embedding costs 26 core-seconds per ingestion workflow, the ingest-embedder occupancy measured at the capacity rung of record seed 12101 (1.84 busy cores over 63 completed ingestion workflows in the steady window).",
     "Resource targets are 80 percent for dedicated services and memory. They are planning assumptions. Application demand is anchored to the measured Enterprise capacity.",
     "Memory assigns 90 percent of the Enterprise footprint to analyst jobs and 10 percent to a fixed per-CPU residual, a modeling assumption. The 40 GB job size sets an effective active-job fraction calibrated to the footprint. Sandbox wall time includes waiting and cannot be used as a memory-active fraction. Non-analyst memory growth and memory bandwidth remain unvalidated.",
     "GPU equivalents use the current paper's serving assumption. Output demand is not GPU utilization telemetry. Model latency is held at the reference target, assuming the required GPU capacity is supplied.",
