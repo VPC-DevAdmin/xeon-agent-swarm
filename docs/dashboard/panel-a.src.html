@@ -13,23 +13,32 @@
 <nav class="study-tabs" aria-label="Layout studies"><span>Layout studies</span><button id="tab-current" aria-pressed="false">Current page</button><button id="tab-a" aria-pressed="true">A · Work to hardware</button></nav>
 <iframe id="current" title="Current conference demo" src="steady-state.html" hidden></iframe>
 <main id="panel-a">
-  <header class="hero">
-    <div class="headline"><div class="brand"><img data-asset="dell" alt="Dell Technologies"><span>Enterprise agent capacity</span></div><h1>Agentic AI needs more CPU capacity.</h1><p id="result-sentence"></p></div>
-    <div class="hero-tools"><button class="ratio glass" data-topic="ratio"><strong id="ratio"></strong><span>CPU sockets : GPUs<small>Before system rounding</small></span></button><div class="controls"><button id="reset">Reset to Default</button><button id="tour">Pause Tour</button><button id="fullscreen">Full screen</button><button data-topic="methodology">Details</button></div></div>
+  <header class="dashboard-header">
+    <div class="appbar">
+      <div class="brand"><img data-asset="dell" alt="Dell Technologies"><img data-asset="intel" alt="Intel"><span>Enterprise agent capacity</span></div>
+      <div class="controls">
+        <div class="theme-switch" aria-label="Appearance"><button id="theme-light" type="button" aria-pressed="false">Light</button><button id="theme-dark" type="button" aria-pressed="false">Dark</button></div>
+        <details id="utility-menu"><summary>More <span aria-hidden="true">⋯</span></summary><div class="utility-actions"><button id="reset" type="button">Reset to default</button><button id="tour" type="button">Start tour</button><button id="fullscreen" type="button">Full screen</button><button type="button" data-topic="methodology">Methodology</button></div></details>
+      </div>
+    </div>
+    <div class="hero"><div class="headline"><h1>Agentic AI needs more CPU capacity.</h1><p class="dashboard-instruction">Select a workload mix to see its impact on CPU and GPU system load.</p><p id="result-sentence"></p></div><button class="ratio" data-topic="ratio"><strong id="ratio"></strong><span>Modeled CPU sockets : GPUs<small id="installed-capacity"></small></span></button></div>
   </header>
   <div class="layout">
     <section class="glass workload">
-      <div class="tier-heading"><span class="eyebrow">1 · Agent workload</span><h2 class="mix-title"><span id="mix-name">Enterprise mix</span><span aria-hidden="true">⌄</span><select id="mix" aria-label="Choose agent mix"></select></h2></div>
-      <div class="target-line"><label for="target">Target working agents</label><input id="target" type="number" value="720" min="0" max="100000" step="1"></div>
+      <div class="tier-heading"><span class="eyebrow">1 · Agent workload</span></div>
+      <div class="workload-fields"><label>Agent mix<select id="mix" aria-label="Choose agent mix"></select></label><label for="target">Working agents<input id="target" type="number" value="720" min="0" max="100000" step="1"></label></div>
+      <div class="row-columns" aria-hidden="true"><span>Workflows</span><span>Incoming share</span></div>
       <div id="rows" class="rows"></div>
       <p id="mix-status" role="status" class="status">Incoming shares total 100%.</p>
-      <p class="mix-help">Incoming share sets how often each workflow starts. Longer jobs account for more of the agents working now.</p>
+      <p class="mix-help">Share controls arrivals. Longer workflows occupy more of the working population.</p>
     </section>
     <div class="connector first" aria-hidden="true"><svg viewBox="0 0 32 64"><path d="M8 12 24 32 8 52"/></svg></div>
     <section class="glass execution">
       <div class="tier-heading"><span class="eyebrow">2 · CPU execution</span><h2>Run agents and their jobs</h2></div>
+      <div class="hardware-product">
       <button class="hardware-heading" data-topic="r770"><strong id="cpu-count"></strong><span>PowerEdge R770<small id="cpu-sockets"></small></span><span class="detail-cue" aria-hidden="true">↗</span></button>
       <button class="hardware-art" data-topic="r770" aria-label="PowerEdge R770 specifications"><div id="cpu-photos" class="server-stack"></div><img class="xeon" data-asset="xeon" alt="Intel Xeon processors"></button>
+      </div>
       <button class="metric cpu-metric" data-topic="cpu"><span>CPU utilization<small>Average across the R770 servers</small></span><strong id="cpu"></strong></button>
       <div class="cpu-stack" id="cpu-stack" role="img" aria-label="CPU utilization by function, including idle capacity"></div><div id="cpu-key" class="legend"></div>
       <button class="metric" data-topic="memory"><span>Memory per R770</span><strong id="memory"></strong></button>
@@ -38,8 +47,10 @@
     <div class="connector exchange" aria-hidden="true"><svg viewBox="0 0 32 64"><path d="M8 12 24 32 8 52"/></svg></div>
     <section class="glass serving">
       <div class="tier-heading"><span class="eyebrow">3 · Model serving</span><h2>Answer the agents’ calls</h2></div>
+      <div class="hardware-product">
       <button class="hardware-heading" data-topic="xe7740"><strong id="gpu-count"></strong><span>PowerEdge XE7740<small id="gpu-allocation"></small></span><span class="detail-cue" aria-hidden="true">↗</span></button>
-      <button class="hardware-art" data-topic="xe7740" aria-label="PowerEdge XE7740 specifications"><div id="gpu-photos" class="gpu-photos"></div></button>
+      <button class="hardware-art" data-topic="xe7740" aria-label="PowerEdge XE7740 specifications"><div id="gpu-photos" class="gpu-photos"></div><img class="xeon" data-asset="xeon" alt="Intel Xeon processors"></button>
+      </div>
       <button class="metric" data-topic="serving"><span>Model-serving demand<small>Share of installed serving capacity</small></span><strong id="gpu-demand"></strong></button>
       <div class="demand-track"><i id="gpu-bar"></i></div>
       <button class="metric" data-topic="serving"><span>Output tokens required</span><strong id="tokens"></strong></button>
@@ -52,7 +63,6 @@
     <div id="flow" class="flow"></div>
     <p class="flow-note">Workflow illustration · worker results pass review before the next job starts.</p>
   </section>
-  <footer>Extrapolated agent execution demo based on single-socket measurements.</footer>
 </main>
 <dialog id="detail-dialog" aria-labelledby="topic-title"><button class="close" id="close-details">Close</button><div id="topic-role" class="eyebrow"></div><h2 id="topic-title"></h2><div id="topic-body"></div><div class="topic-links"><button id="show-reference">Testing and methodology</button><a id="topic-paper" href="../whitepaper/agent-capacity-whitepaper.html#method" target="_blank" rel="noopener">Read the whitepaper ↗</a></div></dialog>
 <dialog id="agent-picker" aria-labelledby="picker-title"><button id="close-picker" class="close">Close</button><h2 id="picker-title">Add an agent</h2><div id="agent-options"></div></dialog>

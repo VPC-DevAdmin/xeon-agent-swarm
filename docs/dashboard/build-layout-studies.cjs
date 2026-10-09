@@ -15,7 +15,7 @@ function asset(alt) {
   if (!src.startsWith('data:')) throw new Error(`Expected embedded image: ${alt}`);
   return src;
 }
-const assets = {r770: asset('Dell PowerEdge R770 rack server'), xe7740: asset('Dell PowerEdge XE7740 rack server'), xeon: asset('Intel Xeon processors'), dell: asset('Dell Technologies')};
+const assets = {r770: asset('Dell PowerEdge R770 rack server'), xe7740: asset('Dell PowerEdge XE7740 rack server'), xeon: asset('Intel Xeon processors'), dell: asset('Dell Technologies'), intel: asset('Intel')};
 const events = process.argv[2] || 'data/capacity/replay/enterprise-v23-12101.json';
 const data = JSON.parse(fs.readFileSync(path.resolve(root, events), 'utf8'));
 const results = JSON.parse(fs.readFileSync(path.join(root, 'docs/whitepaper/paper-results.json'), 'utf8'));
